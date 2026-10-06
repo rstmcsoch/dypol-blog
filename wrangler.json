@@ -1,0 +1,21 @@
+{
+  "name": "dypol-blog",
+  "compatibility_date": "2026-10-06",
+  "compatibility_flags": ["nodejs_compat"],
+  "r2_buckets": [
+    {
+      "binding": "MEDIA",
+      "bucket_name": "dypol-blog-media",
+      "remote": false
+    }
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "dypol-blog-db",
+      "database_id": "78708341-8467-4140-bfa7-0531f14a7aee",
+      "migrations_dir": "migrations/d1",
+      "remote": false
+    }
+  ]
+}
