@@ -1,0 +1,1216 @@
+# DYPOL BLOG — PUBLIC WEBSITE DESIGN & ARCHITECTURE BUILD
+
+PROJECT
+Name: Dypol Blog / DYPOL Automated Blogs
+Brand: DYPOL Labs
+Repository: `/workspaces/dypol-blog`
+Branch: `main`
+
+THIS IS THE PUBLIC WEBSITE DESIGN PHASE.
+
+The infrastructure/setup phase has already been completed. Do not restart the project, replace the deployment platform, or perform unnecessary framework migrations.
+
+==================================================
+1. CURRENT VERIFIED PROJECT FOUNDATION
+==================================================
+
+The existing repository has already been configured with:
+
+- Next.js 16.3.8
+- React 19.x
+- TypeScript 5.x
+- Tailwind CSS 4
+- Vite 8
+- Vinext
+- @vinext/cloudflare
+- Cloudflare Vite plugin
+- Cloudflare Workers/Pages deployment infrastructure
+- Existing Cloudflare D1 database binding
+- Existing Cloudflare R2 media binding
+- Existing R2 bucket: `dypol-blog-media`
+
+Existing Cloudflare configuration must be inspected and preserved.
+
+The project is already deployed as the Cloudflare site/project:
+`dypolblog`
+
+The latest deployment has already been confirmed successful and the deployed site loads successfully.
+
+Do not replace:
+- GitHub
+- Cloudflare
+- Cloudflare Workers/Pages
+- existing R2
+- existing D1
+- existing working deployment architecture
+
+Do not switch to Astro, another framework, another database, another object-storage provider, or another deployment platform merely because it may be convenient for implementation.
+
+If the existing stack can implement something correctly, use it.
+
+If a genuine technical limitation is discovered, explain it and choose the smallest compatible solution.
+
+==================================================
+2. SOURCE-OF-TRUTH RULE
+==================================================
+
+Only treat explicitly stated requirements in this prompt and already-confirmed project infrastructure as requirements.
+
+Do NOT invent:
+- unapproved branding
+- unapproved colors beyond the confirmed black/white foundation and requested accent colors
+- unapproved features
+- imaginary AI providers
+- imaginary automation vendors
+- unnecessary SaaS dependencies
+- unnecessary architectural migrations
+- unrelated visual trends
+- fake content
+- fake statistics
+- fake authors
+- fake publication data
+
+Any implementation choice that is not explicitly required must be selected conservatively according to performance, maintainability, accessibility and Cloudflare compatibility.
+
+Do not turn an implementation suggestion into a permanent product requirement.
+
+==================================================
+3. CONFIRMED DESIGN DIRECTION
+==================================================
+
+The website MUST use a:
+
+NEOBRUTALISM AESTHETIC
+
+The primary visual foundation is:
+
+BLACK + WHITE
+
+Black and white should dominate the overall website.
+
+The design should feel like a sophisticated, modern neobrutalist publication rather than chaotic experimental brutalism.
+
+Use strong visual hierarchy, deliberate geometry, clear borders, confident typography, hard/offset depth where appropriate, and strong interaction states.
+
+The website must remain highly usable and readable.
+
+==================================================
+4. GRAIN / TEXTURE DIRECTION
+==================================================
+
+The design should include a subtle grain/noise treatment in selected COLORED areas.
+
+Important:
+
+- White areas should generally remain clean.
+- Black areas should generally remain clean.
+- Colored accent areas may contain subtle grain.
+- Grain must never reduce text readability.
+- Grain must never become a continuously animated visual effect.
+- Do not use huge texture images when a small reusable implementation can achieve the effect.
+- Prefer lightweight CSS/pseudo-element or tiny optimized texture techniques.
+- Avoid canvas/WebGL for grain.
+- Avoid expensive real-time noise generation.
+- Grain should look intentional, refined and editorial.
+- Grain should add character without making the website feel dirty or low quality.
+
+The visual relationship should be:
+
+BLACK + WHITE = structural identity
+COLOUR + GRAIN = selective visual emphasis
+
+Colored areas must not take over the website.
+
+==================================================
+5. ORIGINALITY / DESIGN RESEARCH
+==================================================
+
+Research contemporary web design references for:
+
+- neo-brutalism
+- grain/noise texture
+- bold editorial web layouts
+- technology publications
+- modern brutalist interfaces
+- textured graphic design
+
+Research multiple sources independently where web access is available.
+
+Use references only for design research.
+
+DO NOT:
+- copy a website
+- reproduce a site's layout
+- copy branding
+- copy illustrations
+- copy text
+- copy distinctive components
+- copy source code
+- reproduce another site's identity
+
+Combine useful principles into an ORIGINAL DYPOL design.
+
+The final result should look like a website deliberately created for DYPOL, not a recognizable template from another site.
+
+==================================================
+6. PUBLIC WEBSITE OBJECTIVE
+==================================================
+
+Create the actual public Dypol Blog website design.
+
+The public website should establish the complete visual language and reusable design system that the future admin panel will manage.
+
+The design must support:
+
+- Homepage
+- Blog/article discovery
+- Featured content
+- Article listings
+- Article detail pages
+- Categories/content navigation where required
+- Site navigation
+- Header
+- Footer
+- Trending/content bar where applicable
+- Responsive layouts
+- Content media
+- Empty states
+- Loading states
+- Error states
+- 404/not-found experience
+
+Do not create disconnected pages that look like separate products.
+
+Everything must belong to one coherent DYPOL design system.
+
+==================================================
+7. TYPOGRAPHY
+==================================================
+
+Create a strong typography hierarchy suitable for a technology publication.
+
+Prioritize:
+
+- excellent headline readability
+- readable article body text
+- clear metadata
+- strong section titles
+- distinct navigation
+- readable labels
+- proper line-height
+- sensible line length
+- fluid type scaling
+- no oversized typography that breaks mobile layouts
+
+Do not add random fonts merely for style.
+
+Inspect the current font setup before changing it.
+
+Use font loading that is compatible with the existing application and performance goals.
+
+Do not unnecessarily load many font families or weights.
+
+==================================================
+8. DESIGN SYSTEM
+==================================================
+
+Create reusable design tokens/components rather than styling every section independently.
+
+Centralize:
+
+- black
+- white
+- approved accent colors
+- border thickness
+- shadow offsets
+- corner/radius rules
+- typography scale
+- spacing scale
+- container widths
+- breakpoints
+- article card behavior
+- buttons
+- badges
+- tags
+- navigation
+- metadata
+- image frames
+- section headers
+- content blocks
+- states
+
+The system should make it easy to maintain visual consistency across the entire website.
+
+The future admin panel should later be able to use the same design tokens.
+
+==================================================
+9. RESPONSIVENESS
+==================================================
+
+Responsiveness is a PRIMARY REQUIREMENT, not a final polish task.
+
+The website must work correctly across:
+
+- very small phones
+- normal phones
+- large phones
+- small tablets
+- large tablets
+- portrait tablets
+- landscape tablets
+- laptops
+- desktop monitors
+- ultrawide monitors
+- very large screens
+
+Do not design only around common desktop widths.
+
+The UI must respond to actual available space rather than relying solely on rigid device-specific assumptions.
+
+Use:
+
+- fluid containers
+- flexible grids
+- fluid typography
+- responsive image sizing
+- responsive gaps
+- wrapping navigation where appropriate
+- container-aware layouts where beneficial
+- robust media aspect ratios
+
+Test both portrait and landscape orientations.
+
+There must be:
+- no accidental horizontal scrolling
+- no clipped text
+- no overlapping cards
+- no broken navigation
+- no impossible button layouts
+- no distorted images
+- no unreadable article content
+
+==================================================
+10. DEVICE-AWARE BEHAVIOR
+==================================================
+
+Where technically appropriate, respect browser/device capabilities and settings such as:
+
+- reduced motion
+- pointer capabilities
+- hover availability
+- viewport dimensions
+- orientation
+- forced-colors/accessibility environments
+- available screen space
+
+Do not render expensive effects simply because the device technically supports them.
+
+The goal is graceful degradation.
+
+A low-end phone should receive the essential website experience without paying for effects it does not need.
+
+==================================================
+11. PERFORMANCE
+==================================================
+
+Performance is one of the most important requirements.
+
+The website should feel extremely fast even on basic devices and slower networks.
+
+Prioritize:
+
+- server-first rendering where practical
+- minimal client-side JavaScript
+- React Server Components where appropriate within the existing stack
+- progressively enhanced interactions
+- minimal dependencies
+- small JavaScript bundles
+- small CSS output
+- optimized images
+- appropriate image dimensions
+- lazy loading below-the-fold images
+- priority loading only for genuinely critical media
+- prevention of layout shift
+- fixed media aspect ratios where useful
+- no unnecessary hydration
+- no unnecessary re-renders
+- no expensive global state for simple UI
+- no giant client-side content payloads
+- no decorative WebGL
+- no continuously animated backgrounds
+- no unnecessary animation libraries
+- no large third-party widgets
+- no auto-playing video unless explicitly required later
+- no rendering of hidden components that are not needed
+
+Do not sacrifice performance just to create visual effects.
+
+The page should still look distinctive when expensive effects are disabled.
+
+==================================================
+12. GRAIN PERFORMANCE
+==================================================
+
+The grain implementation must be especially lightweight.
+
+Do not:
+- render animated noise every frame
+- use large full-page raster textures
+- use WebGL
+- repeatedly generate random pixels with JavaScript
+
+Prefer:
+- CSS pseudo-elements
+- tiny compressed texture assets if actually necessary
+- cached static texture
+- opacity/blur/compositing kept under control
+
+Use the same reusable mechanism across colored areas instead of loading separate large assets for every card.
+
+==================================================
+13. IMAGE / MEDIA PERFORMANCE
+==================================================
+
+Use the existing image optimization capability in the repository where applicable.
+
+Media must:
+
+- preserve aspect ratio
+- avoid distortion
+- load responsively
+- use appropriate dimensions
+- lazy-load when not critical
+- avoid oversized originals being sent to small devices
+- reserve layout space before loading where possible
+- support accessible alternative text
+
+Use the existing R2 infrastructure for future uploaded blog media.
+
+Existing bucket:
+`dypol-blog-media`
+
+Do not introduce another media-storage service.
+
+==================================================
+14. PUBLIC CONTENT ARCHITECTURE
+==================================================
+
+The public website must be designed around structured content rather than hard-coded page markup.
+
+The architecture should clearly separate:
+
+- site configuration
+- navigation configuration
+- content
+- article metadata
+- article body
+- media
+- categories
+- tags
+- publication state
+- SEO metadata
+
+Do not hard-code information that will clearly need to be changed by an administrator later.
+
+The visual layer should consume structured content.
+
+==================================================
+15. AUTOMATION-FIRST ARCHITECTURE
+==================================================
+
+A very large portion of future articles will be produced through an automated content workflow.
+
+Therefore the entire content system MUST be AI-agent/provider agnostic.
+
+Do not hard-code the architecture around any specific AI company, model, bot or provider.
+
+The system should allow the automation provider/agent to be replaced later without redesigning the website or rewriting the content model.
+
+The future automated workflow should be able to work through stable structured interfaces rather than depending on fragile visual UI automation.
+
+The system should make it easy for an automated agent to:
+
+- create an article
+- update an article
+- save a draft
+- add/update metadata
+- assign categories
+- assign tags
+- attach/select media
+- update SEO metadata
+- publish
+- unpublish
+- schedule where later supported
+- correct/retry failed submissions
+
+Do not require unnecessary human clicks for automated operations.
+
+==================================================
+16. AUTOMATION RELIABILITY
+==================================================
+
+Design the underlying content interfaces to minimize automation failures.
+
+Prefer:
+
+- deterministic structured payloads
+- schema validation
+- predictable field names
+- explicit success/error responses
+- idempotent operations where appropriate
+- retry-safe operations
+- clear publication states
+- stable identifiers
+- validation before publishing
+- media references instead of fragile UI selections
+- server-side authorization
+- transactional behavior where applicable
+- clear failure reporting
+- no dependence on screen coordinates or DOM scraping
+
+An automation agent should NOT have to pretend to be a human user clicking through multiple pages just to publish an article.
+
+The system should provide an efficient machine-readable path while still supporting a complete human interface.
+
+==================================================
+17. MANUAL ADMIN PUBLISHING
+==================================================
+
+Although automation is the primary publishing direction, an administrator must also be able to manually create and publish content.
+
+The future admin system must contain an integrated editor.
+
+The administrator should be able to:
+
+- create a post
+- write/edit the article
+- add title
+- add excerpt/summary
+- manage article body
+- add/select cover media
+- manage article metadata
+- manage category
+- manage tags
+- manage publication status
+- preview
+- publish
+- edit an already-published article
+- unpublish where supported
+
+The administrator should not have to leave the admin application and use another external editor merely to publish a normal blog post.
+
+==================================================
+18. EDITOR REQUIREMENTS
+==================================================
+
+The future editor should be designed as a real publishing tool, not just a large textarea.
+
+It must support structured article content and preserve consistent rendering on the public website.
+
+The exact editor technology is NOT predetermined.
+
+Choose an implementation that is:
+
+- reliable
+- lightweight enough
+- maintainable
+- automation compatible
+- secure
+- capable of predictable HTML/structured-content output
+
+The public rendering system should not depend on arbitrary unsafe HTML execution.
+
+Sanitize/validate any user-authored content appropriately.
+
+==================================================
+19. ADMIN-CONTROLLED WEBSITE CONFIGURATION
+==================================================
+
+The future admin panel must have centralized control over all reasonable public website configuration.
+
+Design the public architecture NOW so these values are not scattered through source code.
+
+Administrators should eventually be able to control at least:
+
+SITE IDENTITY
+- website name
+- site title
+- site description
+- logo
+- favicon
+- site metadata
+- default SEO values
+
+HEADER
+- header structure
+- navigation items
+- labels
+- links
+- visible/hidden items
+- ordering
+
+NAVIGATION
+- navigation labels
+- destinations
+- ordering
+- active states where applicable
+
+TRENDING BAR
+- enable/disable
+- label
+- content/items
+- ordering
+- destination links where applicable
+
+FOOTER
+- footer content
+- labels
+- navigation links
+- legal links
+- social links where applicable
+- visible sections
+
+BLOG PRESENTATION
+- article labels
+- category labels
+- section labels
+- featured-content labels
+- other reasonable textual presentation settings
+
+BRANDING
+- logo
+- favicon
+- applicable media
+- metadata
+
+The phrase "all reasonable controls" means the admin should be able to manage public content/configuration without requiring a developer for routine changes.
+
+It does NOT mean providing unsafe arbitrary JavaScript execution or unrestricted code injection.
+
+==================================================
+20. FUTURE ADMIN DESIGN COMPATIBILITY
+==================================================
+
+Do not build the full admin panel during this phase.
+
+However, the public site's architecture must make the later admin panel straightforward to build.
+
+The future admin system should eventually fit naturally into:
+
+- site configuration
+- navigation management
+- article management
+- media management
+- category/tag management
+- publishing
+- automation
+- editor
+- SEO/configuration
+
+The future admin should use the same DYPOL visual design language, but its information architecture should prioritize productivity and management.
+
+Do not finalize specific admin screens, routes, permissions or features that have not been approved.
+
+==================================================
+21. AUTOMATION-FIRST UX PRINCIPLE
+==================================================
+
+The website should be designed so that the human-facing admin interface and machine-facing automation interface are both first-class.
+
+Do not make the automation layer dependent on visual UI controls.
+
+Human:
+Admin opens editor → writes → previews → publishes.
+
+Automation:
+Agent submits validated structured content → system validates → stores → processes media → publishes according to authorized instruction.
+
+Both should ultimately produce the same canonical public article format.
+
+==================================================
+22. CONTENT STATE MODEL
+==================================================
+
+Design the system so article states are explicit rather than inferred.
+
+The architecture should support clearly distinguishable states such as:
+
+- draft
+- ready/review state if later required
+- published
+- unpublished/archived state where applicable
+
+Do not invent a complicated editorial workflow unless required.
+
+The important requirement is deterministic state handling for both humans and automation.
+
+==================================================
+23. SEO-READY FOUNDATION
+==================================================
+
+Build the public website so it is SEO-ready.
+
+Support appropriate:
+
+- page titles
+- meta descriptions
+- canonical URLs
+- article metadata
+- structured heading hierarchy
+- clean article URLs
+- indexable content
+- robots configuration
+- sitemap architecture
+- social/share metadata
+- image metadata
+- 404 handling
+
+Do not generate fake SEO data.
+
+Do not hard-code information that the future admin should control.
+
+==================================================
+24. ACCESSIBILITY
+==================================================
+
+Accessibility is mandatory.
+
+Use:
+
+- semantic HTML
+- correct heading hierarchy
+- keyboard accessibility
+- visible focus states
+- accessible buttons
+- correct link semantics
+- labels for controls
+- alt text strategy
+- adequate contrast
+- usable article typography
+- reduced-motion support
+- accessible navigation
+
+Neobrutalism must not become an excuse for poor accessibility.
+
+==================================================
+25. INTERACTIONS
+==================================================
+
+Interactions should reinforce the neobrutalist visual language.
+
+Use:
+
+- confident hover states
+- pressed states
+- subtle movement
+- border/shadow changes
+- appropriate transitions
+
+But interactions must be:
+
+- fast
+- purposeful
+- lightweight
+- accessible
+- non-blocking
+
+Do not turn the site into an animation showcase.
+
+Respect reduced-motion preferences.
+
+==================================================
+26. NAVIGATION
+==================================================
+
+Navigation must remain usable across all screen sizes.
+
+Desktop navigation should not automatically dictate the mobile layout.
+
+Mobile navigation must be deliberately designed rather than being a shrunken desktop header.
+
+Avoid:
+- tiny tap targets
+- crowded navigation
+- overflow
+- inaccessible hidden links
+
+Navigation configuration should be structured so the future admin can manage it.
+
+==================================================
+27. ARTICLE EXPERIENCE
+==================================================
+
+The article page is one of the most important parts of the product.
+
+Prioritize:
+
+- excellent reading width
+- clear title
+- publication metadata
+- category/tag visibility where applicable
+- cover media
+- strong typography hierarchy
+- readable body text
+- clear section hierarchy
+- responsive media
+- appropriate spacing
+- share/navigation functionality only where justified
+
+Neobrutalism should remain visible in framing, borders, typography and visual structure without damaging long-form readability.
+
+==================================================
+28. HOMEPAGE
+==================================================
+
+Create a strong homepage that immediately communicates:
+
+DYPOL BLOG
+
+It should establish the brand visually and make content discovery easy.
+
+The exact layout is NOT predetermined.
+
+You must develop the strongest original layout that satisfies:
+- neobrutalist identity
+- black/white foundation
+- selective grainy color accents
+- excellent hierarchy
+- fast rendering
+- responsive behavior
+- strong article discovery
+
+Do not blindly use a generic hero + three-card template.
+
+==================================================
+29. STATES
+==================================================
+
+Design proper:
+
+- loading state
+- empty state
+- error state
+- not-found state
+
+Do not leave these as browser defaults.
+
+They must belong to the same DYPOL visual language while remaining lightweight.
+
+==================================================
+30. NO UNNECESSARY RENDERING
+==================================================
+
+Only render what the current viewport/use case needs.
+
+Avoid simultaneously mounting:
+
+- duplicate desktop/mobile interfaces
+- hidden heavy components
+- unused dialogs
+- unused animation systems
+- unnecessary article data
+- unnecessary media
+- expensive off-screen effects
+
+Use CSS and responsive layout techniques where possible rather than rendering separate copies of large components.
+
+==================================================
+31. RESPONSIVE PERFORMANCE STRATEGY
+==================================================
+
+A large desktop screen may support more visual richness, but do not create a fundamentally different expensive application for desktop.
+
+Use progressive enhancement.
+
+Basic devices should receive:
+- core content
+- optimized media
+- essential navigation
+- essential interactions
+
+Higher-capability devices may receive additional visual refinement only when it is cheap enough.
+
+Never make performance depend on the user owning a powerful device.
+
+==================================================
+32. CLOUDflare COMPATIBILITY
+==================================================
+
+Keep the existing Cloudflare deployment architecture working.
+
+The implementation must remain compatible with the existing Workers/Vite/Vinext configuration.
+
+Do not introduce Node-only runtime dependencies into request/runtime code unless the existing Cloudflare setup explicitly supports them.
+
+Be careful with:
+- filesystem APIs
+- native Node modules
+- long-running processes
+- unsupported runtime assumptions
+- environment-specific APIs
+
+Use Cloudflare-compatible APIs and existing bindings where appropriate.
+
+Use the existing R2 binding for media.
+
+Use the existing D1 binding for application data where required by the existing architecture.
+
+Do not create duplicate infrastructure.
+
+==================================================
+33. SECURITY
+==================================================
+
+Even though this phase is focused on public design, architecture must not create obvious security problems.
+
+Do not expose:
+- database credentials
+- storage secrets
+- private environment variables
+- admin-only operations
+- internal automation credentials
+
+Public components must not directly expose privileged bindings.
+
+Future admin/automation operations must be authenticated and authorized server-side.
+
+Never solve a configuration requirement by exposing arbitrary executable code to the public.
+
+==================================================
+34. ADMIN + AUTOMATION DATA OWNERSHIP
+==================================================
+
+The architecture should have a clear canonical source of truth for published article content.
+
+Do not create:
+- one article format for admin
+- another article format for automation
+- another article format for public rendering
+
+Use one canonical content representation with appropriate adapters/interfaces.
+
+The same canonical article should be readable by:
+- public website
+- manual editor
+- admin system
+- automation workflow
+
+==================================================
+35. EXTENSIBILITY
+==================================================
+
+The design should be able to grow without a visual rewrite.
+
+Possible future additions may include more content types or automation features, but do not implement unapproved functionality now.
+
+Create reusable foundations rather than one-off hacks.
+
+==================================================
+36. CODE QUALITY
+==================================================
+
+Use:
+
+- TypeScript
+- strict typing
+- reusable components
+- clear naming
+- maintainable folder structure
+- minimal unnecessary abstraction
+- comments only where useful
+- no duplicated design logic
+
+Do not introduce a component library just because it exists.
+
+Do not install packages when native CSS or existing project code is sufficient.
+
+==================================================
+37. DESIGN IMPLEMENTATION RULE
+==================================================
+
+Do not produce a fake visual mockup consisting only of static decorative sections.
+
+This must be an actual functioning public website implementation.
+
+Interactions should actually work.
+
+Navigation should actually work.
+
+Responsive layout should actually adapt.
+
+Article rendering should use structured data architecture.
+
+Components should be reusable for the later blog/content implementation.
+
+==================================================
+38. CONTENT DURING DESIGN PHASE
+==================================================
+
+Use realistic placeholder/sample content only where necessary to demonstrate the design.
+
+Do not invent claims about DYPOL as if they are factual.
+
+Do not create fake statistics, authors, awards, partners or company information.
+
+Use neutral sample article content when needed.
+
+Keep the content easy to replace with real automated/manual content later.
+
+==================================================
+39. VISUAL QUALITY BAR
+==================================================
+
+The final result should feel:
+
+- premium
+- distinctive
+- intentional
+- modern
+- publication-quality
+- technically polished
+- visually coherent
+
+Avoid generic AI-builder aesthetics such as:
+
+- random gradients everywhere
+- excessive rounded cards
+- excessive glassmorphism
+- generic SaaS dashboards
+- meaningless blobs
+- excessive shadows
+- excessive animations
+- random colors
+- dozens of unrelated card styles
+- fake futuristic UI
+
+Neobrutalism should be the recognizable identity.
+
+Black and white should remain the visual foundation.
+
+Grainy color should be selective.
+
+==================================================
+40. DO NOT MIX UNAPPROVED DESIGN TRENDS
+==================================================
+
+Do not automatically combine:
+
+- glassmorphism
+- cyberpunk
+- material design
+- neumorphism
+- Y2K
+- bento
+- maximalism
+- other unrelated aesthetics
+
+just because they are fashionable.
+
+The only confirmed visual requirement is NEOBRUTALISM with the black/white foundation and the requested selective grain treatment.
+
+Any other visual technique must serve that direction rather than compete with it.
+
+==================================================
+41. BUILD PROCESS
+==================================================
+
+STEP 1
+Inspect the entire repository.
+
+STEP 2
+Inspect:
+- package.json
+- current Next/React setup
+- Vite configuration
+- Vinext configuration
+- Cloudflare configuration
+- existing routes
+- current CSS
+- existing components
+- existing D1/R2 bindings
+
+STEP 3
+Identify what already works.
+
+STEP 4
+Do not remove working infrastructure.
+
+STEP 5
+Create/organize a coherent design system.
+
+STEP 6
+Implement the public website.
+
+STEP 7
+Make the content architecture structured and automation-ready.
+
+STEP 8
+Make future admin-controlled settings centralized rather than hard-coded.
+
+STEP 9
+Test all public routes and responsive states.
+
+STEP 10
+Run the production build.
+
+STEP 11
+Check for:
+- TypeScript errors
+- build errors
+- console errors
+- hydration issues
+- broken links
+- broken images
+- layout shift
+- horizontal overflow
+- responsive bugs
+- accessibility problems
+- excessive client JavaScript
+- unnecessary network requests
+
+STEP 12
+Fix all problems introduced by the implementation.
+
+==================================================
+42. TEST MATRIX
+==================================================
+
+Test at minimum around:
+
+- 320px width
+- 360px
+- 390px
+- 430px
+- 600px
+- 768px
+- 820px
+- 1024px
+- 1280px
+- 1440px
+- 1920px
+- large desktop/ultrawide widths
+
+Test:
+- portrait
+- landscape
+
+Check:
+- typography
+- navigation
+- cards
+- images
+- article body
+- footer
+- buttons
+- spacing
+- grain
+- colored blocks
+- loading/error states
+
+Also test with reduced motion enabled.
+
+==================================================
+43. PERFORMANCE VALIDATION
+==================================================
+
+Do not simply state that performance is good.
+
+Inspect the implementation for obvious performance problems.
+
+Look specifically for:
+- unnecessary client components
+- excessive JavaScript
+- unnecessary hydration
+- oversized images
+- duplicate assets
+- duplicate rendering
+- expensive CSS effects
+- unnecessary shadows/filters
+- animation loops
+- large dependencies
+- unnecessary API requests
+
+Remove what is unnecessary.
+
+==================================================
+44. IMPORTANT ADMIN TIMING
+==================================================
+
+DO NOT BUILD THE FULL ADMIN PANEL DURING THIS PHASE.
+
+The current task is to design/build the public website and create the architecture required for the future admin system.
+
+The later admin phase will be implemented AFTER the public design and finalized blog architecture are complete.
+
+The admin must then be designed around the real public website, not the other way around.
+
+==================================================
+45. IMPORTANT AUTOMATION TIMING
+==================================================
+
+Do not implement a complete automated publishing pipeline during this design task unless the existing architecture already requires a minimal foundation.
+
+Prepare stable interfaces and content architecture for future automation.
+
+Do not hard-code any particular AI provider, model or external agent.
+
+The final automation system must be replaceable without redesigning the public website.
+
+==================================================
+46. DEFINITION OF SUCCESS
+==================================================
+
+This phase is successful when:
+
+1. The public Dypol Blog has a coherent original neobrutalist visual identity.
+2. Black and white form the primary visual foundation.
+3. Selected colored areas use subtle grain texture.
+4. The website remains readable and professional.
+5. The website is extremely responsive across device sizes and orientations.
+6. The website does not unnecessarily render expensive elements.
+7. The existing Cloudflare/GitHub/R2 infrastructure remains intact.
+8. The current framework stack is reused rather than needlessly replaced.
+9. Public content is structured rather than hard-coded.
+10. The future admin system can control public configuration without redesigning the site.
+11. Manual publishing can eventually happen entirely inside the admin system.
+12. Automated article publishing can later work through stable provider-agnostic structured interfaces.
+13. No unnecessary dependency on visual UI automation exists.
+14. SEO and accessibility foundations are present.
+15. The production build succeeds.
+16. Existing functionality is not broken.
+17. No unapproved product feature is silently introduced.
+
+==================================================
+47. FINAL INSTRUCTION
+==================================================
+
+Do not rush directly into coding decorative components.
+
+First understand the existing application.
+
+Then build the public website as a coherent system.
+
+Prioritize:
+AUTHENTIC DYPOL IDENTITY
++
+NEOBRUTALISM
++
+BLACK/WHITE FOUNDATION
++
+SELECTIVE GRAINY COLOR
++
+EXTREME RESPONSIVENESS
++
+PERFORMANCE
++
+ACCESSIBILITY
++
+AUTOMATION-READY CONTENT ARCHITECTURE
++
+FUTURE ADMIN CONTROL
+
+The result should be a real, production-oriented public blogging website, not a concept mockup.
+
+After completing the implementation, run the build and test it thoroughly.
+
+Only report completion for things that were actually implemented and tested.

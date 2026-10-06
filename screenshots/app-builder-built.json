@@ -1,0 +1,38 @@
+{
+  "url": "http://127.0.0.1:8081/",
+  "viewports": {
+    "desktop": {
+      "width": 1280,
+      "height": 800,
+      "status": 200,
+      "title": "DYPOL Blog",
+      "hasCanvas": false,
+      "bodyTextLen": 1615,
+      "bodyTextHash": "723388c6c8e1afe785bec5b6a32900c77674b47ba69ffc020ba5836321a8a478",
+      "bodyTextPrefix": "Skip to content DYPOL BLOG Home Index Topics About DAY NIGHT NOW",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-built.png"
+    },
+    "mobile": {
+      "width": 390,
+      "height": 844,
+      "status": 200,
+      "title": "DYPOL Blog",
+      "hasCanvas": false,
+      "bodyTextLen": 1596,
+      "bodyTextHash": "7d00fd2cbace8037397be73de1a92876dad05368cf242e64b5b56ddfd9411094",
+      "bodyTextPrefix": "Skip to content DYPOL BLOG DAY NIGHT MENU NOW Borders, type, and",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-built-mobile.png"
+    }
+  },
+  "brandWarnings": [],
+  "authWarnings": [],
+  "verdictFile": "/workspace/screenshots/app-builder-built.json",
+  "divergesFromBaseline": false,
+  "baselineReasons": []
+}
