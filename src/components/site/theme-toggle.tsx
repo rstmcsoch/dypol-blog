@@ -1,9 +1,10 @@
 import { Moon, Sun } from "lucide-react";
 import { useLayoutEffect, useState } from "react";
-import { site } from "@/content/site";
 import { applyTheme, readTheme, type ThemeChoice } from "./theme";
+import { useSite } from "./use-site";
 
 export function ThemeToggle() {
+  const site = useSite();
   const [theme, setTheme] = useState<ThemeChoice | null>(null);
 
   useLayoutEffect(() => {
