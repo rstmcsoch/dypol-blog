@@ -46,6 +46,7 @@ export interface Sql {
  */
 const globalRef = globalThis as typeof globalThis & {
   __pgSqlPromise__?: Promise<Sql>;
+  __pgPool__?: import("pg").Pool;
   __pgliteInstance__?: Promise<import("@electric-sql/pglite").PGlite>;
   __pgliteMigrateChain__?: Promise<void>;
 };
@@ -94,6 +95,7 @@ function createNeonSql(): Promise<Sql> {
     types.setTypeParser(OID_DATE, identity);
     types.setTypeParser(OID_INTERVAL, identity);
     const pool = new Pool({ connectionString: databaseUrl });
+    globalRef.__pgPool__ = pool;
     return toSql(async <T>(text: string, params: unknown[]) => {
       const res = await pool.query(text, params);
       return res.rows as T[];
@@ -192,6 +194,57 @@ export function getSql(): Promise<Sql> {
     throw err;
   });
   return sqlPromise;
+}
+
+/**
+ * Run several statements on one connection. Article saves and the first seed
+ * touch more than one table and need to commit together. Neon checks out a
+ * pooled client; PGLite uses its transaction helper. The shared `Sql` surface
+ * is the same one queries already use.
+ */
+export async function withTransaction<T>(fn: (sql: Sql) => Promise<T>): Promise<T> {
+  if (typeof window !== "undefined") {
+    throw new Error(
+      "@/lib/db is server-only — call withTransaction() from a createServerFn handler " +
+        "or a server route loader, never from client code.",
+    );
+  }
+  await getSql();
+  if (dbSource === "pglite") {
+    const pg = await globalRef.__pgliteInstance__;
+    if (!pg) throw new Error("PGLite instance failed to initialize");
+    return pg.transaction(async (tx) =>
+      fn(
+        toSql(async <TRow>(text: string, params: unknown[]) => {
+          const result = await tx.query<TRow>(text, params);
+          return result.rows;
+        }),
+      ),
+    );
+  }
+  const pool = globalRef.__pgPool__;
+  if (!pool) throw new Error("Postgres pool failed to initialize");
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const result = await fn(
+      toSql(async <TRow>(text: string, params: unknown[]) => {
+        const res = await client.query(text, params);
+        return res.rows as TRow[];
+      }),
+    );
+    await client.query("COMMIT");
+    return result;
+  } catch (error) {
+    try {
+      await client.query("ROLLBACK");
+    } catch {
+      // Keep the original error when the connection is already dead.
+    }
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 /**

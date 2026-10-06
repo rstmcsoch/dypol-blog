@@ -26,6 +26,8 @@ export type Article = {
   featured: boolean;
   seoTitle?: string;
   seoDescription?: string;
+  /** Set when a stored image should stand in for the geometric plate. */
+  coverMediaId?: string | null;
   blocks: ArticleBlock[];
 };
 
@@ -48,4 +50,77 @@ export type NavItem = {
   id: string;
   label: string;
   href: NavHref;
+  visible: boolean;
+};
+
+export type FooterLink = {
+  id: string;
+  label: string;
+  href: string;
+};
+
+export type SiteLabels = {
+  featured: string;
+  also: string;
+  latest: string;
+  topics: string;
+  read: string;
+  fullIndex: string;
+  indexKicker: string;
+  indexTitle: string;
+  indexLede: string;
+  topicsKicker: string;
+  topicsTitle: string;
+  topicsLede: string;
+  aboutKicker: string;
+  aboutTitle: string;
+  related: string;
+  neighbors: string;
+  newer: string;
+  older: string;
+  minRead: string;
+  emptyTitle: string;
+  emptyBody: string;
+  emptyAction: string;
+  notFoundKicker: string;
+  notFoundTitle: string;
+  notFoundBody: string;
+  backHome: string;
+  menu: string;
+  close: string;
+  day: string;
+  night: string;
+  themeGroup: string;
+  dayTheme: string;
+  nightTheme: string;
+  skip: string;
+  primaryNav: string;
+  footerNav: string;
+  errorTitle: string;
+  errorHome: string;
+  loading: string;
+};
+
+/** Canonical public configuration. The journal and the desk both read this. */
+export type SiteConfig = {
+  name: string;
+  title: string;
+  description: string;
+  publisher: string;
+  labels: SiteLabels;
+  nav: NavItem[];
+  trending: {
+    enabled: boolean;
+    label: string;
+    slugs: string[];
+  };
+  footer: {
+    note: string;
+    links: FooterLink[];
+  };
+  about: {
+    paragraphs: string[];
+  };
+  logoMediaId: string | null;
+  faviconMediaId: string | null;
 };

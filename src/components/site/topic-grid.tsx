@@ -1,14 +1,14 @@
 import { Link } from "@tanstack/react-router";
 import { padIndex } from "@/lib/format";
-import { listCategories, publishedCount } from "@/content/queries";
+import type { Category } from "@/content/types";
 
-export function TopicGrid() {
+export function TopicGrid({ topics }: { topics: { category: Category; count: number }[] }) {
   return (
     <ul className="topic-grid">
-      {listCategories().map((category) => (
+      {topics.map(({ category, count }) => (
         <li key={category.id}>
           <Link to="/topics/$slug" params={{ slug: category.slug }} className="topic-card">
-            <span className="topic-card__count">{padIndex(publishedCount(category.id))}</span>
+            <span className="topic-card__count">{padIndex(count)}</span>
             <span className="topic-card__label">{category.label}</span>
             <span className="topic-card__desc">{category.description}</span>
           </Link>

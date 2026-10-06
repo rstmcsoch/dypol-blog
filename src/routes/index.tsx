@@ -3,31 +3,17 @@ import { CoverPlate } from "@/components/site/cover-plate";
 import { IndexList } from "@/components/site/index-list";
 import { PagePending } from "@/components/site/states";
 import { TopicGrid } from "@/components/site/topic-grid";
-import { site } from "@/content/site";
-import {
-  featuredArticle,
-  getCategory,
-  listPublished,
-  rankOf,
-  readingMinutes,
-} from "@/content/queries";
+import { useSite } from "@/components/site/use-site";
+import { getHome } from "@/content/public-api";
+import { site as fallbackSite } from "@/content/site";
 import { formatDate, padIndex } from "@/lib/format";
 
 export const Route = createFileRoute("/")({
-  loader: () => {
-    const published = listPublished();
-    const lead = featuredArticle();
-    const rest = published.filter((article) => article.id !== lead?.id);
-    return {
-      lead,
-      band: rest.slice(0, 3),
-      index: rest.slice(3),
-    };
-  },
+  loader: () => getHome(),
   head: () => ({
     meta: [
-      { title: site.title },
-      { name: "description", content: site.description },
+      { title: fallbackSite.title },
+      { name: "description", content: fallbackSite.description },
     ],
     links: [{ rel: "canonical", href: "/" }],
   }),
@@ -36,17 +22,19 @@ export const Route = createFileRoute("/")({
 });
 
 function Home() {
-  const { lead, band, index } = Route.useLoaderData();
+  const site = useSite();
+  const { lead, band, index, meta, topics } = Route.useLoaderData();
   if (!lead) {
     return (
       <div className="page">
         <div className="container">
           <h1 className="page-title">{site.name}</h1>
+          <p className="lede">{site.labels.emptyBody}</p>
         </div>
       </div>
     );
   }
-  const category = getCategory(lead.categoryId);
+  const leadMeta = meta[lead.id];
   return (
     <>
       <section className="lead-section">
@@ -54,7 +42,7 @@ function Home() {
           <div className="lead-copy">
             <p className="kicker">
               {site.labels.featured}
-              {category ? ` · ${category.label}` : ""}
+              {leadMeta?.categoryLabel ? ` · ${leadMeta.categoryLabel}` : ""}
             </p>
             <h1 className="display">
               <Link to="/articles/$slug" params={{ slug: lead.slug }}>
@@ -65,7 +53,7 @@ function Home() {
             <p className="meta">
               {lead.publishedAt ? <span>{formatDate(lead.publishedAt)}</span> : null}
               <span>
-                {readingMinutes(lead)} {site.labels.minRead}
+                {leadMeta?.minutes ?? 1} {site.labels.minRead}
               </span>
             </p>
             <Link to="/articles/$slug" params={{ slug: lead.slug }} className="btn">
@@ -78,11 +66,15 @@ function Home() {
             className="plate-link"
             aria-label={lead.title}
           >
-            <CoverPlate
-              motif={lead.motif}
-              index={padIndex(rankOf(lead.slug))}
-              category={category?.label ?? ""}
-            />
+            {lead.coverMediaId ? (
+              <img className="article-cover" src={`/media/${lead.coverMediaId}`} alt="" />
+            ) : (
+              <CoverPlate
+                motif={lead.motif}
+                index={padIndex(leadMeta?.rank ?? 1)}
+                category={leadMeta?.categoryLabel ?? ""}
+              />
+            )}
           </Link>
         </div>
       </section>
@@ -94,17 +86,16 @@ function Home() {
               {site.labels.also}
             </h2>
             <ul className="band-grid">
-              {band.map((article) => {
-                const topic = getCategory(article.categoryId);
-                return (
-                  <li key={article.id}>
-                    <Link to="/articles/$slug" params={{ slug: article.slug }} className="band-link">
-                      {topic ? <span className="band-link__cat">{topic.label}</span> : null}
-                      <span className="band-link__title">{article.title}</span>
-                    </Link>
-                  </li>
-                );
-              })}
+              {band.map((article) => (
+                <li key={article.id}>
+                  <Link to="/articles/$slug" params={{ slug: article.slug }} className="band-link">
+                    {meta[article.id]?.categoryLabel ? (
+                      <span className="band-link__cat">{meta[article.id]?.categoryLabel}</span>
+                    ) : null}
+                    <span className="band-link__title">{article.title}</span>
+                  </Link>
+                </li>
+              ))}
             </ul>
           </div>
         </section>
@@ -117,7 +108,7 @@ function Home() {
               {site.labels.fullIndex}
             </Link>
           </div>
-          <IndexList articles={index} />
+          <IndexList articles={index} meta={meta} minRead={site.labels.minRead} />
         </div>
       </section>
       <section className="section section--flush" aria-labelledby="topics">
@@ -125,7 +116,7 @@ function Home() {
           <div className="section-head">
             <h2 id="topics">{site.labels.topics}</h2>
           </div>
-          <TopicGrid />
+          <TopicGrid topics={topics} />
         </div>
       </section>
     </>

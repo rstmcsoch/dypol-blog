@@ -1,5 +1,6 @@
-import { readdirSync } from "node:fs";
-import { join } from "node:path";
+import { copyFileSync, existsSync, readdirSync } from "node:fs";
+import { createRequire } from "node:module";
+import { dirname, join } from "node:path";
 import type { Plugin } from "vite";
 import { defineConfig } from "vite";
 import { tanstackStart } from "@tanstack/react-start/plugin/vite";
@@ -12,7 +13,23 @@ import { grokPwaPlugin } from "./scripts/grok-pwa-plugin.mjs";
 import { appEnvPlugin } from "./scripts/app-env-plugin.mjs";
 import { isMigrationFile } from "./scripts/migration-plan.mjs";
 
-/** The files `src/lib/db.ts` globs — same directory, same non-recursive scope. */
+const require = createRequire(import.meta.url);
+
+/**
+ * Nitro inlines `@electric-sql/pglite` into `_libs` and leaves
+ * `new URL("./pglite.data", import.meta.url)` pointing at files it never
+ * emits. When that chunk is still present, put the sibling assets beside it.
+ * A traced (external) package already has them and this is a no-op.
+ */
+function copyBundledPgliteAssets(serverDir: string) {
+  const libs = join(serverDir, "_libs");
+  const bundled = join(libs, "electric-sql__pglite.mjs");
+  if (!existsSync(bundled)) return;
+  const dist = dirname(require.resolve("@electric-sql/pglite"));
+  for (const name of ["pglite.data", "pglite.wasm", "initdb.wasm"]) {
+    copyFileSync(join(dist, name), join(libs, name));
+  }
+}
 function hasGlobbedMigrations(root: string): boolean {
   try {
     return readdirSync(join(root, "migrations")).some(isMigrationFile);
@@ -30,6 +47,26 @@ function hasGlobbedMigrations(root: string): boolean {
  * migrations — no schema to apply — skips it entirely rather than paying for a
  * PGLite instance it never queries.
  */
+function mediaBindingsPlugin(): Plugin {
+  return {
+    name: "dypol-media-bindings",
+    apply: "serve",
+    configureServer(server) {
+      // The worker bindings are not injected into Vite's Node process.
+      // Start the declared MEDIA bucket and DB database before the first upload.
+      void server
+        .ssrLoadModule("/src/content/media-platform.server.ts")
+        .then((mod) => {
+          const open = (mod as { openDeclaredBindings?: () => Promise<unknown> }).openDeclaredBindings;
+          return open?.();
+        })
+        .catch((error: unknown) => {
+          console.error("[media] The MEDIA and DB bindings did not start.", error);
+        });
+    },
+  };
+}
+
 function pgliteBootstrapPlugin(): Plugin {
   return {
     name: "app-builder:pglite-bootstrap",
@@ -159,6 +196,7 @@ export default defineConfig(({ command, isPreview }) => ({
   resolve: { tsconfigPaths: true },
   plugins: [
     pgliteBootstrapPlugin(),
+    mediaBindingsPlugin(),
     // Before tanstackStart so /auth/popup never falls through to the SPA.
     authPopupPlugin(),
     // Dev-only /__app-env, read by scripts/check-auth-invariant.mjs.
@@ -175,6 +213,15 @@ export default defineConfig(({ command, isPreview }) => ({
             // manifest + head-tag middleware). Nitro v3 defaults serverDir to
             // false, so removing this silently unwires /?install=1 on deploys.
             serverDir: "./server",
+            // Sibling binaries must not be inlined. PGLite reads wasm/data
+            // next to its module; Miniflare reads workerd and its worker
+            // scripts from its own package directory.
+            traceDeps: ["@electric-sql/pglite*", "miniflare*"],
+            hooks: {
+              compiled(nitro) {
+                copyBundledPgliteAssets(nitro.options.output.serverDir);
+              },
+            },
           }),
         ]
       : []),
