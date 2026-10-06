@@ -24,6 +24,8 @@ export default defineConfig({
       ...responseStore.applicationWorker.env,
       ASSETS: bindings.assets(),
       IMAGES: bindings.images(),
+        DB: bindings.d1({ name: "dypol-blog-db", id: "78708341-8467-4140-bfa7-0531f14a7aee" }),
+        MEDIA: bindings.r2({ name: "dypol-blog-media" }),
     },
   }),
 });
