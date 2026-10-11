@@ -29,7 +29,7 @@ function LoginPage() {
           <h1 className="page-title">Sign in</h1>
           {denied ? <p className="lede">The desk is locked until an editor token is configured.</p> : null}
           <form
-            className="stack"
+            className="stack login-form"
             style={{ maxWidth: "24rem" }}
             onSubmit={(event) => {
               event.preventDefault();

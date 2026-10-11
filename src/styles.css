@@ -1358,7 +1358,7 @@ html[data-theme="dark"] .theme-switch__btn[data-value="dark"] .theme-switch__mar
   width: 100%;
   aspect-ratio: 1;
   object-fit: cover;
-  border: var(--line) solid var(--line-strong);
+  border: var(--line) solid var(--line-strong, var(--ink));
   background: var(--paper);
 }
 
@@ -1554,7 +1554,7 @@ html[data-theme="dark"] .theme-switch__btn[data-value="dark"] .theme-switch__mar
 .desk-table td {
   text-align: left;
   padding: 0.7rem 0.75rem;
-  border-bottom: var(--line) solid var(--line-strong);
+  border-bottom: var(--line) solid var(--line-strong, var(--ink));
   vertical-align: top;
 }
 
@@ -1608,9 +1608,10 @@ html[data-theme="dark"] .theme-switch__btn[data-value="dark"] .theme-switch__mar
 
 .desk input,
 .desk textarea,
-.desk select {
+.desk select,
+.login-form input {
   width: 100%;
-  border: var(--line) solid var(--line-strong);
+  border: var(--line) solid var(--line-strong, var(--ink));
   background: var(--paper);
   color: var(--ink);
   font: inherit;
@@ -1624,7 +1625,8 @@ html[data-theme="dark"] .theme-switch__btn[data-value="dark"] .theme-switch__mar
 
 .desk input:focus-visible,
 .desk textarea:focus-visible,
-.desk select:focus-visible {
+.desk select:focus-visible,
+.login-form input:focus-visible {
   outline: 3px solid var(--accent);
   outline-offset: 2px;
 }
