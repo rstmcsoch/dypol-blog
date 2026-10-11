@@ -102,14 +102,20 @@ if (LOCKED) {
   await page.click('button[type="submit"]');
   await page.waitForURL(/\/admin$/);
 
-  await check("desk cookie is HttpOnly, Secure, SameSite=Lax with an expiry", async () => {
+  const signInCalls = calls.slice();
+  await check("desk cookie is HttpOnly, Secure, SameSite=Lax, short-lived, signed with iat/exp/nonce", async () => {
     const cookie = (await context.cookies()).find((c) => c.name === "dypol_desk");
     assert.ok(cookie, "cookie set");
     assert.equal(cookie.httpOnly, true);
     assert.equal(cookie.secure, true);
     assert.equal(cookie.sameSite, "Lax");
-    assert.ok(cookie.expires > Date.now() / 1000 + 13 * 86400, "~14 day expiry");
-    assert.match(cookie.value, /^[0-9a-f]{64}$/);
+    const now = Date.now() / 1000;
+    assert.ok(cookie.expires > now + 11 * 3600 && cookie.expires < now + 13 * 3600, "~12 hour expiry");
+    const [v, iat, exp, nonce, mac] = cookie.value.split(".");
+    assert.equal(v, "v1");
+    assert.equal(Number(exp) - Number(iat), 12 * 3600);
+    assert.match(nonce, /^[0-9a-f]{32}$/);
+    assert.match(mac, /^[0-9a-f]{64}$/);
   });
 
   // Real editor writes, captured for replay.
@@ -134,6 +140,16 @@ if (LOCKED) {
       assert.ok(refused(r.status(), await r.text()), `${call.url} -> ${r.status()}`);
     }
     assert.deepEqual(counts(), before);
+  });
+
+  await check("a tampered session (extended expiry) is refused", async () => {
+    const cookie = (await context.cookies()).find((c) => c.name === "dypol_desk");
+    const [v, iat, , nonce, mac] = cookie.value.split(".");
+    const forged = [v, iat, String(Number(iat) + 365 * 86400), nonce, mac].join(".");
+    const r = await anon.get("/admin", { headers: { cookie: `dypol_desk=${forged}` }, maxRedirects: 0 });
+    assert.equal(r.status(), 307);
+    const ok = await anon.get("/admin", { headers: { cookie: `dypol_desk=${cookie.value}` }, maxRedirects: 0 });
+    assert.equal(ok.status(), 200, "the genuine cookie still works");
   });
 
   await check("replayed writes with a forged cookie are refused", async () => {
@@ -164,6 +180,39 @@ if (LOCKED) {
     assert.match(page.url(), /\/login/);
   });
   await context.close();
+
+  // Last, because it leaves this IP throttled for up to a minute.
+  await check("sign-in is rate limited per IP: 429 + Retry-After, same answer for right and wrong tokens", async () => {
+    const wrong = signInCalls.find((c) => !c.body.toString().includes(TOKEN));
+    const right = signInCalls.find((c) => c.body.toString().includes(TOKEN));
+    assert.ok(wrong && right, "captured both sign-in requests");
+    const statuses = [];
+    for (let i = 0; i < 8; i += 1) {
+      const r = await anon.post(wrong.url, { headers: { ...wrong.headers, cookie: "" }, data: wrong.body });
+      statuses.push(r.status());
+      if (r.status() === 429) {
+        assert.equal(r.headers()["retry-after"], "60");
+        assert.match(await r.text(), /limited/);
+      }
+    }
+    assert.ok(statuses.includes(429), `statuses ${statuses.join(",")}`);
+    assert.ok(statuses.filter((s) => s !== 429).length <= 5, `at most 5 attempts per minute: ${statuses.join(",")}`);
+    const r = await anon.post(right.url, { headers: { ...right.headers, cookie: "" }, data: right.body });
+    assert.equal(r.status(), 429, "the correct token is throttled too (no validity oracle)");
+    assert.equal(r.headers()["set-cookie"], undefined, "no session issued while throttled");
+    const ui = await browser.newPage();
+    // Fixed windows can roll over mid-test, so use a wrong token until the UI shows the throttle.
+    await ui.goto(BASE + "/login");
+    let message = "";
+    for (let i = 0; i < 7 && !/Too many/.test(message); i += 1) {
+      await ui.fill('input[type="password"]', "still-the-wrong-token");
+      await ui.click('button[type="submit"]');
+      await ui.waitForFunction(() => !document.querySelector('button[type="submit"]')?.disabled);
+      message = (await ui.textContent('[role="alert"]').catch(() => "")) ?? "";
+    }
+    assert.match(message, /Too many attempts\. Try again in 60 seconds/);
+    await ui.close();
+  });
 }
 
 await anon.dispose();

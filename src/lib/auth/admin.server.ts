@@ -1,14 +1,18 @@
-import { getCookie, setCookie, deleteCookie } from "@tanstack/react-start/server";
+import { getCookie, getRequest, setCookie, deleteCookie } from "@tanstack/react-start/server";
 import { workerEnv } from "../cf-env.server";
+import { checkSignIn, clientKey, type LimitDecision } from "./sign-in-limit.ts";
+import { issueSession, SESSION_TTL_SECONDS, sessionKey, tokenMatches, verifySession } from "./session-token.ts";
 import { assertSameOrigin, ReadOnlyError, writesAllowed } from "../write-guard.server";
 
 /**
  * Desk access on Cloudflare Workers.
  *
  * The editor signs in with the shared ADMIN_TOKEN (a Worker secret). On success
- * the server sets an HttpOnly cookie holding an HMAC of a fixed label keyed by
- * ADMIN_SESSION_SECRET (falls back to ADMIN_TOKEN). Rotating either secret signs
- * everyone out. With no ADMIN_TOKEN configured the desk is locked (fail closed).
+ * the server sets an HttpOnly cookie carrying issued-at, expiry, a random nonce
+ * and an HMAC keyed by ADMIN_SESSION_SECRET + ADMIN_TOKEN (see session-token.ts).
+ * Rotating either secret signs everyone out; expiry is checked server-side.
+ * Sign-in is rate limited per IP (see sign-in-limit.ts). With no ADMIN_TOKEN
+ * configured the desk is locked (fail closed).
  */
 export class ForbiddenError extends Error {
   readonly status = 403;
@@ -29,29 +33,13 @@ export class UnauthorizedError extends Error {
 export type AdminIdentity = { id: string; email: string | null; mode: "dev" | "account" };
 
 const COOKIE = "dypol_desk";
-const LABEL = "dypol-desk-session-v1";
-const MAX_AGE = 60 * 60 * 24 * 14;
 
 async function secrets(): Promise<{ token: string; key: string } | null> {
   const env = await workerEnv();
   const token = (env.ADMIN_TOKEN ?? "").trim();
   if (token.length < 16) return null;
-  const key = (env.ADMIN_SESSION_SECRET ?? "").trim() || token;
-  return { token, key };
-}
-
-async function sign(key: string): Promise<string> {
-  const enc = new TextEncoder();
-  const k = await crypto.subtle.importKey("raw", enc.encode(key), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
-  const mac = new Uint8Array(await crypto.subtle.sign("HMAC", k, enc.encode(LABEL)));
-  return Array.from(mac, (b) => b.toString(16).padStart(2, "0")).join("");
-}
-
-function sameText(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i += 1) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return diff === 0;
+  const sessionSecret = (env.ADMIN_SESSION_SECRET ?? "").trim() || undefined;
+  return { token, key: sessionKey(token, sessionSecret) };
 }
 
 export async function deskConfigured(): Promise<boolean> {
@@ -62,7 +50,7 @@ export async function requireAdmin(): Promise<AdminIdentity> {
   const s = await secrets();
   if (!s) throw new ForbiddenError();
   const cookie = getCookie(COOKIE) ?? "";
-  if (!cookie || !sameText(cookie, await sign(s.key))) throw new UnauthorizedError();
+  if (!cookie || !(await verifySession(s.key, cookie)).ok) throw new UnauthorizedError();
   return { id: "editor", email: null, mode: "account" };
 }
 
@@ -73,18 +61,24 @@ export async function requireWriter(): Promise<AdminIdentity> {
   return admin;
 }
 
+/** Counts this attempt against the per-IP limit. Call before checking the token. */
+export async function signInAllowed(): Promise<LimitDecision> {
+  const env = await workerEnv();
+  const request = getRequest();
+  const key = request ? clientKey(request.headers) : "signin:unknown";
+  return checkSignIn(env.SIGNIN_LIMITER, key);
+}
+
 export async function signInDesk(token: string): Promise<boolean> {
   const s = await secrets();
   if (!s) return false;
-  const a = await sign(`${s.key}:${token}`);
-  const b = await sign(`${s.key}:${s.token}`);
-  if (!sameText(a, b)) return false;
-  setCookie(COOKIE, await sign(s.key), {
+  if (!(await tokenMatches(token, s.token, s.key))) return false;
+  setCookie(COOKIE, await issueSession(s.key), {
     httpOnly: true,
     secure: true,
     sameSite: "lax",
     path: "/",
-    maxAge: MAX_AGE,
+    maxAge: SESSION_TTL_SECONDS,
   });
   return true;
 }

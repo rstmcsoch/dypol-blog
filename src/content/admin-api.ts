@@ -198,10 +198,25 @@ export const adminSignIn = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const { assertSameOrigin } = await import("@/lib/write-guard.server");
     assertSameOrigin();
-    const { signInDesk, deskConfigured } = await import("@/lib/auth/admin.server");
-    if (!(await deskConfigured())) return { ok: false, reason: "locked" as const };
+    const { signInDesk, signInAllowed, deskConfigured } = await import("@/lib/auth/admin.server");
+    // Rate limit first, on every attempt, so the limiter can't reveal token validity.
+    const gate = await signInAllowed();
+    if (!gate.allowed) {
+      // A thrown Response is sent as-is, so the 429 keeps its Retry-After header.
+      throw new Response(JSON.stringify({ ok: false, reason: "limited", retryAfter: gate.retryAfter }), {
+        status: 429,
+        headers: {
+          "Content-Type": "application/json",
+          "Retry-After": String(gate.retryAfter),
+          "Cache-Control": "no-store",
+          // Hand the Response to the client unchanged (TanStack raw response).
+          "x-tss-raw": "true",
+        },
+      });
+    }
+    if (!(await deskConfigured())) return { ok: false, reason: "locked" as const, retryAfter: 0 };
     const ok = await signInDesk(data.token);
-    return ok ? { ok: true, reason: null } : { ok: false, reason: "wrong" as const };
+    return ok ? { ok: true, reason: null, retryAfter: 0 } : { ok: false, reason: "wrong" as const, retryAfter: 0 };
   });
 
 export const adminSignOut = createServerFn({ method: "POST" }).handler(async () => {

@@ -21,6 +21,7 @@ export type WorkerBindings = {
   MEDIA?: unknown;
   ADMIN_TOKEN?: string;
   ADMIN_SESSION_SECRET?: string;
+  SIGNIN_LIMITER?: { limit(options: { key: string }): Promise<{ success: boolean }> };
 };
 
 // No promise is cached across requests: workerd hangs a request that awaits a

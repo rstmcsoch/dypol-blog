@@ -36,14 +36,31 @@ function LoginPage() {
               setPending(true);
               setError(null);
               void adminSignIn({ data: { token } })
-                .then(async (result) => {
+                .then(async (raw) => {
+                  if ((raw as unknown) instanceof Response) {
+                    const wait = Number((raw as unknown as Response).headers.get("Retry-After")) || 60;
+                    setError(`Too many attempts. Try again in ${wait} seconds.`);
+                    return;
+                  }
+                  const result = raw;
                   if (result.ok) {
                     await router.navigate({ to: "/admin" });
                     return;
                   }
-                  setError(result.reason === "locked" ? "The desk is locked on this deployment." : "That token is not right.");
+                  setError(
+                    result.reason === "locked"
+                      ? "The desk is locked on this deployment."
+                      : "That token is not right.",
+                  );
                 })
-                .catch(() => setError("Sign-in failed. Try again."))
+                .catch((error: unknown) => {
+                  if (error instanceof Response && error.status === 429) {
+                    const wait = Number(error.headers.get("Retry-After")) || 60;
+                    setError(`Too many attempts. Try again in ${wait} seconds.`);
+                    return;
+                  }
+                  setError("Sign-in failed. Try again.");
+                })
                 .finally(() => setPending(false));
             }}
           >

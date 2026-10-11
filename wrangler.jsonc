@@ -23,6 +23,10 @@
       "bucket_name": "dypol-blog-media"
     }
   ],
+  // Sign-in throttle: 5 attempts / 60 s per client IP (src/lib/auth/sign-in-limit.ts).
+  "ratelimits": [
+    { "name": "SIGNIN_LIMITER", "namespace_id": "7301", "simple": { "limit": 5, "period": 60 } }
+  ],
   // `wrangler preview` (Workers Builds on non-production branches) uses these
   // instead, so previews can never read or write production content.
   "previews": {
@@ -40,9 +44,13 @@
         "binding": "MEDIA",
         "bucket_name": "dypol-blog-media-preview"
       }
+    ],
+    "ratelimits": [
+      { "name": "SIGNIN_LIMITER", "namespace_id": "7302", "simple": { "limit": 5, "period": 60 } }
     ]
   }
   // Secrets (set with `wrangler secret put`, never committed):
   //   ADMIN_TOKEN           editor sign-in token (16+ chars; use 32+ random)
-  //   ADMIN_SESSION_SECRET  optional, signs the desk cookie
+  //   ADMIN_SESSION_SECRET  optional, signs the desk cookie; rotate it (or
+  //                         ADMIN_TOKEN) to sign every editor out
 }
