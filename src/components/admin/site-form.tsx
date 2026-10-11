@@ -61,7 +61,7 @@ export function FormShell({
         }}
       >
         {children}
-        <div className="inline-actions" style={{ position: "sticky", bottom: "0.75rem" }}>
+        <div className="inline-actions adm-savebar">
           <button className="btn" type="submit" disabled={form.pending}>
             {form.pending ? "Saving…" : saveLabel}
           </button>

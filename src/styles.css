@@ -1481,6 +1481,7 @@ html[data-theme="dark"] .theme-switch__btn[data-value="dark"] .theme-switch__mar
 .adm-help h2 { margin-top: 1.75rem; }
 .adm-help h3 { margin: 1.25rem 0 0.4rem; font-size: 1rem; }
 .adm-help pre { overflow-x: auto; border-radius: 8px; background: #0f172a; color: #e2e8f0; padding: 0.75rem 0.9rem; font-size: 0.85rem; }
+.adm-savebar { position: sticky; bottom: 0; z-index: 5; margin: 0 -0.5rem; padding: 0.75rem 0.5rem; border-top: 1px solid var(--a-line); background: rgba(246, 247, 249, 0.95); backdrop-filter: blur(4px); }
 .adm-row-actions { display: flex; flex-wrap: wrap; gap: 0.4rem; }
 @media (min-width: 900px) {
   .stat-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
@@ -1505,9 +1506,13 @@ html[data-theme="dark"] .theme-switch__btn[data-value="dark"] .theme-switch__mar
 }
 
 /* Article hero: a wide band instead of a full-width 4:3 / square box. */
-.article-plate .plate,
-.article-plate .article-cover,
 .article-plate .cover-minimal {
+  aspect-ratio: auto;
+  min-height: clamp(7rem, 16vw, 12rem);
+}
+
+.article-plate .plate,
+.article-plate .article-cover {
   aspect-ratio: 21 / 9;
   max-height: 30rem;
   width: 100%;

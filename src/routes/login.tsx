@@ -25,9 +25,9 @@ function LoginPage() {
     <div className="page">
       <div className="container">
         <header className="page-header">
-          <p className="kicker">Desk</p>
+          <p className="kicker">Admin</p>
           <h1 className="page-title">Sign in</h1>
-          {denied ? <p className="lede">The desk is locked until an editor token is configured.</p> : null}
+          {denied ? <p className="lede">Sign-in is locked until an admin token (ADMIN_TOKEN secret) is configured.</p> : null}
           <form
             className="stack login-form"
             style={{ maxWidth: "24rem" }}
@@ -65,7 +65,7 @@ function LoginPage() {
             }}
           >
             <label className="field">
-              <span>Editor token</span>
+              <span>Admin token</span>
               <input
                 type="password"
                 autoComplete="current-password"
