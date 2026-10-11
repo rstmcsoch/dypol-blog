@@ -21,6 +21,10 @@ export type WorkerBindings = {
   MEDIA?: unknown;
   ADMIN_TOKEN?: string;
   ADMIN_SESSION_SECRET?: string;
+  MCP_TOKEN?: string;
+  MCP_OAUTH_REDIRECT_HOSTS?: string;
+  XAI_API_KEY?: string;
+  MCP_LIMITER?: { limit(options: { key: string }): Promise<{ success: boolean }> };
   SIGNIN_LIMITER?: { limit(options: { key: string }): Promise<{ success: boolean }> };
 };
 

@@ -224,3 +224,32 @@ export const adminSignOut = createServerFn({ method: "POST" }).handler(async () 
   signOutDesk();
   return { ok: true };
 });
+
+export const adminAutomation = createServerFn({ method: "GET" }).handler(async () => {
+  await guard();
+  const { readAutomationSettings, recentRuns } = await import("./automation.server");
+  const { adminList } = await import("./repository.server");
+  const { providerStatus } = await import("@/lib/automation/provider");
+  const { mcpConfigured } = await import("@/lib/mcp/auth");
+  const { workerEnv } = await import("@/lib/cf-env.server");
+  const env = await workerEnv();
+  const settings = await readAutomationSettings();
+  const list = await adminList({});
+  return {
+    settings,
+    runs: await recentRuns(25),
+    categories: list.categories.map((c) => ({ id: c.id, label: c.label })),
+    provider: providerStatus(settings, env),
+    // Only whether it is set; the value never leaves the server.
+    mcpTokenConfigured: mcpConfigured(env.MCP_TOKEN),
+  };
+});
+
+export const adminSaveAutomation = createServerFn({ method: "POST" })
+  .validator((input: unknown) => input)
+  .handler(async ({ data }) => {
+    await writeGuard();
+    const { saveAutomationSettings } = await import("./automation.server");
+    await saveAutomationSettings(data);
+    return { ok: true };
+  });
