@@ -1,8 +1,15 @@
 import { createServerFn } from "@tanstack/react-start";
 
 export const getShell = createServerFn({ method: "GET" }).handler(async () => {
-  const { readShell } = await import("./repository.server");
-  return readShell();
+  try {
+    const { readShell } = await import("./repository.server");
+    return await readShell();
+  } catch (error) {
+    // The site frame must always render, even if the content layer is broken.
+    console.error("[shell] falling back to the built-in site config.", error);
+    const { site } = await import("./site");
+    return { site, trending: [] as { id: string; slug: string; title: string }[] };
+  }
 });
 
 export const getHome = createServerFn({ method: "GET" }).handler(async () => {

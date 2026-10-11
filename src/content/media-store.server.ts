@@ -195,8 +195,7 @@ function envFrom(scope: unknown): WorkerEnv | null {
 
 /**
  * The worker injects bindings on `cloudflare:workers` (`env.MEDIA`, `env.DB`).
- * Outside that runtime, the same MEDIA bucket and DB database are opened from
- * the declaration in cloudflare.config.ts. No other store is consulted.
+ * Outside that runtime there is no store: uploads fail with MediaBindingError.
  */
 export async function readMediaBindings(): Promise<WorkerEnv | null> {
   const root = globalThis as { env?: unknown; __env__?: unknown };
@@ -206,22 +205,13 @@ export async function readMediaBindings(): Promise<WorkerEnv | null> {
     const mod = (await import(/* @vite-ignore */ specifier)) as { env?: unknown };
     scopes.unshift(mod.env);
   } catch {
-    // Node (Vite, tests, Vercel) is not the Cloudflare worker.
+    // Outside the Cloudflare runtime (node tests) there are no bindings.
   }
   for (const scope of scopes) {
     const env = envFrom(scope);
     if (env) return env;
   }
-  const inWorker = typeof navigator !== "undefined" && navigator.userAgent === "Cloudflare-Workers";
-  if (inWorker) return null;
-  if (process.env.NODE_TEST_CONTEXT && process.env.DYPOL_MEDIA_PLATFORM !== "on") return null;
-  try {
-    const { openDeclaredBindings } = await import("./media-platform.server");
-    return await openDeclaredBindings();
-  } catch (error) {
-    console.error("[media] The MEDIA and DB bindings could not be opened.", error);
-    return null;
-  }
+  return null;
 }
 
 function wrapBucket(binding: R2BucketBinding): MediaBucket {

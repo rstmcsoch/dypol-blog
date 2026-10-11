@@ -1,5 +1,6 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { authEnabled, GROK_PROVIDERS, signIn } from "@/lib/auth/client";
+import { useState } from "react";
+import { createFileRoute, useRouter } from "@tanstack/react-router";
+import { adminSignIn } from "@/content/admin-api";
 
 export const Route = createFileRoute("/login")({
   validateSearch: (search: Record<string, unknown>) => ({
@@ -16,37 +17,51 @@ export const Route = createFileRoute("/login")({
 
 function LoginPage() {
   const { denied } = Route.useSearch();
+  const router = useRouter();
+  const [token, setToken] = useState("");
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   return (
     <div className="page">
       <div className="container">
         <header className="page-header">
           <p className="kicker">Desk</p>
           <h1 className="page-title">Sign in</h1>
-          {denied ? <p className="lede">This account is not an editor.</p> : null}
-          {!authEnabled ? (
-            <>
-              <p className="lede">
-                Sign-in is off in this environment. The desk is open here, and it is locked to granted accounts once
-                sign-in is turned on.
-              </p>
-              <Link to="/admin" className="btn">
-                Open the desk
-              </Link>
-            </>
-          ) : (
-            <div className="stack" style={{ maxWidth: "24rem" }}>
-              {GROK_PROVIDERS.map((provider) => (
-                <button
-                  key={provider.providerId}
-                  type="button"
-                  className="btn"
-                  onClick={() => void signIn(provider.providerId, { callbackURL: "/admin" })}
-                >
-                  Continue with {provider.label}
-                </button>
-              ))}
-            </div>
-          )}
+          {denied ? <p className="lede">The desk is locked until an editor token is configured.</p> : null}
+          <form
+            className="stack"
+            style={{ maxWidth: "24rem" }}
+            onSubmit={(event) => {
+              event.preventDefault();
+              setPending(true);
+              setError(null);
+              void adminSignIn({ data: { token } })
+                .then(async (result) => {
+                  if (result.ok) {
+                    await router.navigate({ to: "/admin" });
+                    return;
+                  }
+                  setError(result.reason === "locked" ? "The desk is locked on this deployment." : "That token is not right.");
+                })
+                .catch(() => setError("Sign-in failed. Try again."))
+                .finally(() => setPending(false));
+            }}
+          >
+            <label className="field">
+              <span>Editor token</span>
+              <input
+                type="password"
+                autoComplete="current-password"
+                value={token}
+                onChange={(event) => setToken(event.target.value)}
+                required
+              />
+            </label>
+            <button className="btn" type="submit" disabled={pending}>
+              {pending ? "Checking…" : "Open the desk"}
+            </button>
+            {error ? <p className="banner banner--bad" role="alert">{error}</p> : null}
+          </form>
         </header>
       </div>
     </div>

@@ -1,5 +1,4 @@
 import { createServerFn } from "@tanstack/react-start";
-import { authMiddleware } from "@/lib/auth/middleware";
 
 async function guard() {
   const { requireAdmin } = await import("@/lib/auth/admin.server");
@@ -7,7 +6,6 @@ async function guard() {
 }
 
 export const adminSession = createServerFn({ method: "GET" })
-  .middleware([authMiddleware])
   .handler(async () => {
     const admin = await guard();
     const { listGrants } = await import("@/lib/auth/admin.server");
@@ -15,7 +13,6 @@ export const adminSession = createServerFn({ method: "GET" })
   });
 
 export const adminDashboard = createServerFn({ method: "GET" })
-  .middleware([authMiddleware])
   .handler(async () => {
     await guard();
     const { adminOverview } = await import("./repository.server");
@@ -23,7 +20,6 @@ export const adminDashboard = createServerFn({ method: "GET" })
   });
 
 export const adminArticles = createServerFn({ method: "POST" })
-  .middleware([authMiddleware])
   .validator((input: unknown) => input)
   .handler(async ({ data }) => {
     await guard();
@@ -33,7 +29,6 @@ export const adminArticles = createServerFn({ method: "POST" })
   });
 
 export const adminEditorData = createServerFn({ method: "GET" })
-  .middleware([authMiddleware])
   .validator((input: { id: string | null }) => input)
   .handler(async ({ data }) => {
     await guard();
@@ -42,7 +37,6 @@ export const adminEditorData = createServerFn({ method: "GET" })
   });
 
 export const adminSaveArticle = createServerFn({ method: "POST" })
-  .middleware([authMiddleware])
   .validator((input: unknown) => input)
   .handler(async ({ data }) => {
     await guard();
@@ -51,7 +45,6 @@ export const adminSaveArticle = createServerFn({ method: "POST" })
   });
 
 export const adminDeleteDraft = createServerFn({ method: "POST" })
-  .middleware([authMiddleware])
   .validator((input: { id: string }) => input)
   .handler(async ({ data }) => {
     await guard();
@@ -61,7 +54,6 @@ export const adminDeleteDraft = createServerFn({ method: "POST" })
   });
 
 export const adminPreview = createServerFn({ method: "GET" })
-  .middleware([authMiddleware])
   .validator((input: { id: string }) => input)
   .handler(async ({ data }) => {
     await guard();
@@ -72,7 +64,6 @@ export const adminPreview = createServerFn({ method: "GET" })
   });
 
 export const adminTaxonomy = createServerFn({ method: "GET" })
-  .middleware([authMiddleware])
   .handler(async () => {
     await guard();
     const { adminList } = await import("./repository.server");
@@ -81,7 +72,6 @@ export const adminTaxonomy = createServerFn({ method: "GET" })
   });
 
 export const adminSaveCategory = createServerFn({ method: "POST" })
-  .middleware([authMiddleware])
   .validator((input: unknown) => input)
   .handler(async ({ data }) => {
     await guard();
@@ -90,7 +80,6 @@ export const adminSaveCategory = createServerFn({ method: "POST" })
   });
 
 export const adminDeleteCategory = createServerFn({ method: "POST" })
-  .middleware([authMiddleware])
   .validator((input: { id: string }) => input)
   .handler(async ({ data }) => {
     await guard();
@@ -100,7 +89,6 @@ export const adminDeleteCategory = createServerFn({ method: "POST" })
   });
 
 export const adminSaveTag = createServerFn({ method: "POST" })
-  .middleware([authMiddleware])
   .validator((input: unknown) => input)
   .handler(async ({ data }) => {
     await guard();
@@ -109,7 +97,6 @@ export const adminSaveTag = createServerFn({ method: "POST" })
   });
 
 export const adminDeleteTag = createServerFn({ method: "POST" })
-  .middleware([authMiddleware])
   .validator((input: { id: string }) => input)
   .handler(async ({ data }) => {
     await guard();
@@ -119,7 +106,6 @@ export const adminDeleteTag = createServerFn({ method: "POST" })
   });
 
 export const adminSettings = createServerFn({ method: "GET" })
-  .middleware([authMiddleware])
   .handler(async () => {
     const session = await guard();
     const { readSettings, listMedia } = await import("./repository.server");
@@ -145,7 +131,6 @@ export const adminSettings = createServerFn({ method: "GET" })
   });
 
 export const adminSaveSettings = createServerFn({ method: "POST" })
-  .middleware([authMiddleware])
   .validator((input: unknown) => input)
   .handler(async ({ data }) => {
     await guard();
@@ -155,7 +140,6 @@ export const adminSaveSettings = createServerFn({ method: "POST" })
   });
 
 export const adminMedia = createServerFn({ method: "GET" })
-  .middleware([authMiddleware])
   .handler(async () => {
     await guard();
     const { listMedia } = await import("./repository.server");
@@ -169,7 +153,6 @@ export const adminMedia = createServerFn({ method: "GET" })
   });
 
 export const adminUploadMedia = createServerFn({ method: "POST" })
-  .middleware([authMiddleware])
   .validator((input: unknown) => input)
   .handler(async ({ data }) => {
     await guard();
@@ -178,7 +161,6 @@ export const adminUploadMedia = createServerFn({ method: "POST" })
   });
 
 export const adminDeleteMedia = createServerFn({ method: "POST" })
-  .middleware([authMiddleware])
   .validator((input: { id: string }) => input)
   .handler(async ({ data }) => {
     await guard();
@@ -188,7 +170,6 @@ export const adminDeleteMedia = createServerFn({ method: "POST" })
   });
 
 export const adminAddGrant = createServerFn({ method: "POST" })
-  .middleware([authMiddleware])
   .validator((input: { email: string }) => input)
   .handler(async ({ data }) => {
     await guard();
@@ -198,7 +179,6 @@ export const adminAddGrant = createServerFn({ method: "POST" })
   });
 
 export const adminRemoveGrant = createServerFn({ method: "POST" })
-  .middleware([authMiddleware])
   .validator((input: { email: string }) => input)
   .handler(async ({ data }) => {
     await guard();
@@ -206,3 +186,18 @@ export const adminRemoveGrant = createServerFn({ method: "POST" })
     await removeGrant(data.email);
     return { ok: true };
   });
+
+export const adminSignIn = createServerFn({ method: "POST" })
+  .validator((input: { token: string }) => ({ token: String(input?.token ?? "").slice(0, 512) }))
+  .handler(async ({ data }) => {
+    const { signInDesk, deskConfigured } = await import("@/lib/auth/admin.server");
+    if (!(await deskConfigured())) return { ok: false, reason: "locked" as const };
+    const ok = await signInDesk(data.token);
+    return ok ? { ok: true, reason: null } : { ok: false, reason: "wrong" as const };
+  });
+
+export const adminSignOut = createServerFn({ method: "POST" }).handler(async () => {
+  const { signOutDesk } = await import("@/lib/auth/admin.server");
+  signOutDesk();
+  return { ok: true };
+});

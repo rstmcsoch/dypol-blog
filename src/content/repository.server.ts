@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+const randomUUID = () => crypto.randomUUID();
 import { articles as seedArticles } from "./articles";
 import { readingMinutes, type ArticleMeta } from "./present";
 import { MediaBindingError, openMediaStore } from "./media-store.server";
@@ -38,7 +38,7 @@ type ArticleRow = {
   updated_at: string | Date;
   category_id: string;
   motif: Article["motif"];
-  featured: boolean;
+  featured: boolean | number;
   seo_title: string | null;
   seo_description: string | null;
   cover_media_id: string | null;
@@ -61,18 +61,18 @@ async function seedIfEmpty(): Promise<void> {
     if (Number(existing[0]?.n ?? 0) > 0) {
       const settings = await sql`select id from site_settings where id = 'site'`;
       if (settings.length === 0) {
-        await sql`insert into site_settings (id, data) values ('site', ${JSON.stringify(site)}::jsonb)`;
+        await sql`insert or ignore into site_settings (id, data) values ('site', ${JSON.stringify(site)}::jsonb)`;
       }
       return;
     }
     for (const category of seedCategories) {
-      await sql`insert into categories (id, slug, label, description) values (${category.id}, ${category.slug}, ${category.label}, ${category.description})`;
+      await sql`insert or ignore into categories (id, slug, label, description) values (${category.id}, ${category.slug}, ${category.label}, ${category.description})`;
     }
     for (const tag of seedTags) {
-      await sql`insert into tags (id, slug, label) values (${tag.id}, ${tag.slug}, ${tag.label})`;
+      await sql`insert or ignore into tags (id, slug, label) values (${tag.id}, ${tag.slug}, ${tag.label})`;
     }
     for (const article of seedArticles) {
-      await sql`insert into articles (
+      await sql`insert or ignore into articles (
         id, slug, title, excerpt, status, published_at, updated_at, category_id, motif, featured,
         seo_title, seo_description, cover_media_id, blocks
       ) values (
@@ -82,10 +82,10 @@ async function seedIfEmpty(): Promise<void> {
         ${article.coverMediaId ?? null}, ${JSON.stringify(article.blocks)}::jsonb
       )`;
       for (const tagId of article.tagIds) {
-        await sql`insert into article_tags (article_id, tag_id) values (${article.id}, ${tagId})`;
+        await sql`insert or ignore into article_tags (article_id, tag_id) values (${article.id}, ${tagId})`;
       }
     }
-    await sql`insert into site_settings (id, data) values ('site', ${JSON.stringify(site)}::jsonb)`;
+    await sql`insert or ignore into site_settings (id, data) values ('site', ${JSON.stringify(site)}::jsonb)`;
   });
 }
 
@@ -109,7 +109,7 @@ function mapArticle(row: ArticleRow, tagIds: string[]): Article {
     categoryId: row.category_id,
     tagIds,
     motif: row.motif,
-    featured: row.featured,
+    featured: Boolean(row.featured),
     seoTitle: row.seo_title ?? undefined,
     seoDescription: row.seo_description ?? undefined,
     coverMediaId: row.cover_media_id,
@@ -163,6 +163,25 @@ async function catalog(): Promise<{ articles: Article[]; categories: Category[];
   return { articles, categories, tags, site: siteConfig };
 }
 
+/** Built-in content shipped with the code. Public pages fall back to it when D1 fails. */
+function staticCatalog(): Awaited<ReturnType<typeof catalog>> {
+  return {
+    articles: seedArticles.map((article) => ({ ...article, coverMediaId: article.coverMediaId ?? null })),
+    categories: seedCategories,
+    tags: seedTags,
+    site: normalizeSite(site),
+  };
+}
+
+async function publicCatalog(): Promise<Awaited<ReturnType<typeof catalog>>> {
+  try {
+    return await catalog();
+  } catch (error) {
+    console.error("[content] D1 unavailable, serving built-in content.", error);
+    return staticCatalog();
+  }
+}
+
 function published(articles: Article[]): Article[] {
   return articles.filter((article) => article.status === "published" && article.publishedAt).sort(byNewest);
 }
@@ -185,7 +204,7 @@ export function metaFor(articles: Article[], publishedOrder: Article[], categori
 }
 
 export async function readShell() {
-  const data = await catalog();
+  const data = await publicCatalog();
   const live = published(data.articles);
   const trending = data.site.trending.enabled
     ? data.site.trending.slugs
@@ -197,7 +216,7 @@ export async function readShell() {
 }
 
 export async function readHome() {
-  const data = await catalog();
+  const data = await publicCatalog();
   const live = published(data.articles);
   const lead = live.find((article) => article.featured) ?? live[0] ?? null;
   const rest = live.filter((article) => article.id !== lead?.id);
@@ -216,13 +235,13 @@ export async function readHome() {
 }
 
 export async function readIndex() {
-  const data = await catalog();
+  const data = await publicCatalog();
   const live = published(data.articles);
   return { articles: live, meta: metaFor(live, live, data.categories) };
 }
 
 export async function readTopics() {
-  const data = await catalog();
+  const data = await publicCatalog();
   const live = published(data.articles);
   return {
     topics: data.categories.map((category) => ({
@@ -233,7 +252,7 @@ export async function readTopics() {
 }
 
 export async function readTopic(slug: string) {
-  const data = await catalog();
+  const data = await publicCatalog();
   const category = categoryOf(data.categories, slug);
   if (!category) return null;
   const live = published(data.articles).filter((article) => article.categoryId === category.id);
@@ -242,7 +261,7 @@ export async function readTopic(slug: string) {
 }
 
 export async function readArticle(slug: string) {
-  const data = await catalog();
+  const data = await publicCatalog();
   const live = published(data.articles);
   const article = live.find((item) => item.slug === slug);
   if (!article) return null;
@@ -283,7 +302,7 @@ function articlePayload(
 }
 
 export async function readSitemap() {
-  const data = await catalog();
+  const data = await publicCatalog();
   return {
     articles: published(data.articles).map((article) => article.slug),
     topics: data.categories.map((category) => category.slug),

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { errorText } from "@/components/admin/gate";
-import { adminAddGrant, adminRemoveGrant, adminSaveSettings, adminSettings } from "@/content/admin-api";
+import { adminSaveSettings, adminSettings, adminSignOut } from "@/content/admin-api";
 import type { NavHref, SiteConfig } from "@/content/types";
 
 export const Route = createFileRoute("/admin/settings")({
@@ -16,7 +16,6 @@ function SettingsDesk() {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
-  const [grant, setGrant] = useState("");
 
   function patch(next: Partial<SiteConfig>) {
     setSite((current) => ({ ...current, ...next }));
@@ -27,9 +26,7 @@ function SettingsDesk() {
       <p className="desk-kicker">Configuration</p>
       <h1 className="desk-title">Settings</h1>
       <p className="desk-note">
-        {data.mode === "dev"
-          ? "Sign-in is off in this environment, so the desk is open to this preview. When sign-in is on, only emails in ADMIN_EMAILS or the grant list can publish."
-          : `Signed in as ${data.email ?? "an editor"}.`}
+        Signed in with the editor token.
       </p>
       {data.mediaNotice ? (
         <p className="banner banner--bad" role="alert">
@@ -281,45 +278,20 @@ function SettingsDesk() {
         </button>
       </form>
       <section className="desk-section">
-        <h2>Editor grants</h2>
-        <p className="desk-note">These emails can use the desk when sign-in is on and ADMIN_EMAILS is unset.</p>
-        <ul>
-          {data.grants.map((email) => (
-            <li key={email}>
-              {email}{" "}
-              <button
-                type="button"
-                className="btn btn--ghost"
-                onClick={() => {
-                  void adminRemoveGrant({ data: { email } }).then(() => router.invalidate());
-                }}
-              >
-                Remove
-              </button>
-            </li>
-          ))}
-        </ul>
-        <form
-          className="filters"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void adminAddGrant({ data: { email: grant } })
-              .then(async () => {
-                setGrant("");
-                setMessage("Grant saved.");
-                await router.invalidate();
-              })
-              .catch((caught: unknown) => setError(errorText(caught)));
+        <h2>Access</h2>
+        <p className="desk-note">
+          The desk opens with the editor token stored as the ADMIN_TOKEN secret on the Cloudflare Worker. Rotate that
+          secret to change it and sign every editor out.
+        </p>
+        <button
+          type="button"
+          className="btn btn--ghost"
+          onClick={() => {
+            void adminSignOut().then(() => router.navigate({ to: "/login", search: { denied: false } }));
           }}
         >
-          <label className="field">
-            <span>Email</span>
-            <input type="email" value={grant} onChange={(event) => setGrant(event.target.value)} required />
-          </label>
-          <button className="btn" type="submit">
-            Add editor
-          </button>
-        </form>
+          Sign out
+        </button>
       </section>
     </>
   );
