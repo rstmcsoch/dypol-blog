@@ -1,4 +1,4 @@
-import type { NavItem } from "./types";
+import type { NavItem, SiteConfig } from "./types";
 
 /**
  * Public site configuration.
@@ -53,10 +53,10 @@ export const site = {
     loading: "Loading",
   },
   nav: [
-    { id: "home", label: "Home", href: "/" },
-    { id: "index", label: "Index", href: "/articles" },
-    { id: "topics", label: "Topics", href: "/topics" },
-    { id: "about", label: "About", href: "/about" },
+    { id: "home", label: "Home", href: "/", visible: true },
+    { id: "index", label: "Index", href: "/articles", visible: true },
+    { id: "topics", label: "Topics", href: "/topics", visible: true },
+    { id: "about", label: "About", href: "/about", visible: true },
   ] satisfies NavItem[],
   trending: {
     enabled: true,
@@ -65,6 +65,7 @@ export const site = {
   },
   footer: {
     note: "DYPOL Blog · DYPOL Labs",
+    links: [],
   },
   about: {
     paragraphs: [
@@ -74,4 +75,6 @@ export const site = {
       "The same article shape is what a later editor and an automated publishing flow will both write. Neither one needs its own format.",
     ],
   },
-} as const;
+  logoMediaId: null,
+  faviconMediaId: null,
+} satisfies SiteConfig;

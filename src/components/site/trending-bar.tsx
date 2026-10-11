@@ -1,9 +1,9 @@
 import { Link } from "@tanstack/react-router";
-import { site } from "@/content/site";
-import { trendingArticles } from "@/content/queries";
+import { useSite, useTrending } from "./use-site";
 
 export function TrendingBar() {
-  const items = trendingArticles();
+  const site = useSite();
+  const items = useTrending();
   if (!site.trending.enabled || items.length === 0) return null;
   return (
     <div className="trend">

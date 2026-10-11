@@ -1,12 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { PagePending } from "@/components/site/states";
-import { site } from "@/content/site";
+import { useSite } from "@/components/site/use-site";
 
 export const Route = createFileRoute("/about")({
   head: () => ({
     meta: [
-      { title: `${site.labels.aboutTitle} — ${site.name}` },
-      { name: "description", content: site.about.paragraphs[0] },
+      { title: "About — DYPOL Blog" },
+      { name: "description", content: "DYPOL Blog is the public journal of DYPOL Labs." },
     ],
     links: [{ rel: "canonical", href: "/about" }],
   }),
@@ -15,6 +15,7 @@ export const Route = createFileRoute("/about")({
 });
 
 function AboutPage() {
+  const site = useSite();
   return (
     <div className="page">
       <div className="container">

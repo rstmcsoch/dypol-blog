@@ -1,7 +1,9 @@
 import { Link } from "@tanstack/react-router";
-import { site } from "@/content/site";
+import { site as fallback } from "@/content/site";
+import { useSite } from "./use-site";
 
 export function EmptyState() {
+  const site = useSite();
   return (
     <div className="state-panel">
       <p className="state-panel__num">00</p>
@@ -15,6 +17,7 @@ export function EmptyState() {
 }
 
 export function NotFoundState() {
+  const site = useSite();
   return (
     <div className="page">
       <div className="container">
@@ -35,7 +38,7 @@ export function PagePending() {
   return (
     <div className="page" aria-busy="true" aria-live="polite">
       <div className="container">
-        <p className="kicker">{site.labels.loading}</p>
+        <p className="kicker">{fallback.labels.loading}</p>
         <div className="skeleton skeleton--title" />
         <div className="skeleton" />
         <div className="skeleton skeleton--short" />

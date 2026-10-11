@@ -518,9 +518,9 @@ test("renders the manifest with the per-app name", () => {
 // Tripwires: the deployed-app path only works if Nitro scans server/ — an
 // accidental edit that drops serverDir or the middleware file would otherwise
 // fail silently (published apps would just render the app for ?install=1).
-test("vite config keeps the nitro serverDir wiring", () => {
+test("vite config builds for Cloudflare Workers with the PWA plugin", () => {
   const viteConfig = readFileSync(join(TEMPLATE_ROOT, "vite.config.ts"), "utf8");
-  assert.match(viteConfig, /serverDir:\s*"\.\/server"/);
+  assert.match(viteConfig, /cloudflare\(\{ viteEnvironment: \{ name: "ssr" \} \}\)/);
   assert.match(viteConfig, /grokPwaPlugin\(\)/);
 });
 

@@ -1,13 +1,15 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { PagePending } from "@/components/site/states";
 import { TopicGrid } from "@/components/site/topic-grid";
-import { site } from "@/content/site";
+import { useSite } from "@/components/site/use-site";
+import { getTopics } from "@/content/public-api";
 
 export const Route = createFileRoute("/topics/")({
+  loader: () => getTopics(),
   head: () => ({
     meta: [
-      { title: `${site.labels.topicsTitle} — ${site.name}` },
-      { name: "description", content: site.labels.topicsLede },
+      { title: "Topics — DYPOL Blog" },
+      { name: "description", content: "Pieces are filed by subject." },
     ],
     links: [{ rel: "canonical", href: "/topics" }],
   }),
@@ -16,6 +18,8 @@ export const Route = createFileRoute("/topics/")({
 });
 
 function TopicsPage() {
+  const site = useSite();
+  const { topics } = Route.useLoaderData();
   return (
     <div className="page">
       <div className="container">
@@ -24,7 +28,7 @@ function TopicsPage() {
           <h1 className="page-title">{site.labels.topicsTitle}</h1>
           <p className="lede">{site.labels.topicsLede}</p>
         </header>
-        <TopicGrid />
+        <TopicGrid topics={topics} />
       </div>
     </div>
   );
