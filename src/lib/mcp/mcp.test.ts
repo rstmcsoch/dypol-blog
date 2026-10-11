@@ -88,3 +88,17 @@ test("regression: stored secret with surrounding whitespace still matches the pa
   const pair = await exchangeCode(TOKEN, { code, clientId: "c", redirectUri: "https://grok.com/cb", verifier });
   assert.ok(pair, "tokens minted under the stored value validate under the trimmed value");
 });
+
+test("CORS origin allow-list for browser-originated MCP requests", async () => {
+  const { originAllowed } = await import("./cors.ts");
+  const self = "https://grok-mcp-automation-dypolblog.rstmcsoch.workers.dev";
+  assert.equal(originAllowed(self, self), true);
+  assert.equal(originAllowed("https://grok.com", self), true);
+  assert.equal(originAllowed("https://www.grok.com", self), true);
+  assert.equal(originAllowed("https://console.x.ai", self), true);
+  assert.equal(originAllowed("http://grok.com", self), false);
+  assert.equal(originAllowed("https://grok.com.evil.com", self), false);
+  assert.equal(originAllowed("https://evil.example", self), false);
+  assert.equal(originAllowed("null", self), false);
+  assert.equal(originAllowed("https://my.host", self, "my.host"), true);
+});

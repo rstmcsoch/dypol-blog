@@ -83,6 +83,68 @@ await check("no token -> 401 with OAuth resource metadata hint", async () => {
   assert.match(r.headers.get("www-authenticate") ?? "", /resource_metadata="https?:\/\/[^"]+\/\.well-known\/oauth-protected-resource\/mcp"/);
 });
 
+await check("discovery probes: unauthenticated GET/HEAD /mcp and /mcp/ -> 401 challenge; CORS preflight from grok.com", async () => {
+  for (const path of ["/mcp", "/mcp/"]) {
+    for (const method of ["GET", "HEAD"]) {
+      await pace();
+      const r = await fetch(`${BASE}${path}`, { method, headers: { accept: "text/event-stream" } });
+      assert.equal(r.status, 401, `${method} ${path}`);
+      assert.match(r.headers.get("www-authenticate") ?? "", /resource_metadata=.*scope="blog:automation"/);
+    }
+  }
+  await pace();
+  const pre = await fetch(`${BASE}/mcp`, { method: "OPTIONS", headers: { origin: "https://grok.com", "access-control-request-method": "POST", "access-control-request-headers": "authorization, content-type" } });
+  assert.equal(pre.status, 204);
+  assert.equal(pre.headers.get("access-control-allow-origin"), "https://grok.com");
+  assert.match(pre.headers.get("access-control-allow-headers") ?? "", /authorization/);
+  const ch = await raw({ jsonrpc: "2.0", id: 1, method: "initialize", params: {} }, { origin: "https://grok.com" });
+  assert.equal(ch.status, 401);
+  assert.match(ch.headers.get("access-control-expose-headers") ?? "", /www-authenticate/);
+  await pace();
+  const meta = await fetch(`${BASE}/.well-known/oauth-protected-resource/mcp`, { headers: { origin: "https://grok.com" } });
+  assert.equal(meta.headers.get("access-control-allow-origin"), "*");
+});
+
+await check("full OAuth discovery from just the URL (SDK auth provider, Grok's redirect URI)", async () => {
+  const redirectUrl = "https://grok.com/connectors-oauth-exchange-code/";
+  let clientInfo, tokens, verifier, authCode;
+  const provider = {
+    get redirectUrl() { return redirectUrl; },
+    get clientMetadata() { return { redirect_uris: [redirectUrl], client_name: "Grok-like", grant_types: ["authorization_code", "refresh_token"], response_types: ["code"], token_endpoint_auth_method: "none" }; },
+    clientInformation: () => clientInfo,
+    saveClientInformation: (i) => { clientInfo = i; },
+    tokens: () => tokens,
+    saveTokens: (t) => { tokens = t; },
+    saveCodeVerifier: (v) => { verifier = v; },
+    codeVerifier: () => verifier,
+    redirectToAuthorization: async (url) => {
+      // Stand in for the owner: open the approval page and approve with MCP_TOKEN.
+      await pace();
+      const page = await fetch(url);
+      assert.equal(page.status, 200);
+      await pace();
+      const res = await fetch(new URL("/oauth/authorize", url), { method: "POST", body: new URLSearchParams({ ...Object.fromEntries(url.searchParams), owner_secret: TOKEN }), redirect: "manual" });
+      assert.equal(res.status, 302);
+      authCode = new URL(res.headers.get("location")).searchParams.get("code");
+    },
+  };
+  const transport = new StreamableHTTPClientTransport(new URL(`${BASE}/mcp`), { authProvider: provider });
+  const c = new Client({ name: "grok-like", version: "1.0.0" });
+  await pace();
+  await assert.rejects(c.connect(transport), /Unauthorized/);
+  assert.ok(authCode, "authorization code captured");
+  await pace();
+  await transport.finishAuth(authCode);
+  assert.ok(tokens?.access_token?.startsWith("mcpat."));
+  const c2 = new Client({ name: "grok-like", version: "1.0.0" });
+  await pace();
+  await c2.connect(new StreamableHTTPClientTransport(new URL(`${BASE}/mcp`), { authProvider: provider }));
+  await pace();
+  const { tools } = await c2.listTools();
+  assert.equal(tools.length, 6);
+  await c2.close();
+});
+
 await check("wrong token -> 401 invalid_token; MCP client cannot connect", async () => {
   const r = await raw({ jsonrpc: "2.0", id: 1, method: "tools/list" }, { authorization: "Bearer wrong-token-wrong-token-wrong-token-xx" });
   assert.equal(r.status, 401);
@@ -90,12 +152,12 @@ await check("wrong token -> 401 invalid_token; MCP client cannot connect", async
   await assert.rejects(connect("wrong-token-wrong-token-wrong-token-xx"));
 });
 
-await check("foreign browser Origin -> 403; GET -> 405", async () => {
+await check("foreign browser Origin -> 403; authenticated GET -> 405", async () => {
   const r = await raw({ jsonrpc: "2.0", id: 1, method: "ping" }, { authorization: `Bearer ${TOKEN}`, origin: "https://evil.example" });
   assert.equal(r.status, 403);
   await pace();
   const g = await fetch(`${BASE}/mcp`, { headers: { authorization: `Bearer ${TOKEN}` } });
-  assert.equal(g.status, 405);
+  assert.equal(g.status, 405, "authenticated GET: no SSE stream");
 });
 
 const client = await connect(TOKEN);

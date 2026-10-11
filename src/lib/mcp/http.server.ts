@@ -1,5 +1,6 @@
 import { workerEnv } from "@/lib/cf-env.server";
 import { authenticate } from "./auth";
+import { MCP_CORS_BASE, originAllowed, withHeaders } from "./cors";
 import { handleRpc, RPC } from "./protocol";
 import { buildTools } from "./tools.server";
 
@@ -55,14 +56,18 @@ export function resourceMetadataUrl(request: Request): string {
 
 export async function handleMcp(request: Request): Promise<Response> {
   const url = new URL(request.url);
-  if (request.method !== "POST") {
-    return new Response(null, { status: 405, headers: { allow: "POST" } });
-  }
-  // DNS-rebinding / browser protection: a browser Origin must be this site.
+  const env = (await workerEnv()) as { MCP_TOKEN?: string; MCP_LIMITER?: Limiter; MCP_OAUTH_REDIRECT_HOSTS?: string };
+  // DNS-rebinding / browser protection: a browser Origin must be allow-listed.
   const origin = request.headers.get("origin");
-  if (origin && origin !== url.origin) return rpcError(403, RPC.INVALID_REQUEST, "Origin not allowed.");
+  if (origin && !originAllowed(origin, url.origin, env.MCP_OAUTH_REDIRECT_HOSTS)) {
+    return rpcError(403, RPC.INVALID_REQUEST, "Origin not allowed.");
+  }
+  const cors = origin ? { ...MCP_CORS_BASE, "access-control-allow-origin": origin } : {};
+  if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
+  return withHeaders(await handleMcpInner(request, env), cors);
+}
 
-  const env = (await workerEnv()) as { MCP_TOKEN?: string; MCP_LIMITER?: Limiter };
+async function handleMcpInner(request: Request, env: { MCP_TOKEN?: string; MCP_LIMITER?: Limiter }): Promise<Response> {
   const ip = request.headers.get("cf-connecting-ip") ?? "unknown";
   if (!env.MCP_LIMITER) return rpcError(503, RPC.INTERNAL, "Rate limiter not configured.");
   const { success } = await env.MCP_LIMITER.limit({ key: `mcp:${ip}` });
@@ -74,12 +79,16 @@ export async function handleMcp(request: Request): Promise<Response> {
   if (!auth.ok) {
     if (auth.reason === "disabled") return rpcError(503, RPC.INTERNAL, "The MCP endpoint is not enabled on this deployment.");
     return rpcError(401, RPC.INVALID_REQUEST, "Unauthorized.", {
-      "www-authenticate": `Bearer realm="dypol-blog", resource_metadata="${resourceMetadataUrl(request)}"${
+      "www-authenticate": `Bearer realm="dypol-blog", resource_metadata="${resourceMetadataUrl(request)}", scope="blog:automation"${
         auth.reason === "invalid" ? ', error="invalid_token"' : ""
       }`,
     });
   }
 
+  // Authenticated GET/DELETE: this stateless server offers no SSE stream or sessions (spec: 405).
+  if (request.method !== "POST") {
+    return new Response(null, { status: 405, headers: { allow: "POST, OPTIONS" } });
+  }
   const contentType = request.headers.get("content-type") ?? "";
   if (!contentType.toLowerCase().includes("application/json")) {
     return rpcError(415, RPC.INVALID_REQUEST, "Content-Type must be application/json.");

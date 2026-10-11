@@ -1,4 +1,5 @@
 import { workerEnv } from "@/lib/cf-env.server";
+import { PUBLIC_CORS } from "./cors";
 import { exchangeCode, issueCode, mcpConfigured, redirectAllowed, refresh, secretMatches } from "./auth";
 
 /**
@@ -12,7 +13,7 @@ const SCOPE = "blog:automation";
 const noStore = { "cache-control": "no-store" };
 
 function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", ...noStore } });
+  return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", ...noStore, ...PUBLIC_CORS } });
 }
 
 function oauthError(error: string, description: string, status = 400): Response {
@@ -41,6 +42,7 @@ export function authorizationServerMetadata(request: Request): Response {
     grant_types_supported: ["authorization_code", "refresh_token"],
     code_challenge_methods_supported: ["S256"],
     token_endpoint_auth_methods_supported: ["none"],
+    client_id_metadata_document_supported: true,
     scopes_supported: [SCOPE],
   });
 }
@@ -190,4 +192,9 @@ export async function token(request: Request): Promise<Response> {
     return pair ? json(pair) : oauthError("invalid_grant", "The refresh token is invalid or expired.");
   }
   return oauthError("unsupported_grant_type", "Use authorization_code or refresh_token.");
+}
+
+/** CORS preflight for the public OAuth endpoints. */
+export function preflight(): Response {
+  return new Response(null, { status: 204, headers: PUBLIC_CORS });
 }

@@ -86,7 +86,11 @@ desk shows "Image transfer: untested". If it does not work, drafts keep the
    and opens `/oauth/authorize`: paste `MCP_TOKEN`, click Allow.
    If the form asks for fields manually: Authorization endpoint `https://<site>/oauth/authorize`,
    Token endpoint `https://<site>/oauth/token`, Client ID `dypol-mcp-client`, no client
-   secret, scope `blog:automation`, PKCE / token auth method `none`.
+   secret, scope `blog:automation`, Token Auth Method `none (PKCE only)`.
+   (Community reports put Grok's callback at `https://grok.com/connectors-oauth-exchange-code/`,
+   which is allowed.) Discovery probes are answered per the MCP auth spec: unauthenticated
+   `GET`/`HEAD`/`POST /mcp` → 401 with `WWW-Authenticate: Bearer resource_metadata=…`,
+   CORS preflight from grok.com / x.ai → 204.
    If Grok's callback host is not on grok.com/x.ai, add it to `MCP_OAUTH_REDIRECT_HOSTS`.
 3. Grok CLI alternative: `grok mcp add --transport http dypol https://<site>/mcp --header "Authorization: Bearer ${DYPOL_MCP_TOKEN}"`.
 4. Create a Grok Automation with `grok-automation-prompt.md`, scheduled daily.
