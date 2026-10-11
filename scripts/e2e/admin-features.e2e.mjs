@@ -170,6 +170,7 @@ await check("invalid settings are refused with a readable message", async () => 
 let deleteCall = null;
 await check("delete a draft from the list (confirm dialog)", async () => {
   await page.goto(BASE + "/admin/articles/new");
+  await page.waitForLoadState("networkidle"); // fill only after hydration
   await page.fill('label:has-text("Title") input', "E2E delete me");
   await page.click('button[type="submit"]');
   await page.waitForURL(/\/admin\/articles\/(?!new)[^/]+$/);

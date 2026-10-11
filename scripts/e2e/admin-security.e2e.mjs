@@ -125,6 +125,7 @@ if (LOCKED) {
   await page.click('form button[type="submit"]');
   await page.waitForSelector("text=Uploaded.");
   await page.goto(BASE + "/admin/articles/new");
+  await page.waitForLoadState("networkidle"); // fill only after hydration
   await page.getByLabel(/^Title/).first().fill("E2E security probe");
   await page.getByRole("button", { name: /^Save/ }).first().click();
   await page.waitForURL(/\/admin\/articles\/[0-9a-f-]{36}$/);
