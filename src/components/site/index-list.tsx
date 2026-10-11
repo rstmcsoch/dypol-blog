@@ -1,27 +1,34 @@
 import { Link } from "@tanstack/react-router";
-import { site } from "@/content/site";
 import { formatDate, padIndex } from "@/lib/format";
-import { getCategory, rankOf, readingMinutes } from "@/content/queries";
+import type { ArticleMeta } from "@/content/present";
 import type { Article } from "@/content/types";
 
-export function IndexList({ articles }: { articles: Article[] }) {
+export function IndexList({
+  articles,
+  meta,
+  minRead,
+}: {
+  articles: Article[];
+  meta: Record<string, ArticleMeta>;
+  minRead: string;
+}) {
   return (
     <ol className="index-list">
       {articles.map((article) => {
-        const category = getCategory(article.categoryId);
+        const row = meta[article.id];
         return (
           <li key={article.id}>
             <Link to="/articles/$slug" params={{ slug: article.slug }} className="index-row">
-              <span className="index-row__num">{padIndex(rankOf(article.slug))}</span>
+              <span className="index-row__num">{padIndex(row?.rank ?? 0)}</span>
               <span className="index-row__main">
                 <span className="index-row__title">{article.title}</span>
                 <span className="index-row__excerpt">{article.excerpt}</span>
               </span>
               <span className="index-row__meta">
-                {category ? <span>{category.label}</span> : null}
+                {row?.categoryLabel ? <span>{row.categoryLabel}</span> : null}
                 {article.publishedAt ? <span>{formatDate(article.publishedAt)}</span> : null}
                 <span>
-                  {readingMinutes(article)} {site.labels.minRead}
+                  {row?.minutes ?? 1} {minRead}
                 </span>
               </span>
             </Link>
