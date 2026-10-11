@@ -47,7 +47,9 @@ async function hmac(key: string, message: string): Promise<string> {
   return hex(new Uint8Array(await crypto.subtle.sign("HMAC", k, enc.encode(message))));
 }
 
-const keyFor = (mcpToken: string) => `dypol-mcp|${mcpToken}`;
+/** Secrets pasted into dashboards often carry a trailing newline/space; never part of the token. */
+const norm = (value: string) => value.trim();
+const keyFor = (mcpToken: string) => `dypol-mcp|${norm(mcpToken)}`;
 
 export function mcpConfigured(mcpToken: string | undefined): mcpToken is string {
   return typeof mcpToken === "string" && mcpToken.trim().length >= MIN_MCP_TOKEN_LENGTH;
@@ -56,7 +58,7 @@ export function mcpConfigured(mcpToken: string | undefined): mcpToken is string 
 /** Compares a presented secret to MCP_TOKEN without leaking length or content. */
 export async function secretMatches(presented: string, mcpToken: string): Promise<boolean> {
   const key = keyFor(mcpToken);
-  const [a, b] = await Promise.all([hmac(key, `static|${presented}`), hmac(key, `static|${mcpToken}`)]);
+  const [a, b] = await Promise.all([hmac(key, `static|${norm(presented)}`), hmac(key, `static|${norm(mcpToken)}`)]);
   return constantTimeEqual(a, b);
 }
 

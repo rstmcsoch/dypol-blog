@@ -75,3 +75,16 @@ test("JSON-RPC: initialize, list, call, errors, notifications", async () => {
   assert.equal(((await handleRpc({ id: 7 }, [])) as { error: { code: number } }).error.code, -32600);
   assert.equal(((await handleRpc([], [])) as { error: { code: number } }).error.code, -32600);
 });
+
+test("regression: stored secret with surrounding whitespace still matches the pasted token (approval page + bearer)", async () => {
+  const stored = `${TOKEN}\n`;
+  assert.equal(await secretMatches(TOKEN, stored), true);
+  assert.equal(await secretMatches(` ${TOKEN} `, TOKEN), true);
+  assert.deepEqual(await authenticate(`Bearer ${TOKEN}`, stored), { ok: true, via: "bearer" });
+  assert.equal(await secretMatches(TOKEN.slice(1), stored), false);
+  assert.equal(await secretMatches(`${TOKEN}x`, stored), false);
+  const verifier = "v".repeat(64);
+  const code = await issueCode(stored, { clientId: "c", redirectUri: "https://grok.com/cb", challenge: await pkceS256(verifier) });
+  const pair = await exchangeCode(TOKEN, { code, clientId: "c", redirectUri: "https://grok.com/cb", verifier });
+  assert.ok(pair, "tokens minted under the stored value validate under the trimmed value");
+});
