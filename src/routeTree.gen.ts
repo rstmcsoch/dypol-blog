@@ -20,9 +20,13 @@ import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as DotwellKnownOauthAuthorizationServerRouteImport } from './routes/[.]well-known/oauth-authorization-server'
 import { Route as DotwellKnownOauthProtectedResourceRouteImport } from './routes/[.]well-known/oauth-protected-resource'
 import { Route as AdminIndexRouteImport } from './routes/admin/index'
+import { Route as AdminAppearanceRouteImport } from './routes/admin/appearance'
 import { Route as AdminAutomationRouteImport } from './routes/admin/automation'
+import { Route as AdminHelpRouteImport } from './routes/admin/help'
+import { Route as AdminHomepageRouteImport } from './routes/admin/homepage'
 import { Route as AdminMediaRouteImport } from './routes/admin/media'
 import { Route as AdminSettingsRouteImport } from './routes/admin/settings'
+import { Route as AdminSiteTextRouteImport } from './routes/admin/site-text'
 import { Route as AdminTopicsRouteImport } from './routes/admin/topics'
 import { Route as ArticlesIndexRouteImport } from './routes/articles/index'
 import { Route as ArticlesSlugRouteImport } from './routes/articles/$slug'
@@ -95,9 +99,24 @@ const AdminIndexRoute = AdminIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminAppearanceRoute = AdminAppearanceRouteImport.update({
+  id: '/appearance',
+  path: '/appearance',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminAutomationRoute = AdminAutomationRouteImport.update({
   id: '/automation',
   path: '/automation',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminHelpRoute = AdminHelpRouteImport.update({
+  id: '/help',
+  path: '/help',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminHomepageRoute = AdminHomepageRouteImport.update({
+  id: '/homepage',
+  path: '/homepage',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminMediaRoute = AdminMediaRouteImport.update({
@@ -108,6 +127,11 @@ const AdminMediaRoute = AdminMediaRouteImport.update({
 const AdminSettingsRoute = AdminSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminSiteTextRoute = AdminSiteTextRouteImport.update({
+  id: '/site-text',
+  path: '/site-text',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminTopicsRoute = AdminTopicsRouteImport.update({
@@ -193,9 +217,13 @@ export interface FileRoutesByFullPath {
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/.well-known/oauth-authorization-server': typeof DotwellKnownOauthAuthorizationServerRoute
   '/.well-known/oauth-protected-resource': typeof DotwellKnownOauthProtectedResourceRouteWithChildren
+  '/admin/appearance': typeof AdminAppearanceRoute
   '/admin/automation': typeof AdminAutomationRoute
+  '/admin/help': typeof AdminHelpRoute
+  '/admin/homepage': typeof AdminHomepageRoute
   '/admin/media': typeof AdminMediaRoute
   '/admin/settings': typeof AdminSettingsRoute
+  '/admin/site-text': typeof AdminSiteTextRoute
   '/admin/topics': typeof AdminTopicsRoute
   '/articles/$slug': typeof ArticlesSlugRoute
   '/media/$id': typeof MediaIdRoute
@@ -222,9 +250,13 @@ export interface FileRoutesByTo {
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/.well-known/oauth-authorization-server': typeof DotwellKnownOauthAuthorizationServerRoute
   '/.well-known/oauth-protected-resource': typeof DotwellKnownOauthProtectedResourceRouteWithChildren
+  '/admin/appearance': typeof AdminAppearanceRoute
   '/admin/automation': typeof AdminAutomationRoute
+  '/admin/help': typeof AdminHelpRoute
+  '/admin/homepage': typeof AdminHomepageRoute
   '/admin/media': typeof AdminMediaRoute
   '/admin/settings': typeof AdminSettingsRoute
+  '/admin/site-text': typeof AdminSiteTextRoute
   '/admin/topics': typeof AdminTopicsRoute
   '/articles/$slug': typeof ArticlesSlugRoute
   '/media/$id': typeof MediaIdRoute
@@ -253,9 +285,13 @@ export interface FileRoutesById {
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/.well-known/oauth-authorization-server': typeof DotwellKnownOauthAuthorizationServerRoute
   '/.well-known/oauth-protected-resource': typeof DotwellKnownOauthProtectedResourceRouteWithChildren
+  '/admin/appearance': typeof AdminAppearanceRoute
   '/admin/automation': typeof AdminAutomationRoute
+  '/admin/help': typeof AdminHelpRoute
+  '/admin/homepage': typeof AdminHomepageRoute
   '/admin/media': typeof AdminMediaRoute
   '/admin/settings': typeof AdminSettingsRoute
+  '/admin/site-text': typeof AdminSiteTextRoute
   '/admin/topics': typeof AdminTopicsRoute
   '/articles/$slug': typeof ArticlesSlugRoute
   '/media/$id': typeof MediaIdRoute
@@ -285,9 +321,13 @@ export interface FileRouteTypes {
     | '/sitemap.xml'
     | '/.well-known/oauth-authorization-server'
     | '/.well-known/oauth-protected-resource'
+    | '/admin/appearance'
     | '/admin/automation'
+    | '/admin/help'
+    | '/admin/homepage'
     | '/admin/media'
     | '/admin/settings'
+    | '/admin/site-text'
     | '/admin/topics'
     | '/articles/$slug'
     | '/media/$id'
@@ -314,9 +354,13 @@ export interface FileRouteTypes {
     | '/sitemap.xml'
     | '/.well-known/oauth-authorization-server'
     | '/.well-known/oauth-protected-resource'
+    | '/admin/appearance'
     | '/admin/automation'
+    | '/admin/help'
+    | '/admin/homepage'
     | '/admin/media'
     | '/admin/settings'
+    | '/admin/site-text'
     | '/admin/topics'
     | '/articles/$slug'
     | '/media/$id'
@@ -344,9 +388,13 @@ export interface FileRouteTypes {
     | '/sitemap.xml'
     | '/.well-known/oauth-authorization-server'
     | '/.well-known/oauth-protected-resource'
+    | '/admin/appearance'
     | '/admin/automation'
+    | '/admin/help'
+    | '/admin/homepage'
     | '/admin/media'
     | '/admin/settings'
+    | '/admin/site-text'
     | '/admin/topics'
     | '/articles/$slug'
     | '/media/$id'
@@ -465,11 +513,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminIndexRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/appearance': {
+      id: '/admin/appearance'
+      path: '/appearance'
+      fullPath: '/admin/appearance'
+      preLoaderRoute: typeof AdminAppearanceRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/automation': {
       id: '/admin/automation'
       path: '/automation'
       fullPath: '/admin/automation'
       preLoaderRoute: typeof AdminAutomationRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/help': {
+      id: '/admin/help'
+      path: '/help'
+      fullPath: '/admin/help'
+      preLoaderRoute: typeof AdminHelpRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/homepage': {
+      id: '/admin/homepage'
+      path: '/homepage'
+      fullPath: '/admin/homepage'
+      preLoaderRoute: typeof AdminHomepageRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/media': {
@@ -484,6 +553,13 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/admin/settings'
       preLoaderRoute: typeof AdminSettingsRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/site-text': {
+      id: '/admin/site-text'
+      path: '/site-text'
+      fullPath: '/admin/site-text'
+      preLoaderRoute: typeof AdminSiteTextRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/topics': {
@@ -588,9 +664,13 @@ declare module '@tanstack/react-router' {
 }
 
 interface AdminRouteChildren {
+  AdminAppearanceRoute: typeof AdminAppearanceRoute
   AdminAutomationRoute: typeof AdminAutomationRoute
+  AdminHelpRoute: typeof AdminHelpRoute
+  AdminHomepageRoute: typeof AdminHomepageRoute
   AdminMediaRoute: typeof AdminMediaRoute
   AdminSettingsRoute: typeof AdminSettingsRoute
+  AdminSiteTextRoute: typeof AdminSiteTextRoute
   AdminTopicsRoute: typeof AdminTopicsRoute
   AdminIndexRoute: typeof AdminIndexRoute
   AdminArticlesIdRoute: typeof AdminArticlesIdRoute
@@ -599,9 +679,13 @@ interface AdminRouteChildren {
 }
 
 const AdminRouteChildren: AdminRouteChildren = {
+  AdminAppearanceRoute: AdminAppearanceRoute,
   AdminAutomationRoute: AdminAutomationRoute,
+  AdminHelpRoute: AdminHelpRoute,
+  AdminHomepageRoute: AdminHomepageRoute,
   AdminMediaRoute: AdminMediaRoute,
   AdminSettingsRoute: AdminSettingsRoute,
+  AdminSiteTextRoute: AdminSiteTextRoute,
   AdminTopicsRoute: AdminTopicsRoute,
   AdminIndexRoute: AdminIndexRoute,
   AdminArticlesIdRoute: AdminArticlesIdRoute,

@@ -36,7 +36,7 @@ function TopicsDesk() {
     <>
       <p className="desk-kicker">Taxonomy</p>
       <h1 className="desk-title">Topics and tags</h1>
-      <p className="desk-note">A topic or tag that still belongs to a piece cannot be deleted.</p>
+      <p className="desk-note">A topic or tag that is still used by an article cannot be deleted.</p>
       {error ? (
         <p className="banner banner--bad" role="alert">
           {error}
@@ -93,13 +93,13 @@ function TopicsDesk() {
                   type="button"
                   onClick={() => {
                     if (count > 0) {
-                      setError("Move the pieces in this topic before deleting it.");
+                      setError("Move the articles in this topic to another topic before deleting it.");
                       return;
                     }
                     void run(() => adminDeleteCategory({ data: { id: category.id } }), "Topic deleted.");
                   }}
                 >
-                  Delete ({count} pieces)
+                  Delete ({count} articles)
                 </button>
               </div>
             </form>
@@ -182,7 +182,7 @@ function TopicsDesk() {
                 type="button"
                 onClick={() => {
                   if (count > 0) {
-                    setError("Remove this tag from its pieces before deleting it.");
+                    setError("Remove this tag from its articles before deleting it.");
                     return;
                   }
                   void run(() => adminDeleteTag({ data: { id: tag.id } }), "Tag deleted.");

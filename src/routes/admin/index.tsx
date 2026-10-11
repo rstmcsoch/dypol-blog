@@ -12,8 +12,8 @@ function DeskHome() {
   return (
     <>
       <p className="desk-kicker">Overview</p>
-      <h1 className="desk-title">Desk</h1>
-      <p className="desk-note">Counts come from the journal store. Nothing here is a sample number.</p>
+      <h1 className="desk-title">Dashboard</h1>
+      <p className="desk-note">Live counts from your site.</p>
       <div className="stat-grid">
         <p className="stat">
           <strong>{data.counts.published}</strong>
@@ -35,17 +35,17 @@ function DeskHome() {
       <section className="desk-section">
         <h2>Needs attention</h2>
         {data.attention.length === 0 ? (
-          <p className="desk-note">No drafts or unpublished pieces.</p>
+          <p className="desk-note">No drafts or unpublished articles.</p>
         ) : (
-          <PieceTable rows={data.attention} />
+          <ArticleTable rows={data.attention} />
         )}
       </section>
       <section className="desk-section">
         <h2>Recently updated</h2>
-        <PieceTable rows={data.recent} />
+        <ArticleTable rows={data.recent} />
         <p style={{ marginTop: "1rem" }}>
           <Link to="/admin/articles/new" className="btn">
-            New piece
+            New article
           </Link>
         </p>
       </section>
@@ -53,7 +53,7 @@ function DeskHome() {
   );
 }
 
-function PieceTable({
+function ArticleTable({
   rows,
 }: {
   rows: {

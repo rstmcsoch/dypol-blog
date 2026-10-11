@@ -99,6 +99,32 @@ export type SiteLabels = {
   errorTitle: string;
   errorHome: string;
   loading: string;
+  alsoLike: string;
+  newStories: string;
+  share: string;
+  copyLink: string;
+  linkCopied: string;
+  tags: string;
+};
+
+export type HomeSectionId = "featured" | "also" | "latest" | "topics";
+export type HomeSection = { id: HomeSectionId; enabled: boolean; count: number };
+
+export type SidebarBlock = "tags" | "related" | "newStories" | "share";
+
+export type TickerItem = { id: string; text: string; href: string };
+
+export type CoverFallback = "plate" | "minimal" | "none";
+
+export type Appearance = {
+  /** 75-100: how dark the night theme page is (100 = pure black). */
+  darkness: number;
+  /** 85-100: how white the day theme page is (100 = pure white). */
+  whiteness: number;
+  /** #rrggbb accent color. */
+  accent: string;
+  /** What an article without a cover image shows. */
+  coverFallback: CoverFallback;
 };
 
 /** Canonical public configuration. The journal and the desk both read this. */
@@ -112,8 +138,19 @@ export type SiteConfig = {
   trending: {
     enabled: boolean;
     label: string;
+    /** Pinned article slugs (source "pinned"). */
     slugs: string[];
+    source: "latest" | "pinned" | "custom";
+    count: number;
+    customItems: TickerItem[];
+    /** Scroll the strip continuously. */
+    animate: boolean;
+    /** Seconds per full loop when animated. */
+    speed: number;
   };
+  home: { sections: HomeSection[] };
+  articleSidebar: { enabled: boolean; blocks: SidebarBlock[]; count: number };
+  appearance: Appearance;
   footer: {
     note: string;
     links: FooterLink[];

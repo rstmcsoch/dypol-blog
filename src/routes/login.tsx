@@ -8,7 +8,7 @@ export const Route = createFileRoute("/login")({
   }),
   head: () => ({
     meta: [
-      { title: "Desk — DYPOL Blog" },
+      { title: "Admin sign-in — DYPOL Blog" },
       { name: "robots", content: "noindex" },
     ],
   }),
@@ -25,9 +25,9 @@ function LoginPage() {
     <div className="page">
       <div className="container">
         <header className="page-header">
-          <p className="kicker">Desk</p>
+          <p className="kicker">Admin</p>
           <h1 className="page-title">Sign in</h1>
-          {denied ? <p className="lede">The desk is locked until an editor token is configured.</p> : null}
+          {denied ? <p className="lede">Sign-in is locked until an admin token (ADMIN_TOKEN secret) is configured.</p> : null}
           <form
             className="stack login-form"
             style={{ maxWidth: "24rem" }}
@@ -49,7 +49,7 @@ function LoginPage() {
                   }
                   setError(
                     result.reason === "locked"
-                      ? "The desk is locked on this deployment."
+                      ? "Sign-in is locked on this deployment: no ADMIN_TOKEN secret is set."
                       : "That token is not right.",
                   );
                 })
@@ -65,7 +65,7 @@ function LoginPage() {
             }}
           >
             <label className="field">
-              <span>Editor token</span>
+              <span>Admin token</span>
               <input
                 type="password"
                 autoComplete="current-password"
@@ -75,7 +75,7 @@ function LoginPage() {
               />
             </label>
             <button className="btn" type="submit" disabled={pending}>
-              {pending ? "Checking…" : "Open the desk"}
+              {pending ? "Checking…" : "Sign in"}
             </button>
             {error ? <p className="banner banner--bad" role="alert">{error}</p> : null}
           </form>

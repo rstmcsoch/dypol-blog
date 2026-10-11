@@ -59,6 +59,18 @@ export const adminDeleteDraft = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+export const adminDeleteArticle = createServerFn({ method: "POST" })
+  .validator((input: unknown) => {
+    const v = (input ?? {}) as { id?: unknown; deleteCover?: unknown };
+    if (typeof v.id !== "string" || v.id.length === 0 || v.id.length > 80) throw new Error("A valid article id is required.");
+    return { id: v.id, deleteCover: v.deleteCover === true };
+  })
+  .handler(async ({ data }) => {
+    await writeGuard();
+    const { deleteArticle } = await import("./repository.server");
+    return deleteArticle(data.id, { deleteCover: data.deleteCover });
+  });
+
 export const adminPreview = createServerFn({ method: "GET" })
   .validator((input: { id: string }) => input)
   .handler(async ({ data }) => {

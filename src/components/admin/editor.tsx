@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useBlocker, useNavigate, useRouter } from "@tanstack/react-router";
-import { adminDeleteDraft, adminSaveArticle } from "@/content/admin-api";
+import { adminSaveArticle } from "@/content/admin-api";
+import { DeleteArticleButton } from "./delete-article";
 import { readingMinutes } from "@/content/present";
 import type { Article, ArticleBlock, Category, CoverMotif, PublicationStatus, Tag } from "@/content/types";
 import { slugify } from "@/content/validate";
@@ -98,7 +99,7 @@ export function ArticleEditor({
   const [pending, setPending] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [confirm, setConfirm] = useState<"publish" | "unpublish" | "delete" | null>(null);
+  const [confirm, setConfirm] = useState<"publish" | "unpublish" | null>(null);
   const dirty = JSON.stringify(draft) !== baseline;
   const blocker = useBlocker({
     shouldBlockFn: () => dirty && !pending,
@@ -182,20 +183,6 @@ export function ArticleEditor({
     }
   }
 
-  async function removeDraft() {
-    if (!draft.id) return;
-    setPending("delete");
-    setError(null);
-    try {
-      await adminDeleteDraft({ data: { id: draft.id } });
-      setBaseline(JSON.stringify(draft));
-      await navigate({ to: "/admin/articles" });
-    } catch (caught) {
-      setError(errorText(caught));
-      setPending(null);
-    }
-  }
-
   return (
     <form
       onSubmit={(event) => {
@@ -204,7 +191,7 @@ export function ArticleEditor({
       }}
     >
       <p className="desk-kicker">{draft.status}</p>
-      <h1 className="desk-title">{draft.title || "New piece"}</h1>
+      <h1 className="desk-title">{draft.title || "New article"}</h1>
       <p className="desk-note">
         {readingMinutes({ blocks: draft.blocks })} min · the public page uses this same article shape.
       </p>
@@ -331,7 +318,7 @@ export function ArticleEditor({
             ))}
           </fieldset>
           <label className="field">
-            <span>Plate</span>
+            <span>Fallback pattern (only used when the cover style is set to Pattern)</span>
             <select value={draft.motif} onChange={(event) => update({ motif: event.target.value as CoverMotif })}>
               {motifs.map((motif) => (
                 <option key={motif} value={motif}>
@@ -346,7 +333,7 @@ export function ArticleEditor({
               value={draft.coverMediaId ?? ""}
               onChange={(event) => update({ coverMediaId: event.target.value || null })}
             >
-              <option value="">Geometric plate</option>
+              <option value="">No image (use the site's fallback)</option>
               {media.map((item) => (
                 <option key={item.id} value={item.id}>
                   {item.filename}
@@ -392,7 +379,7 @@ export function ArticleEditor({
           </div>
           {confirm === "publish" ? (
             <div className="banner">
-              <p>Publish this piece to the public journal?</p>
+              <p>Publish this article on the public site?</p>
               <div className="inline-actions">
                 <button type="button" className="btn" disabled={Boolean(pending)} onClick={() => void commit("publish")}>
                   {pending === "publish" ? "Publishing…" : "Publish"}
@@ -410,7 +397,7 @@ export function ArticleEditor({
           {draft.status === "published" ? (
             confirm === "unpublish" ? (
               <div className="banner">
-                <p>Take this piece off the public journal?</p>
+                <p>Take this article off the public site? It becomes Unpublished and can be published again.</p>
                 <div className="inline-actions">
                   <button type="button" className="btn" disabled={Boolean(pending)} onClick={() => void commit("unpublish")}>
                     Unpublish
@@ -426,24 +413,18 @@ export function ArticleEditor({
               </button>
             )
           ) : null}
-          {draft.id && draft.status !== "published" ? (
-            confirm === "delete" ? (
-              <div className="banner banner--bad">
-                <p>Delete this {draft.status} piece? This cannot be undone.</p>
-                <div className="inline-actions">
-                  <button type="button" className="btn" disabled={Boolean(pending)} onClick={() => void removeDraft()}>
-                    {pending === "delete" ? "Deleting…" : "Delete"}
-                  </button>
-                  <button type="button" className="btn btn--ghost" onClick={() => setConfirm(null)}>
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <button type="button" className="btn btn--ghost" onClick={() => setConfirm("delete")}>
-                Delete
-              </button>
-            )
+          {draft.id ? (
+            <DeleteArticleButton
+              id={draft.id}
+              title={draft.title || "Untitled"}
+              status={draft.status}
+              hasCover={Boolean(draft.coverMediaId)}
+              onDeleted={async () => {
+                setBaseline(JSON.stringify(draft));
+                await navigate({ to: "/admin/articles" });
+              }}
+              label="Delete article"
+            />
           ) : null}
         </div>
       </div>

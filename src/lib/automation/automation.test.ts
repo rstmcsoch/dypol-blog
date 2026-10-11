@@ -199,3 +199,35 @@ test("server-api adapters: request shape per provider, parse responses, mocked f
   const fail = (async () => new Response("no", { status: 401 })) as unknown as typeof fetch;
   await assert.rejects(generateWithServerApi({ ...base, mode: "server-api" }, { ANTHROPIC_API_KEY: "k" }, input, fail), /401/);
 });
+
+test("cover size check: rejects the 75-byte/1px placeholder, accepts real sizes", async () => {
+  const { assertUsableCover, imageSize } = await import("./image-fetch.ts");
+  assert.deepEqual(imageSize(PNG, "image/png"), { width: 1, height: 1 });
+  assert.throws(() => assertUsableCover(PNG, "image/png"), /at least 400x200/);
+  const big = Buffer.from(PNG);
+  big.writeUInt32BE(1200, 16);
+  big.writeUInt32BE(675, 20);
+  assert.deepEqual(assertUsableCover(big, "image/png"), { width: 1200, height: 675 });
+  // JPEG: SOI, APP0 (len 16), SOF0 with 640x480
+  const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, ...new Array(14).fill(0), 0xff, 0xc0, 0x00, 0x11, 0x08, 0x01, 0xe0, 0x02, 0x80, 0x03, 0, 0, 0, 0, 0, 0]);
+  assert.deepEqual(imageSize(jpeg, "image/jpeg"), { width: 640, height: 480 });
+  // WebP VP8X 800x600
+  const webp = Buffer.alloc(30);
+  webp.write("RIFF", 0);
+  webp.write("WEBP", 8);
+  webp.write("VP8X", 12);
+  webp.writeUIntLE(799, 24, 3);
+  webp.writeUIntLE(599, 27, 3);
+  assert.deepEqual(imageSize(webp, "image/webp"), { width: 800, height: 600 });
+  assert.throws(() => assertUsableCover(Buffer.from([0xff, 0xd8, 0xff]), "image/jpeg"), /Could not read/);
+});
+
+test("image fetch sends a descriptive User-Agent (Wikimedia and CDNs 403 without one)", async () => {
+  let ua = "";
+  const fake = (async (_url: string, init: RequestInit) => {
+    ua = new Headers(init.headers).get("user-agent") ?? "";
+    return new Response(PNG, { status: 200, headers: { "content-type": "image/png" } });
+  }) as unknown as typeof fetch;
+  await fetchImage("https://example.org/a.png", fake);
+  assert.match(ua, /DYPOL-Blog/);
+});

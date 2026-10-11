@@ -6,7 +6,7 @@ import { writesAllowed } from "@/lib/write-guard.server";
 import { automationActive, type AutomationSettings } from "@/lib/automation/settings";
 import { bodyToBlocks, contentHash, wordCount } from "@/lib/automation/body";
 import { draftFlags, publishDecision, sourceProblems, type DraftFlag } from "@/lib/automation/policy";
-import { decodeBase64Image, fetchImage, ImageIntakeError, MAX_IMAGE_BYTES } from "@/lib/automation/image-fetch";
+import { assertUsableCover, decodeBase64Image, fetchImage, ImageIntakeError, MAX_IMAGE_BYTES, type ImageMime } from "@/lib/automation/image-fetch";
 import { providerStatus } from "@/lib/automation/provider";
 import type { ToolDefinition, ToolResult } from "./protocol";
 import type { ArticleBlock, CoverMotif } from "@/content/types";
@@ -57,6 +57,13 @@ const imageSchema = z
     url: z.string().trim().max(2000).optional().describe("Public https image URL (fetched with SSRF protection)."),
     filename: z.string().trim().max(120).optional(),
     alt: z.string().trim().min(1).max(200).describe("Alt text describing the image."),
+    credit: z
+      .string()
+      .trim()
+      .max(300)
+      .optional()
+      .describe('Required for images you did not create: "Photo: <author> / <source>, <license>" (e.g. "Photo: Jane Doe / Wikimedia Commons, CC BY-SA 4.0").'),
+    source_page: z.string().trim().url().max(500).optional().describe("Page where the image and its license are shown (for attribution)."),
   })
   .refine((v) => Boolean(v.image_base64) !== Boolean(v.url), "Provide exactly one of image_base64 or url.");
 
@@ -357,7 +364,9 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
       title: "Upload featured image",
       description:
         "Store a featured image in the blog's media library (R2) and optionally attach it to an automation draft. " +
-        "Accepts real JPEG/PNG/WebP bytes as base64, or a public https URL (no private hosts/IPs, max 1.5 MB).",
+        "Accepts real JPEG/PNG/WebP bytes as base64, or a public https URL (no private hosts/IPs, max 1.5 MB, at least 400x200 px). " +
+        "If you cannot create an image, pass the direct https URL of a relevant, properly licensed image (Wikimedia Commons, " +
+        "Unsplash, Pexels, or the publisher's own press image) and fill credit + source_page. The credit is added to the draft.",
       inputSchema: schemaOf(imageSchema),
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
       run: async (args) => {
@@ -379,6 +388,7 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
         let image: { bytes: Uint8Array; mime: string };
         try {
           image = input.image_base64 ? decodeBase64Image(input.image_base64) : await fetchImage(input.url as string);
+          assertUsableCover(image.bytes, image.mime as ImageMime);
         } catch (error) {
           const message = error instanceof ImageIntakeError ? error.message : "Image could not be read.";
           await store.recordRun({ tool: "upload_featured_image", outcome: "rejected", reason: message, articleId: input.article_id, auth });
@@ -398,8 +408,16 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
           const check = await sql<{ cover_media_id: string | null }>`select cover_media_id from articles where id = ${input.article_id}`;
           attached = check[0]?.cover_media_id === mediaId;
           if (attached) await store.setSubmissionFlags(input.article_id, submission.flags.filter((f) => f !== "needs_featured_image"));
+          if (attached && input.credit) {
+            const rows = await sql<{ blocks: string }>`select blocks from articles where id = ${input.article_id}`;
+            const blocks = JSON.parse(rows[0]?.blocks ?? "[]") as { type: string; text?: string }[];
+            const line = `Cover image: ${input.credit}${input.source_page ? ` (${input.source_page})` : ""}`;
+            const kept = blocks.filter((b) => !(b.type === "paragraph" && typeof b.text === "string" && b.text.startsWith("Cover image: ")));
+            kept.push({ type: "paragraph", text: line });
+            await sql`update articles set blocks = ${JSON.stringify(kept)} where id = ${input.article_id} and status = 'draft'`;
+          }
         }
-        await store.recordRun({ tool: "upload_featured_image", outcome: "stored", articleId: input.article_id ?? null, auth, details: { mediaId, bytes: image.bytes.length, mime: image.mime, attached } });
+        await store.recordRun({ tool: "upload_featured_image", outcome: "stored", articleId: input.article_id ?? null, auth, details: { mediaId, bytes: image.bytes.length, mime: image.mime, attached, credit: input.credit ?? null, sourcePage: input.source_page ?? null } });
         return { ok: true, data: { media_id: mediaId, mime: image.mime, bytes: image.bytes.length, attached, path: `/media/${mediaId}` } };
       },
     },
