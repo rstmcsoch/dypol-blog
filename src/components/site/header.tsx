@@ -1,11 +1,10 @@
 import { useEffect, useState } from "react";
 import { useRouterState } from "@tanstack/react-router";
+import { site } from "@/content/site";
 import { NavLink } from "./nav-link";
 import { ThemeToggle } from "./theme-toggle";
-import { useSite } from "./use-site";
 
 export function SiteHeader() {
-  const site = useSite();
   const [open, setOpen] = useState(false);
   const pathname = useRouterState({ select: (state) => state.location.pathname });
 
@@ -26,9 +25,6 @@ export function SiteHeader() {
     <header className="site-header">
       <div className="container bar">
         <NavLink href="/" className="wordmark">
-          {site.logoMediaId ? (
-            <img className="wordmark__logo" src={`/media/${site.logoMediaId}`} alt="" />
-          ) : null}
           <span className="wordmark__name">DYPOL</span>
           <span className="wordmark__stamp">
             <span className="grain-layer" aria-hidden="true" />
@@ -41,9 +37,7 @@ export function SiteHeader() {
           aria-label={site.labels.primaryNav}
         >
           <div className="site-nav__inner">
-            {site.nav
-              .filter((item) => item.visible)
-              .map((item) => (
+            {site.nav.map((item) => (
               <NavLink key={item.id} href={item.href} className="nav-link">
                 {item.label}
               </NavLink>

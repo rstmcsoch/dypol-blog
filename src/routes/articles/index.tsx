@@ -1,15 +1,15 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { IndexList } from "@/components/site/index-list";
 import { PagePending } from "@/components/site/states";
-import { useSite } from "@/components/site/use-site";
-import { getIndex } from "@/content/public-api";
+import { site } from "@/content/site";
+import { listPublished } from "@/content/queries";
 
 export const Route = createFileRoute("/articles/")({
-  loader: () => getIndex(),
+  loader: () => ({ articles: listPublished() }),
   head: () => ({
     meta: [
-      { title: "Index — DYPOL Blog" },
-      { name: "description", content: "Every published piece, newest first." },
+      { title: `${site.labels.indexTitle} — ${site.name}` },
+      { name: "description", content: site.labels.indexLede },
     ],
     links: [{ rel: "canonical", href: "/articles" }],
   }),
@@ -18,8 +18,7 @@ export const Route = createFileRoute("/articles/")({
 });
 
 function ArticlesPage() {
-  const site = useSite();
-  const { articles, meta } = Route.useLoaderData();
+  const { articles } = Route.useLoaderData();
   return (
     <div className="page">
       <div className="container">
@@ -28,7 +27,7 @@ function ArticlesPage() {
           <h1 className="page-title">{site.labels.indexTitle}</h1>
           <p className="lede">{site.labels.indexLede}</p>
         </header>
-        <IndexList articles={articles} meta={meta} minRead={site.labels.minRead} />
+        <IndexList articles={articles} />
       </div>
     </div>
   );
