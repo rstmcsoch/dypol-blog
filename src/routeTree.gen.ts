@@ -14,18 +14,26 @@ import { Route as SplatRouteImport } from './routes/$'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as McpRouteImport } from './routes/mcp'
 import { Route as RobotsDottxtRouteImport } from './routes/robots[.]txt'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
+import { Route as DotwellKnownOauthAuthorizationServerRouteImport } from './routes/[.]well-known/oauth-authorization-server'
+import { Route as DotwellKnownOauthProtectedResourceRouteImport } from './routes/[.]well-known/oauth-protected-resource'
 import { Route as AdminIndexRouteImport } from './routes/admin/index'
+import { Route as AdminAutomationRouteImport } from './routes/admin/automation'
 import { Route as AdminMediaRouteImport } from './routes/admin/media'
 import { Route as AdminSettingsRouteImport } from './routes/admin/settings'
 import { Route as AdminTopicsRouteImport } from './routes/admin/topics'
 import { Route as ArticlesIndexRouteImport } from './routes/articles/index'
 import { Route as ArticlesSlugRouteImport } from './routes/articles/$slug'
 import { Route as MediaIdRouteImport } from './routes/media/$id'
+import { Route as OauthAuthorizeRouteImport } from './routes/oauth/authorize'
+import { Route as OauthRegisterRouteImport } from './routes/oauth/register'
+import { Route as OauthTokenRouteImport } from './routes/oauth/token'
 import { Route as PreviewIdRouteImport } from './routes/preview/$id'
 import { Route as TopicsIndexRouteImport } from './routes/topics/index'
 import { Route as TopicsSlugRouteImport } from './routes/topics/$slug'
+import { Route as DotwellKnownOauthProtectedResourceMcpRouteImport } from './routes/[.]well-known/oauth-protected-resource.mcp'
 import { Route as AdminArticlesIndexRouteImport } from './routes/admin/articles/index'
 import { Route as AdminArticlesIdRouteImport } from './routes/admin/articles/$id'
 import { Route as AdminArticlesNewRouteImport } from './routes/admin/articles/new'
@@ -55,6 +63,11 @@ const LoginRoute = LoginRouteImport.update({
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const McpRoute = McpRouteImport.update({
+  id: '/mcp',
+  path: '/mcp',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const RobotsDottxtRoute = RobotsDottxtRouteImport.update({
   id: '/robots.txt',
   path: '/robots.txt',
@@ -65,9 +78,26 @@ const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
   path: '/sitemap.xml',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DotwellKnownOauthAuthorizationServerRoute =
+  DotwellKnownOauthAuthorizationServerRouteImport.update({
+    id: '/.well-known/oauth-authorization-server',
+    path: '/.well-known/oauth-authorization-server',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const DotwellKnownOauthProtectedResourceRoute =
+  DotwellKnownOauthProtectedResourceRouteImport.update({
+    id: '/.well-known/oauth-protected-resource',
+    path: '/.well-known/oauth-protected-resource',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const AdminIndexRoute = AdminIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminAutomationRoute = AdminAutomationRouteImport.update({
+  id: '/automation',
+  path: '/automation',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminMediaRoute = AdminMediaRouteImport.update({
@@ -100,6 +130,21 @@ const MediaIdRoute = MediaIdRouteImport.update({
   path: '/media/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const OauthAuthorizeRoute = OauthAuthorizeRouteImport.update({
+  id: '/oauth/authorize',
+  path: '/oauth/authorize',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OauthRegisterRoute = OauthRegisterRouteImport.update({
+  id: '/oauth/register',
+  path: '/oauth/register',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OauthTokenRoute = OauthTokenRouteImport.update({
+  id: '/oauth/token',
+  path: '/oauth/token',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PreviewIdRoute = PreviewIdRouteImport.update({
   id: '/preview/$id',
   path: '/preview/$id',
@@ -115,6 +160,12 @@ const TopicsSlugRoute = TopicsSlugRouteImport.update({
   path: '/topics/$slug',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DotwellKnownOauthProtectedResourceMcpRoute =
+  DotwellKnownOauthProtectedResourceMcpRouteImport.update({
+    id: '/mcp',
+    path: '/mcp',
+    getParentRoute: () => DotwellKnownOauthProtectedResourceRoute,
+  } as any)
 const AdminArticlesIndexRoute = AdminArticlesIndexRouteImport.update({
   id: '/articles/',
   path: '/articles/',
@@ -137,18 +188,26 @@ export interface FileRoutesByFullPath {
   '/about': typeof AboutRoute
   '/admin': typeof AdminRouteWithChildren
   '/login': typeof LoginRoute
+  '/mcp': typeof McpRoute
   '/robots.txt': typeof RobotsDottxtRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/.well-known/oauth-authorization-server': typeof DotwellKnownOauthAuthorizationServerRoute
+  '/.well-known/oauth-protected-resource': typeof DotwellKnownOauthProtectedResourceRouteWithChildren
+  '/admin/automation': typeof AdminAutomationRoute
   '/admin/media': typeof AdminMediaRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/topics': typeof AdminTopicsRoute
   '/articles/$slug': typeof ArticlesSlugRoute
   '/media/$id': typeof MediaIdRoute
+  '/oauth/authorize': typeof OauthAuthorizeRoute
+  '/oauth/register': typeof OauthRegisterRoute
+  '/oauth/token': typeof OauthTokenRoute
   '/preview/$id': typeof PreviewIdRoute
   '/topics/$slug': typeof TopicsSlugRoute
   '/admin/': typeof AdminIndexRoute
   '/articles/': typeof ArticlesIndexRoute
   '/topics/': typeof TopicsIndexRoute
+  '/.well-known/oauth-protected-resource/mcp': typeof DotwellKnownOauthProtectedResourceMcpRoute
   '/admin/articles/$id': typeof AdminArticlesIdRoute
   '/admin/articles/new': typeof AdminArticlesNewRoute
   '/admin/articles/': typeof AdminArticlesIndexRoute
@@ -158,18 +217,26 @@ export interface FileRoutesByTo {
   '/$': typeof SplatRoute
   '/about': typeof AboutRoute
   '/login': typeof LoginRoute
+  '/mcp': typeof McpRoute
   '/robots.txt': typeof RobotsDottxtRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/.well-known/oauth-authorization-server': typeof DotwellKnownOauthAuthorizationServerRoute
+  '/.well-known/oauth-protected-resource': typeof DotwellKnownOauthProtectedResourceRouteWithChildren
+  '/admin/automation': typeof AdminAutomationRoute
   '/admin/media': typeof AdminMediaRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/topics': typeof AdminTopicsRoute
   '/articles/$slug': typeof ArticlesSlugRoute
   '/media/$id': typeof MediaIdRoute
+  '/oauth/authorize': typeof OauthAuthorizeRoute
+  '/oauth/register': typeof OauthRegisterRoute
+  '/oauth/token': typeof OauthTokenRoute
   '/preview/$id': typeof PreviewIdRoute
   '/topics/$slug': typeof TopicsSlugRoute
   '/admin': typeof AdminIndexRoute
   '/articles': typeof ArticlesIndexRoute
   '/topics': typeof TopicsIndexRoute
+  '/.well-known/oauth-protected-resource/mcp': typeof DotwellKnownOauthProtectedResourceMcpRoute
   '/admin/articles/$id': typeof AdminArticlesIdRoute
   '/admin/articles/new': typeof AdminArticlesNewRoute
   '/admin/articles': typeof AdminArticlesIndexRoute
@@ -181,18 +248,26 @@ export interface FileRoutesById {
   '/about': typeof AboutRoute
   '/admin': typeof AdminRouteWithChildren
   '/login': typeof LoginRoute
+  '/mcp': typeof McpRoute
   '/robots.txt': typeof RobotsDottxtRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/.well-known/oauth-authorization-server': typeof DotwellKnownOauthAuthorizationServerRoute
+  '/.well-known/oauth-protected-resource': typeof DotwellKnownOauthProtectedResourceRouteWithChildren
+  '/admin/automation': typeof AdminAutomationRoute
   '/admin/media': typeof AdminMediaRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/topics': typeof AdminTopicsRoute
   '/articles/$slug': typeof ArticlesSlugRoute
   '/media/$id': typeof MediaIdRoute
+  '/oauth/authorize': typeof OauthAuthorizeRoute
+  '/oauth/register': typeof OauthRegisterRoute
+  '/oauth/token': typeof OauthTokenRoute
   '/preview/$id': typeof PreviewIdRoute
   '/topics/$slug': typeof TopicsSlugRoute
   '/admin/': typeof AdminIndexRoute
   '/articles/': typeof ArticlesIndexRoute
   '/topics/': typeof TopicsIndexRoute
+  '/.well-known/oauth-protected-resource/mcp': typeof DotwellKnownOauthProtectedResourceMcpRoute
   '/admin/articles/$id': typeof AdminArticlesIdRoute
   '/admin/articles/new': typeof AdminArticlesNewRoute
   '/admin/articles/': typeof AdminArticlesIndexRoute
@@ -205,18 +280,26 @@ export interface FileRouteTypes {
     | '/about'
     | '/admin'
     | '/login'
+    | '/mcp'
     | '/robots.txt'
     | '/sitemap.xml'
+    | '/.well-known/oauth-authorization-server'
+    | '/.well-known/oauth-protected-resource'
+    | '/admin/automation'
     | '/admin/media'
     | '/admin/settings'
     | '/admin/topics'
     | '/articles/$slug'
     | '/media/$id'
+    | '/oauth/authorize'
+    | '/oauth/register'
+    | '/oauth/token'
     | '/preview/$id'
     | '/topics/$slug'
     | '/admin/'
     | '/articles/'
     | '/topics/'
+    | '/.well-known/oauth-protected-resource/mcp'
     | '/admin/articles/$id'
     | '/admin/articles/new'
     | '/admin/articles/'
@@ -226,18 +309,26 @@ export interface FileRouteTypes {
     | '/$'
     | '/about'
     | '/login'
+    | '/mcp'
     | '/robots.txt'
     | '/sitemap.xml'
+    | '/.well-known/oauth-authorization-server'
+    | '/.well-known/oauth-protected-resource'
+    | '/admin/automation'
     | '/admin/media'
     | '/admin/settings'
     | '/admin/topics'
     | '/articles/$slug'
     | '/media/$id'
+    | '/oauth/authorize'
+    | '/oauth/register'
+    | '/oauth/token'
     | '/preview/$id'
     | '/topics/$slug'
     | '/admin'
     | '/articles'
     | '/topics'
+    | '/.well-known/oauth-protected-resource/mcp'
     | '/admin/articles/$id'
     | '/admin/articles/new'
     | '/admin/articles'
@@ -248,18 +339,26 @@ export interface FileRouteTypes {
     | '/about'
     | '/admin'
     | '/login'
+    | '/mcp'
     | '/robots.txt'
     | '/sitemap.xml'
+    | '/.well-known/oauth-authorization-server'
+    | '/.well-known/oauth-protected-resource'
+    | '/admin/automation'
     | '/admin/media'
     | '/admin/settings'
     | '/admin/topics'
     | '/articles/$slug'
     | '/media/$id'
+    | '/oauth/authorize'
+    | '/oauth/register'
+    | '/oauth/token'
     | '/preview/$id'
     | '/topics/$slug'
     | '/admin/'
     | '/articles/'
     | '/topics/'
+    | '/.well-known/oauth-protected-resource/mcp'
     | '/admin/articles/$id'
     | '/admin/articles/new'
     | '/admin/articles/'
@@ -271,10 +370,16 @@ export interface RootRouteChildren {
   AboutRoute: typeof AboutRoute
   AdminRoute: typeof AdminRouteWithChildren
   LoginRoute: typeof LoginRoute
+  McpRoute: typeof McpRoute
   RobotsDottxtRoute: typeof RobotsDottxtRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
+  DotwellKnownOauthAuthorizationServerRoute: typeof DotwellKnownOauthAuthorizationServerRoute
+  DotwellKnownOauthProtectedResourceRoute: typeof DotwellKnownOauthProtectedResourceRouteWithChildren
   ArticlesSlugRoute: typeof ArticlesSlugRoute
   MediaIdRoute: typeof MediaIdRoute
+  OauthAuthorizeRoute: typeof OauthAuthorizeRoute
+  OauthRegisterRoute: typeof OauthRegisterRoute
+  OauthTokenRoute: typeof OauthTokenRoute
   PreviewIdRoute: typeof PreviewIdRoute
   TopicsSlugRoute: typeof TopicsSlugRoute
   ArticlesIndexRoute: typeof ArticlesIndexRoute
@@ -318,6 +423,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/mcp': {
+      id: '/mcp'
+      path: '/mcp'
+      fullPath: '/mcp'
+      preLoaderRoute: typeof McpRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/robots.txt': {
       id: '/robots.txt'
       path: '/robots.txt'
@@ -332,11 +444,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SitemapDotxmlRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/.well-known/oauth-authorization-server': {
+      id: '/.well-known/oauth-authorization-server'
+      path: '/.well-known/oauth-authorization-server'
+      fullPath: '/.well-known/oauth-authorization-server'
+      preLoaderRoute: typeof DotwellKnownOauthAuthorizationServerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/.well-known/oauth-protected-resource': {
+      id: '/.well-known/oauth-protected-resource'
+      path: '/.well-known/oauth-protected-resource'
+      fullPath: '/.well-known/oauth-protected-resource'
+      preLoaderRoute: typeof DotwellKnownOauthProtectedResourceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/': {
       id: '/admin/'
       path: '/'
       fullPath: '/admin/'
       preLoaderRoute: typeof AdminIndexRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/automation': {
+      id: '/admin/automation'
+      path: '/automation'
+      fullPath: '/admin/automation'
+      preLoaderRoute: typeof AdminAutomationRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/media': {
@@ -381,6 +514,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MediaIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/oauth/authorize': {
+      id: '/oauth/authorize'
+      path: '/oauth/authorize'
+      fullPath: '/oauth/authorize'
+      preLoaderRoute: typeof OauthAuthorizeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/oauth/register': {
+      id: '/oauth/register'
+      path: '/oauth/register'
+      fullPath: '/oauth/register'
+      preLoaderRoute: typeof OauthRegisterRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/oauth/token': {
+      id: '/oauth/token'
+      path: '/oauth/token'
+      fullPath: '/oauth/token'
+      preLoaderRoute: typeof OauthTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/preview/$id': {
       id: '/preview/$id'
       path: '/preview/$id'
@@ -401,6 +555,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/topics/$slug'
       preLoaderRoute: typeof TopicsSlugRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/.well-known/oauth-protected-resource/mcp': {
+      id: '/.well-known/oauth-protected-resource/mcp'
+      path: '/mcp'
+      fullPath: '/.well-known/oauth-protected-resource/mcp'
+      preLoaderRoute: typeof DotwellKnownOauthProtectedResourceMcpRouteImport
+      parentRoute: typeof DotwellKnownOauthProtectedResourceRoute
     }
     '/admin/articles/': {
       id: '/admin/articles/'
@@ -427,6 +588,7 @@ declare module '@tanstack/react-router' {
 }
 
 interface AdminRouteChildren {
+  AdminAutomationRoute: typeof AdminAutomationRoute
   AdminMediaRoute: typeof AdminMediaRoute
   AdminSettingsRoute: typeof AdminSettingsRoute
   AdminTopicsRoute: typeof AdminTopicsRoute
@@ -437,6 +599,7 @@ interface AdminRouteChildren {
 }
 
 const AdminRouteChildren: AdminRouteChildren = {
+  AdminAutomationRoute: AdminAutomationRoute,
   AdminMediaRoute: AdminMediaRoute,
   AdminSettingsRoute: AdminSettingsRoute,
   AdminTopicsRoute: AdminTopicsRoute,
@@ -448,16 +611,39 @@ const AdminRouteChildren: AdminRouteChildren = {
 
 const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
 
+interface DotwellKnownOauthProtectedResourceRouteChildren {
+  DotwellKnownOauthProtectedResourceMcpRoute: typeof DotwellKnownOauthProtectedResourceMcpRoute
+}
+
+const DotwellKnownOauthProtectedResourceRouteChildren: DotwellKnownOauthProtectedResourceRouteChildren =
+  {
+    DotwellKnownOauthProtectedResourceMcpRoute:
+      DotwellKnownOauthProtectedResourceMcpRoute,
+  }
+
+const DotwellKnownOauthProtectedResourceRouteWithChildren =
+  DotwellKnownOauthProtectedResourceRoute._addFileChildren(
+    DotwellKnownOauthProtectedResourceRouteChildren,
+  )
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   SplatRoute: SplatRoute,
   AboutRoute: AboutRoute,
   AdminRoute: AdminRouteWithChildren,
   LoginRoute: LoginRoute,
+  McpRoute: McpRoute,
   RobotsDottxtRoute: RobotsDottxtRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
+  DotwellKnownOauthAuthorizationServerRoute:
+    DotwellKnownOauthAuthorizationServerRoute,
+  DotwellKnownOauthProtectedResourceRoute:
+    DotwellKnownOauthProtectedResourceRouteWithChildren,
   ArticlesSlugRoute: ArticlesSlugRoute,
   MediaIdRoute: MediaIdRoute,
+  OauthAuthorizeRoute: OauthAuthorizeRoute,
+  OauthRegisterRoute: OauthRegisterRoute,
+  OauthTokenRoute: OauthTokenRoute,
   PreviewIdRoute: PreviewIdRoute,
   TopicsSlugRoute: TopicsSlugRoute,
   ArticlesIndexRoute: ArticlesIndexRoute,
