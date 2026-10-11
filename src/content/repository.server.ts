@@ -4,6 +4,7 @@ import { readingMinutes, type ArticleMeta } from "./present";
 import { MediaBindingError, openMediaStore } from "./media-store.server";
 import { site } from "./site";
 import { categories as seedCategories, tags as seedTags } from "./taxonomy";
+import { tickerEntries } from "./ticker";
 import type { Article, ArticleBlock, Category, PublicationStatus, SiteConfig, Tag } from "./types";
 import {
   articleWriteSchema,
@@ -208,31 +209,31 @@ export function metaFor(articles: Article[], publishedOrder: Article[], categori
 export async function readShell() {
   const data = await publicCatalog();
   const live = published(data.articles);
-  const trending = data.site.trending.enabled
-    ? data.site.trending.slugs
-        .map((slug) => live.find((article) => article.slug === slug))
-        .filter((article): article is Article => Boolean(article))
-        .map((article) => ({ id: article.id, slug: article.slug, title: article.title }))
-    : [];
-  return { site: data.site, trending };
+  return { site: data.site, trending: tickerEntries(data.site, live) };
 }
 
 export async function readHome() {
   const data = await publicCatalog();
   const live = published(data.articles);
-  const lead = live.find((article) => article.featured) ?? live[0] ?? null;
+  const sections = data.site.home.sections;
+  const count = (id: string, fallback: number) => sections.find((x) => x.id === id)?.count ?? fallback;
+  const on = (id: string) => sections.find((x) => x.id === id)?.enabled ?? true;
+  const lead = on("featured") ? (live.find((article) => article.featured) ?? live[0] ?? null) : null;
   const rest = live.filter((article) => article.id !== lead?.id);
-  const band = rest.slice(0, 3);
-  const index = rest.slice(3);
+  const band = on("also") ? rest.slice(0, count("also", 3)) : [];
+  const index = on("latest") ? rest.slice(band.length, band.length + count("latest", 12)) : [];
+  const topics = on("topics")
+    ? data.categories
+        .map((category) => ({ category, count: live.filter((article) => article.categoryId === category.id).length }))
+        .slice(0, count("topics", 12))
+    : [];
   return {
     lead,
     band,
     index,
+    empty: live.length === 0,
     meta: metaFor([...(lead ? [lead] : []), ...band, ...index], live, data.categories),
-    topics: data.categories.map((category) => ({
-      category,
-      count: live.filter((article) => article.categoryId === category.id).length,
-    })),
+    topics,
   };
 }
 
@@ -287,6 +288,9 @@ function articlePayload(
   const same = live.filter((item) => item.categoryId === article.categoryId && item.id !== article.id);
   const rest = live.filter((item) => item.id !== article.id && !same.some((picked) => picked.id === item.id));
   const related = [...same, ...rest].slice(0, 3);
+  const sideCount = data.site.articleSidebar.count;
+  const alsoLike = [...same, ...rest].slice(0, sideCount);
+  const latest = live.filter((item) => item.id !== article.id).slice(0, sideCount);
   return {
     article,
     category: categoryOf(data.categories, article.categoryId) ?? null,
@@ -299,6 +303,8 @@ function articlePayload(
       older: index >= 0 ? live[index + 1] : undefined,
     },
     rank: index === -1 ? 0 : index + 1,
+    alsoLike: alsoLike.map(({ id, slug, title }) => ({ id, slug, title })),
+    latest: latest.map(({ id, slug, title, publishedAt }) => ({ id, slug, title, publishedAt })),
     meta: metaFor(related, live, data.categories),
   };
 }
@@ -323,6 +329,7 @@ export type ArticleSummary = {
   categoryLabel: string;
   tagIds: string[];
   featured: boolean;
+  hasCover: boolean;
 };
 
 export async function adminOverview() {
@@ -369,6 +376,7 @@ function summarize(article: Article, categories: Category[]): ArticleSummary {
     categoryLabel: categoryOf(categories, article.categoryId)?.label ?? "",
     tagIds: article.tagIds,
     featured: article.featured,
+    hasCover: Boolean(article.coverMediaId),
   };
 }
 
@@ -457,7 +465,7 @@ export async function saveArticle(raw: unknown): Promise<{ id: string; slug: str
           select id, status, published_at from articles where id = ${input.id}
         `
       : [];
-    if (input.id && existing.length === 0) throw new ContentError("That piece is not in the index.", 404);
+    if (input.id && existing.length === 0) throw new ContentError("That article no longer exists.", 404);
 
     const id = input.id ?? randomUUID();
     const slug = await uniqueSlug(sql, input.slug || input.title, id);
@@ -518,9 +526,35 @@ export async function deleteDraft(id: string): Promise<void> {
   await ensureContent();
   const sql = await getSql();
   const rows = await sql<{ status: PublicationStatus }>`select status from articles where id = ${id}`;
-  if (rows.length === 0) throw new ContentError("That piece is not in the index.", 404);
-  if (rows[0]?.status === "published") throw new ContentError("Unpublish a piece before deleting it.");
+  if (rows.length === 0) throw new ContentError("That article no longer exists.", 404);
+  if (rows[0]?.status === "published") throw new ContentError("Unpublish the article before deleting it.");
   await sql`delete from articles where id = ${id}`;
+}
+
+/**
+ * Deletes an article in any status (published included). Removes its tag links
+ * and automation bookkeeping rows. The cover image file is kept unless
+ * `deleteCover` is set AND nothing else (another article, logo, favicon) uses it.
+ */
+export async function deleteArticle(id: string, options: { deleteCover?: boolean } = {}): Promise<{ coverDeleted: boolean }> {
+  await ensureContent();
+  const sql = await getSql();
+  const rows = await sql<{ cover_media_id: string | null }>`select cover_media_id from articles where id = ${id}`;
+  if (rows.length === 0) throw new ContentError("That article no longer exists.", 404);
+  const cover = rows[0]?.cover_media_id ?? null;
+  await sql`delete from article_tags where article_id = ${id}`;
+  await sql`delete from automation_submissions where article_id = ${id}`.catch(() => undefined);
+  await sql`delete from articles where id = ${id}`;
+  let coverDeleted = false;
+  if (options.deleteCover && cover) {
+    try {
+      await deleteMedia(cover);
+      coverDeleted = true;
+    } catch (error) {
+      if (!(error instanceof ContentError)) throw error; // still in use elsewhere: keep the file
+    }
+  }
+  return { coverDeleted };
 }
 
 export async function saveCategory(raw: unknown): Promise<{ id: string }> {
@@ -543,7 +577,7 @@ export async function deleteCategory(id: string): Promise<void> {
   await ensureContent();
   const sql = await getSql();
   const used = await sql<{ n: number }>`select count(*)::int as n from articles where category_id = ${id}`;
-  if (Number(used[0]?.n ?? 0) > 0) throw new ContentError("Move the pieces in this topic before deleting it.");
+  if (Number(used[0]?.n ?? 0) > 0) throw new ContentError("Move the articles in this topic to another topic before deleting it.");
   const result = await sql`delete from categories where id = ${id} returning id`;
   if (result.length === 0) throw new ContentError("That topic is gone.", 404);
 }
@@ -568,7 +602,7 @@ export async function deleteTag(id: string): Promise<void> {
   await ensureContent();
   const sql = await getSql();
   const used = await sql<{ n: number }>`select count(*)::int as n from article_tags where tag_id = ${id}`;
-  if (Number(used[0]?.n ?? 0) > 0) throw new ContentError("Remove this tag from its pieces before deleting it.");
+  if (Number(used[0]?.n ?? 0) > 0) throw new ContentError("Remove this tag from its articles before deleting it.");
   const result = await sql`delete from tags where id = ${id} returning id`;
   if (result.length === 0) throw new ContentError("That tag is gone.", 404);
 }
@@ -644,7 +678,7 @@ export async function deleteMedia(id: string): Promise<void> {
   await ensureContent();
   const sql = await getSql();
   const used = await sql<{ n: number }>`select count(*)::int as n from articles where cover_media_id = ${id}`;
-  if (Number(used[0]?.n ?? 0) > 0) throw new ContentError("This image is a cover. Clear it from the piece first.");
+  if (Number(used[0]?.n ?? 0) > 0) throw new ContentError("This image is a cover. Remove it from that article first.");
   const settings = await sql<{ data: SiteConfig | string }>`select data from site_settings where id = 'site'`;
   const config = normalizeSite(typeof settings[0]?.data === "string" ? JSON.parse(settings[0].data) : settings[0]?.data);
   if (config.logoMediaId === id || config.faviconMediaId === id) {

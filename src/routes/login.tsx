@@ -8,7 +8,7 @@ export const Route = createFileRoute("/login")({
   }),
   head: () => ({
     meta: [
-      { title: "Desk — DYPOL Blog" },
+      { title: "Admin sign-in — DYPOL Blog" },
       { name: "robots", content: "noindex" },
     ],
   }),
@@ -49,7 +49,7 @@ function LoginPage() {
                   }
                   setError(
                     result.reason === "locked"
-                      ? "The desk is locked on this deployment."
+                      ? "Sign-in is locked on this deployment: no ADMIN_TOKEN secret is set."
                       : "That token is not right.",
                   );
                 })
@@ -75,7 +75,7 @@ function LoginPage() {
               />
             </label>
             <button className="btn" type="submit" disabled={pending}>
-              {pending ? "Checking…" : "Open the desk"}
+              {pending ? "Checking…" : "Sign in"}
             </button>
             {error ? <p className="banner banner--bad" role="alert">{error}</p> : null}
           </form>

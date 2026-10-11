@@ -60,7 +60,7 @@ await check("/admin without a session redirects to /login", async () => {
   if (LOCKED) assert.match(r.headers().location ?? "", /denied=true/);
 });
 
-for (const path of ["/admin/articles", "/admin/topics", "/admin/media", "/admin/settings", "/admin/articles/new"]) {
+for (const path of ["/admin/articles", "/admin/topics", "/admin/media", "/admin/settings", "/admin/articles/new", "/admin/homepage", "/admin/site-text", "/admin/appearance", "/admin/help", "/admin/automation"]) {
   await check(`${path} without a session never renders the desk`, async () => {
     const r = await anon.get(path, { maxRedirects: 0 });
     assert.ok([302, 307].includes(r.status()), `status ${r.status()}`);

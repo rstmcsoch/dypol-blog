@@ -39,11 +39,26 @@ step says so.
    same key if you retry), title, slug, excerpt, body, category (id or slug), up to 5
    existing tags, seo_title, seo_description, `source_urls` (all sources used) and
    `uncertain: true` if any claim could not be fully verified.
-8. Featured image (optional): only if you have a real JPEG/PNG/WebP you are allowed to
-   use (for example an image you generated, or an openly licensed one), call
-   `upload_featured_image` with `article_id`, `alt`, and either `image_base64` or a
-   public https `url`. If the tool fails, continue; the draft keeps the
-   `needs_featured_image` flag and the owner adds an image in the desk.
+8. Featured image (expected for every article). The image must be a real photo or
+   illustration, at least 400x200 px (placeholders, icons, 1-pixel or blank images are
+   rejected). In order of preference:
+   a. If you can generate an image, generate a relevant, text-free illustration (16:9)
+      and send its bytes as `image_base64`.
+   b. Otherwise find a relevant, properly licensed image and send its DIRECT https
+      image URL as `url` (the site downloads it safely). Good sources: Wikimedia
+      Commons (use the `upload.wikimedia.org/...` file URL or a standard thumbnail such
+      as `/thumb/.../1280px-...`), Unsplash (`images.unsplash.com/...`), Pexels, or the
+      company's own press-kit image for the product discussed. Only use images whose
+      license allows reuse (CC0, CC BY, CC BY-SA, Unsplash/Pexels license, official
+      press images); never use stock photos with watermarks, news-agency photos, or
+      images from articles you cite.
+   c. Always pass `alt` (what the image shows), `credit` in the form
+      `Photo: <author> / <site>, <license>` and `source_page` (the page showing the
+      license). The credit line is added to the end of the draft automatically.
+   Call `upload_featured_image` with `article_id` plus the above. If it fails (for
+   example 403 or too small), try one other image; if that fails too, continue: the
+   draft keeps the `needs_featured_image` flag and the owner adds a cover image in the
+   admin panel.
 9. Call `publish_article_if_allowed` with the `article_id`. Do not try to work around
    its answer: if it says the piece stays a draft, that is the correct outcome.
 10. Call `record_run_result` with outcome `completed`, the `article_id`, and a one-line

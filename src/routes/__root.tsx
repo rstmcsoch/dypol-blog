@@ -10,6 +10,7 @@ import { TrendingBar } from "@/components/site/trending-bar";
 import { NotFoundState } from "@/components/site/states";
 import { useSite } from "@/components/site/use-site";
 import { getShell } from "@/content/public-api";
+import { appearanceCss } from "@/lib/appearance";
 import { site as fallbackSite } from "@/content/site";
 import appCss from "../styles.css?url";
 
@@ -69,6 +70,7 @@ function RootLayout() {
       <a className="skip" href="#content">
         {site.labels.skip}
       </a>
+      <style dangerouslySetInnerHTML={{ __html: appearanceCss(site.appearance) }} />
       <ThemeSync />
       <SiteHeader />
       <TrendingBar />

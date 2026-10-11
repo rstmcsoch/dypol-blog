@@ -9,7 +9,7 @@ export function useSite(): SiteConfig {
   return data?.site ?? fallbackSite;
 }
 
-export function useTrending(): { id: string; slug: string; title: string }[] {
+export function useTrending(): import("@/content/ticker").TickerEntry[] {
   const data = rootRoute.useLoaderData();
   return data?.trending ?? [];
 }

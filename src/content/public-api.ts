@@ -8,7 +8,7 @@ export const getShell = createServerFn({ method: "GET" }).handler(async () => {
     // The site frame must always render, even if the content layer is broken.
     console.error("[shell] falling back to the built-in site config.", error);
     const { site } = await import("./site");
-    return { site, trending: [] as { id: string; slug: string; title: string }[] };
+    return { site, trending: [] as import("./ticker").TickerEntry[] };
   }
 });
 

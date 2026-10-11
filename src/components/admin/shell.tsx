@@ -1,14 +1,39 @@
 import { useState, type ReactNode } from "react";
-import { Link, useRouterState } from "@tanstack/react-router";
+import { Link, useRouter, useRouterState } from "@tanstack/react-router";
+import { adminSignOut } from "@/content/admin-api";
 
-const links = [
-  { to: "/admin", label: "Desk", exact: true },
-  { to: "/admin/articles", label: "Pieces" },
-  { to: "/admin/topics", label: "Topics" },
-  { to: "/admin/media", label: "Media" },
-  { to: "/admin/automation", label: "Automation" },
-  { to: "/admin/settings", label: "Settings" },
-] as const;
+type NavLinkDef = { to: string; label: string; exact?: boolean };
+
+const groups: { label: string; links: NavLinkDef[] }[] = [
+  {
+    label: "Content",
+    links: [
+      { to: "/admin", label: "Dashboard", exact: true },
+      { to: "/admin/articles", label: "Articles" },
+      { to: "/admin/topics", label: "Topics & tags" },
+      { to: "/admin/media", label: "Media" },
+    ],
+  },
+  {
+    label: "Site",
+    links: [
+      { to: "/admin/homepage", label: "Homepage" },
+      { to: "/admin/site-text", label: "Site text" },
+      { to: "/admin/appearance", label: "Appearance" },
+    ],
+  },
+  {
+    label: "Automation",
+    links: [{ to: "/admin/automation", label: "AI automation" }],
+  },
+  {
+    label: "System",
+    links: [
+      { to: "/admin/settings", label: "Settings" },
+      { to: "/admin/help", label: "Help" },
+    ],
+  },
+];
 
 export function AdminShell({
   children,
@@ -20,45 +45,62 @@ export function AdminShell({
   email: string | null;
 }) {
   const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   return (
     <div className="desk">
-      <header className="desk-bar">
-        <div className="container desk-bar-inner">
-          <Link to="/admin" className="desk-brand">
-            DYPOL <span>Desk</span>
+      <aside className={open ? "adm-side is-open" : "adm-side"}>
+        <div className="adm-brand">
+          <Link to="/admin" onClick={() => setOpen(false)}>
+            <span className="adm-logo" aria-hidden="true">D</span>
+            <span>
+              DYPOL Blog
+              <small>Admin</small>
+            </span>
           </Link>
-          <nav className={open ? "desk-nav is-open" : "desk-nav"} aria-label="Desk">
-            {links.map((link) => {
-              const active =
-                "exact" in link && link.exact
-                  ? pathname === link.to
-                  : pathname === link.to || pathname.startsWith(`${link.to}/`);
-              return (
-                <Link
-                  key={link.to}
-                  to={link.to}
-                  className={active ? "is-active" : undefined}
-                  aria-current={active ? "page" : undefined}
-                  onClick={() => setOpen(false)}
-                >
-                  {link.label}
-                </Link>
-              );
-            })}
-            <Link to="/" onClick={() => setOpen(false)}>
-              View journal
-            </Link>
-          </nav>
-          <p className="desk-mode">{mode === "dev" ? "Preview desk" : (email ?? "Editor")}</p>
-          <button type="button" className="desk-nav-btn" aria-expanded={open} onClick={() => setOpen((value) => !value)}>
-            {open ? "Close" : "Sections"}
+          <button type="button" className="adm-menu-btn" aria-expanded={open} aria-controls="adm-nav" onClick={() => setOpen((v) => !v)}>
+            {open ? "Close" : "Menu"}
           </button>
         </div>
-      </header>
-      <div className="desk-main">
-        <div className="container">{children}</div>
-      </div>
+        <nav id="adm-nav" className="adm-nav" aria-label="Admin">
+          {groups.map((group) => (
+            <div className="adm-group" key={group.label}>
+              <p className="adm-group__label">{group.label}</p>
+              {group.links.map((link) => {
+                const active = link.exact ? pathname === link.to || pathname === `${link.to}/` : pathname === link.to || pathname.startsWith(`${link.to}/`);
+                return (
+                  <Link
+                    key={link.to}
+                    to={link.to}
+                    className={active ? "is-active" : undefined}
+                    aria-current={active ? "page" : undefined}
+                    onClick={() => setOpen(false)}
+                  >
+                    {link.label}
+                  </Link>
+                );
+              })}
+            </div>
+          ))}
+          <div className="adm-group adm-group--foot">
+            <a href="/" target="_blank" rel="noreferrer">
+              View site ↗
+            </a>
+            <button
+              type="button"
+              onClick={() => {
+                void adminSignOut().then(() => router.navigate({ to: "/login", search: { denied: false } }));
+              }}
+            >
+              Sign out
+            </button>
+            <p className="adm-who">{mode === "dev" ? "Local preview" : (email ?? "Signed in with admin token")}</p>
+          </div>
+        </nav>
+      </aside>
+      <main className="desk-main">
+        <div className="adm-content">{children}</div>
+      </main>
     </div>
   );
 }

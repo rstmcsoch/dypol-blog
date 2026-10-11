@@ -1,4 +1,5 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate, useRouter } from "@tanstack/react-router";
+import { DeleteArticleButton } from "@/components/admin/delete-article";
 import { adminArticles } from "@/content/admin-api";
 import { publicationStatuses } from "@/content/types";
 import { formatDate } from "@/lib/format";
@@ -28,10 +29,11 @@ function ArticleIndex() {
   const data = Route.useLoaderData();
   const search = Route.useSearch();
   const navigate = useNavigate();
+  const router = useRouter();
   return (
     <>
-      <p className="desk-kicker">Pieces</p>
-      <h1 className="desk-title">Index</h1>
+      <p className="desk-kicker">Content</p>
+      <h1 className="desk-title">Articles</h1>
       <form
         className="filters"
         style={{ marginTop: "1rem" }}
@@ -105,7 +107,7 @@ function ArticleIndex() {
       </form>
       <p style={{ margin: "1rem 0" }}>
         <Link to="/admin/articles/new" className="btn">
-          New piece
+          New article
         </Link>
       </p>
       {data.articles.length === 0 ? (
@@ -119,6 +121,9 @@ function ArticleIndex() {
                 <th>Status</th>
                 <th>Topic</th>
                 <th>Updated</th>
+                <th>
+                  <span className="sr-only">Actions</span>
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -138,6 +143,25 @@ function ArticleIndex() {
                   </td>
                   <td>{article.categoryLabel}</td>
                   <td>{formatDate(article.updatedAt)}</td>
+                  <td>
+                    <div className="adm-row-actions">
+                      <Link to="/admin/articles/$id" params={{ id: article.id }} className="btn btn--ghost">
+                        Edit
+                      </Link>
+                      {article.status === "published" ? (
+                        <a href={`/articles/${article.slug}`} target="_blank" rel="noreferrer" className="btn btn--ghost">
+                          View
+                        </a>
+                      ) : null}
+                      <DeleteArticleButton
+                        id={article.id}
+                        title={article.title}
+                        status={article.status}
+                        hasCover={article.hasCover}
+                        onDeleted={() => router.invalidate()}
+                      />
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>

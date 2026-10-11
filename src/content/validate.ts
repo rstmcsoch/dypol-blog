@@ -1,9 +1,9 @@
 import { z } from "zod";
-import { isSafeHref } from "./rules";
-import { site } from "./site";
-import { publicationStatuses, type SiteConfig } from "./types";
+import { isSafeHref } from "./rules.ts";
+import { site } from "./site.ts";
+import { publicationStatuses, type SiteConfig } from "./types.ts";
 
-export { isSafeHref, publishProblems, slugify } from "./rules";
+export { isSafeHref, publishProblems, slugify } from "./rules.ts";
 
 const slugSchema = z
   .string()
@@ -61,6 +61,9 @@ const hrefSchema = z
   .max(300)
   .refine((value) => isSafeHref(value), "Link must be a site path or an https URL.");
 
+export const HOME_SECTION_IDS = ["featured", "also", "latest", "topics"] as const;
+export const SIDEBAR_BLOCKS = ["tags", "related", "newStories", "share"] as const;
+
 const labelText = z.string().trim().min(1).max(80);
 
 const siteSchema = z.object({
@@ -108,6 +111,12 @@ const siteSchema = z.object({
     errorTitle: z.string().trim().min(1).max(120),
     errorHome: labelText,
     loading: labelText,
+    alsoLike: labelText,
+    newStories: labelText,
+    share: labelText,
+    copyLink: labelText,
+    linkCopied: labelText,
+    tags: labelText,
   }),
   nav: z
     .array(
@@ -123,6 +132,30 @@ const siteSchema = z.object({
     enabled: z.boolean(),
     label: labelText,
     slugs: z.array(slugSchema).max(12),
+    source: z.enum(["latest", "pinned", "custom"]),
+    count: z.number().int().min(1).max(12),
+    customItems: z
+      .array(z.object({ id: z.string().min(1).max(40), text: z.string().trim().min(1).max(160), href: z.union([z.literal(""), hrefSchema]) }))
+      .max(12),
+    animate: z.boolean(),
+    speed: z.number().int().min(10).max(180),
+  }),
+  home: z.object({
+    sections: z
+      .array(z.object({ id: z.enum(HOME_SECTION_IDS), enabled: z.boolean(), count: z.number().int().min(1).max(50) }))
+      .length(HOME_SECTION_IDS.length)
+      .refine((list) => new Set(list.map((x) => x.id)).size === list.length, "Each homepage section appears once."),
+  }),
+  articleSidebar: z.object({
+    enabled: z.boolean(),
+    blocks: z.array(z.enum(SIDEBAR_BLOCKS)).max(SIDEBAR_BLOCKS.length).refine((b) => new Set(b).size === b.length, "Each block appears once."),
+    count: z.number().int().min(1).max(10),
+  }),
+  appearance: z.object({
+    darkness: z.number().int().min(75).max(100),
+    whiteness: z.number().int().min(85).max(100),
+    accent: z.string().regex(/^#[0-9a-fA-F]{6}$/, "Use a #rrggbb color.").transform((v) => v.toLowerCase()),
+    coverFallback: z.enum(["plate", "minimal", "none"]),
   }),
   footer: z.object({
     note: z.string().trim().min(1).max(160),
@@ -143,7 +176,40 @@ const siteSchema = z.object({
   faviconMediaId: z.string().min(1).max(80).nullable(),
 });
 
+
+/** Keeps a stored section list valid: known ids once each, missing ones appended from defaults. */
+function mergeSections(raw: unknown): SiteConfig["home"]["sections"] {
+  const list = Array.isArray(raw) ? raw : [];
+  const out: SiteConfig["home"]["sections"] = [];
+  for (const item of list) {
+    const def = site.home.sections.find((d) => d.id === (item as { id?: string })?.id);
+    if (def && !out.some((o) => o.id === def.id)) out.push({ ...def, ...(item as object), id: def.id });
+  }
+  for (const def of site.home.sections) if (!out.some((o) => o.id === def.id)) out.push({ ...def });
+  return out;
+}
+
+/**
+ * Stored settings merged over defaults. Each newer group falls back to its
+ * default on its own if invalid, so one bad value never blanks the site.
+ */
 export function normalizeSite(input: unknown): SiteConfig {
+  const raw = input && typeof input === "object" ? (input as Partial<SiteConfig>) : {};
+  const shape = siteSchema.shape;
+  const pick = <K extends "trending" | "home" | "articleSidebar" | "appearance">(key: K, value: unknown): SiteConfig[K] => {
+    const parsed = shape[key].safeParse(value);
+    return (parsed.success ? parsed.data : site[key]) as SiteConfig[K];
+  };
+  return normalizeCore({
+    ...raw,
+    trending: pick("trending", { ...site.trending, ...(raw.trending ?? {}) }),
+    home: pick("home", { sections: mergeSections(raw.home?.sections) }),
+    articleSidebar: pick("articleSidebar", { ...site.articleSidebar, ...(raw.articleSidebar ?? {}) }),
+    appearance: pick("appearance", { ...site.appearance, ...(raw.appearance ?? {}) }),
+  });
+}
+
+function normalizeCore(input: unknown): SiteConfig {
   const raw = input && typeof input === "object" ? (input as Partial<SiteConfig>) : {};
   return siteSchema.parse({
     ...site,

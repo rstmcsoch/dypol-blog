@@ -33,7 +33,7 @@ function AutomationDesk() {
       <h1 className="desk-title">Automation</h1>
       <p className="desk-note">
         Any AI app that supports MCP connectors (Claude, ChatGPT, Grok, Cursor, Claude Code, Gemini CLI, VS Code, ...) drafts
-        pieces through this site&apos;s MCP endpoint (<code>/mcp</code>). The schedule is configured in your AI app, not here.
+        articles through this site&apos;s MCP endpoint (<code>/mcp</code>). The schedule is configured in your AI app, not here.
         MCP token: {data.mcpTokenConfigured ? "configured" : "not set (endpoint disabled)"}. Active mode: {data.provider.active}.{" "}
         {data.provider.note}
       </p>
@@ -91,7 +91,7 @@ function AutomationDesk() {
             only ever Worker secrets, never typed here.
           </p>
           <label className="field">
-            <span>Featured image transfer from your AI app</span>
+            <span>Featured image transfer from your AI app (a note for yourself; it does not change behaviour)</span>
             <select value={s.imageTransfer} onChange={(e) => setS({ ...s, imageTransfer: e.target.value as AutomationSettings["imageTransfer"] })}>
               <option value="untested">Untested (verify once in your AI app)</option>
               <option value="verified">Verified working</option>
@@ -114,7 +114,7 @@ function AutomationDesk() {
         </fieldset>
         <fieldset className="block-card">
           <legend>Publishing policy</legend>
-          <p className="desk-note">Off by default: every piece stays a draft. Turn on only with explicit rules.</p>
+          <p className="desk-note">Off by default: every AI article stays a draft. Turn on only with explicit rules.</p>
           <Check checked={policy.autoPublish} onChange={(e) => setPolicy({ autoPublish: e.target.checked })} label="Allow automatic publishing" />
           <div className="field">
             <span>Topics automation may publish into</span>
@@ -150,7 +150,7 @@ function AutomationDesk() {
         <p className="desk-note">No automation runs yet.</p>
       ) : (
         <table className="desk-table">
-          <thead><tr><th>When (UTC)</th><th>Tool</th><th>Outcome</th><th>Reason</th><th>Client</th><th>Piece</th></tr></thead>
+          <thead><tr><th>When (UTC)</th><th>Tool</th><th>Outcome</th><th>Reason</th><th>Client</th><th>Article</th></tr></thead>
           <tbody>
             {data.runs.map((r) => (
               <tr key={r.id}>
