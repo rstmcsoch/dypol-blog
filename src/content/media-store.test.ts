@@ -71,17 +71,28 @@ test("object keys stay inside the media prefix and match the declared bindings",
   assert.equal(D1_DATABASE_ID, "78708341-8467-4140-bfa7-0531f14a7aee");
   assert.equal(mediaObjectKey(id), `media/${id}`);
   assert.throws(() => mediaObjectKey("../etc/passwd"));
-  const config = JSON.parse(readFileSync(new URL("../../wrangler.json", import.meta.url), "utf8")) as {
-    r2_buckets: { binding: string; bucket_name: string; remote?: boolean }[];
-    d1_databases: { binding: string; database_name: string; database_id: string; remote?: boolean }[];
+  // wrangler.jsonc allows comments; strip line comments outside strings before parsing.
+  const raw = readFileSync(new URL("../../wrangler.jsonc", import.meta.url), "utf8");
+  const config = JSON.parse(raw.replace(/("(?:\\.|[^"\\])*")|\/\/[^\n]*/g, (m, str) => str ?? "")) as {
+    r2_buckets: { binding: string; bucket_name: string }[];
+    d1_databases: { binding: string; database_name: string; database_id: string }[];
+    previews: {
+      r2_buckets: { binding: string; bucket_name: string }[];
+      d1_databases: { binding: string; database_name: string; database_id: string }[];
+      vars: Record<string, string>;
+    };
   };
   assert.equal(config.r2_buckets[0]?.binding, "MEDIA");
   assert.equal(config.r2_buckets[0]?.bucket_name, MEDIA_BUCKET_NAME);
-  assert.equal(config.r2_buckets[0]?.remote, false);
   assert.equal(config.d1_databases[0]?.binding, "DB");
   assert.equal(config.d1_databases[0]?.database_name, D1_DATABASE_NAME);
   assert.equal(config.d1_databases[0]?.database_id, D1_DATABASE_ID);
-  assert.equal(config.d1_databases[0]?.remote, false);
+  // Previews must never point at production storage.
+  assert.equal(config.previews.vars.DYPOL_ENV, "preview");
+  assert.equal(config.previews.d1_databases[0]?.binding, "DB");
+  assert.notEqual(config.previews.d1_databases[0]?.database_id, D1_DATABASE_ID);
+  assert.equal(config.previews.r2_buckets[0]?.binding, "MEDIA");
+  assert.notEqual(config.previews.r2_buckets[0]?.bucket_name, MEDIA_BUCKET_NAME);
 });
 
 test("a file is written to the bucket and only a reference is written to the database", async () => {
