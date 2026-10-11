@@ -5,6 +5,12 @@ async function guard() {
   return requireAdmin();
 }
 
+/** Every write: valid desk session, same-origin request, writable deployment. */
+async function writeGuard() {
+  const { requireWriter } = await import("@/lib/auth/admin.server");
+  return requireWriter();
+}
+
 export const adminSession = createServerFn({ method: "GET" })
   .handler(async () => {
     const admin = await guard();
@@ -39,7 +45,7 @@ export const adminEditorData = createServerFn({ method: "GET" })
 export const adminSaveArticle = createServerFn({ method: "POST" })
   .validator((input: unknown) => input)
   .handler(async ({ data }) => {
-    await guard();
+    await writeGuard();
     const { saveArticle } = await import("./repository.server");
     return saveArticle(data);
   });
@@ -47,7 +53,7 @@ export const adminSaveArticle = createServerFn({ method: "POST" })
 export const adminDeleteDraft = createServerFn({ method: "POST" })
   .validator((input: { id: string }) => input)
   .handler(async ({ data }) => {
-    await guard();
+    await writeGuard();
     const { deleteDraft } = await import("./repository.server");
     await deleteDraft(data.id);
     return { ok: true };
@@ -74,7 +80,7 @@ export const adminTaxonomy = createServerFn({ method: "GET" })
 export const adminSaveCategory = createServerFn({ method: "POST" })
   .validator((input: unknown) => input)
   .handler(async ({ data }) => {
-    await guard();
+    await writeGuard();
     const { saveCategory } = await import("./repository.server");
     return saveCategory(data);
   });
@@ -82,7 +88,7 @@ export const adminSaveCategory = createServerFn({ method: "POST" })
 export const adminDeleteCategory = createServerFn({ method: "POST" })
   .validator((input: { id: string }) => input)
   .handler(async ({ data }) => {
-    await guard();
+    await writeGuard();
     const { deleteCategory } = await import("./repository.server");
     await deleteCategory(data.id);
     return { ok: true };
@@ -91,7 +97,7 @@ export const adminDeleteCategory = createServerFn({ method: "POST" })
 export const adminSaveTag = createServerFn({ method: "POST" })
   .validator((input: unknown) => input)
   .handler(async ({ data }) => {
-    await guard();
+    await writeGuard();
     const { saveTag } = await import("./repository.server");
     return saveTag(data);
   });
@@ -99,7 +105,7 @@ export const adminSaveTag = createServerFn({ method: "POST" })
 export const adminDeleteTag = createServerFn({ method: "POST" })
   .validator((input: { id: string }) => input)
   .handler(async ({ data }) => {
-    await guard();
+    await writeGuard();
     const { deleteTag } = await import("./repository.server");
     await deleteTag(data.id);
     return { ok: true };
@@ -133,7 +139,7 @@ export const adminSettings = createServerFn({ method: "GET" })
 export const adminSaveSettings = createServerFn({ method: "POST" })
   .validator((input: unknown) => input)
   .handler(async ({ data }) => {
-    await guard();
+    await writeGuard();
     const { saveSettings } = await import("./repository.server");
     await saveSettings(data);
     return { ok: true };
@@ -155,7 +161,7 @@ export const adminMedia = createServerFn({ method: "GET" })
 export const adminUploadMedia = createServerFn({ method: "POST" })
   .validator((input: unknown) => input)
   .handler(async ({ data }) => {
-    await guard();
+    await writeGuard();
     const { uploadMedia } = await import("./repository.server");
     return uploadMedia(data);
   });
@@ -163,7 +169,7 @@ export const adminUploadMedia = createServerFn({ method: "POST" })
 export const adminDeleteMedia = createServerFn({ method: "POST" })
   .validator((input: { id: string }) => input)
   .handler(async ({ data }) => {
-    await guard();
+    await writeGuard();
     const { deleteMedia } = await import("./repository.server");
     await deleteMedia(data.id);
     return { ok: true };
@@ -172,7 +178,7 @@ export const adminDeleteMedia = createServerFn({ method: "POST" })
 export const adminAddGrant = createServerFn({ method: "POST" })
   .validator((input: { email: string }) => input)
   .handler(async ({ data }) => {
-    await guard();
+    await writeGuard();
     const { addGrant } = await import("@/lib/auth/admin.server");
     await addGrant(data.email);
     return { ok: true };
@@ -181,7 +187,7 @@ export const adminAddGrant = createServerFn({ method: "POST" })
 export const adminRemoveGrant = createServerFn({ method: "POST" })
   .validator((input: { email: string }) => input)
   .handler(async ({ data }) => {
-    await guard();
+    await writeGuard();
     const { removeGrant } = await import("@/lib/auth/admin.server");
     await removeGrant(data.email);
     return { ok: true };
@@ -190,6 +196,8 @@ export const adminRemoveGrant = createServerFn({ method: "POST" })
 export const adminSignIn = createServerFn({ method: "POST" })
   .validator((input: { token: string }) => ({ token: String(input?.token ?? "").slice(0, 512) }))
   .handler(async ({ data }) => {
+    const { assertSameOrigin } = await import("@/lib/write-guard.server");
+    assertSameOrigin();
     const { signInDesk, deskConfigured } = await import("@/lib/auth/admin.server");
     if (!(await deskConfigured())) return { ok: false, reason: "locked" as const };
     const ok = await signInDesk(data.token);

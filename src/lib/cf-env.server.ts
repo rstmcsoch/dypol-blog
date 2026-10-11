@@ -23,17 +23,14 @@ export type WorkerBindings = {
   ADMIN_SESSION_SECRET?: string;
 };
 
-let cached: Promise<WorkerBindings> | null = null;
-
-export function workerEnv(): Promise<WorkerBindings> {
-  cached ??= (async () => {
-    try {
-      const specifier = ["cloudflare", "workers"].join(":");
-      const mod = (await import(/* @vite-ignore */ specifier)) as { env?: WorkerBindings };
-      return mod.env ?? {};
-    } catch {
-      return {};
-    }
-  })();
-  return cached;
+// No promise is cached across requests: workerd hangs a request that awaits a
+// promise created by another request. The module import itself is cached.
+export async function workerEnv(): Promise<WorkerBindings> {
+  try {
+    const specifier = ["cloudflare", "workers"].join(":");
+    const mod = (await import(/* @vite-ignore */ specifier)) as { env?: WorkerBindings };
+    return mod.env ?? {};
+  } catch {
+    return {};
+  }
 }

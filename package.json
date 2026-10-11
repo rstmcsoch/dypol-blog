@@ -16,11 +16,12 @@
     "preview:stop": "node scripts/preview.mjs stop",
     "typecheck": "tsc --noEmit",
     "check:auth": "node scripts/check-auth-invariant.mjs",
-    "test": "node --test 'scripts/**/*.test.mjs' && node --experimental-strip-types --test src/lib/app-data/app-data.test.ts src/lib/app-data/readiness-schedule.test.ts src/lib/auth/gate-identity.test.ts src/lib/auth/sign-in-gate.test.ts src/content/validate.test.ts src/content/media-store.test.ts",
+    "test": "node --test 'scripts/**/*.test.mjs' && node --experimental-strip-types --test src/lib/app-data/app-data.test.ts src/lib/app-data/readiness-schedule.test.ts src/lib/auth/gate-identity.test.ts src/lib/auth/sign-in-gate.test.ts src/content/validate.test.ts src/content/media-store.test.ts src/lib/write-policy.test.ts",
     "lint": "eslint .",
     "format": "prettier --write .",
     "db:migrate:remote": "wrangler d1 migrations apply DB --remote",
-    "deploy": "npm run build && wrangler deploy"
+    "deploy": "npm run build && wrangler deploy",
+    "test:e2e:security": "node scripts/e2e/admin-security.e2e.mjs"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.4",

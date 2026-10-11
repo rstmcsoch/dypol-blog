@@ -45,14 +45,16 @@ type ArticleRow = {
   blocks: ArticleBlock[] | string;
 };
 
-const readyState = globalThis as typeof globalThis & { __dypolContentReady__?: Promise<void> };
+// A plain flag, not a shared promise: workerd hangs requests that await a
+// promise created by another request. Seeding is idempotent (insert or ignore).
+let seeded = false;
 
-export function ensureContent(): Promise<void> {
-  readyState.__dypolContentReady__ ??= seedIfEmpty().catch((error) => {
-    readyState.__dypolContentReady__ = undefined;
-    throw error;
-  });
-  return readyState.__dypolContentReady__;
+export async function ensureContent(): Promise<void> {
+  if (seeded) return;
+  const { writesAllowed } = await import("@/lib/write-guard.server");
+  if (!(await writesAllowed())) return;
+  await seedIfEmpty();
+  seeded = true;
 }
 
 async function seedIfEmpty(): Promise<void> {

@@ -255,19 +255,14 @@ function wrapDatabase(binding: D1Binding): MediaDatabase {
   };
 }
 
-let storePromise: Promise<ReturnType<typeof createMediaStore>> | null = null;
-
-/** The MEDIA bucket and DB database declared in cloudflare.config.ts. */
-export function openMediaStore() {
-  storePromise ??= (async () => {
-    const env = await readMediaBindings();
-    if (!env?.MEDIA || !env.DB) throw new MediaBindingError();
-    const store = createMediaStore(wrapBucket(env.MEDIA), wrapDatabase(env.DB));
-    await store.ready;
-    return store;
-  })().catch((error) => {
-    storePromise = null;
-    throw error;
-  });
-  return storePromise;
+/**
+ * The MEDIA bucket and DB database bindings. A fresh store per call: workerd
+ * hangs a request that awaits a promise created by another request.
+ */
+export async function openMediaStore() {
+  const env = await readMediaBindings();
+  if (!env?.MEDIA || !env.DB) throw new MediaBindingError();
+  const store = createMediaStore(wrapBucket(env.MEDIA), wrapDatabase(env.DB));
+  await store.ready;
+  return store;
 }

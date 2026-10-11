@@ -2,11 +2,13 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   // One config for both Workers (dypolblog and dypol-blog). Workers Builds
   // overrides "name" per Worker, so both get the same bindings below.
+  // Workers Builds must run `npm run build` before the deploy/preview command.
   "name": "dypolblog",
   "main": "@tanstack/react-start/server-entry",
   "compatibility_date": "2026-10-06",
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true },
+  "vars": { "DYPOL_ENV": "production" },
   "d1_databases": [
     {
       "binding": "DB",
@@ -20,8 +22,27 @@
       "binding": "MEDIA",
       "bucket_name": "dypol-blog-media"
     }
-  ]
+  ],
+  // `wrangler preview` (Workers Builds on non-production branches) uses these
+  // instead, so previews can never read or write production content.
+  "previews": {
+    "vars": { "DYPOL_ENV": "preview" },
+    "d1_databases": [
+      {
+        "binding": "DB",
+        "database_name": "dypol-blog-db-preview",
+        "database_id": "c9030fb4-8657-47d9-bf6f-e8c11650bdd5",
+        "migrations_dir": "migrations/d1"
+      }
+    ],
+    "r2_buckets": [
+      {
+        "binding": "MEDIA",
+        "bucket_name": "dypol-blog-media-preview"
+      }
+    ]
+  }
   // Secrets (set with `wrangler secret put`, never committed):
-  //   ADMIN_TOKEN           editor sign-in token (16+ chars)
+  //   ADMIN_TOKEN           editor sign-in token (16+ chars; use 32+ random)
   //   ADMIN_SESSION_SECRET  optional, signs the desk cookie
 }

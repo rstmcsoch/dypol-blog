@@ -1,5 +1,6 @@
 import { getCookie, setCookie, deleteCookie } from "@tanstack/react-start/server";
 import { workerEnv } from "../cf-env.server";
+import { assertSameOrigin, ReadOnlyError, writesAllowed } from "../write-guard.server";
 
 /**
  * Desk access on Cloudflare Workers.
@@ -63,6 +64,13 @@ export async function requireAdmin(): Promise<AdminIdentity> {
   const cookie = getCookie(COOKIE) ?? "";
   if (!cookie || !sameText(cookie, await sign(s.key))) throw new UnauthorizedError();
   return { id: "editor", email: null, mode: "account" };
+}
+
+export async function requireWriter(): Promise<AdminIdentity> {
+  const admin = await requireAdmin();
+  assertSameOrigin();
+  if (!(await writesAllowed())) throw new ReadOnlyError();
+  return admin;
 }
 
 export async function signInDesk(token: string): Promise<boolean> {
