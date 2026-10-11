@@ -125,7 +125,10 @@ ${hidden("code_challenge", params.challenge)}${hidden("code_challenge_method", "
     headers: {
       "content-type": "text/html; charset=utf-8",
       "x-frame-options": "DENY",
-      "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'",
+      // form-action also governs where the form's POST may redirect (Chromium enforces it on
+      // the 302), so it must name the already allow-listed redirect_uri origin or Allow
+      // silently does nothing.
+      "content-security-policy": `default-src 'none'; style-src 'unsafe-inline'; form-action 'self' ${new URL(params.redirectUri).origin}; frame-ancestors 'none'`,
       "referrer-policy": "no-referrer",
       ...noStore,
     },
