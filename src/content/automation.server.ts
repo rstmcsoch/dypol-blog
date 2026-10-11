@@ -6,7 +6,7 @@ import {
 } from "@/lib/automation/settings";
 import { ensureContent } from "./repository.server";
 
-/** Storage for Grok automation: settings row, submissions (idempotency) and the run log. */
+/** Storage for AI-connector automation: settings row, submissions (idempotency) and the run log. */
 
 export async function readAutomationSettings(): Promise<AutomationSettings> {
   await ensureContent();

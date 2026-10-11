@@ -1,3 +1,4 @@
+import type { KeyEnv } from "@/lib/automation/provider";
 import { z } from "zod";
 import { getSql } from "@/lib/db";
 import { workerEnv } from "@/lib/cf-env.server";
@@ -126,7 +127,7 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
         const settings = await loadSettings();
         const { readSettings } = await import("@/content/repository.server");
         const { site } = await readSettings();
-        const env = (await workerEnv()) as { XAI_API_KEY?: string };
+        const env = (await workerEnv()) as KeyEnv;
         return {
           ok: true,
           data: {
@@ -281,7 +282,7 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
           articleId: saved.id,
           sourceUrls: sources,
           flags,
-          provider: "grok-mcp",
+          provider: "mcp-connector",
           createdAt: new Date().toISOString(),
         });
         if (winner.articleId !== saved.id) {

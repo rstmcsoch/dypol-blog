@@ -173,10 +173,10 @@ await check("tools/list exposes exactly the six automation tools", async () => {
   for (const t of tools) assert.equal(t.inputSchema.type, "object");
 });
 
-await check("get_blog_settings returns policy, categories, provider grok-mcp", async () => {
+await check("get_blog_settings returns policy, categories, provider mcp-connector", async () => {
   const { isError, data } = await call(client, "get_blog_settings", {});
   assert.equal(isError, false);
-  assert.equal(data.automation.provider.active, "grok-mcp");
+  assert.equal(data.automation.provider.active, "mcp-connector");
   assert.ok(data.categories.some((c) => c.id === CATEGORY));
   assert.equal(data.automation.active, true, "test target must have automation enabled");
 });

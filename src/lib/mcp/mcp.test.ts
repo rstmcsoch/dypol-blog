@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { authenticate, exchangeCode, issueCode, pkceS256, redirectAllowed, refresh, secretMatches } from "./auth.ts";
+import { authenticate, exchangeCode, formActionSource, issueCode, pkceS256, readClient, redirectAllowed, redirectMatches, refresh, registerClient, secretMatches } from "./auth.ts";
 import { handleRpc, type ToolDefinition } from "./protocol.ts";
 
 const TOKEN = "t".repeat(40);
@@ -46,6 +46,51 @@ test("OAuth redirect allow-list", () => {
   assert.equal(redirectAllowed("http://grok.com/cb"), false);
   assert.equal(redirectAllowed("https://my.host/cb", "my.host"), true);
   assert.equal(redirectAllowed("javascript:alert(1)"), false);
+  // Well-known MCP clients
+  for (const uri of [
+    "https://claude.ai/api/mcp/auth_callback",
+    "https://claude.com/api/mcp/auth_callback",
+    "https://chatgpt.com/connector_platform_oauth_redirect",
+    "https://chatgpt.com/connector/oauth/abc123",
+    "https://www.cursor.com/agents/mcp/oauth/callback",
+    "https://vscode.dev/redirect",
+    "https://insiders.vscode.dev/redirect",
+    "http://localhost:8787/callback",
+    "http://127.0.0.1:33418/",
+    "http://[::1]:7777/oauth/callback",
+    "cursor://anysphere.cursor-mcp/oauth/callback",
+  ]) assert.equal(redirectAllowed(uri), true, uri);
+  for (const uri of ["https://claude.ai.evil.com/cb", "http://claude.ai/api/mcp/auth_callback", "cursor://evil/cb", "vscode-evil://x", "https://u:p@claude.ai/cb", "https://claude.ai/cb#f", "data:text/html,x"]) {
+    assert.equal(redirectAllowed(uri), false, uri);
+  }
+  assert.equal(redirectAllowed("https://a.my.host/cb", ["my.host"]), true);
+  assert.equal(redirectAllowed("https://a.my.host/cb", ["https://bad"]), false);
+});
+
+test("loopback redirects match on any port; others exact", () => {
+  assert.equal(redirectMatches("http://127.0.0.1/", "http://127.0.0.1:59656/"), true);
+  assert.equal(redirectMatches("http://localhost/callback", "http://localhost:44770/callback"), true);
+  assert.equal(redirectMatches("http://localhost/callback", "http://localhost:1/other"), false);
+  assert.equal(redirectMatches("http://localhost/callback", "http://127.0.0.1:1/callback"), false);
+  assert.equal(redirectMatches("https://claude.ai/api/mcp/auth_callback", "https://claude.ai/api/mcp/auth_callback"), true);
+  assert.equal(redirectMatches("https://claude.ai/api/mcp/auth_callback", "https://claude.ai/api/mcp/other"), false);
+  assert.equal(formActionSource("cursor://anysphere.cursor-mcp/oauth/callback"), "cursor:");
+  assert.equal(formActionSource("https://claude.ai/x"), "https://claude.ai");
+});
+
+test("DCR: signed client ids carry name + redirects; tampering and rotation void them; tokens carry client name", async () => {
+  const id = await registerClient(TOKEN, { name: "Claude <script>", redirectUris: ["https://claude.ai/api/mcp/auth_callback"] });
+  assert.deepEqual(await readClient(TOKEN, id), { name: "Claude script", redirectUris: ["https://claude.ai/api/mcp/auth_callback"] });
+  assert.equal(await readClient("r".repeat(40), id), null, "rotated MCP_TOKEN");
+  assert.equal(await readClient(TOKEN, id.replace(/.$/, (c) => (c === "0" ? "1" : "0"))), null, "tampered");
+  assert.equal(await readClient(TOKEN, "dypol-mcp-client"), null, "legacy id is not signed");
+  const verifier = "v".repeat(64);
+  const redirectUri = "https://claude.ai/api/mcp/auth_callback";
+  const code = await issueCode(TOKEN, { clientId: id, redirectUri, challenge: await pkceS256(verifier) });
+  const pair = await exchangeCode(TOKEN, { code, clientId: id, redirectUri, verifier });
+  assert.ok(pair);
+  assert.deepEqual(await authenticate(`Bearer ${pair.access_token}`, TOKEN), { ok: true, via: "oauth", client: "Claude script" });
+  assert.ok(await refresh(TOKEN, { refreshToken: pair.refresh_token, clientId: id }));
 });
 
 const echo: ToolDefinition = {
@@ -101,4 +146,7 @@ test("CORS origin allow-list for browser-originated MCP requests", async () => {
   assert.equal(originAllowed("https://evil.example", self), false);
   assert.equal(originAllowed("null", self), false);
   assert.equal(originAllowed("https://my.host", self, "my.host"), true);
+  assert.equal(originAllowed("https://claude.ai", self), true);
+  assert.equal(originAllowed("https://chatgpt.com", self), true);
+  assert.equal(originAllowed("https://claude.ai.evil.com", self), false);
 });

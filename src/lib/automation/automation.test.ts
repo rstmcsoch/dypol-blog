@@ -3,7 +3,8 @@ import test from "node:test";
 import { bodyToBlocks, contentHash, wordCount } from "./body.ts";
 import { decodeBase64Image, fetchImage, ImageIntakeError, MAX_IMAGE_BYTES, sniffImage, unsafeUrlReason } from "./image-fetch.ts";
 import { draftFlags, publishDecision, sourceProblems } from "./policy.ts";
-import { providerStatus, runXaiProvider } from "./provider.ts";
+import { buildRequest, configuredKeyNames, generateWithServerApi, parseResponse, providerStatus, ProviderError } from "./provider.ts";
+import { SERVER_API_PROVIDERS } from "./settings.ts";
 import { automationActive, DEFAULT_AUTOMATION_SETTINGS, normalizeAutomationSettings } from "./settings.ts";
 
 const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC", "base64");
@@ -12,7 +13,7 @@ const policy = { ...DEFAULT_AUTOMATION_SETTINGS.policy };
 test("defaults are safe: automation off, auto-publish off", () => {
   assert.equal(DEFAULT_AUTOMATION_SETTINGS.enabled, false);
   assert.equal(DEFAULT_AUTOMATION_SETTINGS.policy.autoPublish, false);
-  assert.equal(DEFAULT_AUTOMATION_SETTINGS.provider, "grok-mcp");
+  assert.equal(DEFAULT_AUTOMATION_SETTINGS.mode, "mcp-connector");
   assert.deepEqual(normalizeAutomationSettings({ enabled: "yes" }), DEFAULT_AUTOMATION_SETTINGS);
   assert.equal(normalizeAutomationSettings({ enabled: true, policy: { minWords: 300 } }).policy.minWords, 300);
   assert.deepEqual(automationActive({ ...DEFAULT_AUTOMATION_SETTINGS, enabled: true, paused: true }), { active: false, reason: "Automation is paused in the desk." });
@@ -123,21 +124,78 @@ test("fetchImage follows safe redirects, blocks unsafe hops, enforces type and s
   await assert.rejects(fetchImage("https://a.org/l", loop), /Too many redirects/);
 });
 
-test("provider: grok-mcp active; xai-api inert without key; never makes requests", async () => {
-  const s = { ...DEFAULT_AUTOMATION_SETTINGS };
-  assert.equal(providerStatus(s, {}).active, "grok-mcp");
-  assert.equal(providerStatus({ ...s, provider: "xai-api" }, {}).active, "grok-mcp");
-  assert.equal(providerStatus({ ...s, provider: "xai-api" }, { XAI_API_KEY: "k" }).active, "xai-api");
-  const original = globalThis.fetch;
-  let calls = 0;
-  globalThis.fetch = (async () => {
-    calls += 1;
-    return new Response();
-  }) as typeof fetch;
-  try {
-    await assert.rejects(runXaiProvider(), /No request was made/);
-  } finally {
-    globalThis.fetch = original;
+test("settings: legacy grok-mcp / xai-api values migrate; base URL validated", () => {
+  const legacy = normalizeAutomationSettings({ enabled: true, provider: "grok-mcp" });
+  assert.equal(legacy.mode, "mcp-connector");
+  assert.equal(legacy.enabled, true, "migration keeps other settings");
+  assert.equal("provider" in legacy, false);
+  const legacyApi = normalizeAutomationSettings({ provider: "xai-api" });
+  assert.equal(legacyApi.mode, "server-api");
+  assert.equal(legacyApi.serverApi.provider, "xai");
+  const badBase = normalizeAutomationSettings({ enabled: true, serverApi: { provider: "openai-compatible", model: "m", baseUrl: "http://10.0.0.1/v1" } });
+  assert.equal(badBase.enabled, true, "an invalid serverApi block falls back alone");
+  assert.equal(badBase.serverApi.provider, "openai");
+  for (const baseUrl of ["http://api.example.com/v1", "https://localhost/v1", "https://127.0.0.1/v1", "https://svc.internal/v1", ""]) {
+    assert.equal(normalizeAutomationSettings({ serverApi: { provider: "openai-compatible", model: "m", baseUrl } }).serverApi.baseUrl, "", baseUrl);
   }
-  assert.equal(calls, 0);
+  assert.equal(
+    normalizeAutomationSettings({ serverApi: { provider: "openai-compatible", model: "m", baseUrl: "https://api.together.xyz/v1" } }).serverApi.baseUrl,
+    "https://api.together.xyz/v1",
+  );
+  assert.deepEqual(normalizeAutomationSettings({ extraClientHosts: ["Connectors.Example.com"] }).extraClientHosts, ["connectors.example.com"]);
+  assert.deepEqual(normalizeAutomationSettings({ extraClientHosts: ["https://x"] }), DEFAULT_AUTOMATION_SETTINGS);
+});
+
+test("provider status: mcp-connector by default; server-api only with mode AND key; key names only", () => {
+  const s = { ...DEFAULT_AUTOMATION_SETTINGS };
+  assert.equal(providerStatus(s, {}).active, "mcp-connector");
+  assert.equal(providerStatus(s, { OPENAI_API_KEY: "k" }).active, "mcp-connector", "key alone does nothing");
+  const api = { ...s, mode: "server-api" as const };
+  assert.equal(providerStatus(api, {}).active, "mcp-connector", "mode alone does nothing");
+  const on = providerStatus(api, { OPENAI_API_KEY: "secret-value" });
+  assert.equal(on.active, "server-api");
+  assert.equal(on.serverApi.keySecret, "OPENAI_API_KEY");
+  assert.equal(JSON.stringify(on).includes("secret-value"), false, "never exposes key values");
+  assert.equal(providerStatus({ ...api, serverApi: { provider: "anthropic", model: "", baseUrl: "" } }, { AI_API_KEY: "k" }).serverApi.keySecret, "AI_API_KEY");
+  assert.deepEqual(configuredKeyNames({ XAI_API_KEY: "a", GEMINI_API_KEY: " " }), ["XAI_API_KEY"]);
+});
+
+test("server-api adapters: request shape per provider, parse responses, mocked fetch only", async () => {
+  const input = { system: "sys", prompt: "hello" };
+  const cases = {
+    xai: ["https://api.x.ai/v1/chat/completions", "authorization"],
+    openai: ["https://api.openai.com/v1/chat/completions", "authorization"],
+    openrouter: ["https://openrouter.ai/api/v1/chat/completions", "authorization"],
+    anthropic: ["https://api.anthropic.com/v1/messages", "x-api-key"],
+    gemini: ["https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent", "x-goog-api-key"],
+  } as const;
+  for (const [provider, [url, header]] of Object.entries(cases)) {
+    const r = buildRequest({ provider: provider as (typeof SERVER_API_PROVIDERS)[number], model: "", baseUrl: "" }, "KEY", input);
+    assert.equal(r.url, url, provider);
+    assert.ok(Object.values(r.init.headers).some((v) => v.includes("KEY")) && header in r.init.headers, provider);
+    assert.equal(r.url.includes("KEY") || r.init.body.includes("KEY"), false, "key only in a header");
+  }
+  const compat = buildRequest({ provider: "openai-compatible", model: "llama", baseUrl: "https://api.example.com/v1/" }, "K", input);
+  assert.equal(compat.url, "https://api.example.com/v1/chat/completions");
+  assert.throws(() => buildRequest({ provider: "openai-compatible", model: "m", baseUrl: "https://10.1.1.1/v1" }, "K", input), ProviderError);
+  assert.throws(() => buildRequest({ provider: "openai-compatible", model: "", baseUrl: "https://api.example.com" }, "K", input), /model id/);
+  assert.equal(parseResponse("openai", { choices: [{ message: { content: "hi" } }] }), "hi");
+  assert.equal(parseResponse("anthropic", { content: [{ type: "text", text: "a" }, { type: "text", text: "b" }] }), "ab");
+  assert.equal(parseResponse("gemini", { candidates: [{ content: { parts: [{ text: "g" }] } }] }), "g");
+  assert.throws(() => parseResponse("openai", {}), ProviderError);
+
+  let calls: string[] = [];
+  const mock = (async (url: string) => {
+    calls.push(String(url));
+    return new Response(JSON.stringify({ content: [{ type: "text", text: "draft" }] }), { status: 200 });
+  }) as unknown as typeof fetch;
+  const base = { ...DEFAULT_AUTOMATION_SETTINGS, serverApi: { provider: "anthropic" as const, model: "", baseUrl: "" } };
+  await assert.rejects(generateWithServerApi(base, { ANTHROPIC_API_KEY: "k" }, input, mock), /No request was made/);
+  await assert.rejects(generateWithServerApi({ ...base, mode: "server-api" }, {}, input, mock), /No request was made/);
+  assert.equal(calls.length, 0);
+  assert.equal(await generateWithServerApi({ ...base, mode: "server-api" }, { ANTHROPIC_API_KEY: "k" }, input, mock), "draft");
+  assert.deepEqual(calls, ["https://api.anthropic.com/v1/messages"]);
+  calls = [];
+  const fail = (async () => new Response("no", { status: 401 })) as unknown as typeof fetch;
+  await assert.rejects(generateWithServerApi({ ...base, mode: "server-api" }, { ANTHROPIC_API_KEY: "k" }, input, fail), /401/);
 });
