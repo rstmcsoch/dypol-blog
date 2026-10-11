@@ -1,12 +1,14 @@
 /**
  * Browser access to the MCP endpoint. Auth is a bearer header (no cookies), so
  * CORS grants no ambient authority; the allow-list still keeps arbitrary sites
- * (DNS-rebinding style) out. Allowed: this site, grok.com / x.ai and their
- * subdomains over https, and owner-listed hosts (MCP_OAUTH_REDIRECT_HOSTS).
+ * (DNS-rebinding style) out. Allowed: this site, the well-known MCP client hosts
+ * (Claude, ChatGPT, Grok, Cursor, VS Code, Perplexity; see auth.ts) and their
+ * subdomains over https, and owner-listed hosts (env MCP_OAUTH_REDIRECT_HOSTS or
+ * the desk's "extra client hosts" setting).
  */
-const DEFAULT_HOSTS = ["grok.com", "x.ai"];
+import { DEFAULT_REDIRECT_HOSTS, parseHostList } from "./auth.ts";
 
-export function originAllowed(origin: string, selfOrigin: string, extraHosts = ""): boolean {
+export function originAllowed(origin: string, selfOrigin: string, extraHosts: string | readonly string[] = ""): boolean {
   if (origin === selfOrigin) return true;
   let url: URL;
   try {
@@ -16,7 +18,7 @@ export function originAllowed(origin: string, selfOrigin: string, extraHosts = "
   }
   if (url.protocol !== "https:" || url.origin !== origin) return false;
   const host = url.hostname.toLowerCase();
-  const allowed = [...DEFAULT_HOSTS, ...extraHosts.split(",").map((h) => h.trim().toLowerCase()).filter(Boolean)];
+  const allowed = [...DEFAULT_REDIRECT_HOSTS, ...parseHostList(extraHosts)];
   return allowed.some((base) => host === base || host.endsWith(`.${base}`));
 }
 

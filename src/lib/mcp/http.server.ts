@@ -1,5 +1,6 @@
 import { workerEnv } from "@/lib/cf-env.server";
 import { authenticate } from "./auth";
+import { extraClientHosts } from "./hosts.server";
 import { MCP_CORS_BASE, originAllowed, withHeaders } from "./cors";
 import { handleRpc, RPC } from "./protocol";
 import { buildTools } from "./tools.server";
@@ -59,7 +60,7 @@ export async function handleMcp(request: Request): Promise<Response> {
   const env = (await workerEnv()) as { MCP_TOKEN?: string; MCP_LIMITER?: Limiter; MCP_OAUTH_REDIRECT_HOSTS?: string };
   // DNS-rebinding / browser protection: a browser Origin must be allow-listed.
   const origin = request.headers.get("origin");
-  if (origin && !originAllowed(origin, url.origin, env.MCP_OAUTH_REDIRECT_HOSTS)) {
+  if (origin && !originAllowed(origin, url.origin) && !originAllowed(origin, url.origin, await extraClientHosts(env))) {
     return rpcError(403, RPC.INVALID_REQUEST, "Origin not allowed.");
   }
   const cors = origin ? { ...MCP_CORS_BASE, "access-control-allow-origin": origin } : {};
@@ -101,7 +102,7 @@ async function handleMcpInner(request: Request, env: { MCP_TOKEN?: string; MCP_L
   } catch {
     return rpcError(400, RPC.PARSE, "Parse error.");
   }
-  const reply = await handleRpc(body, buildTools({ auth: auth.via }));
+  const reply = await handleRpc(body, buildTools({ auth: auth.client ? `oauth:${auth.client}` : auth.via }));
   if (reply === null) return new Response(null, { status: 202 });
   return json(reply);
 }

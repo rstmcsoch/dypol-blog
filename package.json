@@ -26,7 +26,8 @@
     "test:src": "node --experimental-strip-types --test src/lib/app-data/app-data.test.ts src/lib/app-data/readiness-schedule.test.ts src/lib/auth/gate-identity.test.ts src/lib/auth/sign-in-gate.test.ts src/content/validate.test.ts src/content/media-store.test.ts src/lib/write-policy.test.ts src/lib/auth/session-token.test.ts src/lib/automation/automation.test.ts src/lib/mcp/mcp.test.ts",
     "test:e2e:rotation": "node scripts/e2e/session-rotation.e2e.mjs",
     "test:e2e:mcp": "node scripts/e2e/mcp.e2e.mjs",
-    "test:e2e:oauth-browser": "node scripts/e2e/oauth-browser.e2e.mjs"
+    "test:e2e:oauth-browser": "node scripts/e2e/oauth-browser.e2e.mjs",
+    "test:e2e:oauth-clients": "node scripts/e2e/oauth-clients.e2e.mjs"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.4",

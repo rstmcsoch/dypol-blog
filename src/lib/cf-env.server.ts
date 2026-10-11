@@ -23,7 +23,13 @@ export type WorkerBindings = {
   ADMIN_SESSION_SECRET?: string;
   MCP_TOKEN?: string;
   MCP_OAUTH_REDIRECT_HOSTS?: string;
+  /** Server-api provider keys (names only ever shown). See src/lib/automation/provider.ts. */
+  AI_API_KEY?: string;
   XAI_API_KEY?: string;
+  OPENAI_API_KEY?: string;
+  ANTHROPIC_API_KEY?: string;
+  GEMINI_API_KEY?: string;
+  OPENROUTER_API_KEY?: string;
   MCP_LIMITER?: { limit(options: { key: string }): Promise<{ success: boolean }> };
   SIGNIN_LIMITER?: { limit(options: { key: string }): Promise<{ success: boolean }> };
 };

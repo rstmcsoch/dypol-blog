@@ -1,10 +1,23 @@
 import { workerEnv } from "@/lib/cf-env.server";
 import { PUBLIC_CORS } from "./cors";
-import { exchangeCode, issueCode, mcpConfigured, redirectAllowed, refresh, secretMatches } from "./auth";
+import {
+  exchangeCode,
+  formActionSource,
+  isSignedClientId,
+  issueCode,
+  mcpConfigured,
+  readClient,
+  redirectAllowed,
+  redirectMatches,
+  refresh,
+  registerClient,
+  secretMatches,
+} from "./auth";
+import { extraClientHosts } from "./hosts.server";
 
 /**
- * OAuth 2.1 (authorization code + S256 PKCE, public clients) for grok.com custom
- * connectors. Stateless: codes and tokens are HMACs keyed by MCP_TOKEN. The owner
+ * OAuth 2.1 (authorization code + S256 PKCE, public clients, RFC 7591 dynamic
+ * registration) for any MCP connector client (Claude, ChatGPT, Grok, Cursor, ...). Stateless: codes and tokens are HMACs keyed by MCP_TOKEN. The owner
  * approves a connection by entering MCP_TOKEN on /oauth/authorize.
  */
 type Env = { MCP_TOKEN?: string; MCP_LIMITER?: { limit(o: { key: string }): Promise<{ success: boolean }> }; MCP_OAUTH_REDIRECT_HOSTS?: string };
@@ -63,14 +76,22 @@ export async function register(request: Request): Promise<Response> {
   } catch {
     return oauthError("invalid_client_metadata", "Body must be JSON.");
   }
-  const uris = Array.isArray(body.redirect_uris) ? body.redirect_uris.filter((u): u is string => typeof u === "string") : [];
-  if (uris.length === 0 || uris.length > 5 || !uris.every((u) => redirectAllowed(u, env.MCP_OAUTH_REDIRECT_HOSTS))) {
-    return oauthError("invalid_redirect_uri", "Redirect URIs must be https on grok.com / x.ai (or owner-allowed hosts).");
+  const uris = Array.isArray(body.redirect_uris) ? body.redirect_uris.filter((u): u is string => typeof u === "string" && u.length <= 500) : [];
+  const extra = await extraClientHosts(env);
+  if (uris.length === 0 || uris.length > 5 || !uris.every((u) => redirectAllowed(u, extra))) {
+    return oauthError(
+      "invalid_redirect_uri",
+      "Redirect URIs must be https on a known MCP client host (claude.ai, chatgpt.com, grok.com, ...), loopback http, or an owner-allowed host.",
+    );
   }
+  const clientName = typeof body.client_name === "string" ? body.client_name : "MCP client";
+  const clientId = await registerClient(env.MCP_TOKEN, { name: clientName, redirectUris: uris });
+  const client = await readClient(env.MCP_TOKEN, clientId);
   return json(
     {
-      client_id: "dypol-mcp-client",
-      client_name: typeof body.client_name === "string" ? body.client_name.slice(0, 100) : "MCP client",
+      client_id: clientId,
+      client_id_issued_at: Math.floor(Date.now() / 1000),
+      client_name: client?.name ?? "MCP client",
       redirect_uris: uris,
       token_endpoint_auth_method: "none",
       grant_types: ["authorization_code", "refresh_token"],
@@ -85,12 +106,12 @@ function esc(value: string): string {
   return value.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] as string);
 }
 
-type AuthorizeParams = { clientId: string; redirectUri: string; challenge: string; state: string; scope: string };
+type AuthorizeParams = { clientId: string; clientName: string | null; redirectUri: string; challenge: string; state: string; scope: string };
 
-function readParams(get: (k: string) => string | null, extraHosts?: string): AuthorizeParams | string {
+async function readParams(get: (k: string) => string | null, env: Env): Promise<AuthorizeParams | string> {
   const p = {
     responseType: get("response_type") ?? "",
-    clientId: (get("client_id") ?? "").slice(0, 200),
+    clientId: (get("client_id") ?? "").slice(0, 4000),
     redirectUri: get("redirect_uri") ?? "",
     challenge: get("code_challenge") ?? "",
     method: get("code_challenge_method") ?? "",
@@ -99,21 +120,33 @@ function readParams(get: (k: string) => string | null, extraHosts?: string): Aut
   };
   if (p.responseType !== "code") return "response_type must be code.";
   if (!p.clientId) return "client_id is required.";
-  if (!redirectAllowed(p.redirectUri, extraHosts)) return "redirect_uri is not allowed.";
+  if (!redirectAllowed(p.redirectUri, await extraClientHosts(env))) return "redirect_uri is not allowed.";
+  let clientName: string | null = null;
+  if (isSignedClientId(p.clientId)) {
+    // Registered via /oauth/register: the redirect must be one it registered (loopback port-agnostic).
+    const client = await readClient(env.MCP_TOKEN as string, p.clientId);
+    if (!client) return "client_id is not registered here (or MCP_TOKEN was rotated). Reconnect the client.";
+    if (!client.redirectUris.some((r) => redirectMatches(r, p.redirectUri))) return "redirect_uri was not registered for this client.";
+    clientName = client.name;
+  }
   if (p.method !== "S256" || !/^[A-Za-z0-9_-]{43,128}$/.test(p.challenge)) return "PKCE with S256 is required.";
-  return { clientId: p.clientId, redirectUri: p.redirectUri, challenge: p.challenge, state: p.state, scope: p.scope };
+  return { clientId: p.clientId, clientName, redirectUri: p.redirectUri, challenge: p.challenge, state: p.state, scope: p.scope };
 }
 
 function page(params: AuthorizeParams, message: string | null, status = 200): Response {
   const hidden = (name: string, value: string) => `<input type="hidden" name="${name}" value="${esc(value)}">`;
-  const host = esc(new URL(params.redirectUri).host);
+  const target = new URL(params.redirectUri);
+  const host = esc(target.host || target.protocol);
+  const loopback = target.protocol === "http:";
+  const who = params.clientName ? `<strong>${esc(params.clientName)}</strong> (returning to <strong>${host}</strong>)` : `<strong>${host}</strong>`;
   const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex"><title>Connect to DYPOL Blog</title>
 <style>body{font:16px/1.5 system-ui,sans-serif;max-width:28rem;margin:3rem auto;padding:0 1rem;color:#111}
 input[type=password]{width:100%;padding:.55rem;border:2px solid #111;font:inherit}button{margin-top:1rem;padding:.6rem 1rem;border:0;background:#111;color:#fff;font:inherit;font-weight:700}
 .bad{border:2px solid #ff4d00;padding:.5rem}</style></head><body>
 <h1>Connect an MCP client</h1>
-<p><strong>${host}</strong> asks to draft articles on DYPOL Blog through the automation tools (scope <code>${esc(params.scope)}</code>). It cannot sign in to the desk.</p>
+<p>${who} asks to draft articles on DYPOL Blog through the automation tools (scope <code>${esc(params.scope)}</code>). It cannot sign in to the desk.</p>
+${loopback ? `<p class="bad">This returns to a program on this computer (${host}). Only allow it if you just started the connection from a desktop app or CLI.</p>` : ""}
 ${message ? `<p class="bad" role="alert">${esc(message)}</p>` : ""}
 <form method="post" action="/oauth/authorize">
 ${hidden("response_type", "code")}${hidden("client_id", params.clientId)}${hidden("redirect_uri", params.redirectUri)}
@@ -128,7 +161,7 @@ ${hidden("code_challenge", params.challenge)}${hidden("code_challenge_method", "
       // form-action also governs where the form's POST may redirect (Chromium enforces it on
       // the 302), so it must name the already allow-listed redirect_uri origin or Allow
       // silently does nothing.
-      "content-security-policy": `default-src 'none'; style-src 'unsafe-inline'; form-action 'self' ${new URL(params.redirectUri).origin}; frame-ancestors 'none'`,
+      "content-security-policy": `default-src 'none'; style-src 'unsafe-inline'; form-action 'self' ${formActionSource(params.redirectUri)}; frame-ancestors 'none'`,
       "referrer-policy": "no-referrer",
       ...noStore,
     },
@@ -140,22 +173,22 @@ export async function authorize(request: Request): Promise<Response> {
   if (!mcpConfigured(env.MCP_TOKEN)) return new Response("MCP is not enabled on this deployment.", { status: 503 });
   if (request.method === "GET") {
     const url = new URL(request.url);
-    const params = readParams((k) => url.searchParams.get(k), env.MCP_OAUTH_REDIRECT_HOSTS);
+    const params = await readParams((k) => url.searchParams.get(k), env);
     if (typeof params === "string") return new Response(params, { status: 400, headers: noStore });
     return page(params, null);
   }
   const form = await request.formData();
-  const params = readParams((k) => {
+  const params = await readParams((k) => {
     const v = form.get(k);
     return typeof v === "string" ? v : null;
-  }, env.MCP_OAUTH_REDIRECT_HOSTS);
+  }, env);
   if (typeof params === "string") return new Response(params, { status: 400, headers: noStore });
   if (await limited(env, request, "oauth-approve")) return page(params, "Too many attempts. Try again in a minute.", 429);
   const secret = form.get("owner_secret");
   if (typeof secret !== "string" || !(await secretMatches(secret.slice(0, 512), env.MCP_TOKEN))) {
     return page(params, "That token is not right.", 401);
   }
-  const code = await issueCode(env.MCP_TOKEN, params);
+  const code = await issueCode(env.MCP_TOKEN, { clientId: params.clientId, redirectUri: params.redirectUri, challenge: params.challenge });
   const target = new URL(params.redirectUri);
   target.searchParams.set("code", code);
   if (params.state) target.searchParams.set("state", params.state);

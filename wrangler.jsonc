@@ -58,5 +58,8 @@
   //                         ADMIN_TOKEN) to sign every editor out
   //   MCP_TOKEN             enables the /mcp automation endpoint (32+ chars);
   //                         unset = endpoint disabled (503). Separate from ADMIN_TOKEN.
-  //   XAI_API_KEY           future xai-api provider only; unused in this release
+  //   AI key secrets        server-api mode only (no scheduler yet; never called):
+  //                         XAI_API_KEY, OPENAI_API_KEY, ANTHROPIC_API_KEY,
+  //                         GEMINI_API_KEY, OPENROUTER_API_KEY, or generic AI_API_KEY
+  // Var (optional): MCP_OAUTH_REDIRECT_HOSTS  comma list of extra MCP client hosts
 }

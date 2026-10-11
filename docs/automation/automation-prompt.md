@@ -1,8 +1,11 @@
-# Grok Automation instruction (DYPOL Blog)
+# Automation instruction (DYPOL Blog) — any AI app
 
-Paste the block below into a scheduled Grok Automation (for example "every day at
-08:00 IST"). It assumes the custom connector "DYPOL Blog" is connected (see
-`README.md`). The site never calls an AI service; this prompt is the whole writer.
+Paste the block below into a scheduled task in whichever AI app you connected
+(Grok Automations / Tasks, ChatGPT scheduled tasks, Claude, a cron'd CLI such as
+`claude -p` or `gemini -p`, ...). For example "every day at 08:00 IST". It assumes
+the connector "DYPOL Blog" is connected (see `README.md`). In mcp-connector mode the
+site never calls an AI service; this prompt is the whole writer. The AI app needs web
+search/browsing for the research step.
 
 ---
 
