@@ -57,7 +57,7 @@ export const automationSettingsSchema = z.object({
   extraClientHosts: z
     .array(z.string().trim().toLowerCase().regex(/^(\*\.)?[a-z0-9-]+(\.[a-z0-9-]+)+$/, "Use a host name such as connectors.example.com"))
     .max(20),
-  topicIdeas: z.array(z.string().trim().min(1).max(300)).max(50),
+  topicIdeas: z.array(z.string().trim().min(1).max(300)).max(200),
   topicSources: z.array(z.string().trim().url().max(500)).max(30),
   policy: publishingPolicySchema,
   imageTransfer: z.enum(IMAGE_TRANSFER_STATES),
