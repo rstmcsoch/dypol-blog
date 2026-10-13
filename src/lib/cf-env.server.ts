@@ -9,7 +9,7 @@ export type D1Result<T> = { results?: T[] };
 export type D1Statement = {
   bind(...values: unknown[]): D1Statement;
   all<T = Record<string, unknown>>(): Promise<D1Result<T>>;
-  run(): Promise<unknown>;
+  run(): Promise<{ meta?: { changes?: number; rows_written?: number; last_row_id?: number } }>;
 };
 export type D1Database = {
   prepare(sql: string): D1Statement;
@@ -19,10 +19,14 @@ export type D1Database = {
 export type WorkerBindings = {
   DB?: D1Database;
   MEDIA?: unknown;
+  DYPOL_ENV?: string;
+  DYPOL_WRITES?: string;
   ADMIN_TOKEN?: string;
   ADMIN_SESSION_SECRET?: string;
   MCP_TOKEN?: string;
   MCP_OAUTH_REDIRECT_HOSTS?: string;
+  /** Optional shared secret for the automation tick endpoint (external cron). */
+  CRON_SECRET?: string;
   /** Server-api provider keys (names only ever shown). See src/lib/automation/provider.ts. */
   AI_API_KEY?: string;
   XAI_API_KEY?: string;
@@ -30,6 +34,14 @@ export type WorkerBindings = {
   ANTHROPIC_API_KEY?: string;
   GEMINI_API_KEY?: string;
   OPENROUTER_API_KEY?: string;
+  /**
+   * Per-automation key slots, so two automations never share one key by
+   * accident. An automation can only ever use the secret it names.
+   */
+  AUTOMATION_A_KEY?: string;
+  AUTOMATION_B_KEY?: string;
+  AUTOMATION_C_KEY?: string;
+  AUTOMATION_D_KEY?: string;
   MCP_LIMITER?: { limit(options: { key: string }): Promise<{ success: boolean }> };
   SIGNIN_LIMITER?: { limit(options: { key: string }): Promise<{ success: boolean }> };
 };

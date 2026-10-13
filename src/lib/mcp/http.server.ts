@@ -80,7 +80,7 @@ async function handleMcpInner(request: Request, env: { MCP_TOKEN?: string; MCP_L
   if (!auth.ok) {
     if (auth.reason === "disabled") return rpcError(503, RPC.INTERNAL, "The MCP endpoint is not enabled on this deployment.");
     return rpcError(401, RPC.INVALID_REQUEST, "Unauthorized.", {
-      "www-authenticate": `Bearer realm="dypol-blog", resource_metadata="${resourceMetadataUrl(request)}", scope="blog:automation"${
+      "www-authenticate": `Bearer realm="dypolblog", resource_metadata="${resourceMetadataUrl(request)}", scope="blog:automation"${
         auth.reason === "invalid" ? ', error="invalid_token"' : ""
       }`,
     });

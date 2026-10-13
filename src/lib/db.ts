@@ -12,6 +12,12 @@ import { workerEnv, type D1Database } from "./cf-env.server";
 export interface Sql {
   <T = Record<string, unknown>>(strings: TemplateStringsArray, ...values: unknown[]): Promise<T[]>;
   query<T = Record<string, unknown>>(text: string, params?: unknown[]): Promise<T[]>;
+  /**
+   * Executes a statement and reports how many rows it changed. Used where the
+   * result of a conditional UPDATE decides what happens next (scheduler claims,
+   * publish races) — `.all()` cannot report that on D1.
+   */
+  run(text: string, params?: unknown[]): Promise<{ changes: number }>;
 }
 
 export class DatabaseUnavailableError extends Error {
@@ -45,6 +51,13 @@ function toSql(db: D1Database): Sql {
     return run<T>(text, values);
   }) as unknown as Sql;
   sql.query = <T = Record<string, unknown>>(text: string, params: unknown[] = []) => run<T>(text, params);
+  sql.run = async (text: string, params: unknown[] = []) => {
+    const statement = db.prepare(toSqlite(text));
+    const bound = params.length ? statement.bind(...params.map(bindable)) : statement;
+    const result = (await bound.run()) as { meta?: { changes?: number; rows_written?: number } } | undefined;
+    const changes = result?.meta?.changes ?? result?.meta?.rows_written ?? 0;
+    return { changes: Number(changes) || 0 };
+  };
   return sql;
 }
 

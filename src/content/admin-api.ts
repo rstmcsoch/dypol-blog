@@ -1,5 +1,46 @@
 import { createServerFn } from "@tanstack/react-start";
 
+/** Worker env as plain strings; secrets are read but never returned. */
+function envText(env: unknown): Record<string, string | undefined> {
+  return (env ?? {}) as Record<string, string | undefined>;
+}
+
+export type RunForClient = {
+  id: string;
+  automationId: string | null;
+  createdAt: string;
+  finishedAt: string | null;
+  tool: string;
+  outcome: string;
+  status: string;
+  stage: string;
+  reason: string;
+  articleId: string | null;
+  durationMs: number;
+  attempt: number;
+  /** Details as JSON text: the desk parses it only when it needs a field. */
+  details: string;
+};
+
+/** Run rows are flattened to serializable primitives for the client. */
+function runForClient(run: {
+  id: string;
+  automationId: string | null;
+  createdAt: string;
+  finishedAt: string | null;
+  tool: string;
+  outcome: string;
+  status: string;
+  stage: string;
+  reason: string;
+  articleId: string | null;
+  durationMs: number;
+  attempt: number;
+  details: Record<string, unknown>;
+}): RunForClient {
+  return { ...run, details: JSON.stringify(run.details ?? {}) };
+}
+
 async function guard() {
   const { requireAdmin } = await import("@/lib/auth/admin.server");
   return requireAdmin();
@@ -14,8 +55,28 @@ async function writeGuard() {
 export const adminSession = createServerFn({ method: "GET" })
   .handler(async () => {
     const admin = await guard();
-    const { listGrants } = await import("@/lib/auth/admin.server");
-    return { email: admin.email, mode: admin.mode, grants: admin.mode === "account" ? await listGrants() : [] };
+    const { listGrants, readDeskTheme } = await import("@/lib/auth/admin.server");
+    return {
+      email: admin.email,
+      mode: admin.mode,
+      grants: admin.mode === "account" ? await listGrants() : [],
+      // Where the desk's own Light/Dark/System choice is kept (a cookie, so the
+      // first paint is already correct).
+      theme: await readDeskTheme(),
+    };
+  });
+
+/** Desk appearance: Light, Dark or System. Written by the server, never localStorage. */
+export const adminSetDeskTheme = createServerFn({ method: "POST" })
+  .validator((input: unknown) => {
+    const value = (input ?? {}) as { theme?: unknown };
+    if (value.theme !== "light" && value.theme !== "dark" && value.theme !== "system") throw new Error("Choose Light, Dark or System.");
+    return { theme: value.theme as "light" | "dark" | "system" };
+  })
+  .handler(async ({ data }) => {
+    const { requireAdmin, writeDeskTheme } = await import("@/lib/auth/admin.server");
+    await requireAdmin();
+    return { ok: true, theme: await writeDeskTheme(data.theme) };
   });
 
 export const adminDashboard = createServerFn({ method: "GET" })
@@ -237,31 +298,245 @@ export const adminSignOut = createServerFn({ method: "POST" }).handler(async () 
   return { ok: true };
 });
 
+// ---------------------------------------------------------------- automation
+
 export const adminAutomation = createServerFn({ method: "GET" }).handler(async () => {
   await guard();
-  const { readAutomationSettings, recentRuns } = await import("./automation.server");
+  const { listAutomations, readSchedules, recentRuns, runCounts } = await import("@/lib/automation/store.server");
   const { adminList } = await import("./repository.server");
-  const { providerStatus } = await import("@/lib/automation/provider");
+  const { credentialStatus, credentialSummary } = await import("@/lib/automation/credentials");
   const { mcpConfigured } = await import("@/lib/mcp/auth");
   const { workerEnv } = await import("@/lib/cf-env.server");
-  const env = await workerEnv();
-  const settings = await readAutomationSettings();
-  const list = await adminList({});
+  const { scheduleSummary, mcpRunnable, automationActive } = await import("@/lib/automation/automation");
+  const env = envText(await workerEnv());
+  const [automations, schedules, runs, list, credentials] = await Promise.all([
+    listAutomations(),
+    readSchedules(),
+    recentRuns(30),
+    adminList({}),
+    credentialStatus(env),
+  ]);
   return {
-    settings,
-    runs: await recentRuns(25),
+    automations: await Promise.all(
+      automations.map(async (automation) => {
+        const schedule = schedules.get(automation.id) ?? null;
+        const counts = await runCounts(automation.id);
+        const active = automationActive(automation);
+        return {
+          ...automation,
+          schedule,
+          counts,
+          active,
+          scheduleText: scheduleSummary(automation),
+          /** Credential line never contains the key itself. */
+          credential: credentialSummary(automation.credentialRef, credentials),
+          runnable: mcpRunnable(automation) ? false : active.active,
+          runnableReason: mcpRunnable(automation)
+            ? "This automation is driven by an MCP client (draft pushed to /mcp); the site does not generate for it."
+            : active.reason,
+        };
+      }),
+    ),
+    runs: runs.map(runForClient),
     categories: list.categories.map((c) => ({ id: c.id, label: c.label })),
-    provider: providerStatus(settings, env),
-    // Only whether it is set; the value never leaves the server.
+    tags: list.tags.map((t) => ({ id: t.id, label: t.label })),
+    articles: list.articles.map((a) => ({ id: a.id, slug: a.slug, title: a.title, status: a.status })),
+    credentials,
     mcpTokenConfigured: mcpConfigured(env.MCP_TOKEN),
+    cronSecretConfigured: Boolean((env.CRON_SECRET ?? "").trim()),
   };
 });
 
 export const adminSaveAutomation = createServerFn({ method: "POST" })
-  .validator((input: unknown) => input)
+  .validator((input: unknown) => {
+    const value = (input ?? {}) as { id?: unknown; data?: unknown };
+    const id = typeof value.id === "string" && value.id.length > 0 ? value.id : null;
+    if (value.data === undefined) throw new Error("Nothing to save.");
+    return { id, data: value.data };
+  })
   .handler(async ({ data }) => {
     await writeGuard();
-    const { saveAutomationSettings } = await import("./automation.server");
-    await saveAutomationSettings(data);
-    return { ok: true };
+    const { createAutomation, updateAutomation } = await import("@/lib/automation/store.server");
+    const record = data.id ? await updateAutomation(data.id, data.data) : await createAutomation(data.data);
+    return { ok: true, automation: record };
+  });
+
+export const adminDeleteAutomation = createServerFn({ method: "POST" })
+  .validator((input: unknown) => {
+    const value = (input ?? {}) as { id?: unknown };
+    if (typeof value.id !== "string" || value.id.length === 0) throw new Error("A valid automation id is required.");
+    return { id: value.id };
+  })
+  .handler(async ({ data }) => {
+    await writeGuard();
+    const { deleteAutomation, listAutomations } = await import("@/lib/automation/store.server");
+    await deleteAutomation(data.id);
+    return { ok: true, remaining: (await listAutomations()).length };
+  });
+
+export const adminDuplicateAutomation = createServerFn({ method: "POST" })
+  .validator((input: unknown) => {
+    const value = (input ?? {}) as { id?: unknown; name?: unknown };
+    if (typeof value.id !== "string" || value.id.length === 0) throw new Error("A valid automation id is required.");
+    const name = typeof value.name === "string" && value.name.trim() ? value.name.trim().slice(0, 80) : undefined;
+    return { id: value.id, name };
+  })
+  .handler(async ({ data }) => {
+    await writeGuard();
+    const { duplicateAutomation } = await import("@/lib/automation/store.server");
+    return { ok: true, automation: await duplicateAutomation(data.id, data.name) };
+  });
+
+export const adminRunAutomation = createServerFn({ method: "POST" })
+  .validator((input: unknown) => {
+    const value = (input ?? {}) as { id?: unknown; dryRun?: unknown };
+    if (typeof value.id !== "string" || value.id.length === 0) throw new Error("A valid automation id is required.");
+    return { id: value.id, dryRun: value.dryRun === true };
+  })
+  .handler(async ({ data }) => {
+    await writeGuard();
+    const { runAutomationById } = await import("@/lib/automation/scheduler.server");
+    const outcome = await runAutomationById(data.id, { trigger: "manual", dryRun: data.dryRun });
+    if (!outcome) throw new Error("That automation no longer exists.");
+    return { ok: outcome.status !== "failed", outcome };
+  });
+
+/** Checks the provider with the automation's OWN credential. Never returns the key. */
+export const adminTestAutomation = createServerFn({ method: "POST" })
+  .validator((input: unknown) => {
+    const value = (input ?? {}) as { id?: unknown };
+    if (typeof value.id !== "string" || value.id.length === 0) throw new Error("A valid automation id is required.");
+    return { id: value.id };
+  })
+  .handler(async ({ data }) => {
+    await writeGuard();
+    const { listAutomations } = await import("@/lib/automation/store.server");
+    const { resolveCredential, credentialSummary, credentialStatus } = await import("@/lib/automation/credentials");
+    const { testProviderConnection } = await import("@/lib/automation/provider");
+    const { workerEnv } = await import("@/lib/cf-env.server");
+    const automation = (await listAutomations()).find((item) => item.id === data.id);
+    if (!automation) throw new Error("That automation no longer exists.");
+    const env = envText(await workerEnv());
+    const status = await credentialStatus(env);
+    if (automation.mode === "mcp-connector") {
+      return {
+        ok: true,
+        kind: "mcp" as const,
+        message: "MCP connector mode: your own MCP client calls this site, so there is no provider key to test here.",
+        credential: credentialSummary(automation.credentialRef, status),
+      };
+    }
+    const credential = resolveCredential(automation.credentialRef, env);
+    if (!credential) {
+      return {
+        ok: false,
+        kind: "credential" as const,
+        message: credentialSummary(automation.credentialRef, status),
+        credential: credentialSummary(automation.credentialRef, status),
+      };
+    }
+    const result = await testProviderConnection(automation, credential.value, { fetchImpl: fetch });
+    return { ...result, credential: credentialSummary(automation.credentialRef, status) };
+  });
+
+export const adminAutomationRuns = createServerFn({ method: "POST" })
+  .validator((input: unknown) => {
+    const value = (input ?? {}) as { automationId?: unknown; limit?: unknown };
+    const automationId = typeof value.automationId === "string" && value.automationId ? value.automationId : undefined;
+    const limit = typeof value.limit === "number" && Number.isFinite(value.limit) ? Math.max(1, Math.min(200, Math.trunc(value.limit))) : 50;
+    return { automationId, limit };
+  })
+  .handler(async ({ data }) => {
+    await guard();
+    const { recentRuns } = await import("@/lib/automation/store.server");
+    return { runs: (await recentRuns(data.limit, data.automationId)).map(runForClient) };
+  });
+
+// -------------------------------------------------------------------- layout
+
+export const adminLayout = createServerFn({ method: "GET" }).handler(async () => {
+  await guard();
+  const { readLayoutState } = await import("./layout.server");
+  const { adminList } = await import("./repository.server");
+  const list = await adminList({});
+  return {
+    state: await readLayoutState(),
+    options: {
+      articles: list.articles
+        .filter((article) => article.status === "published")
+        .map((article) => ({ slug: article.slug, title: article.title, categoryLabel: article.categoryLabel })),
+      categories: list.categories.map((category) => ({ id: category.id, slug: category.slug, label: category.label })),
+      tags: list.tags.map((tag) => ({ id: tag.id, slug: tag.slug, label: tag.label })),
+    },
+  };
+});
+
+export const adminSaveLayoutDraft = createServerFn({ method: "POST" })
+  .validator((input: unknown) => {
+    const value = (input ?? {}) as { doc?: unknown };
+    if (value.doc === undefined) throw new Error("Nothing to save.");
+    return { doc: value.doc };
+  })
+  .handler(async ({ data }) => {
+    await writeGuard();
+    const { saveLayoutDraft } = await import("./layout.server");
+    return { ok: true, doc: await saveLayoutDraft(data.doc) };
+  });
+
+export const adminPublishLayout = createServerFn({ method: "POST" }).handler(async () => {
+  await writeGuard();
+  const { publishLayout } = await import("./layout.server");
+  return { ok: true, doc: await publishLayout() };
+});
+
+export const adminDiscardLayout = createServerFn({ method: "POST" }).handler(async () => {
+  await writeGuard();
+  const { discardLayoutDraft } = await import("./layout.server");
+  await discardLayoutDraft();
+  return { ok: true };
+});
+
+/** Resolves a draft document for the desk preview, without publishing it. */
+export const adminLayoutPreview = createServerFn({ method: "POST" })
+  .validator((input: unknown) => {
+    const value = (input ?? {}) as { area?: unknown; doc?: unknown; articleSlug?: unknown };
+    if (value.area !== "homepage" && value.area !== "sidebar") throw new Error("Choose which area to preview.");
+    if (value.doc === undefined) throw new Error("Nothing to preview.");
+    const articleSlug = typeof value.articleSlug === "string" && value.articleSlug ? value.articleSlug : undefined;
+    return { area: value.area as "homepage" | "sidebar", doc: value.doc, articleSlug };
+  })
+  .handler(async ({ data }) => {
+    await guard();
+    const { parseLayout } = await import("@/lib/layout/blocks");
+    const doc = parseLayout(data.doc);
+    if (!doc) throw new Error("This draft is not valid yet; fix the highlighted fields and try again.");
+    const { resolveBlocks } = await import("./layout.server");
+    const { adminList } = await import("./repository.server");
+    const list = await adminList({});
+    const article = data.articleSlug ? list.articles.find((item) => item.slug === data.articleSlug) : list.articles[0];
+    const blocks = await resolveBlocks(doc, data.area, {
+      articleId: article?.id,
+      articleSlug: article?.slug,
+      articleTitle: article?.title,
+    });
+    return { blocks, sampleArticle: article ? { slug: article.slug, title: article.title } : null };
+  });
+
+/** The ticker exactly as it would appear, from real published articles. */
+export const adminTickerPreview = createServerFn({ method: "POST" })
+  .validator((input: unknown) => {
+    const value = (input ?? {}) as { trending?: unknown };
+    if (value.trending === undefined) throw new Error("Nothing to preview.");
+    return { trending: value.trending };
+  })
+  .handler(async ({ data }) => {
+    await guard();
+    const { parseSite } = await import("./validate");
+    const { readSettings, publicSnapshotForPreview } = await import("./repository.server");
+    const { resolveTicker } = await import("./ticker");
+    const settings = await readSettings();
+    const merged = parseSite({ ...settings.site, trending: data.trending });
+    const { live, views, categories, featured } = await publicSnapshotForPreview();
+    const ticker = resolveTicker(merged, live, { views, categories, featured });
+    return { items: ticker.items, source: ticker.source, fallback: ticker.fallback, note: ticker.note };
   });
