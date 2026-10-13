@@ -1,3 +1,13 @@
+/**
+ * LEGACY, UNUSED CONFIG — kept only so nothing that still resolves it breaks.
+ *
+ * This file is a leftover from the vinext (Next.js on Cloudflare) template:
+ * `vinext` / `cf/config` are not dependencies of this project, nothing imports
+ * this file, and no deployment reads it. The canonical, live configuration is
+ * `wrangler.jsonc` (Worker name `dypolblog`, no hyphen) — the Worker that serves
+ * https://dypolblog.rstmcsoch.workers.dev. The `dypol-blog` name below is the old
+ * GitHub repository name, not the site domain, and is not deployed.
+ */
 import { bindings, defineConfig, defineWorker } from "cf/config";
 import { createWorkersResponseStoreServiceBindingConfig } from "@vinext/cloudflare/cache/config";
 

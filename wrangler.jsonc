@@ -1,14 +1,26 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  // One config for both Workers (dypolblog and dypol-blog). Workers Builds
-  // overrides "name" per Worker, so both get the same bindings below.
-  // Workers Builds must run `npm run build` before the deploy/preview command.
+  // The Worker is named `dypolblog` — no hyphen — and serves
+  // https://dypolblog.rstmcsoch.workers.dev. Branch previews are
+  // `<branch>-dypolblog.<subdomain>.workers.dev` and use the "previews" bindings
+  // below, so a preview can never read or write production content.
+  // Workers Builds must run `npm run build` before the deploy command;
+  // the deploy command points at the generated dist/server/wrangler.json.
   "name": "dypolblog",
-  "main": "@tanstack/react-start/server-entry",
+  // The Worker entry adds the Cloudflare Cron Trigger handler (scheduled) on top
+  // of TanStack Start's fetch handler. Keep this path in sync with src/worker-entry.ts.
+  "main": "src/worker-entry.ts",
   "compatibility_date": "2026-10-06",
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true },
   "vars": { "DYPOL_ENV": "production" },
+  // Automation tick: every 5 minutes. Each tick reads the stored per-automation
+  // schedules (cron + timezone, in D1) and runs only what is due, so a schedule
+  // fires within 5 minutes of its chosen time. Cron delivery is at-least-once;
+  // automation_schedule.next_run_at is advanced before a run starts and the run
+  // is claimed with a conditional UPDATE, so a repeated tick cannot duplicate an
+  // article. Advanced: set "0 * * * *" for hourly granularity.
+  "triggers": { "crons": ["*/5 * * * *"] },
   "d1_databases": [
     {
       "binding": "DB",
@@ -58,8 +70,12 @@
   //                         ADMIN_TOKEN) to sign every editor out
   //   MCP_TOKEN             enables the /mcp automation endpoint (32+ chars);
   //                         unset = endpoint disabled (503). Separate from ADMIN_TOKEN.
-  //   AI key secrets        server-api mode only (no scheduler yet; never called):
-  //                         XAI_API_KEY, OPENAI_API_KEY, ANTHROPIC_API_KEY,
-  //                         GEMINI_API_KEY, OPENROUTER_API_KEY, or generic AI_API_KEY
+  //   CRON_SECRET           optional, authorises POST/GET /api/automation/tick for an
+  //                         external cron. Unset falls back to MCP_TOKEN.
+  //   AI key secrets        server-api automations only. Each automation names the ONE
+  //                         secret it may use, so automations never share a key by
+  //                         accident: AUTOMATION_A_KEY … AUTOMATION_D_KEY (per-automation
+  //                         slots), or XAI_API_KEY / OPENAI_API_KEY / ANTHROPIC_API_KEY /
+  //                         GEMINI_API_KEY / OPENROUTER_API_KEY / AI_API_KEY.
   // Var (optional): MCP_OAUTH_REDIRECT_HOSTS  comma list of extra MCP client hosts
 }

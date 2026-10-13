@@ -26,7 +26,9 @@ import { Route as AdminHelpRouteImport } from './routes/admin/help'
 import { Route as AdminHomepageRouteImport } from './routes/admin/homepage'
 import { Route as AdminMediaRouteImport } from './routes/admin/media'
 import { Route as AdminSettingsRouteImport } from './routes/admin/settings'
+import { Route as AdminSidebarRouteImport } from './routes/admin/sidebar'
 import { Route as AdminSiteTextRouteImport } from './routes/admin/site-text'
+import { Route as AdminTickerRouteImport } from './routes/admin/ticker'
 import { Route as AdminTopicsRouteImport } from './routes/admin/topics'
 import { Route as ArticlesIndexRouteImport } from './routes/articles/index'
 import { Route as ArticlesSlugRouteImport } from './routes/articles/$slug'
@@ -41,6 +43,8 @@ import { Route as DotwellKnownOauthProtectedResourceMcpRouteImport } from './rou
 import { Route as AdminArticlesIndexRouteImport } from './routes/admin/articles/index'
 import { Route as AdminArticlesIdRouteImport } from './routes/admin/articles/$id'
 import { Route as AdminArticlesNewRouteImport } from './routes/admin/articles/new'
+import { Route as AdminAutomationHistoryRouteImport } from './routes/admin/automation.history'
+import { Route as ApiAutomationTickRouteImport } from './routes/api.automation.tick'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -129,9 +133,19 @@ const AdminSettingsRoute = AdminSettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminSidebarRoute = AdminSidebarRouteImport.update({
+  id: '/sidebar',
+  path: '/sidebar',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminSiteTextRoute = AdminSiteTextRouteImport.update({
   id: '/site-text',
   path: '/site-text',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminTickerRoute = AdminTickerRouteImport.update({
+  id: '/ticker',
+  path: '/ticker',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminTopicsRoute = AdminTopicsRouteImport.update({
@@ -205,6 +219,16 @@ const AdminArticlesNewRoute = AdminArticlesNewRouteImport.update({
   path: '/articles/new',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminAutomationHistoryRoute = AdminAutomationHistoryRouteImport.update({
+  id: '/history',
+  path: '/history',
+  getParentRoute: () => AdminAutomationRoute,
+} as any)
+const ApiAutomationTickRoute = ApiAutomationTickRouteImport.update({
+  id: '/api/automation/tick',
+  path: '/api/automation/tick',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -218,12 +242,14 @@ export interface FileRoutesByFullPath {
   '/.well-known/oauth-authorization-server': typeof DotwellKnownOauthAuthorizationServerRoute
   '/.well-known/oauth-protected-resource': typeof DotwellKnownOauthProtectedResourceRouteWithChildren
   '/admin/appearance': typeof AdminAppearanceRoute
-  '/admin/automation': typeof AdminAutomationRoute
+  '/admin/automation': typeof AdminAutomationRouteWithChildren
   '/admin/help': typeof AdminHelpRoute
   '/admin/homepage': typeof AdminHomepageRoute
   '/admin/media': typeof AdminMediaRoute
   '/admin/settings': typeof AdminSettingsRoute
+  '/admin/sidebar': typeof AdminSidebarRoute
   '/admin/site-text': typeof AdminSiteTextRoute
+  '/admin/ticker': typeof AdminTickerRoute
   '/admin/topics': typeof AdminTopicsRoute
   '/articles/$slug': typeof ArticlesSlugRoute
   '/media/$id': typeof MediaIdRoute
@@ -238,6 +264,8 @@ export interface FileRoutesByFullPath {
   '/.well-known/oauth-protected-resource/mcp': typeof DotwellKnownOauthProtectedResourceMcpRoute
   '/admin/articles/$id': typeof AdminArticlesIdRoute
   '/admin/articles/new': typeof AdminArticlesNewRoute
+  '/admin/automation/history': typeof AdminAutomationHistoryRoute
+  '/api/automation/tick': typeof ApiAutomationTickRoute
   '/admin/articles/': typeof AdminArticlesIndexRoute
 }
 export interface FileRoutesByTo {
@@ -251,12 +279,14 @@ export interface FileRoutesByTo {
   '/.well-known/oauth-authorization-server': typeof DotwellKnownOauthAuthorizationServerRoute
   '/.well-known/oauth-protected-resource': typeof DotwellKnownOauthProtectedResourceRouteWithChildren
   '/admin/appearance': typeof AdminAppearanceRoute
-  '/admin/automation': typeof AdminAutomationRoute
+  '/admin/automation': typeof AdminAutomationRouteWithChildren
   '/admin/help': typeof AdminHelpRoute
   '/admin/homepage': typeof AdminHomepageRoute
   '/admin/media': typeof AdminMediaRoute
   '/admin/settings': typeof AdminSettingsRoute
+  '/admin/sidebar': typeof AdminSidebarRoute
   '/admin/site-text': typeof AdminSiteTextRoute
+  '/admin/ticker': typeof AdminTickerRoute
   '/admin/topics': typeof AdminTopicsRoute
   '/articles/$slug': typeof ArticlesSlugRoute
   '/media/$id': typeof MediaIdRoute
@@ -271,6 +301,8 @@ export interface FileRoutesByTo {
   '/.well-known/oauth-protected-resource/mcp': typeof DotwellKnownOauthProtectedResourceMcpRoute
   '/admin/articles/$id': typeof AdminArticlesIdRoute
   '/admin/articles/new': typeof AdminArticlesNewRoute
+  '/admin/automation/history': typeof AdminAutomationHistoryRoute
+  '/api/automation/tick': typeof ApiAutomationTickRoute
   '/admin/articles': typeof AdminArticlesIndexRoute
 }
 export interface FileRoutesById {
@@ -286,12 +318,14 @@ export interface FileRoutesById {
   '/.well-known/oauth-authorization-server': typeof DotwellKnownOauthAuthorizationServerRoute
   '/.well-known/oauth-protected-resource': typeof DotwellKnownOauthProtectedResourceRouteWithChildren
   '/admin/appearance': typeof AdminAppearanceRoute
-  '/admin/automation': typeof AdminAutomationRoute
+  '/admin/automation': typeof AdminAutomationRouteWithChildren
   '/admin/help': typeof AdminHelpRoute
   '/admin/homepage': typeof AdminHomepageRoute
   '/admin/media': typeof AdminMediaRoute
   '/admin/settings': typeof AdminSettingsRoute
+  '/admin/sidebar': typeof AdminSidebarRoute
   '/admin/site-text': typeof AdminSiteTextRoute
+  '/admin/ticker': typeof AdminTickerRoute
   '/admin/topics': typeof AdminTopicsRoute
   '/articles/$slug': typeof ArticlesSlugRoute
   '/media/$id': typeof MediaIdRoute
@@ -306,6 +340,8 @@ export interface FileRoutesById {
   '/.well-known/oauth-protected-resource/mcp': typeof DotwellKnownOauthProtectedResourceMcpRoute
   '/admin/articles/$id': typeof AdminArticlesIdRoute
   '/admin/articles/new': typeof AdminArticlesNewRoute
+  '/admin/automation/history': typeof AdminAutomationHistoryRoute
+  '/api/automation/tick': typeof ApiAutomationTickRoute
   '/admin/articles/': typeof AdminArticlesIndexRoute
 }
 export interface FileRouteTypes {
@@ -327,7 +363,9 @@ export interface FileRouteTypes {
     | '/admin/homepage'
     | '/admin/media'
     | '/admin/settings'
+    | '/admin/sidebar'
     | '/admin/site-text'
+    | '/admin/ticker'
     | '/admin/topics'
     | '/articles/$slug'
     | '/media/$id'
@@ -342,6 +380,8 @@ export interface FileRouteTypes {
     | '/.well-known/oauth-protected-resource/mcp'
     | '/admin/articles/$id'
     | '/admin/articles/new'
+    | '/admin/automation/history'
+    | '/api/automation/tick'
     | '/admin/articles/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -360,7 +400,9 @@ export interface FileRouteTypes {
     | '/admin/homepage'
     | '/admin/media'
     | '/admin/settings'
+    | '/admin/sidebar'
     | '/admin/site-text'
+    | '/admin/ticker'
     | '/admin/topics'
     | '/articles/$slug'
     | '/media/$id'
@@ -375,6 +417,8 @@ export interface FileRouteTypes {
     | '/.well-known/oauth-protected-resource/mcp'
     | '/admin/articles/$id'
     | '/admin/articles/new'
+    | '/admin/automation/history'
+    | '/api/automation/tick'
     | '/admin/articles'
   id:
     | '__root__'
@@ -394,7 +438,9 @@ export interface FileRouteTypes {
     | '/admin/homepage'
     | '/admin/media'
     | '/admin/settings'
+    | '/admin/sidebar'
     | '/admin/site-text'
+    | '/admin/ticker'
     | '/admin/topics'
     | '/articles/$slug'
     | '/media/$id'
@@ -409,6 +455,8 @@ export interface FileRouteTypes {
     | '/.well-known/oauth-protected-resource/mcp'
     | '/admin/articles/$id'
     | '/admin/articles/new'
+    | '/admin/automation/history'
+    | '/api/automation/tick'
     | '/admin/articles/'
   fileRoutesById: FileRoutesById
 }
@@ -432,6 +480,7 @@ export interface RootRouteChildren {
   TopicsSlugRoute: typeof TopicsSlugRoute
   ArticlesIndexRoute: typeof ArticlesIndexRoute
   TopicsIndexRoute: typeof TopicsIndexRoute
+  ApiAutomationTickRoute: typeof ApiAutomationTickRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -555,11 +604,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminSettingsRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/sidebar': {
+      id: '/admin/sidebar'
+      path: '/sidebar'
+      fullPath: '/admin/sidebar'
+      preLoaderRoute: typeof AdminSidebarRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/site-text': {
       id: '/admin/site-text'
       path: '/site-text'
       fullPath: '/admin/site-text'
       preLoaderRoute: typeof AdminSiteTextRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/ticker': {
+      id: '/admin/ticker'
+      path: '/ticker'
+      fullPath: '/admin/ticker'
+      preLoaderRoute: typeof AdminTickerRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/topics': {
@@ -660,17 +723,45 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminArticlesNewRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/automation/history': {
+      id: '/admin/automation/history'
+      path: '/history'
+      fullPath: '/admin/automation/history'
+      preLoaderRoute: typeof AdminAutomationHistoryRouteImport
+      parentRoute: typeof AdminAutomationRoute
+    }
+    '/api/automation/tick': {
+      id: '/api/automation/tick'
+      path: '/api/automation/tick'
+      fullPath: '/api/automation/tick'
+      preLoaderRoute: typeof ApiAutomationTickRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
+interface AdminAutomationRouteChildren {
+  AdminAutomationHistoryRoute: typeof AdminAutomationHistoryRoute
+}
+
+const AdminAutomationRouteChildren: AdminAutomationRouteChildren = {
+  AdminAutomationHistoryRoute: AdminAutomationHistoryRoute,
+}
+
+const AdminAutomationRouteWithChildren = AdminAutomationRoute._addFileChildren(
+  AdminAutomationRouteChildren,
+)
+
 interface AdminRouteChildren {
   AdminAppearanceRoute: typeof AdminAppearanceRoute
-  AdminAutomationRoute: typeof AdminAutomationRoute
+  AdminAutomationRoute: typeof AdminAutomationRouteWithChildren
   AdminHelpRoute: typeof AdminHelpRoute
   AdminHomepageRoute: typeof AdminHomepageRoute
   AdminMediaRoute: typeof AdminMediaRoute
   AdminSettingsRoute: typeof AdminSettingsRoute
+  AdminSidebarRoute: typeof AdminSidebarRoute
   AdminSiteTextRoute: typeof AdminSiteTextRoute
+  AdminTickerRoute: typeof AdminTickerRoute
   AdminTopicsRoute: typeof AdminTopicsRoute
   AdminIndexRoute: typeof AdminIndexRoute
   AdminArticlesIdRoute: typeof AdminArticlesIdRoute
@@ -680,12 +771,14 @@ interface AdminRouteChildren {
 
 const AdminRouteChildren: AdminRouteChildren = {
   AdminAppearanceRoute: AdminAppearanceRoute,
-  AdminAutomationRoute: AdminAutomationRoute,
+  AdminAutomationRoute: AdminAutomationRouteWithChildren,
   AdminHelpRoute: AdminHelpRoute,
   AdminHomepageRoute: AdminHomepageRoute,
   AdminMediaRoute: AdminMediaRoute,
   AdminSettingsRoute: AdminSettingsRoute,
+  AdminSidebarRoute: AdminSidebarRoute,
   AdminSiteTextRoute: AdminSiteTextRoute,
+  AdminTickerRoute: AdminTickerRoute,
   AdminTopicsRoute: AdminTopicsRoute,
   AdminIndexRoute: AdminIndexRoute,
   AdminArticlesIdRoute: AdminArticlesIdRoute,
@@ -732,6 +825,7 @@ const rootRouteChildren: RootRouteChildren = {
   TopicsSlugRoute: TopicsSlugRoute,
   ArticlesIndexRoute: ArticlesIndexRoute,
   TopicsIndexRoute: TopicsIndexRoute,
+  ApiAutomationTickRoute: ApiAutomationTickRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

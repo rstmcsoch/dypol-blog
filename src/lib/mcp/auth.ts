@@ -190,7 +190,7 @@ export const CLIENT_TTL = 60 * 60 * 24 * 365 * 5; // 5 years; rotating MCP_TOKEN
 export type RegisteredClient = { name: string; redirectUris: string[] };
 
 export function cleanClientName(name: unknown): string {
-  const text = typeof name === "string" ? name.replace(/[^\p{L}\p{N} ._()\-]/gu, "").trim().slice(0, 60) : "";
+  const text = typeof name === "string" ? name.replace(/[^\p{L}\p{N} ._()-]/gu, "").trim().slice(0, 60) : "";
   return text || "MCP client";
 }
 

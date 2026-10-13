@@ -19,6 +19,23 @@ export type AutomationMode = (typeof AUTOMATION_MODES)[number];
 export const SERVER_API_PROVIDERS = ["xai", "openai", "anthropic", "gemini", "openrouter", "openai-compatible"] as const;
 export type ServerApiProvider = (typeof SERVER_API_PROVIDERS)[number];
 
+/**
+ * The model each provider uses when an automation leaves its model blank. One
+ * table, used by the desk (to prefill the field) and by the provider adapters.
+ */
+export const DEFAULT_MODELS: Record<ServerApiProvider, string> = {
+  xai: "grok-4",
+  openai: "gpt-5",
+  anthropic: "claude-sonnet-4-5",
+  gemini: "gemini-2.5-pro",
+  openrouter: "openrouter/auto",
+  "openai-compatible": "",
+};
+
+export function defaultModel(provider: ServerApiProvider): string {
+  return DEFAULT_MODELS[provider];
+}
+
 export const serverApiSchema = z
   .object({
     provider: z.enum(SERVER_API_PROVIDERS),
