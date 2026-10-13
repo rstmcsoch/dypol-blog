@@ -819,9 +819,28 @@ export async function selectArticles(input: ArticleSelection): Promise<SelectedA
   });
 
   const { mostViewed, viewTotals } = await import("@/lib/automation/store.server");
-  const mapRanking = async (ranking: { articleId: string; views: number }[]): Promise<SelectedArticle[]> => {
+  // The popularity metric lives in its own table. A database that has not been
+  // migrated yet, or that cannot answer the query, has no ranking — the block
+  // falls back to the newest articles below rather than failing the page.
+  const ranked = async (days: number, limit: number): Promise<{ articleId: string; views: number }[]> => {
+    try {
+      return await mostViewed(days, limit);
+    } catch (error) {
+      console.error("[views] ranking unavailable", error instanceof Error ? error.message : "unknown");
+      return [];
+    }
+  };
+  const totalViews = async (): Promise<Map<string, number>> => {
+    try {
+      return await viewTotals();
+    } catch (error) {
+      console.error("[views] totals unavailable", error instanceof Error ? error.message : "unknown");
+      return new Map();
+    }
+  };
+  const mapRanking = async (items: { articleId: string; views: number }[]): Promise<SelectedArticle[]> => {
     const byId = new Map(live.map((article) => [article.id, article]));
-    return ranking
+    return items
       .map((item) => {
         const article = byId.get(item.articleId);
         return article ? summarise(article, item.views) : null;
@@ -832,16 +851,16 @@ export async function selectArticles(input: ArticleSelection): Promise<SelectedA
   let rows: SelectedArticle[] = [];
   switch (input.source) {
     case "trending": {
-      rows = await mapRanking(await mostViewed(input.days ?? 7, Math.max(input.limit * 4, 20)));
+      rows = await mapRanking(await ranked(input.days ?? 7, Math.max(input.limit * 4, 20)));
       // Honest fallback: a young site with no views yet shows the newest pieces
       // rather than an empty block, and the desk says which source was used.
       if (rows.length === 0) rows = live.slice(0, input.limit).map((article) => summarise(article));
       break;
     }
     case "popular": {
-      const totals = await viewTotals();
+      const all = await totalViews();
       rows = live
-        .map((article) => summarise(article, totals.get(article.id) ?? 0))
+        .map((article) => summarise(article, all.get(article.id) ?? 0))
         .sort((a, b) => (b.views ?? 0) - (a.views ?? 0))
         .filter((item) => (item.views ?? 0) > 0);
       if (rows.length === 0) rows = live.slice(0, input.limit).map((article) => summarise(article));
