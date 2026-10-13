@@ -1,11 +1,17 @@
 import { useMemo, useState } from "react";
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { adminAutomation } from "@/content/admin-api";
+import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
+import { errorText } from "@/components/admin/gate";
+import { AdminPageError } from "@/components/admin/page-error";
+import { AutomationSchemaNotice } from "@/components/admin/automation-schema-notice";
+import { adminAutomation, adminRunAutomation } from "@/content/admin-api";
 
 export const Route = createFileRoute("/admin/automation/history")({
   loader: () => adminAutomation(),
   component: AutomationHistory,
+  errorComponent: AdminPageError,
 });
+
+type AutomationData = Extract<Awaited<ReturnType<typeof adminAutomation>>, { ready: true }>;
 
 function StatusChip({ status }: { status: string }) {
   const tone = status === "succeeded" || status === "published" ? "desk-status desk-status--published" : status === "failed" ? "desk-status desk-status--failed" : "desk-status";
@@ -14,8 +20,17 @@ function StatusChip({ status }: { status: string }) {
 
 function AutomationHistory() {
   const data = Route.useLoaderData();
+  if (!data.ready) return <AutomationSchemaNotice schema={data.schema} environment={data.environment} />;
+  return <AutomationHistoryReady data={data} />;
+}
+
+function AutomationHistoryReady({ data }: { data: AutomationData }) {
+  const router = useRouter();
   const [automationId, setAutomationId] = useState<string>("");
   const [status, setStatus] = useState<string>("");
+  const [pending, setPending] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [lastRun, setLastRun] = useState<{ id: string; dryRun: boolean; result: Awaited<ReturnType<typeof adminRunAutomation>>["outcome"] } | null>(null);
 
   const runs = useMemo(
     () =>
@@ -29,11 +44,35 @@ function AutomationHistory() {
 
   const nameOf = (id: string | null) => (id ? (data.automations.find((item) => item.id === id)?.name ?? id) : "MCP / manual");
 
+  const runAutomation = async (id: string, dryRun: boolean) => {
+    setPending(`${id}:${dryRun}`);
+    setError(null);
+    setLastRun(null);
+    try {
+      const response = await adminRunAutomation({ data: { id, dryRun } });
+      setLastRun({ id, dryRun, result: response.outcome });
+      await router.invalidate();
+    } catch (caught) {
+      setError(errorText(caught));
+    } finally {
+      setPending(null);
+    }
+  };
+
   return (
     <>
       <p className="desk-kicker">Automation</p>
-      <h1 className="desk-title">History & diagnostics</h1>
+      <h1 className="desk-title">History &amp; diagnostics</h1>
       <p className="desk-note">Every run this site recorded, per automation, with the stage that failed and why. Credentials are never shown.</p>
+
+      {error ? <p className="banner banner--bad" role="alert">{error}</p> : null}
+      {lastRun ? (
+        <p className={lastRun.result.status === "failed" ? "banner banner--bad" : "banner banner--ok"} role="status">
+          {lastRun.dryRun ? "Dry run" : "Run"} for {nameOf(lastRun.id)}: <strong>{lastRun.result.status}</strong> at {lastRun.result.stage}. {lastRun.result.reason}
+          {lastRun.result.articleId ? ` Article ${lastRun.result.articleId}.` : ""}
+          {lastRun.result.preview ? ` Preview: ${lastRun.result.preview.title}.` : ""}
+        </p>
+      ) : null}
 
       <section className="desk-section">
         <h2>Health</h2>
@@ -63,6 +102,7 @@ function AutomationHistory() {
                 <th scope="col">Last run</th>
                 <th scope="col">Failures in a row</th>
                 <th scope="col">Runs</th>
+                <th scope="col">Run controls</th>
               </tr>
             </thead>
             <tbody>
@@ -80,6 +120,28 @@ function AutomationHistory() {
                   <td>{automation.schedule?.failureStreak ?? 0}</td>
                   <td>
                     {automation.counts.total} ({automation.counts.failed} failed)
+                  </td>
+                  <td>
+                    <div className="inline-actions">
+                      <button
+                        type="button"
+                        className="btn"
+                        aria-label={`Run ${automation.name} now`}
+                        disabled={pending !== null}
+                        onClick={() => void runAutomation(automation.id, false)}
+                      >
+                        {pending === `${automation.id}:false` ? "Running…" : "Run now"}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn--ghost"
+                        aria-label={`Dry run ${automation.name}`}
+                        disabled={pending !== null}
+                        onClick={() => void runAutomation(automation.id, true)}
+                      >
+                        {pending === `${automation.id}:true` ? "Preparing…" : "Dry run"}
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

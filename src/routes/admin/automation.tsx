@@ -1,6 +1,8 @@
 import { useState } from "react";
-import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
+import { createFileRoute, Link, Outlet, useRouter, useRouterState } from "@tanstack/react-router";
 import { errorText } from "@/components/admin/gate";
+import { AdminPageError } from "@/components/admin/page-error";
+import { AutomationSchemaNotice } from "@/components/admin/automation-schema-notice";
 import {
   adminAutomation,
   adminDeleteAutomation,
@@ -31,6 +33,7 @@ import { formatDate } from "@/lib/format";
 export const Route = createFileRoute("/admin/automation")({
   loader: () => adminAutomation(),
   component: AutomationAdmin,
+  errorComponent: AdminPageError,
 });
 
 type RunResult = Awaited<ReturnType<typeof adminRunAutomation>>["outcome"];
@@ -38,6 +41,7 @@ type TestResult = Awaited<ReturnType<typeof adminTestAutomation>>;
 
 function AutomationAdmin() {
   const data = Route.useLoaderData();
+  const pathname = useRouterState({ select: (state) => state.location.pathname.replace(/\/$/, "") });
   const router = useRouter();
   const [editing, setEditing] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
@@ -48,6 +52,8 @@ function AutomationAdmin() {
   const [outcome, setOutcome] = useState<{ id: string; result: RunResult; dryRun: boolean } | null>(null);
   const [test, setTest] = useState<{ id: string; result: TestResult } | null>(null);
 
+  if (pathname === "/admin/automation/history") return <Outlet />;
+  if (!data.ready) return <AutomationSchemaNotice schema={data.schema} environment={data.environment} />;
   const credentials = data.credentials;
 
   const run = async (key: string, work: () => Promise<unknown>, success?: string) => {

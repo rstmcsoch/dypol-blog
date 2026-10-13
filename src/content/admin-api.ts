@@ -307,8 +307,13 @@ export const adminAutomation = createServerFn({ method: "GET" }).handler(async (
   const { credentialStatus, credentialSummary } = await import("@/lib/automation/credentials");
   const { mcpConfigured } = await import("@/lib/mcp/auth");
   const { workerEnv } = await import("@/lib/cf-env.server");
+  const { getSql } = await import("@/lib/db");
+  const { inspectAutomationSchema } = await import("@/lib/automation/schema");
   const { scheduleSummary, mcpRunnable, automationActive } = await import("@/lib/automation/automation");
   const env = envText(await workerEnv());
+  const schema = await inspectAutomationSchema(await getSql());
+  const environment = env.DYPOL_ENV ?? "unknown";
+  if (!schema.ready) return { ready: false as const, schema, environment };
   const [automations, schedules, runs, list, credentials] = await Promise.all([
     listAutomations(),
     readSchedules(),
@@ -317,6 +322,9 @@ export const adminAutomation = createServerFn({ method: "GET" }).handler(async (
     credentialStatus(env),
   ]);
   return {
+    ready: true as const,
+    schema,
+    environment,
     automations: await Promise.all(
       automations.map(async (automation) => {
         const schedule = schedules.get(automation.id) ?? null;
@@ -448,6 +456,10 @@ export const adminAutomationRuns = createServerFn({ method: "POST" })
   })
   .handler(async ({ data }) => {
     await guard();
+    const { getSql } = await import("@/lib/db");
+    const { assertAutomationSchemaReady } = await import("@/lib/automation/schema");
+    const { workerEnv } = await import("@/lib/cf-env.server");
+    await assertAutomationSchemaReady(await getSql(), (await workerEnv()).DYPOL_ENV);
     const { recentRuns } = await import("@/lib/automation/store.server");
     return { runs: (await recentRuns(data.limit, data.automationId)).map(runForClient) };
   });
