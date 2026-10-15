@@ -1,9 +1,12 @@
 import { getSql, type Sql } from "@/lib/db";
 import { workerEnv } from "@/lib/cf-env.server";
+import { writesAllowed } from "@/lib/write-guard.server";
 import {
   automationIdFromName,
   automationInputSchema,
   DEFAULT_AUTOMATION_INPUT,
+  inputFromLegacySettings,
+  parseAutomationRecord,
   type AutomationInput,
   type AutomationRecord,
 } from "./automation";
@@ -115,21 +118,8 @@ function toRecord(row: AutomationRow): AutomationRecord {
  * surprising than silently turning the whole automation off and losing the
  * owner's settings (for example after a schema gains a new rule).
  */
-function parseRecord(candidate: Record<string, unknown>, name: string): AutomationInput {
-  const parsed = automationInputSchema.safeParse(candidate);
-  if (parsed.success) return parsed.data;
-  console.warn("[automation] stored settings need attention; keeping the valid fields", {
-    problems: parsed.error.issues.slice(0, 8).map((issue) => `${issue.path.join(".") || "value"}: ${issue.message}`),
-  });
-  const working: Record<string, unknown> = { ...candidate };
-  // Take the first default for each failing top-level field, then re-validate.
-  const failing = [...new Set(parsed.error.issues.map((issue) => issue.path[0]).filter((key): key is string => typeof key === "string"))];
-  for (const key of failing) {
-    if (key in DEFAULT_AUTOMATION_INPUT) working[key] = (DEFAULT_AUTOMATION_INPUT as Record<string, unknown>)[key];
-  }
-  const retry = automationInputSchema.safeParse({ ...DEFAULT_AUTOMATION_INPUT, ...working });
-  if (retry.success) return retry.data;
-  return { ...DEFAULT_AUTOMATION_INPUT, name: name || DEFAULT_AUTOMATION_INPUT.name, enabled: false, paused: true };
+export function parseRecord(candidate: Record<string, unknown>, name: string): AutomationInput {
+  return parseAutomationRecord(candidate, name);
 }
 
 const COLUMNS = `id, name, enabled, paused, mode, provider, model, base_url, credential_ref, topic_source,
@@ -154,34 +144,15 @@ async function legacySettings(sql: Sql): Promise<AutomationSettings | null> {
   }
 }
 
-function inputFromLegacy(settings: AutomationSettings): AutomationInput {
-  return {
-    ...DEFAULT_AUTOMATION_INPUT,
-    name: "Primary automation",
-    enabled: settings.enabled,
-    paused: settings.paused,
-    mode: settings.mode,
-    provider: settings.serverApi.provider,
-    model: settings.serverApi.model,
-    baseUrl: settings.serverApi.baseUrl,
-    credentialRef: "",
-    topicIdeas: settings.topicIdeas,
-    topicSources: settings.topicSources,
-    minWords: settings.policy.minWords,
-    publishMode: settings.policy.autoPublish ? "auto" : "draft",
-    maxPerDay: settings.policy.maxPublishedPerDay,
-    requireSources: settings.policy.requireSources,
-    minSources: settings.policy.minSources,
-    requireCover: settings.policy.requireFeaturedImage,
-    allowedCategoryIds: settings.policy.allowedCategoryIds,
-    mcpDefault: true,
-  };
+export function inputFromLegacy(settings: AutomationSettings): AutomationInput {
+  return inputFromLegacySettings(settings);
 }
 
-async function insert(sql: Sql, id: string, input: AutomationInput, sortOrder: number): Promise<void> {
+async function insert(sql: Sql, id: string, input: AutomationInput, sortOrder: number, ignoreConflict = false): Promise<void> {
   const now = new Date().toISOString();
+  const verb = ignoreConflict ? "insert or ignore into" : "insert into";
   await sql.run(
-    `insert into automations (${COLUMNS})
+    `${verb} automations (${COLUMNS})
      values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
@@ -224,8 +195,8 @@ async function insert(sql: Sql, id: string, input: AutomationInput, sortOrder: n
 
 /**
  * All automations. Creates the first one from the legacy settings row (or from
- * safe defaults) the first time it is called on a deployment that has none, so
- * the desk and the MCP tools always have a configuration to work with.
+ * safe defaults) the first time it is called on a writable deployment that has
+ * none, so the desk and the MCP tools always have a configuration to work with.
  */
 export async function listAutomations(): Promise<AutomationRecord[]> {
   const sql = await getSql();
@@ -235,7 +206,11 @@ export async function listAutomations(): Promise<AutomationRecord[]> {
   if (existing.length > 0) return existing;
   const legacy = await legacySettings(sql);
   const input = legacy ? inputFromLegacy(legacy) : { ...DEFAULT_AUTOMATION_INPUT };
-  await insert(sql, "default", input, 0);
+  if (!(await writesAllowed())) {
+    const now = new Date(0).toISOString();
+    return [{ ...input, id: "default", sortOrder: 0, createdAt: now, updatedAt: now }];
+  }
+  await insert(sql, "default", input, 0, true);
   return selectAll(sql);
 }
 
@@ -251,7 +226,7 @@ export async function mcpAutomation(preferredId?: string): Promise<AutomationRec
     const chosen = all.find((item) => item.id === preferredId);
     if (chosen) return chosen;
   }
-  return all.find((item) => item.mcpDefault) ?? all[0] as AutomationRecord;
+  return all.find((item) => item.mcpDefault) ?? (all[0] as AutomationRecord);
 }
 
 export async function createAutomation(raw: unknown): Promise<AutomationRecord> {
@@ -585,15 +560,26 @@ export async function runCounts(automationId: string): Promise<{ total: number; 
   return { total: Number(rows[0]?.total ?? 0), failed: Number(rows[0]?.failed ?? 0) };
 }
 
+/**
+ * Counts actual automated publications today (UTC), covering both MCP
+ * `publish_article_if_allowed` runs and site-run `scheduled_run`/`manual_run`
+ * publications where the resulting article is genuinely published.
+ */
 export async function automatedPublishesToday(automationId?: string): Promise<number> {
   const sql = await getSql();
   const since = new Date();
   since.setUTCHours(0, 0, 0, 0);
+  const sinceIso = since.toISOString();
   const rows = automationId
-    ? await sql<{ n: number }>`select count(*) as n from automation_runs
-        where tool = 'publish_article_if_allowed' and outcome = 'published' and automation_id = ${automationId} and created_at >= ${since.toISOString()}`
-    : await sql<{ n: number }>`select count(*) as n from automation_runs
-        where tool = 'publish_article_if_allowed' and outcome = 'published' and created_at >= ${since.toISOString()}`;
+    ? await sql<{ n: number }>`select count(distinct r.article_id) as n from automation_runs r
+        inner join articles a on a.id = r.article_id and a.status = 'published'
+        where ((r.tool = 'publish_article_if_allowed' and r.outcome = 'published') or (r.status = 'succeeded' and r.outcome = 'succeeded'))
+          and r.automation_id = ${automationId}
+          and r.created_at >= ${sinceIso}`
+    : await sql<{ n: number }>`select count(distinct r.article_id) as n from automation_runs r
+        inner join articles a on a.id = r.article_id and a.status = 'published'
+        where ((r.tool = 'publish_article_if_allowed' and r.outcome = 'published') or (r.status = 'succeeded' and r.outcome = 'succeeded'))
+          and r.created_at >= ${sinceIso}`;
   return Number(rows[0]?.n ?? 0);
 }
 
