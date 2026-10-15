@@ -142,7 +142,7 @@ export const automationInputSchema = z
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["imageMode"],
-        message: `Image generation is not supported for this provider. Choose \u201cNo featured image\u201d or switch to ${IMAGE_CAPABLE_PROVIDERS.join("/")}.`,
+        message: `Image generation is not supported for this provider. Choose “No featured image” or switch to ${IMAGE_CAPABLE_PROVIDERS.join("/")}.`,
       });
     }
     if (value.publishMode === "auto" && value.allowedCategoryIds.length === 0) {
@@ -314,7 +314,7 @@ export function mcpRunnable(record: Pick<AutomationRecord, "mode">): boolean {
 
 export function scheduleSummary(record: Pick<AutomationRecord, "scheduleCron" | "timezone">): string {
   if (!record.scheduleCron) return "No schedule (manual runs only)";
-  return `${record.scheduleCron} \u00b7 ${record.timezone}`;
+  return `${record.scheduleCron} · ${record.timezone}`;
 }
 
 export function cronPresets(): { label: string; cron: string }[] {
