@@ -14,7 +14,7 @@ export const Route = createFileRoute("/admin/ticker")({
 });
 
 const SOURCES: { value: SiteConfig["trending"]["source"]; label: string; help: string }[] = [
-  { value: "trending", label: "Trending — most read recently", help: "Ranked by reads recorded on this site. Until reads build up, the newest articles are shown and the preview says so." },
+  { value: "trending", label: "Trending \u2014 most read recently", help: "Ranked by reads recorded on this site. Until reads build up, the newest articles are shown and the preview says so." },
   { value: "latest", label: "Newest articles", help: "Always the most recently published pieces." },
   { value: "featured", label: "Featured articles", help: "Articles you marked Featured, newest first." },
   { value: "category", label: "Articles in chosen topics", help: "Pick one or more topics below." },
@@ -31,12 +31,14 @@ function TickerAdmin() {
 
   const [preview, setPreview] = useState<{ items: TickerEntry[]; source: string; fallback: boolean; note: string } | null>(null);
   const [previewPending, setPreviewPending] = useState(false);
+  const [previewIndex, setPreviewIndex] = useState(0);
 
   const refresh = useCallback(async () => {
     setPreviewPending(true);
     try {
       const result = await adminTickerPreview({ data: { trending: t } });
       setPreview(result);
+      setPreviewIndex(0);
     } catch {
       setPreview(null);
     } finally {
@@ -50,6 +52,10 @@ function TickerAdmin() {
   }, [JSON.stringify(t)]);
 
   const published = useMemo(() => data.articles, [data.articles]);
+  const previewCount = preview?.items.length ?? 0;
+  const previewRounded = previewIndex % Math.max(1, previewCount);
+  const stepPreview = (direction: -1 | 1) =>
+    setPreviewIndex((current) => (current + direction + Math.max(1, previewCount)) % Math.max(1, previewCount));
 
   return (
     <FormShell
@@ -92,7 +98,7 @@ function TickerAdmin() {
           </label>
           <label className="check-row">
             <input type="checkbox" checked={t.showIndex} onChange={(e) => setT({ showIndex: e.target.checked })} />
-            Show “2 / 5” position
+            Show \u201c2 / 5\u201d position
           </label>
           <label className="check-row">
             <input type="checkbox" checked={t.pauseOnHover} onChange={(e) => setT({ pauseOnHover: e.target.checked })} />
@@ -145,7 +151,7 @@ function TickerAdmin() {
               </label>
             ))}
             {t.slugs.some((slug) => !published.some((article) => article.slug === slug)) ? (
-              <p className="field-help">
+              <p className="field-help" role="status">
                 Some pinned articles are no longer published; they are left out of the strip and can be removed here:
                 {t.slugs
                   .filter((slug) => !published.some((article) => article.slug === slug))
@@ -168,7 +174,7 @@ function TickerAdmin() {
                   <input value={item.text} maxLength={160} onChange={(e) => setT({ customItems: t.customItems.map((x, i) => (i === index ? { ...x, text: e.target.value } : x)) })} />
                 </label>
                 <label className="field">
-                  <span>Link (optional, e.g. /about or https://…)</span>
+                  <span>Link (optional, e.g. /about or https://\u2026)</span>
                   <input value={item.href} maxLength={300} onChange={(e) => setT({ customItems: t.customItems.map((x, i) => (i === index ? { ...x, href: e.target.value } : x)) })} />
                 </label>
                 <button type="button" className="btn btn--danger-ghost" onClick={() => setT({ customItems: t.customItems.filter((_, i) => i !== index) })}>
@@ -208,39 +214,70 @@ function TickerAdmin() {
         <legend>Preview</legend>
         <p className="field-help">
           {preview
-            ? `Showing “${preview.source}” from ${preview.items.length} headline${preview.items.length === 1 ? "" : "s"}.`
+            ? `Showing \u201c${preview.source}\u201d from ${preview.items.length} headline${preview.items.length === 1 ? "" : "s"}.`
             : previewPending
-              ? "Rendering…"
+              ? "Rendering\u2026"
               : "Preview unavailable right now."}
         </p>
         {preview?.note ? <p className="field-help">{preview.note}</p> : null}
         <div className="preview-frame">
           <div className="preview-page" data-theme="light">
             {preview && preview.items.length > 0 ? (
-              <div className="trend">
+              <div className={t.animate ? "trend trend--animate" : "trend"}>
                 <div className="container trend__row">
                   {t.showLabel && t.label ? (
                     <p className="trend__label">
+                      <span className="grain-layer" aria-hidden="true" />
                       <span>{t.label}</span>
                     </p>
                   ) : null}
                   <div className="trend__viewport">
-                    <ul className="trend__list">
-                      <li className="trend__slot">
-                        <span className="trend__link">{preview.items[0]?.title}</span>
-                      </li>
+                    <ul className="trend__list" style={t.animate ? { animationDuration: `${t.speed}s` } : undefined}>
+                      {t.animate ? (
+                        <>
+                          {preview.items.map((item) => (
+                            <li key={item.id}>
+                              <span className="trend__link">{item.title}</span>
+                            </li>
+                          ))}
+                          {preview.items.map((item) => (
+                            <li key={`dup-${item.id}`} aria-hidden="true">
+                              <span className="trend__link">{item.title}</span>
+                            </li>
+                          ))}
+                        </>
+                      ) : (
+                        <li className="trend__slot" key={preview.items[previewRounded]?.id ?? "empty"}>
+                          <span className="trend__link">{preview.items[previewRounded]?.title}</span>
+                        </li>
+                      )}
                     </ul>
                   </div>
+                  {!t.animate && previewCount > 1 ? (
+                    <div className="trend__controls">
+                      {t.showIndex ? (
+                        <p className="trend__count">
+                          {previewRounded + 1} / {previewCount}
+                        </p>
+                      ) : null}
+                      <button type="button" className="trend__step" onClick={() => stepPreview(-1)} aria-label="Previous preview headline">
+                        \u2039
+                      </button>
+                      <button type="button" className="trend__step" onClick={() => stepPreview(1)} aria-label="Next preview headline">
+                        \u203a
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
               </div>
             ) : (
-              <p className="lede">No headlines would appear — check the source and that articles are published.</p>
+              <p className="lede">No headlines would appear \u2014 check the source and that articles are published.</p>
             )}
           </div>
         </div>
         <p>
           <button type="button" className="btn btn--ghost" disabled={previewPending} onClick={() => void refresh()}>
-            {previewPending ? "Rendering…" : "Refresh preview"}
+            {previewPending ? "Rendering\u2026" : "Refresh preview"}
           </button>
         </p>
       </fieldset>
