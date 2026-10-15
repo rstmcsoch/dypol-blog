@@ -1,0 +1,31 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // Dedicated Wrangler configuration for remote preview D1 migrations
+  // (`npm run db:migrate:preview`). Targets ONLY `dypol-blog-db-preview`
+  // (`c9030fb4-8657-47d9-bf6f-e8c11650bdd5`) and `dypol-blog-media-preview`
+  // so preview database migrations can never touch production `dypol-blog-db`.
+  "name": "dypolblog",
+  "main": "src/worker-entry.ts",
+  "compatibility_date": "2026-10-06",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+  "vars": { "DYPOL_ENV": "preview" },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "dypol-blog-db-preview",
+      "database_id": "c9030fb4-8657-47d9-bf6f-e8c11650bdd5",
+      "migrations_dir": "migrations/d1"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "MEDIA",
+      "bucket_name": "dypol-blog-media-preview"
+    }
+  ],
+  "ratelimits": [
+    { "name": "SIGNIN_LIMITER", "namespace_id": "7302", "simple": { "limit": 5, "period": 60 } },
+    { "name": "MCP_LIMITER", "namespace_id": "7304", "simple": { "limit": 30, "period": 60 } }
+  ]
+}
