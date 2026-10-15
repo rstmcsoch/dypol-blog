@@ -257,6 +257,24 @@ export function parseLayout(input: unknown): LayoutDoc | null {
   return parsed.success ? parsed.data : null;
 }
 
+/**
+ * Updates only `area` (`homepage` or `sidebar`) on `base`, leaving the other
+ * area untouched so Homepage Builder and Sidebar Manager never overwrite each
+ * other's drafts or published layouts.
+ */
+export function mergeLayoutArea(base: LayoutDoc, incoming: LayoutDoc, area: Area): LayoutDoc {
+  return {
+    version: 2,
+    homepage: area === "homepage" ? incoming.homepage : base.homepage,
+    sidebar: area === "sidebar" ? incoming.sidebar : base.sidebar,
+  };
+}
+
+/** True when `a` and `b` differ in `area` (`homepage` or `sidebar`). */
+export function isLayoutAreaDirty(a: LayoutDoc, b: LayoutDoc, area: Area): boolean {
+  return JSON.stringify(a[area]) !== JSON.stringify(b[area]);
+}
+
 export function summariseBlock(block: Block): string {
   switch (block.type) {
     case "hero":
@@ -271,12 +289,12 @@ export function summariseBlock(block: Block): string {
             : block.source === "manual"
               ? ` (${block.slugs.length} picked)`
               : "";
-      return `${source}${where} · ${block.count} article${block.count === 1 ? "" : "s"}`;
+      return `${source}${where} \u00b7 ${block.count} article${block.count === 1 ? "" : "s"}`;
     }
     case "categories":
-      return `Topic navigation · up to ${block.count}`;
+      return `Topic navigation \u00b7 up to ${block.count}`;
     case "tags":
-      return `Tag collection · up to ${block.count}`;
+      return `Tag collection \u00b7 up to ${block.count}`;
     case "articleTags":
       return "This article's tags";
     case "share":
