@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import type { TickerEntry } from "@/content/ticker";
 import { useSite, useTrending } from "./use-site";
@@ -14,11 +14,6 @@ import { useSite, useTrending } from "./use-site";
  * The owner can also switch the strip to a single still headline, or keep the
  * older continuous marquee ("animate") — that path is unchanged.
  */
-
-function reducedMotion(): boolean {
-  if (typeof window === "undefined" || !window.matchMedia) return false;
-  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-}
 
 function Headline({ item }: { item: TickerEntry }) {
   if (item.slug) {
@@ -44,10 +39,15 @@ export function TrendingBar() {
   const config = site.trending;
   const [index, setIndex] = useState(0);
   const [paused, setPaused] = useState(false);
-  const still = useRef(false);
+  const [still, setStill] = useState(false);
 
   useEffect(() => {
-    still.current = reducedMotion();
+    if (typeof window === "undefined" || !window.matchMedia) return;
+    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const update = () => setStill(media.matches);
+    update();
+    media.addEventListener?.("change", update);
+    return () => media.removeEventListener?.("change", update);
   }, []);
 
   const count = items.length;
@@ -55,12 +55,12 @@ export function TrendingBar() {
 
   useEffect(() => {
     if (config.animate || config.mode === "still" || count < 2) return;
-    if (still.current) return;
+    if (still) return;
     if (paused && config.pauseOnHover) return;
     const seconds = Math.min(60, Math.max(3, config.intervalSeconds || 6));
     const timer = window.setInterval(() => setIndex((current) => (current + 1) % count), seconds * 1000);
     return () => window.clearInterval(timer);
-  }, [config.animate, config.intervalSeconds, config.mode, config.pauseOnHover, count, paused]);
+  }, [config.animate, config.intervalSeconds, config.mode, config.pauseOnHover, count, paused, still]);
 
   const step = (direction: -1 | 1) => setIndex((current) => (current + direction + count) % count);
   const label = useMemo(() => config.label, [config.label]);
@@ -71,10 +71,25 @@ export function TrendingBar() {
   return (
     <div
       className={marquee ? "trend trend--animate" : "trend"}
+      role="region"
+      aria-label={label || "Trending"}
       onMouseEnter={config.pauseOnHover ? () => setPaused(true) : undefined}
       onMouseLeave={config.pauseOnHover ? () => setPaused(false) : undefined}
       onFocusCapture={config.pauseOnHover ? () => setPaused(true) : undefined}
       onBlurCapture={config.pauseOnHover ? () => setPaused(false) : undefined}
+      onKeyDown={
+        !marquee && count > 1
+          ? (event) => {
+              if (event.key === "ArrowLeft") {
+                event.preventDefault();
+                step(-1);
+              } else if (event.key === "ArrowRight") {
+                event.preventDefault();
+                step(1);
+              }
+            }
+          : undefined
+      }
     >
       <div className="container trend__row">
         {config.showLabel && label ? (
@@ -108,7 +123,7 @@ export function TrendingBar() {
         {!marquee && count > 1 ? (
           <div className="trend__controls">
             {config.showIndex ? (
-              <p className="trend__count">
+              <p className="trend__count" aria-live="polite">
                 {rounded + 1} / {count}
               </p>
             ) : null}
