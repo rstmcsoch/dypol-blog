@@ -289,12 +289,12 @@ export function summariseBlock(block: Block): string {
             : block.source === "manual"
               ? ` (${block.slugs.length} picked)`
               : "";
-      return `${source}${where} \u00b7 ${block.count} article${block.count === 1 ? "" : "s"}`;
+      return `${source}${where} · ${block.count} article${block.count === 1 ? "" : "s"}`;
     }
     case "categories":
-      return `Topic navigation \u00b7 up to ${block.count}`;
+      return `Topic navigation · up to ${block.count}`;
     case "tags":
-      return `Tag collection \u00b7 up to ${block.count}`;
+      return `Tag collection · up to ${block.count}`;
     case "articleTags":
       return "This article's tags";
     case "share":

@@ -233,7 +233,7 @@ test("the daily publishing limit, failed daily-count query guard, and repeat-top
   assert.equal(countFailed.built.calls.published.length, 0, "failed daily count query must never assume 0 and auto-publish");
   assert.match(countFailedOutcome.reason, /daily publish count could not be verified/);
 
-  const repeated = run({}, { recentTitles: async () => ["Edge inference in retail \u2014 what changed"] });
+  const repeated = run({}, { recentTitles: async () => ["Edge inference in retail — what changed"] });
   const repeat = await repeated.promise;
   assert.equal(repeat.status, "skipped");
   assert.equal(repeat.stage, "topic");
