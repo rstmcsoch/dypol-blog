@@ -13,7 +13,7 @@ export const Route = createFileRoute("/admin")({
 function DeskError({ error }: ErrorComponentProps) {
   const message = error instanceof Error && error.message ? error.message : "The desk could not load this page.";
   return (
-    <div className="desk" data-theme="light">
+    <div className="desk" data-theme="system">
       <main className="desk-main">
         <div className="adm-content">
           <p className="desk-kicker">Admin</p>

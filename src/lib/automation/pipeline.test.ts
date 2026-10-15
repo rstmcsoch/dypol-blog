@@ -211,13 +211,27 @@ test("an MCP-driven automation is never run by the site", async () => {
   assert.match(outcome.reason, /MCP/);
 });
 
-test("the daily publishing limit and the repeat-topic guard both hold", async () => {
+test("the daily publishing limit, failed daily-count query guard, and repeat-topic guard hold", async () => {
   const limited = run(
     { automation: record({ publishMode: "auto", allowedCategoryIds: ["news"], minWords: 120, maxPerDay: 1 }) },
     { publishedToday: async () => 1 },
   );
   const outcome = await limited.promise;
   assert.equal(outcome.published, false);
+
+  const countFailed = run(
+    { automation: record({ publishMode: "auto", allowedCategoryIds: ["news"], minWords: 120, maxPerDay: 1 }) },
+    {
+      publishedToday: async () => {
+        throw new Error("D1_ERROR: no such table: automation_runs");
+      },
+    },
+  );
+  const countFailedOutcome = await countFailed.promise;
+  assert.equal(countFailedOutcome.status, "draft");
+  assert.equal(countFailedOutcome.published, false);
+  assert.equal(countFailed.built.calls.published.length, 0, "failed daily count query must never assume 0 and auto-publish");
+  assert.match(countFailedOutcome.reason, /daily publish count could not be verified/);
 
   const repeated = run({}, { recentTitles: async () => ["Edge inference in retail — what changed"] });
   const repeat = await repeated.promise;

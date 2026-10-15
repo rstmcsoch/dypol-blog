@@ -257,6 +257,24 @@ export function parseLayout(input: unknown): LayoutDoc | null {
   return parsed.success ? parsed.data : null;
 }
 
+/**
+ * Updates only `area` (`homepage` or `sidebar`) on `base`, leaving the other
+ * area untouched so Homepage Builder and Sidebar Manager never overwrite each
+ * other's drafts or published layouts.
+ */
+export function mergeLayoutArea(base: LayoutDoc, incoming: LayoutDoc, area: Area): LayoutDoc {
+  return {
+    version: 2,
+    homepage: area === "homepage" ? incoming.homepage : base.homepage,
+    sidebar: area === "sidebar" ? incoming.sidebar : base.sidebar,
+  };
+}
+
+/** True when `a` and `b` differ in `area` (`homepage` or `sidebar`). */
+export function isLayoutAreaDirty(a: LayoutDoc, b: LayoutDoc, area: Area): boolean {
+  return JSON.stringify(a[area]) !== JSON.stringify(b[area]);
+}
+
 export function summariseBlock(block: Block): string {
   switch (block.type) {
     case "hero":

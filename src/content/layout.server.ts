@@ -1,7 +1,9 @@
 import { getSql } from "@/lib/db";
 import {
   defaultLayout,
+  isLayoutAreaDirty,
   layoutDocSchema,
+  mergeLayoutArea,
   newBlock,
   parseLayout,
   type Area,
@@ -168,22 +170,54 @@ export async function readPublishedLayout(): Promise<LayoutDoc> {
   }
 }
 
-export async function saveLayoutDraft(raw: unknown): Promise<LayoutDoc> {
-  const doc = layoutDocSchema.parse(raw);
-  await writeRow(LAYOUT_DRAFT, doc);
-  return doc;
+export async function saveLayoutDraft(raw: unknown, area?: Area): Promise<LayoutDoc> {
+  const incoming = layoutDocSchema.parse(raw);
+  if (!area) {
+    await writeRow(LAYOUT_DRAFT, incoming);
+    return incoming;
+  }
+  const base = (await readRow(LAYOUT_DRAFT)) ?? (await readRow(LAYOUT_PUBLISHED)) ?? (await legacyLayout());
+  const merged = mergeLayoutArea(base, incoming, area);
+  await writeRow(LAYOUT_DRAFT, merged);
+  return merged;
 }
 
-export async function publishLayout(): Promise<LayoutDoc> {
-  const draft = await readRow(LAYOUT_DRAFT);
-  if (!draft) throw new Error("There is no draft layout to publish.");
-  await writeRow(LAYOUT_PUBLISHED, draft);
-  await deleteRow(LAYOUT_DRAFT);
-  return draft;
+export async function publishLayout(options?: { area?: Area; doc?: unknown }): Promise<LayoutDoc> {
+  const storedDraft = await readRow(LAYOUT_DRAFT);
+  const candidate = options?.doc !== undefined ? layoutDocSchema.parse(options.doc) : storedDraft;
+  if (!candidate) throw new Error("There is no draft layout to publish.");
+  if (!options?.area) {
+    await writeRow(LAYOUT_PUBLISHED, candidate);
+    await deleteRow(LAYOUT_DRAFT);
+    return candidate;
+  }
+  const published = (await readRow(LAYOUT_PUBLISHED)) ?? (await legacyLayout());
+  const nextPublished = mergeLayoutArea(published, candidate, options.area);
+  await writeRow(LAYOUT_PUBLISHED, nextPublished);
+  const otherArea: Area = options.area === "homepage" ? "sidebar" : "homepage";
+  if (storedDraft && isLayoutAreaDirty(storedDraft, nextPublished, otherArea)) {
+    await writeRow(LAYOUT_DRAFT, mergeLayoutArea(nextPublished, storedDraft, otherArea));
+  } else {
+    await deleteRow(LAYOUT_DRAFT);
+  }
+  return nextPublished;
 }
 
-export async function discardLayoutDraft(): Promise<void> {
-  await deleteRow(LAYOUT_DRAFT);
+export async function discardLayoutDraft(area?: Area): Promise<LayoutDoc> {
+  const published = (await readRow(LAYOUT_PUBLISHED)) ?? (await legacyLayout());
+  if (!area) {
+    await deleteRow(LAYOUT_DRAFT);
+    return published;
+  }
+  const storedDraft = await readRow(LAYOUT_DRAFT);
+  if (!storedDraft) return published;
+  const otherArea: Area = area === "homepage" ? "sidebar" : "homepage";
+  if (isLayoutAreaDirty(storedDraft, published, otherArea)) {
+    await writeRow(LAYOUT_DRAFT, mergeLayoutArea(published, storedDraft, otherArea));
+  } else {
+    await deleteRow(LAYOUT_DRAFT);
+  }
+  return published;
 }
 
 // ---- resolution -------------------------------------------------------------

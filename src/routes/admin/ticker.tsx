@@ -31,12 +31,14 @@ function TickerAdmin() {
 
   const [preview, setPreview] = useState<{ items: TickerEntry[]; source: string; fallback: boolean; note: string } | null>(null);
   const [previewPending, setPreviewPending] = useState(false);
+  const [previewIndex, setPreviewIndex] = useState(0);
 
   const refresh = useCallback(async () => {
     setPreviewPending(true);
     try {
       const result = await adminTickerPreview({ data: { trending: t } });
       setPreview(result);
+      setPreviewIndex(0);
     } catch {
       setPreview(null);
     } finally {
@@ -50,6 +52,10 @@ function TickerAdmin() {
   }, [JSON.stringify(t)]);
 
   const published = useMemo(() => data.articles, [data.articles]);
+  const previewCount = preview?.items.length ?? 0;
+  const previewRounded = previewIndex % Math.max(1, previewCount);
+  const stepPreview = (direction: -1 | 1) =>
+    setPreviewIndex((current) => (current + direction + Math.max(1, previewCount)) % Math.max(1, previewCount));
 
   return (
     <FormShell
@@ -145,7 +151,7 @@ function TickerAdmin() {
               </label>
             ))}
             {t.slugs.some((slug) => !published.some((article) => article.slug === slug)) ? (
-              <p className="field-help">
+              <p className="field-help" role="status">
                 Some pinned articles are no longer published; they are left out of the strip and can be removed here:
                 {t.slugs
                   .filter((slug) => !published.some((article) => article.slug === slug))
@@ -217,20 +223,51 @@ function TickerAdmin() {
         <div className="preview-frame">
           <div className="preview-page" data-theme="light">
             {preview && preview.items.length > 0 ? (
-              <div className="trend">
+              <div className={t.animate ? "trend trend--animate" : "trend"}>
                 <div className="container trend__row">
                   {t.showLabel && t.label ? (
                     <p className="trend__label">
+                      <span className="grain-layer" aria-hidden="true" />
                       <span>{t.label}</span>
                     </p>
                   ) : null}
                   <div className="trend__viewport">
-                    <ul className="trend__list">
-                      <li className="trend__slot">
-                        <span className="trend__link">{preview.items[0]?.title}</span>
-                      </li>
+                    <ul className="trend__list" style={t.animate ? { animationDuration: `${t.speed}s` } : undefined}>
+                      {t.animate ? (
+                        <>
+                          {preview.items.map((item) => (
+                            <li key={item.id}>
+                              <span className="trend__link">{item.title}</span>
+                            </li>
+                          ))}
+                          {preview.items.map((item) => (
+                            <li key={`dup-${item.id}`} aria-hidden="true">
+                              <span className="trend__link">{item.title}</span>
+                            </li>
+                          ))}
+                        </>
+                      ) : (
+                        <li className="trend__slot" key={preview.items[previewRounded]?.id ?? "empty"}>
+                          <span className="trend__link">{preview.items[previewRounded]?.title}</span>
+                        </li>
+                      )}
                     </ul>
                   </div>
+                  {!t.animate && previewCount > 1 ? (
+                    <div className="trend__controls">
+                      {t.showIndex ? (
+                        <p className="trend__count">
+                          {previewRounded + 1} / {previewCount}
+                        </p>
+                      ) : null}
+                      <button type="button" className="trend__step" onClick={() => stepPreview(-1)} aria-label="Previous preview headline">
+                        ‹
+                      </button>
+                      <button type="button" className="trend__step" onClick={() => stepPreview(1)} aria-label="Next preview headline">
+                        ›
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
               </div>
             ) : (

@@ -2,10 +2,13 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   // The Worker is named `dypolblog` — no hyphen — and serves
   // https://dypolblog.rstmcsoch.workers.dev. Branch previews are
-  // `<branch>-dypolblog.<subdomain>.workers.dev` and use the "previews" bindings
-  // below, so a preview can never read or write production content.
-  // Workers Builds must run `npm run build` before the deploy command;
-  // the deploy command points at the generated dist/server/wrangler.json.
+  // `<branch>-dypolblog.<subdomain>.workers.dev` and use the "previews"
+  // bindings below, so a preview can never read or write production content.
+  //
+  // Approved Workers Builds / CLI commands:
+  // - Production deploy (`main` branch only): `DYPOL_DEPLOY_TARGET=production npm run deploy:prod`
+  // - Preview build/upload (non-`main` branches): `DYPOL_DEPLOY_TARGET=preview npm run deploy:preview`
+  // - Preview D1 migrations (`dypol-blog-db-preview` only): `DYPOL_DEPLOY_TARGET=preview npm run db:migrate:preview`
   "name": "dypolblog",
   // The Worker entry adds the Cloudflare Cron Trigger handler (scheduled) on top
   // of TanStack Start's fetch handler. Keep this path in sync with src/worker-entry.ts.

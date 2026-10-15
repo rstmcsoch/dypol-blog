@@ -68,19 +68,29 @@ export function resolveTicker(site: SiteConfig, live: Article[], context: Ticker
 
   if (config.source === "custom") {
     const items = dedupe(
-      config.customItems.map((item) => ({ id: item.id, title: item.text, slug: null, href: item.href || null })),
+      config.customItems
+        .filter((item) => item.text.trim().length > 0)
+        .map((item) => ({ id: item.id, title: item.text.trim(), slug: null, href: item.href || null })),
     ).slice(0, count);
     return { items, source: "custom", fallback: false, note: items.length === 0 ? "No custom items yet." : "" };
   }
 
   if (config.source === "pinned") {
+    const uniqueSlugs = [...new Set(config.slugs)];
+    const missingCount = uniqueSlugs.filter((slug) => !live.some((article) => article.slug === slug)).length;
     const items = dedupe(
-      config.slugs
+      uniqueSlugs
         .map((slug) => live.find((article) => article.slug === slug))
         .filter((article): article is Article => Boolean(article))
         .map((article) => fromArticle(article, views.get(article.id))),
     ).slice(0, count);
-    if (items.length > 0) return { items, source: "pinned", fallback: false, note: "" };
+    if (items.length > 0) {
+      const note =
+        missingCount > 0
+          ? `${missingCount} pinned article${missingCount === 1 ? " is" : "s are"} not published and ${missingCount === 1 ? "was" : "were"} skipped.`
+          : "";
+      return { items, source: "pinned", fallback: false, note };
+    }
     return { items: newestEntries().slice(0, count), source: "latest", fallback: true, note: "None of the pinned articles are published — showing the newest instead." };
   }
 
