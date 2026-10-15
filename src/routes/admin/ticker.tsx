@@ -14,7 +14,7 @@ export const Route = createFileRoute("/admin/ticker")({
 });
 
 const SOURCES: { value: SiteConfig["trending"]["source"]; label: string; help: string }[] = [
-  { value: "trending", label: "Trending \u2014 most read recently", help: "Ranked by reads recorded on this site. Until reads build up, the newest articles are shown and the preview says so." },
+  { value: "trending", label: "Trending — most read recently", help: "Ranked by reads recorded on this site. Until reads build up, the newest articles are shown and the preview says so." },
   { value: "latest", label: "Newest articles", help: "Always the most recently published pieces." },
   { value: "featured", label: "Featured articles", help: "Articles you marked Featured, newest first." },
   { value: "category", label: "Articles in chosen topics", help: "Pick one or more topics below." },
@@ -98,7 +98,7 @@ function TickerAdmin() {
           </label>
           <label className="check-row">
             <input type="checkbox" checked={t.showIndex} onChange={(e) => setT({ showIndex: e.target.checked })} />
-            Show \u201c2 / 5\u201d position
+            Show “2 / 5” position
           </label>
           <label className="check-row">
             <input type="checkbox" checked={t.pauseOnHover} onChange={(e) => setT({ pauseOnHover: e.target.checked })} />
@@ -174,7 +174,7 @@ function TickerAdmin() {
                   <input value={item.text} maxLength={160} onChange={(e) => setT({ customItems: t.customItems.map((x, i) => (i === index ? { ...x, text: e.target.value } : x)) })} />
                 </label>
                 <label className="field">
-                  <span>Link (optional, e.g. /about or https://\u2026)</span>
+                  <span>Link (optional, e.g. /about or https://…)</span>
                   <input value={item.href} maxLength={300} onChange={(e) => setT({ customItems: t.customItems.map((x, i) => (i === index ? { ...x, href: e.target.value } : x)) })} />
                 </label>
                 <button type="button" className="btn btn--danger-ghost" onClick={() => setT({ customItems: t.customItems.filter((_, i) => i !== index) })}>
@@ -214,9 +214,9 @@ function TickerAdmin() {
         <legend>Preview</legend>
         <p className="field-help">
           {preview
-            ? `Showing \u201c${preview.source}\u201d from ${preview.items.length} headline${preview.items.length === 1 ? "" : "s"}.`
+            ? `Showing “${preview.source}” from ${preview.items.length} headline${preview.items.length === 1 ? "" : "s"}.`
             : previewPending
-              ? "Rendering\u2026"
+              ? "Rendering…"
               : "Preview unavailable right now."}
         </p>
         {preview?.note ? <p className="field-help">{preview.note}</p> : null}
@@ -261,23 +261,23 @@ function TickerAdmin() {
                         </p>
                       ) : null}
                       <button type="button" className="trend__step" onClick={() => stepPreview(-1)} aria-label="Previous preview headline">
-                        \u2039
+                        ‹
                       </button>
                       <button type="button" className="trend__step" onClick={() => stepPreview(1)} aria-label="Next preview headline">
-                        \u203a
+                        ›
                       </button>
                     </div>
                   ) : null}
                 </div>
               </div>
             ) : (
-              <p className="lede">No headlines would appear \u2014 check the source and that articles are published.</p>
+              <p className="lede">No headlines would appear — check the source and that articles are published.</p>
             )}
           </div>
         </div>
         <p>
           <button type="button" className="btn btn--ghost" disabled={previewPending} onClick={() => void refresh()}>
-            {previewPending ? "Rendering\u2026" : "Refresh preview"}
+            {previewPending ? "Rendering…" : "Refresh preview"}
           </button>
         </p>
       </fieldset>
