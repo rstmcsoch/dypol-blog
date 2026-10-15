@@ -56,10 +56,20 @@ test("non-.sql entries are dropped (readdir also yields the auth/ directory)", (
   assert.deepEqual(pendingMigrations(["auth", "README.md"], []), []);
 });
 
-test("the auth schema ships outside the globbed directory", () => {
+test("the auth schema ships outside the globbed directory and D1 migrations live in migrations/d1", () => {
   const migrationsDir = join(projectRoot(), "migrations");
-  assert.deepEqual(pendingMigrations(readdirSync(migrationsDir), []), []);
-  assert.ok(readdirSync(join(migrationsDir, "auth")).includes("0001_auth.sql"));
+  const topLevel = pendingMigrations(readdirSync(migrationsDir), []);
+  assert.equal(
+    topLevel.some((m) => m.name === AUTH_MIGRATION),
+    false,
+    "0001_auth.sql must stay in migrations/auth/ when Better Auth sign-in is disabled",
+  );
+  assert.ok(readdirSync(join(migrationsDir, "auth")).includes(AUTH_MIGRATION));
+  const d1Migrations = pendingMigrations(readdirSync(join(migrationsDir, "d1")), []);
+  assert.deepEqual(
+    d1Migrations.map((m) => m.name),
+    ["0001_media.sql", "0002_content.sql", "0003_automation.sql", "0004_automations.sql"],
+  );
 });
 
 test("this workspace's auth schema copy is byte-identical to its source", () => {

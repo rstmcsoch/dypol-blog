@@ -1,39 +1,49 @@
-# Automation D1 schema recovery
+# Automation D1 schema recovery & deployment separation
 
 ## Symptom and repository-level cause
 
 The admin Automations/History routes and the scheduler need the durable schedule table `automation_schedule`, created by `migrations/d1/0004_automations.sql`. The reported `D1_ERROR: no such table: automation_schedule` proves that the database reached by the failing request does not contain that table.
 
-The versioned migration is already present and additive. The repository-level deployment gap was that the old `deploy` command built and deployed the Worker without applying D1 migrations. The corrected production deploy command applies pending migrations from the checked-in `migrations/d1` directory before deploying. The Wrangler config binds `DB` to database `dypol-blog-db` (`78708341-8467-4140-bfa7-0531f14a7aee`) and the preview binding is separate.
+The versioned migration is already present and additive (`migrations/d1/0004_automations.sql`). Two deployment hazards existed in earlier revisions:
 
-That identifies the likely code/deployment cause, but it does **not** prove which database the current production Worker is actually bound to or whether Wrangler's migration tracker records `0004` as applied. There is no checked-in GitHub deploy workflow, and the external Workers Builds dashboard command is not available here; verify that it runs the migration-first deployment path rather than invoking raw `wrangler deploy`. Cloudflare credentials are not available in this workspace, so live bindings, migration history and Worker logs remain unverified. Do not infer that a missing table should be recreated until those read-only checks identify the intended D1 database and migration state.
+1. **Pre-PR #8**: `npm run deploy` built and deployed the Worker without applying remote D1 migrations.
+2. **PR #8 (`1a4fc3bd44`)**: `db:migrate:remote` ran `wrangler d1 migrations apply DB --remote --config wrangler.jsonc` unconditionally against the top-level production `dypol-blog-db` (`78708341-8467-4140-bfa7-0531f14a7aee`) with no branch, environment, or Worker-name guard, and `wrangler.jsonc` lacked an `--env preview` target for `dypol-blog-db-preview` (`c9030fb4-8657-47d9-bf6f-e8c11650bdd5`). In addition, a duplicate Cloudflare Worker (`dypol-blog`, with a hyphen) was connected to the repository alongside canonical Worker `dypolblog`.
 
-## Safe production verification
+## Fail-closed environment separation
 
-1. Confirm Wrangler is authenticated (`npx wrangler whoami`). This workspace currently reports that it is not.
-2. Verify the Worker binding in Cloudflare matches the production `DB` binding in `wrangler.jsonc`.
-3. Inspect migration history without changing data:
+`scripts/deploy-target.mjs`, `package.json`, and `wrangler.jsonc` now enforce strict, fail-closed separation between local development, preview builds/migrations, and production migrations/deployments:
 
+| Environment | Migration Command | Deploy / Upload Command | Target Worker | Target D1 Database | Target R2 Bucket |
+| --- | --- | --- | --- | --- | --- |
+| **Local dev** | `npm run db:migrate` (`--local`) | `npm run dev` / `npm run preview` | local Miniflare | local SQLite | local R2 |
+| **Preview** (non-`main` branches) | `DYPOL_DEPLOY_TARGET=preview npm run db:migrate:preview` (`--remote --env preview`) | `DYPOL_DEPLOY_TARGET=preview npm run deploy:preview` (`wrangler versions upload`) | `dypolblog` (preview) | `dypol-blog-db-preview` (`c9030fb4-8657-47d9-bf6f-e8c11650bdd5`) | `dypol-blog-media-preview` |
+| **Production** (`main` branch only) | `DYPOL_DEPLOY_TARGET=production npm run db:migrate:prod` (`--remote`) | `DYPOL_DEPLOY_TARGET=production npm run deploy:prod` (or `npm run deploy`) | `dypolblog` | `dypol-blog-db` (`78708341-8467-4140-bfa7-0531f14a7aee`) | `dypol-blog-media` |
+
+Safeguards enforced by `scripts/deploy-target.mjs`:
+- `assert-prod` fails closed if `DYPOL_DEPLOY_TARGET` is not `"production"` (unless `WORKERS_CI_BRANCH=main`), if `WORKERS_CI_BRANCH` is any non-`main` branch, if `DYPOL_ENV=preview`, or if `CF_WORKER_NAME` is anything other than `"dypolblog"` (specifically blocking the duplicate `"dypol-blog"` Worker).
+- `assert-preview` fails closed if `DYPOL_DEPLOY_TARGET=production`, `DYPOL_ENV=production`, or `WORKERS_CI_BRANCH=main` (without explicit `DYPOL_DEPLOY_TARGET=preview`), and targets only `--env preview` (`dypol-blog-db-preview`).
+
+## Safe production verification & release procedure
+
+1. Confirm Wrangler is authenticated (`npx wrangler whoami`) and you have access to Cloudflare account `b006dbecdf366ee0b2c21b378049d50a`.
+2. Verify in the Cloudflare dashboard that canonical Worker `dypolblog` serves `https://dypolblog.rstmcsoch.workers.dev` and is bound to `dypol-blog-db` (`78708341-8467-4140-bfa7-0531f14a7aee`), and check whether legacy/duplicate Worker `dypol-blog` serves any traffic before disabling its Workers Builds trigger.
+3. Export a backup of `dypol-blog-db` before any schema change:
+   ```sh
+   npx wrangler d1 export dypol-blog-db --remote --output=backup-dypol-blog-db-$(date -u +%Y%m%dT%H%M%SZ).sql --config wrangler.jsonc
+   ```
+4. Inspect remote migration history and live schema without changing data:
    ```sh
    npx wrangler d1 migrations list DB --remote --config wrangler.jsonc
+   npx wrangler d1 execute dypol-blog-db --remote --command "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name;" --config wrangler.jsonc
    ```
-
-4. If the correct database has pending migrations, run the production-only deployment path (`npm run deploy`), which builds, applies pending migrations and deploys the Worker. `npm run db:migrate:remote` is also available as the explicit migration-only command. If Workers Builds separates build and deploy steps, its **production deploy command** must apply pending migrations before `wrangler deploy -c dist/server/wrangler.json`; do not run the production migration command for preview builds.
-5. If `0004_automations.sql` is recorded as applied while `automation_schedule` is missing, stop. Verify the binding and schema drift; do not rerun non-idempotent `ALTER TABLE` statements and do not reset, drop or recreate the database. Only add a forward-only, version-controlled repair migration after the actual state is understood.
-
-Preview/local work uses `npm run db:migrate` against Wrangler's local D1. The preview D1 binding is separate in `wrangler.jsonc`; never point a preview at production to get past a schema error.
+5. If `0004_automations.sql` is pending on `dypol-blog-db`, run the guarded production release from `main`:
+   ```sh
+   DYPOL_DEPLOY_TARGET=production npm run deploy:prod
+   ```
+6. If `0004_automations.sql` is already marked applied in `d1_migrations` while `automation_schedule` or `automations` is absent from `sqlite_master`, **stop**. Do not reset, drop, or recreate the database, and do not re-run non-idempotent `ALTER TABLE` statements; author a forward-only `0005_*.sql` migration creating only the missing objects identified from `sqlite_master` and `PRAGMA table_info(...)`.
 
 ## Runtime behavior
 
-- The admin Automations and History loaders read the `sqlite_master` catalog and fixed allow-listed `PRAGMA table_info` schemas before issuing automation queries. The preflight is read-only.
-- A schema mismatch returns an authorized-admin diagnostic with the detected `DYPOL_ENV`, exact missing tables/columns and suggested migration names. It asks operators to verify the binding/tracker before applying only pending migrations.
-- Save, delete, duplicate, test, run and History-query actions perform the same preflight before any automation mutation/query. They do not treat a failed query as an empty run list or zero failures.
-- The protected `/api/automation/tick` route reports the diagnostic with a non-success response; the Cloudflare cron handler writes the reason to Worker logs. Public article routes are not made dependent on the automation schema.
-- The check makes no D1 changes and the UI explicitly advises against resets/recreation.
-
-## Local verification in this change
-
-- `npm run db:migrate` applied the checked-in migrations to Wrangler's **local** D1 only; no remote migration was attempted.
-- Schema-preflight unit tests cover ready state, missing schedule table, missing run-history columns, migration suggestions and safe error text.
-- `npm run test:e2e:automation` (with local `ADMIN_TOKEN`/`CRON_SECRET`) exercises both admin pages, the authorized dry-run server action, History query, and the anonymous/authorized tick route against local D1.
-- Production migration status, bindings, logs and deployment are unverified until Cloudflare access is restored.
+- The admin Automations and History loaders inspect `sqlite_master` and allow-listed `PRAGMA table_info` schemas before issuing automation queries. The preflight is read-only.
+- On read-only deployments (`writesAllowed() === false`), `listAutomations()` never mutates D1 when the table is empty.
+- The protected `/api/automation/tick` route returns HTTP `503` with structured `code`, `environment`, and `schema` diagnostics when `AutomationSchemaNotReadyError` is raised, and refuses non-dry-run mutations on read-only deployments with HTTP `403`.
