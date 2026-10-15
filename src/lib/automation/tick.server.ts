@@ -1,4 +1,6 @@
 import { workerEnv } from "../cf-env.server";
+import { writesAllowed } from "../write-guard.server";
+import { AutomationSchemaNotReadyError } from "./schema.ts";
 import { runAutomationById, runDueAutomations } from "./scheduler.server";
 import { tickAuthorised, tickConfigured } from "./tick-auth.ts";
 
@@ -33,6 +35,16 @@ export async function handleTick(request: Request): Promise<Response> {
   const force = url.searchParams.get("force") === "1";
 
   try {
+    if (!dryRun && !(await writesAllowed())) {
+      return json(
+        {
+          ok: false,
+          trigger: who,
+          error: "This deployment is read-only; non-dry-run scheduler ticks are disabled.",
+        },
+        403,
+      );
+    }
     if (automationId) {
       const outcome = await runAutomationById(automationId, { trigger: force ? "manual" : "schedule", dryRun });
       if (!outcome) return json({ ok: false, error: "That automation does not exist." }, 404);
@@ -53,6 +65,18 @@ export async function handleTick(request: Request): Promise<Response> {
     const result = await runDueAutomations();
     return json({ ok: true, trigger: who, checkedAt: result.checkedAt, ran: result.ran, skipped: result.skipped });
   } catch (error) {
+    if (error instanceof AutomationSchemaNotReadyError) {
+      return json(
+        {
+          ok: false,
+          code: error.code,
+          environment: error.environment,
+          schema: error.schema,
+          error: error.message,
+        },
+        error.status,
+      );
+    }
     return json({ ok: false, error: error instanceof Error ? error.message.slice(0, 300) : "Scheduler error." }, 500);
   }
 }
