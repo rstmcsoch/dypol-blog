@@ -1059,6 +1059,8 @@ html[data-theme="dark"] .theme-switch__btn[data-value="dark"] .theme-switch__mar
 }
 
 .article-body {
+  min-width: 0;
+  overflow-wrap: break-word;
   max-width: var(--measure);
   font-family: var(--font-serif);
   font-size: clamp(1.06rem, 1rem + 0.25vw, 1.19rem);
@@ -1100,6 +1102,8 @@ html[data-theme="dark"] .theme-switch__btn[data-value="dark"] .theme-switch__mar
 
 .article-body a {
   color: inherit;
+  /* Long unbroken URLs (Sources list!) must wrap, never stretch the column. */
+  overflow-wrap: anywhere;
 }
 
 .article-body blockquote {
@@ -2100,12 +2104,117 @@ html[data-theme="dark"] .theme-switch__btn[data-value="dark"] .theme-switch__mar
   display: grid;
   gap: 0.45em;
 }
+.page-body {
+  min-width: 0;
+  overflow-wrap: break-word;
+}
+
 .page-body a {
   text-decoration: underline;
   text-underline-offset: 3px;
+  overflow-wrap: anywhere;
 }
 .page-updated {
   opacity: 0.7;
   font-size: 0.95rem;
   margin-top: 0.4rem;
+}
+
+/* ==== t73 responsive hardening: no element may outgrow its column ====
+   Root cause of the cut-off article text: grid/flex items default to
+   min-width:auto, so one unbreakable string (a long Sources URL) sized the
+   whole article track past the viewport and overflow-x:clip cut it off.
+   Fixes below size tracks by the CONTAINER, and let long content wrap. */
+
+/* Media never exceeds its container. */
+img, video, iframe, embed, object, svg {
+  max-width: 100%;
+}
+img, video {
+  height: auto;
+}
+iframe, embed {
+  aspect-ratio: 16 / 9;
+  height: auto;
+}
+
+/* Grid/flex children may shrink below their content's intrinsic size. */
+.article-layout > *,
+.article-aside > *,
+.footer-grid > *,
+.neighbor-list > *,
+.lead-grid > *,
+.band-grid > * {
+  min-width: 0;
+}
+
+.article-body li,
+.article-aside li {
+  min-width: 0;
+  overflow-wrap: break-word;
+}
+
+.article-body pre {
+  min-width: 0;
+}
+
+/* Tables inside prose scroll within their box instead of stretching it. */
+.article-body table,
+.page-body table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+}
+
+/* Container awareness (t73): sidebar cards respond to the SIDEBAR's width,
+   not just the viewport — narrow column = tighter cards, any window size. */
+.article-aside {
+  container-type: inline-size;
+  container-name: aside;
+}
+
+@container aside (max-width: 19rem) {
+  .aside-card,
+  .neighbor {
+    padding: 0.7rem;
+  }
+  .aside-card h2,
+  .aside-card h3,
+  .neighbor strong {
+    font-size: 0.98rem;
+    line-height: 1.25;
+  }
+}
+
+/* Header: tools never squeeze the wordmark off-screen at odd widths. */
+.bar {
+  flex-wrap: nowrap;
+}
+.wordmark {
+  min-width: 0;
+}
+.wordmark__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Ticker headlines truncate instead of widening the layout. */
+.ticker-block a {
+  overflow-wrap: break-word;
+}
+.ticker-block li {
+  min-width: 0;
+}
+
+/* Admin bare tables (health/activity) scroll inside their panel on small
+   screens instead of widening the desk. */
+@media (max-width: 760px) {
+  .panel table.table,
+  .desk table.table {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+  }
 }
