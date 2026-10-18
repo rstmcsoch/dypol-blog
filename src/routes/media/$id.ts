@@ -14,7 +14,7 @@ export const Route = createFileRoute("/media/$id")({
           return new Response(body, {
             headers: {
               "content-type": file.mime,
-              "cache-control": "public, max-age=3600",
+              "cache-control": "public, max-age=31536000, immutable",
               "x-content-type-options": "nosniff",
             },
           });

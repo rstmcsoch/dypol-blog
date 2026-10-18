@@ -61,7 +61,10 @@ step says so.
    same key if you retry), title, slug, excerpt, body, `topics` (the 1–4 topic
    slugs or exact names you picked in step 3b, best fit first), up to 5 existing tags, seo_title,
    seo_description, `source_urls` (all sources used) and `uncertain: true` if any claim
-   could not be fully verified. If you already uploaded an image in step 8a, also pass
+   could not be fully verified. The excerpt and `seo_description` become the
+   search-result and social-share description, and your `topics` become the
+   article's section, feed categories and related-article signals — one more
+   reason to write a specific excerpt and file topics by actual content. If you already uploaded an image in step 8a, also pass
    its `cover_media_id`. The reply tells you `published` true/false and
    `publish_reasons` — read them; they are the exact rules that kept it a draft.
 8. Featured image (expected for every article). The image must be a real photo or

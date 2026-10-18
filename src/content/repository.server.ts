@@ -376,10 +376,43 @@ async function articlePayload(
 
 export async function readSitemap() {
   const data = await publicCatalog();
+  const live = published(data.articles);
+  const labelOf = new Map(data.categories.map((c) => [c.id, c.label]));
   return {
-    articles: published(data.articles).map((article) => article.slug),
-    topics: data.categories.map((category) => category.slug),
+    articles: live.map((article) => ({
+      slug: article.slug,
+      lastmod: article.updatedAt,
+      publishedAt: article.publishedAt,
+      updatedAt: article.updatedAt,
+      title: article.title,
+      excerpt: article.excerpt,
+      topics: article.topicIds.map((id) => labelOf.get(id) ?? "").filter(Boolean),
+      coverMediaId: article.coverMediaId ?? null,
+    })),
+    topics: data.categories.map((category) => {
+      const inTopic = live.filter((a) => a.topicIds.includes(category.id));
+      const lastmod = inTopic.reduce<string | null>((max, a) => (max && max > a.updatedAt ? max : a.updatedAt), null);
+      return { slug: category.slug, lastmod };
+    }),
   };
+}
+
+/** Latest published articles for the RSS feed (newest first). */
+export async function readFeed(limit = 20) {
+  const data = await publicCatalog();
+  const labelOf = new Map(data.categories.map((c) => [c.id, c.label]));
+  return published(data.articles)
+    .slice(0, limit)
+    .map((article) => ({
+      slug: article.slug,
+      title: article.title,
+      excerpt: article.excerpt,
+      description: article.seoDescription ?? article.excerpt,
+      publishedAt: article.publishedAt,
+      updatedAt: article.updatedAt,
+      topics: article.topicIds.map((id) => labelOf.get(id) ?? "").filter(Boolean),
+      coverMediaId: article.coverMediaId ?? null,
+    }));
 }
 
 export type ArticleSummary = {
