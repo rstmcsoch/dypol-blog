@@ -13,7 +13,7 @@ test("a legacy stored settings row (before these features) gets every new defaul
   assert.equal(out.labels.alsoLike, "You may also like");
   assert.equal(out.labels.newStories, "New stories");
   assert.deepEqual(out.trending.slugs, ["a"]);
-  assert.equal(out.trending.source, "trending");
+  assert.equal(out.trending.source, "pinned");
   assert.equal(out.trending.animate, false);
   assert.deepEqual(out.home, site.home);
   assert.deepEqual(out.articleSidebar, site.articleSidebar);
@@ -55,27 +55,4 @@ test("ticker sources: latest, pinned, custom, count, disabled", () => {
   const custom = tickerEntries({ ...base, trending: { ...base.trending, source: "custom", count: 1, customItems: [{ id: "a", text: "Hello", href: "/about" }, { id: "b", text: "B", href: "" }] } }, live);
   assert.deepEqual(custom, [{ id: "a", title: "Hello", slug: null, href: "/about" }]);
   assert.deepEqual(tickerEntries({ ...base, trending: { ...base.trending, enabled: false } }, live), []);
-});
-
-test("a legacy stored settings row gains the new ticker fields with safe defaults", () => {
-  const out = normalizeSite({ trending: { enabled: true, label: "Now", slugs: ["a"], source: "latest", count: 3, animate: false, speed: 40 } });
-  assert.equal(out.trending.mode, "rotate");
-  assert.equal(out.trending.intervalSeconds, 6);
-  assert.equal(out.trending.showLabel, true);
-  assert.equal(out.trending.showIndex, false);
-  assert.deepEqual(out.trending.categories, []);
-  assert.throws(() => parseSite({ ...out, trending: { ...out.trending, intervalSeconds: 1 } }));
-  assert.throws(() => parseSite({ ...out, trending: { ...out.trending, source: "bogus" } }));
-});
-
-test("a pinned ticker list keeps the owner's slugs, published or not", () => {
-  // The desk saves the whole settings row on every change. Filtering the pinned
-  // slugs against what happens to be published at that moment used to delete the
-  // owner's selection for good; the render step is what skips missing entries.
-  const configured = parseSite({
-    ...site,
-    trending: { ...site.trending, source: "pinned", slugs: ["published-one", "unpublished-one", "typo"] },
-  });
-  assert.deepEqual(configured.trending.slugs, ["published-one", "unpublished-one", "typo"]);
-  assert.deepEqual(normalizeSite({ trending: { source: "pinned", slugs: ["a", "b"] } }).trending.slugs, ["a", "b"]);
 });

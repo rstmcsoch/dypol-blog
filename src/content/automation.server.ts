@@ -1,11 +1,14 @@
 import { getSql } from "@/lib/db";
-import { normalizeAutomationSettings, type AutomationSettings } from "@/lib/automation/settings";
+import {
+  automationSettingsSchema,
+  normalizeAutomationSettings,
+  type AutomationSettings,
+} from "@/lib/automation/settings";
 import { ensureContent } from "./repository.server";
 
 /** Storage for AI-connector automation: settings row, submissions (idempotency) and the run log. */
 
-/** The legacy single-row record (site_settings 'automation'), if it exists. */
-async function readLegacyRow(): Promise<AutomationSettings> {
+export async function readAutomationSettings(): Promise<AutomationSettings> {
   await ensureContent();
   const sql = await getSql();
   const rows = await sql<{ data: string }>`select data from site_settings where id = 'automation'`;
@@ -13,47 +16,12 @@ async function readLegacyRow(): Promise<AutomationSettings> {
   return normalizeAutomationSettings(typeof raw === "string" ? JSON.parse(raw) : raw);
 }
 
-/**
- * Settings for the MCP endpoint, resolved from the automation the desk marked
- * as the MCP default (the `automations` table).
- *
- * Consumers keep working unchanged, and nothing is lost on the way:
- *  - a database that still only has the legacy row returns that row;
- *  - `extraClientHosts` and `imageTransfer` are MCP-wide, so they keep coming
- *    from the legacy row;
- *  - everything else is the chosen automation's own settings, so two
- *    automations can no longer overwrite each other's provider or policy.
- */
-export async function readAutomationSettings(): Promise<AutomationSettings> {
-  const legacy = await readLegacyRow().catch(() => null);
-  try {
-    const { mcpAutomation } = await import("@/lib/automation/store.server");
-    const record = await mcpAutomation();
-    const base = legacy ?? normalizeAutomationSettings({});
-    return {
-      enabled: record.enabled,
-      paused: record.paused,
-      mode: record.mode,
-      serverApi: { provider: record.provider, model: record.model, baseUrl: record.baseUrl },
-      extraClientHosts: base.extraClientHosts,
-      topicIdeas: record.topicIdeas,
-      topicSources: record.topicSources,
-      policy: {
-        autoPublish: record.publishMode === "auto",
-        allowedCategoryIds: record.allowedCategoryIds,
-        minWords: record.minWords,
-        requireSources: record.requireSources,
-        minSources: record.minSources,
-        requireFeaturedImage: record.requireCover,
-        maxPublishedPerDay: record.maxPerDay,
-      },
-      imageTransfer: base.imageTransfer,
-    };
-  } catch {
-    // No automations table yet (an older deployment) — the legacy row still runs
-    // the endpoint exactly as before.
-    return legacy ?? normalizeAutomationSettings({});
-  }
+export async function saveAutomationSettings(raw: unknown): Promise<AutomationSettings> {
+  const settings = automationSettingsSchema.parse(raw);
+  const sql = await getSql();
+  await sql`insert into site_settings (id, data) values ('automation', ${JSON.stringify(settings)})
+    on conflict (id) do update set data = excluded.data`;
+  return settings;
 }
 
 export type RunRecord = {

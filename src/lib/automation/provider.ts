@@ -1,5 +1,4 @@
 import type { AutomationMode, AutomationSettings, ServerApiProvider, ServerApiSettings } from "./settings.ts";
-import { defaultModel } from "./settings.ts";
 import { unsafeUrlReason } from "./image-fetch.ts";
 
 /**
@@ -92,7 +91,18 @@ export function providerStatus(settings: AutomationSettings, env: KeyEnv): Provi
 
 // ---- server-api adapters (request building / parsing only) ----------------
 
-export { DEFAULT_MODELS, defaultModel } from "./settings.ts";
+export const DEFAULT_MODELS: Record<ServerApiProvider, string> = {
+  xai: "grok-4",
+  openai: "gpt-5",
+  anthropic: "claude-sonnet-4-5",
+  gemini: "gemini-2.5-pro",
+  openrouter: "openrouter/auto",
+  "openai-compatible": "",
+};
+
+export function defaultModel(provider: ServerApiProvider): string {
+  return DEFAULT_MODELS[provider];
+}
 
 const OPENAI_STYLE_BASE: Partial<Record<ServerApiProvider, string>> = {
   xai: "https://api.x.ai/v1",
@@ -104,21 +114,6 @@ export type GenerateInput = { system: string; prompt: string; maxTokens?: number
 export type BuiltRequest = { url: string; init: { method: "POST"; headers: Record<string, string>; body: string } };
 
 export class ProviderError extends Error {}
-
-/**
- * A provider endpoint must answer directly. Following a redirect would send the
- * API key to whatever host the redirect names, so it is treated as a failure —
- * and note that workerd does not implement `redirect: "error"`, so the request
- * is made with `"manual"` and the status is checked here instead.
- */
-function assertNoRedirect(response: Response): void {
-  if (response.status >= 300 && response.status < 400) {
-    const location = response.headers.get("location") ?? "";
-    throw new ProviderError(
-      `The provider answered ${response.status}${location ? ` (redirect to ${location.slice(0, 120)})` : ""}; a redirect is not followed, so no key is sent elsewhere.`,
-    );
-  }
-}
 
 export function buildRequest(api: ServerApiSettings, apiKey: string, input: GenerateInput): BuiltRequest {
   const model = api.model || defaultModel(api.provider);
@@ -193,147 +188,7 @@ export async function generateWithServerApi(
   const key = keyFor(settings.serverApi.provider, env);
   if (!key) throw new ProviderError("No API key secret is configured for this provider. No request was made.");
   const { url, init } = buildRequest(settings.serverApi, key.value, input);
-  const res = await fetchImpl(url, { ...init, redirect: "manual", signal: AbortSignal.timeout(30_000) });
-  assertNoRedirect(res);
+  const res = await fetchImpl(url, { ...init, redirect: "error", signal: AbortSignal.timeout(60_000) });
   if (!res.ok) throw new ProviderError(`The provider answered ${res.status}.`);
   return parseResponse(settings.serverApi.provider, await res.json());
-}
-
-// ---- per-automation generation (Phase 2/3) ---------------------------------
-
-export type AutomationProviderInput = {
-  provider: ServerApiProvider;
-  model: string;
-  baseUrl: string;
-};
-
-export function automationApiSettings(automation: AutomationProviderInput): ServerApiSettings {
-  return { provider: automation.provider, model: automation.model, baseUrl: automation.baseUrl };
-}
-
-export type GenerateOptions = { fetchImpl?: typeof fetch; timeoutMs?: number; maxTokens?: number };
-
-/** One generation call for an automation, with its own key and its own timeout. */
-export async function generateArticle(
-  automation: AutomationProviderInput,
-  apiKey: string,
-  messages: { system: string; prompt: string },
-  options: GenerateOptions = {},
-): Promise<string> {
-  const api = automationApiSettings(automation);
-  const { url, init } = buildRequest(api, apiKey, { system: messages.system, prompt: messages.prompt, maxTokens: options.maxTokens ?? 6000 });
-  const fetcher = options.fetchImpl ?? fetch;
-  const signal = AbortSignal.timeout(options.timeoutMs ?? 60_000);
-  let res: Response;
-  try {
-    res = await fetcher(url, { ...init, redirect: "manual", signal });
-  } catch (error) {
-    throw new ProviderError(
-      (error as Error)?.name === "TimeoutError" || (error as Error)?.name === "AbortError"
-        ? "The provider did not answer in time."
-        : `The provider could not be reached${error instanceof Error && error.message ? ` (${error.message})` : ""}.`,
-    );
-  }
-  assertNoRedirect(res);
-  if (!res.ok) {
-    const detail = await res.text().catch(() => "");
-    throw new ProviderError(`The provider answered ${res.status}${detail ? `: ${detail.slice(0, 300)}` : "."}`);
-  }
-  return parseResponse(api.provider, await res.json());
-}
-
-/**
- * A cheap round trip that proves the credential, the model id and the endpoint
- * work together. Never returns or logs the key.
- */
-export async function testProviderConnection(
-  automation: AutomationProviderInput,
-  apiKey: string,
-  options: GenerateOptions = {},
-): Promise<{ ok: true; model: string; reply: string }> {
-  const model = automation.model || defaultModel(automation.provider);
-  if (!model) throw new ProviderError("Set a model id for this provider first.");
-  const reply = await generateArticle(
-    automation,
-    apiKey,
-    {
-      system: "You are a connection test. Reply with the single word: ready",
-      prompt: "Connection test. Reply with the single word: ready",
-    },
-    { ...options, maxTokens: 24, timeoutMs: options.timeoutMs ?? 20_000 },
-  );
-  return { ok: true, model, reply: reply.trim().slice(0, 80) };
-}
-
-export type BuiltImageRequest = BuiltRequest;
-
-const IMAGE_PATHS: Partial<Record<ServerApiProvider, string>> = {
-  openai: "https://api.openai.com/v1/images/generations",
-  xai: "https://api.x.ai/v1/images/generations",
-};
-
-const IMAGE_MODELS: Partial<Record<ServerApiProvider, string>> = {
-  openai: "gpt-image-1",
-  xai: "grok-2-image",
-};
-
-export function imageGenerationSupported(provider: ServerApiProvider): boolean {
-  return Boolean(IMAGE_PATHS[provider]);
-}
-
-export function buildImageRequest(api: ServerApiSettings, apiKey: string, prompt: string, model?: string): BuiltRequest {
-  const endpoint = IMAGE_PATHS[api.provider];
-  if (!endpoint) throw new ProviderError(`Image generation is not supported for ${api.provider}.`);
-  const chosen = model?.trim() || IMAGE_MODELS[api.provider] || "";
-  const body: Record<string, unknown> = { model: chosen, prompt: prompt.slice(0, 3800), n: 1 };
-  if (api.provider === "openai") {
-    // JPEG keeps the file inside the 1.5 MB media cap much more reliably than PNG.
-    body.size = "1536x1024";
-    body.output_format = "jpeg";
-    body.output_compression = 80;
-  } else {
-    body.response_format = "b64_json";
-  }
-  return {
-    url: endpoint,
-    init: { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` }, body: JSON.stringify(body) },
-  };
-}
-
-export type GeneratedImage = { base64?: string; url?: string };
-
-export function parseImageResponse(data: unknown): GeneratedImage {
-  const first = (data as { data?: unknown[] })?.data?.[0] as { b64_json?: unknown; url?: unknown } | undefined;
-  if (!first) throw new ProviderError("The provider returned no image.");
-  if (typeof first.b64_json === "string" && first.b64_json.length > 0) return { base64: first.b64_json };
-  if (typeof first.url === "string" && /^https:\/\//.test(first.url)) return { url: first.url };
-  throw new ProviderError("The provider returned an unusable image payload.");
-}
-
-export async function generateImage(
-  automation: AutomationProviderInput,
-  apiKey: string,
-  prompt: string,
-  options: GenerateOptions = {},
-): Promise<GeneratedImage> {
-  const api = automationApiSettings(automation);
-  const { url, init } = buildImageRequest(api, apiKey, prompt);
-  const fetcher = options.fetchImpl ?? fetch;
-  const signal = AbortSignal.timeout(options.timeoutMs ?? 60_000);
-  let res: Response;
-  try {
-    res = await fetcher(url, { ...init, redirect: "manual", signal });
-  } catch (error) {
-    throw new ProviderError(
-      (error as Error)?.name === "TimeoutError" || (error as Error)?.name === "AbortError"
-        ? "The image provider did not answer in time."
-        : "The image provider could not be reached.",
-    );
-  }
-  assertNoRedirect(res);
-  if (!res.ok) {
-    const detail = await res.text().catch(() => "");
-    throw new ProviderError(`The image provider answered ${res.status}${detail ? `: ${detail.slice(0, 200)}` : "."}`);
-  }
-  return parseImageResponse(await res.json());
 }

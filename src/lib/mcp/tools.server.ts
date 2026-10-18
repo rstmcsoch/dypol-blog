@@ -296,7 +296,7 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
           await deleteDraft(saved.id); // lost a concurrent retry race: keep the first draft only
           return { ok: true, data: { duplicate: true, matchedBy: "idempotency_key", article_id: winner.articleId, flags: winner.flags, status: "unchanged" } };
         }
-        const logged = await store.recordRun({
+        await store.recordRun({
           tool: "submit_article_draft",
           outcome: "drafted",
           reason: flags.length ? `flags: ${flags.join(", ")}` : "",
@@ -314,9 +314,6 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
             flags,
             preview_path: `/preview/${saved.id}`,
             admin_path: `/admin/articles/${saved.id}`,
-            // The draft is safe either way, but the caller should know the run
-            // history has a gap instead of assuming the log is complete.
-            history_logged: Boolean(logged),
           },
         };
       },
@@ -356,36 +353,10 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
           return { ok: true, data: { published: false, status: rows[0].status, reasons: decision.reasons } };
         }
         const now = new Date().toISOString();
-        // Conditional UPDATE: exactly one caller can move the draft to published.
-        // A second concurrent call must not report a publish it did not perform,
-        // because those reports are what the daily publish cap counts.
-        const claimed = await sql.run(
-          `update articles set status = 'published', published_at = ?, updated_at = ? where id = ? and status = 'draft'`,
-          [now, now, parsed.data.article_id],
-        );
-        if (claimed.changes !== 1) {
-          await store.recordRun({
-            tool: "publish_article_if_allowed",
-            outcome: "kept_draft",
-            reason: "Another publish claimed this draft first.",
-            articleId: parsed.data.article_id,
-            auth,
-          });
-          return {
-            ok: true,
-            data: { published: false, status: "published", reasons: ["Another publish claimed this draft first."] },
-          };
-        }
-        const logged = await store.recordRun({ tool: "publish_article_if_allowed", outcome: "published", articleId: parsed.data.article_id, auth });
-        return {
-          ok: true,
-          data: {
-            published: true,
-            status: "published",
-            path: `/articles/${rows[0].slug}`,
-            ...(logged ? {} : { warning: "Published, but the run could not be written to the history. Check the database." }),
-          },
-        };
+        await sql`update articles set status = 'published', published_at = ${now}, updated_at = ${now}
+          where id = ${parsed.data.article_id} and status = 'draft'`;
+        await store.recordRun({ tool: "publish_article_if_allowed", outcome: "published", articleId: parsed.data.article_id, auth });
+        return { ok: true, data: { published: true, status: "published", path: `/articles/${rows[0].slug}` } };
       },
     },
     {

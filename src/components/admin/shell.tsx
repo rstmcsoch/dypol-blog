@@ -1,7 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { Link, useRouter, useRouterState } from "@tanstack/react-router";
-import { adminSetDeskTheme, adminSignOut } from "@/content/admin-api";
-import { DESK_THEME_LABELS, deskThemes, type DeskTheme } from "@/lib/admin-theme";
+import { adminSignOut } from "@/content/admin-api";
 
 type NavLinkDef = { to: string; label: string; exact?: boolean };
 
@@ -18,19 +17,14 @@ const groups: { label: string; links: NavLinkDef[] }[] = [
   {
     label: "Site",
     links: [
-      { to: "/admin/homepage", label: "Homepage builder" },
-      { to: "/admin/sidebar", label: "Sidebar manager" },
-      { to: "/admin/ticker", label: "Trending ticker" },
+      { to: "/admin/homepage", label: "Homepage" },
       { to: "/admin/site-text", label: "Site text" },
       { to: "/admin/appearance", label: "Appearance" },
     ],
   },
   {
     label: "Automation",
-    links: [
-      { to: "/admin/automation", label: "Automations", exact: true },
-      { to: "/admin/automation/history", label: "History & diagnostics" },
-    ],
+    links: [{ to: "/admin/automation", label: "AI automation" }],
   },
   {
     label: "System",
@@ -45,31 +39,16 @@ export function AdminShell({
   children,
   mode,
   email,
-  theme: storedTheme,
 }: {
   children: ReactNode;
   mode: "dev" | "account";
   email: string | null;
-  theme: DeskTheme;
 }) {
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  // The server already picked this from the cookie, so the desk never flashes
-  // the wrong palette; changing it writes the cookie and updates in place.
-  const [theme, setTheme] = useState<DeskTheme>(storedTheme);
-  const [themeError, setThemeError] = useState<string | null>(null);
-  const chooseTheme = (next: DeskTheme) => {
-    const previous = theme;
-    setTheme(next);
-    setThemeError(null);
-    void adminSetDeskTheme({ data: { theme: next } }).catch(() => {
-      setTheme(previous);
-      setThemeError("Could not save the desk appearance.");
-    });
-  };
   return (
-    <div className="desk" data-theme={theme}>
+    <div className="desk">
       <aside className={open ? "adm-side is-open" : "adm-side"}>
         <div className="adm-brand">
           <Link to="/admin" onClick={() => setOpen(false)}>
@@ -82,20 +61,6 @@ export function AdminShell({
           <button type="button" className="adm-menu-btn" aria-expanded={open} aria-controls="adm-nav" onClick={() => setOpen((v) => !v)}>
             {open ? "Close" : "Menu"}
           </button>
-        </div>
-        <div className="adm-topbar">
-          <div className="desk-theme" role="group" aria-label="Desk appearance">
-            {deskThemes.map((choice) => (
-              <button key={choice} type="button" aria-pressed={theme === choice} onClick={() => chooseTheme(choice)}>
-                {DESK_THEME_LABELS[choice]}
-              </button>
-            ))}
-          </div>
-          {themeError ? (
-            <p className="desk-note" role="alert">
-              {themeError}
-            </p>
-          ) : null}
         </div>
         <nav id="adm-nav" className="adm-nav" aria-label="Admin">
           {groups.map((group) => (

@@ -3,7 +3,6 @@ import { workerEnv } from "../cf-env.server";
 import { checkSignIn, clientKey, type LimitDecision } from "./sign-in-limit.ts";
 import { issueSession, SESSION_TTL_SECONDS, sessionKey, tokenMatches, verifySession } from "./session-token.ts";
 import { assertSameOrigin, ReadOnlyError, writesAllowed } from "../write-guard.server";
-import { DESK_THEME_COOKIE, parseDeskTheme, type DeskTheme } from "../admin-theme";
 
 /**
  * Desk access on Cloudflare Workers.
@@ -47,8 +46,6 @@ export async function deskConfigured(): Promise<boolean> {
   return (await secrets()) !== null;
 }
 
-export type DeskSession = AdminIdentity & { theme: DeskTheme };
-
 export async function requireAdmin(): Promise<AdminIdentity> {
   const s = await secrets();
   if (!s) throw new ForbiddenError();
@@ -84,27 +81,6 @@ export async function signInDesk(token: string): Promise<boolean> {
     maxAge: SESSION_TTL_SECONDS,
   });
   return true;
-}
-
-/**
- * The editor's desk appearance. A cookie is the source of truth so the loader
- * can hand the shell the right palette before the first paint; nothing is read
- * from localStorage.
- */
-export async function readDeskTheme(): Promise<DeskTheme> {
-  return parseDeskTheme(getCookie(DESK_THEME_COOKIE)) ?? "system";
-}
-
-export async function writeDeskTheme(theme: DeskTheme): Promise<DeskTheme> {
-  assertSameOrigin();
-  setCookie(DESK_THEME_COOKIE, theme, {
-    httpOnly: true,
-    secure: true,
-    sameSite: "lax",
-    path: "/",
-    maxAge: 60 * 60 * 24 * 365,
-  });
-  return theme;
 }
 
 export function signOutDesk(): void {

@@ -114,35 +114,6 @@ export type SidebarBlock = "tags" | "related" | "newStories" | "share";
 
 export type TickerItem = { id: string; text: string; href: string };
 
-/** Where the ticking strip takes its items from. */
-export type TickerSource = "trending" | "latest" | "featured" | "category" | "pinned" | "custom";
-
-/** How the strip behaves: one item at a time (rotating), or the first one only. */
-export type TickerMode = "rotate" | "still";
-
-export type TrendingConfig = {
-  enabled: boolean;
-  label: string;
-  /** Pinned article slugs, in the owner's order (source "pinned"). */
-  slugs: string[];
-  source: TickerSource;
-  count: number;
-  customItems: TickerItem[];
-  /** Category ids used when source is "category". */
-  categories: string[];
-  /** Seconds each article stays on screen (3-60). */
-  intervalSeconds: number;
-  mode: TickerMode;
-  /** Show the coloured label chip. */
-  showLabel: boolean;
-  /** Show the "3 / 7" position counter. */
-  showIndex: boolean;
-  pauseOnHover: boolean;
-  /** Legacy continuous marquee (kept working, off by default). */
-  animate: boolean;
-  speed: number;
-};
-
 export type CoverFallback = "plate" | "minimal" | "none";
 
 export type Appearance = {
@@ -164,7 +135,19 @@ export type SiteConfig = {
   publisher: string;
   labels: SiteLabels;
   nav: NavItem[];
-  trending: TrendingConfig;
+  trending: {
+    enabled: boolean;
+    label: string;
+    /** Pinned article slugs (source "pinned"). */
+    slugs: string[];
+    source: "latest" | "pinned" | "custom";
+    count: number;
+    customItems: TickerItem[];
+    /** Scroll the strip continuously. */
+    animate: boolean;
+    /** Seconds per full loop when animated. */
+    speed: number;
+  };
   home: { sections: HomeSection[] };
   articleSidebar: { enabled: boolean; blocks: SidebarBlock[]; count: number };
   appearance: Appearance;

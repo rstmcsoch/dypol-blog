@@ -131,21 +131,14 @@ const siteSchema = z.object({
   trending: z.object({
     enabled: z.boolean(),
     label: labelText,
-    slugs: z.array(slugSchema).max(12).default([]),
-    source: z.enum(["trending", "latest", "featured", "category", "pinned", "custom"]).default("trending"),
-    count: z.number().int().min(1).max(12).default(5),
+    slugs: z.array(slugSchema).max(12),
+    source: z.enum(["latest", "pinned", "custom"]),
+    count: z.number().int().min(1).max(12),
     customItems: z
       .array(z.object({ id: z.string().min(1).max(40), text: z.string().trim().min(1).max(160), href: z.union([z.literal(""), hrefSchema]) }))
-      .max(12)
-      .default([]),
-    categories: z.array(z.string().trim().min(1).max(80)).max(20).default([]),
-    intervalSeconds: z.number().int().min(3).max(60).default(6),
-    mode: z.enum(["rotate", "still"]).default("rotate"),
-    showLabel: z.boolean().default(true),
-    showIndex: z.boolean().default(false),
-    pauseOnHover: z.boolean().default(true),
-    animate: z.boolean().default(false),
-    speed: z.number().int().min(10).max(180).default(40),
+      .max(12),
+    animate: z.boolean(),
+    speed: z.number().int().min(10).max(180),
   }),
   home: z.object({
     sections: z

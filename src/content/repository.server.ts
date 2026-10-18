@@ -4,8 +4,8 @@ import { readingMinutes, type ArticleMeta } from "./present";
 import { MediaBindingError, openMediaStore } from "./media-store.server";
 import { site } from "./site";
 import { categories as seedCategories, tags as seedTags } from "./taxonomy";
-import { resolveTicker, type TickerContext } from "./ticker";
-import type { Article, ArticleBlock, Category, CoverMotif, PublicationStatus, SiteConfig, Tag } from "./types";
+import { tickerEntries } from "./ticker";
+import type { Article, ArticleBlock, Category, PublicationStatus, SiteConfig, Tag } from "./types";
 import {
   articleWriteSchema,
   categoryWriteSchema,
@@ -206,60 +206,35 @@ export function metaFor(articles: Article[], publishedOrder: Article[], categori
   return meta;
 }
 
-/** View counters are optional: a database without the metric still renders. */
-async function viewContext(): Promise<{ views: Map<string, number>; recorded: boolean }> {
-  try {
-    const { mostViewed, viewTotals } = await import("@/lib/automation/store.server");
-    const [recent, totals] = await Promise.all([mostViewed(7, 200), viewTotals()]);
-    const views = new Map<string, number>(totals);
-    for (const row of recent) views.set(row.articleId, Math.max(views.get(row.articleId) ?? 0, row.views));
-    return { views, recorded: views.size > 0 };
-  } catch {
-    return { views: new Map<string, number>(), recorded: false };
-  }
-}
-
-/**
- * Published articles plus the real signals the builders and the ticker use:
- * recorded views (empty when the metric is unavailable), category slugs and
- * which articles are marked featured.
- */
-export async function publicSnapshotForPreview(): Promise<{
-  live: Article[];
-  views: Map<string, number>;
-  categories: Map<string, string>;
-  featured: Set<string>;
-}> {
-  const data = await publicCatalog();
-  const live = published(data.articles);
-  const { views } = await viewContext();
-  return {
-    live,
-    views,
-    categories: new Map(data.categories.map((category) => [category.id, category.slug])),
-    featured: new Set(live.filter((article) => article.featured).map((article) => article.id)),
-  };
-}
-
 export async function readShell() {
   const data = await publicCatalog();
-  const { live, views, categories, featured } = await publicSnapshotForPreview();
-  const context: TickerContext = { views, categories, featured };
-  const ticker = resolveTicker(data.site, live, context);
-  return {
-    site: data.site,
-    trending: ticker.items,
-    trendingNote: ticker.note,
-    trendingFallback: ticker.fallback,
-  };
+  const live = published(data.articles);
+  return { site: data.site, trending: tickerEntries(data.site, live) };
 }
 
 export async function readHome() {
-  const { readResolvedHomepage } = await import("./layout.server");
-  const { doc, blocks } = await readResolvedHomepage();
   const data = await publicCatalog();
   const live = published(data.articles);
-  return { blocks, empty: live.length === 0, layoutVersion: doc.version };
+  const sections = data.site.home.sections;
+  const count = (id: string, fallback: number) => sections.find((x) => x.id === id)?.count ?? fallback;
+  const on = (id: string) => sections.find((x) => x.id === id)?.enabled ?? true;
+  const lead = on("featured") ? (live.find((article) => article.featured) ?? live[0] ?? null) : null;
+  const rest = live.filter((article) => article.id !== lead?.id);
+  const band = on("also") ? rest.slice(0, count("also", 3)) : [];
+  const index = on("latest") ? rest.slice(band.length, band.length + count("latest", 12)) : [];
+  const topics = on("topics")
+    ? data.categories
+        .map((category) => ({ category, count: live.filter((article) => article.categoryId === category.id).length }))
+        .slice(0, count("topics", 12))
+    : [];
+  return {
+    lead,
+    band,
+    index,
+    empty: live.length === 0,
+    meta: metaFor([...(lead ? [lead] : []), ...band, ...index], live, data.categories),
+    topics,
+  };
 }
 
 export async function readIndex() {
@@ -293,10 +268,7 @@ export async function readArticle(slug: string) {
   const live = published(data.articles);
   const article = live.find((item) => item.slug === slug);
   if (!article) return null;
-  // Count the read (a real popularity signal for Trending/Popular blocks and
-  // the ticker). Best effort: a failed count never affects the page.
-  await recordArticleView(article.id);
-  return await articlePayload(data, article, live);
+  return articlePayload(data, article, live);
 }
 
 export async function readPreview(id: string) {
@@ -304,10 +276,10 @@ export async function readPreview(id: string) {
   const article = data.articles.find((item) => item.id === id);
   if (!article) return null;
   const live = published(data.articles);
-  return await articlePayload(data, article, live);
+  return articlePayload(data, article, live);
 }
 
-async function articlePayload(
+function articlePayload(
   data: Awaited<ReturnType<typeof catalog>>,
   article: Article,
   live: Article[],
@@ -334,25 +306,7 @@ async function articlePayload(
     alsoLike: alsoLike.map(({ id, slug, title }) => ({ id, slug, title })),
     latest: latest.map(({ id, slug, title, publishedAt }) => ({ id, slug, title, publishedAt })),
     meta: metaFor(related, live, data.categories),
-    /** Rendered by the Sidebar Manager; falls back to the legacy blocks. */
-    sidebar: await sidebarBlocks(article),
   };
-}
-
-/** Sidebar block resolution for one article. A failure hides the sidebar, never the article. */
-async function sidebarBlocks(article: Article): Promise<import("./layout.server").ResolvedBlock[]> {
-  try {
-    const { readResolvedSidebar } = await import("./layout.server");
-    const { blocks } = await readResolvedSidebar({
-      articleId: article.id,
-      articleSlug: article.slug,
-      articleTitle: article.title,
-    });
-    return blocks;
-  } catch (error) {
-    console.error("[content] sidebar blocks unavailable; rendering without the sidebar.", error);
-    return [];
-  }
 }
 
 export async function readSitemap() {
@@ -683,11 +637,9 @@ export async function saveSettings(raw: unknown): Promise<void> {
     }
   }
   const sql = await getSql();
-  // Keep the owner's pinned list exactly as chosen. A slug that is not published
-  // *right now* (unpublished for a rewrite, or a typo) stays in the setting so
-  // the choice survives, and the ticker resolves it at render time: it shows the
-  // published entries and says in the desk preview when something is missing.
-  // Filtering here used to delete the selection silently on any settings save.
+  const known = new Set(published(await loadArticles(sql)).map((article) => article.slug));
+  // Trending may point at published slugs only. Drop unknown ones rather than storing dead links.
+  next.trending.slugs = next.trending.slugs.filter((slug) => known.has(slug));
   await sql`update site_settings set data = ${JSON.stringify(next)}::jsonb where id = 'site'`;
 }
 
@@ -740,283 +692,4 @@ export async function deleteMedia(id: string): Promise<void> {
 export async function readMediaFile(id: string): Promise<{ mime: string; bytes: Uint8Array } | null> {
   const library = await openMediaStore();
   return library.read(id);
-}
-
-/**
- * Publishes an automation draft only if it is still a draft, and reports
- * whether this call is the one that did it. Fixes the race where two callers
- * both reported a publish (the second updated zero rows).
- */
-export async function publishDraftIfStillDraft(id: string): Promise<boolean> {
-  await ensureContent();
-  const sql = await getSql();
-  const now = new Date().toISOString();
-  const result = await sql.run(
-    "update articles set status = 'published', published_at = ?, updated_at = ? where id = ? and status = 'draft'",
-    [now, now, id],
-  );
-  return result.changes > 0;
-}
-
-/** Attaches a cover to a draft (used by the automation pipeline and the MCP tools). */
-export async function attachCoverToDraft(id: string, mediaId: string): Promise<boolean> {
-  await ensureContent();
-  const sql = await getSql();
-  const result = await sql.run("update articles set cover_media_id = ?, updated_at = ? where id = ? and status = 'draft'", [
-    mediaId,
-    new Date().toISOString(),
-    id,
-  ]);
-  return result.changes > 0;
-}
-
-export async function readSiteIdentity(): Promise<{ name: string; description: string }> {
-  const data = await publicCatalog();
-  return { name: data.site.name, description: data.site.description };
-}
-
-export type ArticleSelection = {
-  source: "latest" | "trending" | "popular" | "featured" | "updated" | "category" | "tag" | "manual";
-  limit: number;
-  categoryIds?: string[];
-  tagIds?: string[];
-  slugs?: string[];
-  /** Trending only: how many days back to count. */
-  days?: number;
-  /** Exclude this article (used by the sidebar's related lists). */
-  excludeId?: string;
-};
-
-export type SelectedArticle = ArticleSummary & {
-  views?: number;
-  excerpt: string;
-  publishedAt: string | null;
-  minutes: number;
-  rank: number;
-  motif: CoverMotif;
-  coverMediaId: string | null;
-};
-
-/**
- * Resolves an article block/sidebar selection against published content only.
- * Never returns drafts or unpublished pieces, never repeats an article, and
- * never invents a popularity number: "trending" and "popular" come from the
- * view counters in article_views.
- */
-export async function selectArticles(input: ArticleSelection): Promise<SelectedArticle[]> {
-  const data = await publicCatalog();
-  const live = published(data.articles);
-  const rank = (article: Article) => live.findIndex((item) => item.id === article.id);
-  const summarise = (article: Article, views?: number): SelectedArticle => ({
-    ...summarize(article, data.categories),
-    excerpt: article.excerpt,
-    publishedAt: article.publishedAt,
-    minutes: readingMinutes(article),
-    rank: rank(article) + 1,
-    motif: article.motif,
-    coverMediaId: article.coverMediaId ?? null,
-    ...(views === undefined ? {} : { views }),
-  });
-
-  const { mostViewed, viewTotals } = await import("@/lib/automation/store.server");
-  // The popularity metric lives in its own table. A database that has not been
-  // migrated yet, or that cannot answer the query, has no ranking — the block
-  // falls back to the newest articles below rather than failing the page.
-  const ranked = async (days: number, limit: number): Promise<{ articleId: string; views: number }[]> => {
-    try {
-      return await mostViewed(days, limit);
-    } catch (error) {
-      console.error("[views] ranking unavailable", error instanceof Error ? error.message : "unknown");
-      return [];
-    }
-  };
-  const totalViews = async (): Promise<Map<string, number>> => {
-    try {
-      return await viewTotals();
-    } catch (error) {
-      console.error("[views] totals unavailable", error instanceof Error ? error.message : "unknown");
-      return new Map();
-    }
-  };
-  const mapRanking = async (items: { articleId: string; views: number }[]): Promise<SelectedArticle[]> => {
-    const byId = new Map(live.map((article) => [article.id, article]));
-    return items
-      .map((item) => {
-        const article = byId.get(item.articleId);
-        return article ? summarise(article, item.views) : null;
-      })
-      .filter((item): item is SelectedArticle => item !== null);
-  };
-
-  let rows: SelectedArticle[] = [];
-  switch (input.source) {
-    case "trending": {
-      rows = await mapRanking(await ranked(input.days ?? 7, Math.max(input.limit * 4, 20)));
-      // Honest fallback: a young site with no views yet shows the newest pieces
-      // rather than an empty block, and the desk says which source was used.
-      if (rows.length === 0) rows = live.slice(0, input.limit).map((article) => summarise(article));
-      break;
-    }
-    case "popular": {
-      const all = await totalViews();
-      rows = live
-        .map((article) => summarise(article, all.get(article.id) ?? 0))
-        .sort((a, b) => (b.views ?? 0) - (a.views ?? 0))
-        .filter((item) => (item.views ?? 0) > 0);
-      if (rows.length === 0) rows = live.slice(0, input.limit).map((article) => summarise(article));
-      break;
-    }
-    case "featured": {
-      const featured = live.filter((article) => article.featured);
-      rows = [...featured, ...live.filter((article) => !article.featured)].map((article) => summarise(article));
-      break;
-    }
-    case "updated": {
-      rows = [...live]
-        .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))
-        .map((article) => summarise(article));
-      break;
-    }
-    case "category": {
-      const ids = new Set(input.categoryIds ?? []);
-      rows = live.filter((article) => ids.size === 0 || ids.has(article.categoryId)).map((article) => summarise(article));
-      break;
-    }
-    case "tag": {
-      const ids = new Set(input.tagIds ?? []);
-      rows = live.filter((article) => ids.size === 0 || article.tagIds.some((tag) => ids.has(tag))).map((article) => summarise(article));
-      break;
-    }
-    case "manual": {
-      const bySlug = new Map(live.map((article) => [article.slug, article]));
-      rows = (input.slugs ?? [])
-        .map((slug) => bySlug.get(slug))
-        .filter((article): article is Article => Boolean(article))
-        .map((article) => summarise(article));
-      break;
-    }
-    case "latest":
-    default:
-      rows = live.map((article) => summarise(article));
-      break;
-  }
-  const seen = new Set<string>();
-  return rows
-    .filter((row) => {
-      if (row.id === input.excludeId) return false;
-      if (seen.has(row.id)) return false;
-      seen.add(row.id);
-      return true;
-    })
-    .sort((a, b) => (input.source === "latest" || input.source === "trending" ? rankOrder(live, a, b) : 0))
-    .slice(0, Math.max(1, input.limit));
-}
-
-/**
- * Same as selectArticles, plus a plain-language note when the honest fallback
- * kicked in (for example: no reading data recorded yet, so newest was used).
- * The desk shows this line above a preview; the public site never needs it.
- */
-export async function selectArticlesWithNote(
-  input: ArticleSelection,
-): Promise<{ articles: SelectedArticle[]; note: string }> {
-  const articles = await selectArticles(input);
-  if (articles.length === 0) return { articles, note: "" };
-  if (input.source === "trending") {
-    const ranked = articles.some((article) => (article.views ?? 0) > 0);
-    return ranked ? { articles, note: "" } : { articles, note: "No reading data recorded yet, so this shows the newest articles." };
-  }
-  if (input.source === "popular") {
-    const ranked = articles.some((article) => (article.views ?? 0) > 0);
-    return ranked ? { articles, note: "" } : { articles, note: "No reading data recorded yet, so this shows the newest articles." };
-  }
-  if (input.source === "featured") {
-    const only = articles.every((article) => article.featured);
-    return only ? { articles, note: "" } : { articles, note: "Nothing is marked Featured, so the newest articles fill the rest." };
-  }
-  if (input.source === "manual") {
-    const found = articles.length;
-    const asked = (input.slugs ?? []).length;
-    return found === asked ? { articles, note: "" } : { articles, note: `${asked - found} of the picked article(s) are not published, so they are left out.` };
-  }
-  return { articles, note: "" };
-}
-
-function rankOrder(live: Article[], a: SelectedArticle, b: SelectedArticle): number {
-  if ((a.views ?? 0) !== (b.views ?? 0) && (a.views !== undefined || b.views !== undefined)) return (b.views ?? 0) - (a.views ?? 0);
-  return live.findIndex((item) => item.id === a.id) - live.findIndex((item) => item.id === b.id);
-}
-
-/** Counts one view of a published article. Best effort: never breaks a page. */
-export async function recordArticleView(articleId: string): Promise<void> {
-  try {
-    const { writesAllowed } = await import("@/lib/write-guard.server");
-    if (!(await writesAllowed())) return;
-    const { recordArticleView: write } = await import("@/lib/automation/store.server");
-    await write(articleId);
-  } catch {
-    // A view counter must never affect the page.
-  }
-}
-
-/** Published articles, taxonomy and site config in one read (pure, no writes). */
-export async function publicSnapshot(): Promise<{
-  articles: Article[];
-  categories: Category[];
-  tags: Tag[];
-  site: SiteConfig;
-}> {
-  const data = await publicCatalog();
-  return { articles: published(data.articles), categories: data.categories, tags: data.tags, site: data.site };
-}
-
-/** Topics with the number of published articles in each. */
-export async function publicTopics(): Promise<{ category: Category; count: number }[]> {
-  const { articles, categories } = await publicSnapshot();
-  return categories.map((category) => ({
-    category,
-    count: articles.filter((article) => article.categoryId === category.id).length,
-  }));
-}
-
-/** Tags actually used by published articles. */
-export async function publicTags(): Promise<{ tag: Tag; count: number }[]> {
-  const { articles, tags } = await publicSnapshot();
-  const counts = new Map<string, number>();
-  for (const article of articles) {
-    for (const tagId of article.tagIds) counts.set(tagId, (counts.get(tagId) ?? 0) + 1);
-  }
-  return tags
-    .map((tag) => ({ tag, count: counts.get(tag.id) ?? 0 }))
-    .filter((item) => item.count > 0)
-    .sort((a, b) => b.count - a.count || a.tag.label.localeCompare(b.tag.label));
-}
-
-/** Related published articles: same topic first, then shared tags, then newest. */
-export async function relatedArticles(articleId: string, limit = 4): Promise<SelectedArticle[]> {
-  const data = await publicCatalog();
-  const live = published(data.articles);
-  const article = live.find((item) => item.id === articleId);
-  if (!article) return [];
-  const score = (candidate: Article): number => {
-    if (candidate.id === article.id) return -1;
-    let value = candidate.categoryId === article.categoryId ? 2 : 0;
-    value += candidate.tagIds.filter((tag) => article.tagIds.includes(tag)).length;
-    return value;
-  };
-  return live
-    .filter((candidate) => candidate.id !== article.id)
-    .map((candidate) => ({ candidate, score: score(candidate) }))
-    .filter((item) => item.score > 0)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, limit)
-    .map(({ candidate }) => ({
-      ...summarize(candidate, data.categories),
-      excerpt: candidate.excerpt,
-      publishedAt: candidate.publishedAt,
-      minutes: readingMinutes(candidate),
-      rank: live.findIndex((item) => item.id === candidate.id) + 1,
-      motif: candidate.motif,
-      coverMediaId: candidate.coverMediaId ?? null,
-    }));
 }

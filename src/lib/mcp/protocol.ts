@@ -5,9 +5,7 @@
  * answers 2025-03-26 and 2024-11-05 clients).
  */
 export const SUPPORTED_PROTOCOL_VERSIONS = ["2025-06-18", "2025-03-26", "2024-11-05"];
-// The site is `dypolblog` (no hyphen); the GitHub repo name is the only place the
-// hyphen appears. Clients show this string, so it must match the deployment.
-export const SERVER_INFO = { name: "dypolblog", title: "DYPOL Blog automation", version: "1.0.0" };
+export const SERVER_INFO = { name: "dypol-blog", title: "DYPOL Blog automation", version: "1.0.0" };
 
 export type ToolResult = { ok: true; data: unknown } | { ok: false; error: string; data?: unknown };
 
