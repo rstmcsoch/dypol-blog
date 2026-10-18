@@ -145,6 +145,7 @@ function ArticleIndex() {
                       {article.featured ? " · featured" : ""}
                     </span>
                     {article.scheduledAt ? <span className="desk-status" title={`Scheduled to publish ${formatDate(article.scheduledAt)}`}> · scheduled {formatDate(article.scheduledAt)}</span> : null}
+                    {article.topicReview && article.status === "draft" ? <span className="desk-status" title="Automation filed this under a single topic but its content signals others. Open it and check Topics before publishing."> · ⚠ topic review</span> : null}
                     {article.aiEditAllowed ? <span className="desk-status" title="An AI connected over MCP may edit this published article (never delete or unpublish it)"> · AI edit allowed</span> : null}
                   </td>
                   <td>{article.categoryLabel}{(article.topicIds?.length ?? 0) > 1 ? <span className="desk-note"> +{article.topicIds.length - 1} more</span> : null}</td>

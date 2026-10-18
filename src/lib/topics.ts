@@ -133,3 +133,41 @@ export function effectiveAllowedTopics(allowedCategoryIds: string[], existingTop
   const live = allowedCategoryIds.filter((id) => existing.has(id));
   return live.length > 0 ? live : [];
 }
+
+/**
+ * Per-topic filing guidance (t72): one disambiguating "file under X when…"
+ * line per canonical topic, returned by get_blog_settings so the AI files
+ * by content instead of defaulting to the first generic topic it sees.
+ * Keyed by slug; topics the owner adds later fall back to their description.
+ */
+export const TOPIC_FILING_GUIDANCE: Record<string, string> = {
+  "artificial-intelligence-ai-tools": "The article is mainly ABOUT an AI model, assistant, agent, or AI tool — its capabilities, release, or use. Not merely because AI is mentioned, and not when the main subject is a chip, a robot body, a quantum result, or a company's earnings.",
+  "smartphones-android-iphone-wearables": "The main subject is a phone, tablet, watch, or their platforms (Android/iOS). A phone REVIEW also takes product-reviews; buying advice also takes buying-guides.",
+  "apps-software-operating-systems": "The main subject is an app, program, or operating system release/feature — everyday software people run, not developer tooling.",
+  "cybersecurity-privacy": "Security threats, breaches, malware, exploits, privacy, tracking, or staying safe online is a main subject — including AI-powered malware or self-replicating models.",
+  "online-scams": "The main subject is a specific fraud/phishing/scam pattern and how readers spot or avoid it.",
+  "big-tech-companies": "A giant tech company (Google, Apple, Microsoft, Amazon, Meta, NVIDIA…) and its strategy/moves is a main subject. Add it alongside the subject topic, e.g. a Google AI story is AI + Big Tech.",
+  "competition": "The story is a rivalry, market-share race, or antitrust fight between companies.",
+  "computer-hardware": "Computers and components themselves: PCs, laptops, GPUs as hardware, memory, peripherals, builds. If the angle is the chip industry/business, chips-gaming may fit better; often both.",
+  "chips-gaming": "Processors/semiconductors (foundries, nodes, GPUs, AI accelerators as an industry) OR the games industry. Chip earnings/supply stories belong here with funding-tech-business.",
+  "startups": "A young company, founder story, or early-stage venture is the main subject.",
+  "funding-tech-business": "Money is a main subject: earnings, revenue, investment rounds, deals, market moves. Earnings reports belong here (plus the subject topic, e.g. chips).",
+  "social-media": "A social platform, creator economy, or online community is the main subject.",
+  "youtube-internet-culture": "Video/streaming culture, memes, or how the internet behaves is the main subject.",
+  "emerging-technology": "A genuinely new technology still finding its shape is the main subject: quantum computing, novel computing paradigms, early-stage breakthroughs. The right home for a quantum result — not AI just because the lab is called an AI lab.",
+  "robotics-science": "Robots, physical automation, or the underlying science is a main subject: humanoids, robot models, lab results. A robot foundation model is Robotics + AI.",
+  "technology-policy": "Law, regulation, government or court decisions about technology are a main subject.",
+  "cloud-computing-data-centers-enterprise-tech": "Cloud platforms, data centers, or workplace/enterprise infrastructure is a main subject — including sandboxing/isolation infrastructure that runs at scale.",
+  "electric-vehicles": "Electric cars, batteries, or charging is the main subject.",
+  "smart-mobility-clean-technology": "New transport or clean/green technology beyond EVs is the main subject.",
+  "product-reviews": "A hands-on review or verdict on a specific product. Pair with the product's topic (phones, hardware…).",
+  "buying-guides": "Advice on what to buy/skip and how to choose. Pair with the product's topic.",
+  "developer-tools": "A tool, service, or platform FOR building software is the main subject: sandboxes, IDEs, APIs, infrastructure devs use. An open-source release for developers is Developer Tools + Coding & Open Source.",
+  "coding-open-source": "Programming, an open-source project/release, or developer life is a main subject.",
+  "tech-news": "LAST RESORT ONLY: general tech news that genuinely fits no other topic. If any other topic fits even partly, use that instead — never file under tech-news just to have a second topic, and never as the only topic when a subject topic fits.",
+  "leaks": "A credible leak/rumour/early look at unreleased tech is the main subject.",
+};
+
+export function filingGuidance(slug: string, description = ""): string {
+  return TOPIC_FILING_GUIDANCE[slug] ?? description;
+}

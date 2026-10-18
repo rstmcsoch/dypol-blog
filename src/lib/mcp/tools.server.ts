@@ -10,7 +10,8 @@ import { effectiveRun, limitVerdict, type EffectiveRun } from "@/lib/automation/
 import { assertUsableCover, decodeBase64Image, fetchImage, ImageIntakeError, MAX_IMAGE_BYTES, type ImageMime } from "@/lib/automation/image-fetch";
 import { providerStatus } from "@/lib/automation/provider";
 import { advanceCursor, computeTopicSelection } from "@/lib/automation/topic-selection";
-import { MAX_TOPICS_PER_ARTICLE, effectiveAllowedTopics, mergeTopicRefs, resolveTopicRefs, unknownTopicsError } from "@/lib/topics";
+import { MAX_TOPICS_PER_ARTICLE, effectiveAllowedTopics, filingGuidance, mergeTopicRefs, resolveTopicRefs, unknownTopicsError } from "@/lib/topics";
+import { topicSignals } from "@/lib/automation/topic-signals";
 import { blocksToBody } from "@/lib/automation/body";
 import type { AiActor } from "@/lib/automation/ai-edit";
 import type { ToolDefinition, ToolResult } from "./protocol";
@@ -431,6 +432,15 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
       hasImage: Boolean(row.cover_media_id),
       droppedTags,
     });
+    // t72: keep the topic_review flag honest after edits (body/topics change).
+    try {
+      const topicIds = await topicIdsOf(articleId, row.category_id);
+      const { categories: cats } = await taxonomy();
+      const slugOf = (id: string) => cats.find((c) => c.id === id)?.slug ?? id;
+      const text = blocks.map((b) => [("text" in b ? b.text : ""), ("heading" in b ? b.heading : ""), ...(Array.isArray(("items" in b ? b.items : undefined)) ? (b as { items: string[] }).items : [])].join(" ")).join("\n");
+      const adv = topicSignals({ title: row.title, body: text }, topicIds.map(slugOf));
+      if (adv.reviewNeeded && !flags.includes("topic_review")) flags.push("topic_review");
+    } catch { /* advisory only */ }
     if (submission) await store.setSubmissionFlags(articleId, flags);
     if (row.status !== "draft") return { flags, wouldPublish: false, publishReasons: [`The article is ${row.status}; editing never changes its status.`] };
     const runUsage = effectiveRun(profileId, null, await store.aiPublishUsageToday(profileId));
@@ -490,12 +500,14 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
               },
             },
             ...tax,
-            topics: tax.categories.map((c) => ({ slug: c.slug, label: c.label, description: c.description })),
+            topics: tax.categories.map((c) => ({ slug: c.slug, label: c.label, description: c.description, fileWhen: filingGuidance(c.slug, c.description) })),
             topicInstructions:
-              "Every article must be filed under the blog's topics by its actual content. In submit_article_draft pass `topics`: " +
-              `1 to ${MAX_TOPICS_PER_ARTICLE} entries from the ` + "`topics`" + " list below (slug or exact name), best fit first — the first is the main topic. " +
-              "An article can belong to several topics (for example a phone review can be `product-reviews`, `smartphones-android-iphone-wearables` and `buying-guides`). " +
-              "Do not invent topics: unknown ones are rejected with the valid list. The legacy single `category` field still works and is merged into `topics`. " +
+              "File every article under the blog's topics BY ITS ACTUAL CONTENT (each topic below has a `fileWhen` line — use it). " +
+              "In submit_article_draft pass `topics`: " + `1 to ${MAX_TOPICS_PER_ARTICLE} entries (slug or exact name), best fit first: THE FIRST IS THE MAIN TOPIC = the article's main subject — not a default. ` +
+              "Anti-rote rules: (1) Never default to artificial-intelligence-ai-tools or tech-news just because the blog covers tech or an AI lab is mentioned — ask 'what is this article mainly about?' (2) File under every topic that genuinely fits (usually 2–4): subject + company/industry + business angle. " +
+              "A quantum-computing result is emerging-technology (+ robotics-science, big-tech-companies), NOT AI. A robot foundation model is robotics-science + AI. Chip-company earnings are chips-gaming + funding-tech-business. A phone review is product-reviews + smartphones + buying-guides. " +
+              "(3) tech-news is a last resort only, never the sole topic when a subject topic fits. (4) The order of the `topics` list here is NOT a priority order. " +
+              "The server checks content signals: a single-topic filing whose text strongly signals other topics is flagged topic_review, will not auto-publish, and the submit reply's `topic_advice.suggested_missing` names the likely topics — re-file with update_article_draft if they fit. Unknown topics are rejected with the valid list. The legacy single `category` field still works and is merged into `topics`. " +
               "To change topics later use update_article_draft with `topics`, `add_topics` or `remove_topics`.",
             limits: { maxBodyChars: MAX_BODY_CHARS, maxImageBytes: MAX_IMAGE_BYTES, imageTypes: ["image/jpeg", "image/png", "image/webp"] },
           },
@@ -613,6 +625,11 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
           hasImage: Boolean(input.cover_media_id),
           droppedTags: dropped,
         });
+        // t72: deterministic content signals — advisory only, never auto-assign.
+        // A single-topic filing whose content strongly signals other topics is
+        // flagged topic_review (keeps it a draft for the owner to check).
+        const advice = topicSignals({ title: input.title, excerpt: input.excerpt, body: input.body }, topicIds.map((id) => categories.find((c) => c.id === id)?.slug ?? id));
+        if (advice.reviewNeeded && !flags.includes("topic_review")) flags.push("topic_review");
         const { saveArticle, deleteDraft, ContentError } = await import("@/content/repository.server");
         let saved: { id: string; slug: string };
         try {
@@ -684,6 +701,16 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
             article_id: saved.id,
             slug: saved.slug,
             topics: topicIds.map((id) => categories.find((c) => c.id === id)?.slug ?? id),
+            topic_advice: {
+              filed: topicIds.map((id) => categories.find((c) => c.id === id)?.slug ?? id),
+              suggested_missing: advice.suggestedMissing.map((m) => ({ slug: m.slug, label: categories.find((c) => c.slug === m.slug)?.label ?? m.slug, signals: m.matched })),
+              review_needed: advice.reviewNeeded,
+              note: advice.reviewNeeded
+                ? "Filed under a single topic but the content strongly signals the suggested topic(s). This draft is flagged topic_review and will not auto-publish. Re-file by content with update_article_draft (topics, best fit first) if the suggestions fit — the first topic is the main subject, not a default."
+                : advice.suggestedMissing.length
+                  ? "The content also signals the suggested topic(s). Consider adding any that genuinely fit (max 4 total) with update_article_draft add_topics."
+                  : "No missing-topic signals detected.",
+            },
             category: category.slug,
             status: auto.published ? "published" : "draft",
             published: auto.published,
