@@ -75,7 +75,8 @@ export function publishDecision(input: {
   /** All topic ids the article is filed under (first = primary). */
   categoryIds: string[];
   flags: DraftFlag[];
-  publishedToday: number;
+  /** Publishes already made in this automation run (t64 per-run cap). */
+  publishedThisRun: number;
 }): PublishDecision {
   const reasons: string[] = [];
   if (!input.active.active) reasons.push(input.active.reason ?? "Automation is not active.");
@@ -91,8 +92,8 @@ export function publishDecision(input: {
     (flag) => !ADVISORY.includes(flag) && !(flag === "needs_featured_image" && !input.policy.requireFeaturedImage),
   );
   if (blocking.length) reasons.push(`Validation flags: ${blocking.join(", ")}.`);
-  if (input.publishedToday >= input.policy.maxPublishedPerDay) {
-    reasons.push(`Daily automatic publish limit reached (${input.policy.maxPublishedPerDay}).`);
+  if (input.policy.maxPublishedPerRun > 0 && input.publishedThisRun >= input.policy.maxPublishedPerRun) {
+    reasons.push(`Per-run publish limit reached (${input.policy.maxPublishedPerRun}) for this automation run.`);
   }
   return reasons.length ? { publish: false, reasons } : { publish: true };
 }

@@ -221,6 +221,7 @@ const siteSchema = z.object({
         }),
     )
     .max(7),
+  aiDailyPublishLimit: z.number().int().min(0).max(100),
 });
 
 
@@ -322,6 +323,7 @@ function normalizeCore(input: unknown): SiteConfig {
     logoMediaId: raw.logoMediaId ?? null,
     faviconMediaId: raw.faviconMediaId ?? null,
     socials: normalizeSocials(raw.socials),
+    aiDailyPublishLimit: typeof raw.aiDailyPublishLimit === "number" ? raw.aiDailyPublishLimit : 0,
   });
 }
 

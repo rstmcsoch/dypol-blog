@@ -43,7 +43,7 @@ test("draft flags", () => {
 });
 
 test("publish policy: default keeps drafts; only explicit rules publish", () => {
-  const base = { active: { active: true, reason: null }, status: "draft", categoryIds: ["cat-a"], flags: [], publishedToday: 0 };
+  const base = { active: { active: true, reason: null }, status: "draft", categoryIds: ["cat-a"], flags: [], publishedThisRun: 0 };
   const off = publishDecision({ ...base, policy });
   assert.equal(off.publish, false);
   assert.match((off as { reasons: string[] }).reasons.join(" "), /Auto-publish is off/);
@@ -53,13 +53,13 @@ test("publish policy: default keeps drafts; only explicit rules publish", () => 
   assert.equal(publishDecision({ ...base, policy: { ...on, requireFeaturedImage: true }, flags: ["needs_featured_image"] }).publish, false);
   assert.equal(publishDecision({ ...base, policy: on, categoryIds: ["cat-b"] }).publish, false);
   assert.equal(publishDecision({ ...base, policy: on, flags: ["too_short"] }).publish, false);
-  assert.equal(publishDecision({ ...base, policy: on, publishedToday: 1 }).publish, false);
+  assert.equal(publishDecision({ ...base, policy: { ...on, maxPublishedPerRun: 1 }, publishedThisRun: 1 }).publish, false);
   assert.equal(publishDecision({ ...base, policy: on, status: "published" }).publish, false);
   assert.equal(publishDecision({ ...base, policy: on, active: { active: false, reason: "paused" } }).publish, false);
 });
 
 test("publish policy: every failing rule keeps the draft with a reason", () => {
-  const base = { active: { active: true, reason: null }, status: "draft", categoryIds: ["ai"], flags: [], publishedToday: 0, policy: { ...policy, autoPublish: true, allowedCategoryIds: ["ai"], requireFeaturedImage: false, maxPublishedPerDay: 3 } };
+  const base = { active: { active: true, reason: null }, status: "draft", categoryIds: ["ai"], flags: [], publishedThisRun: 0, policy: { ...policy, autoPublish: true, allowedCategoryIds: ["ai"], requireFeaturedImage: false, maxPublishedPerRun: 3 } };
   const dec = (o: object) => publishDecision({ ...base, ...o } as never);
   assert.equal((dec({ policy: { ...base.policy, autoPublish: false } }) as {publish:boolean}).publish, false);
   // Empty allowlist = every topic allowed (t44); any one matching topic is enough.
@@ -69,7 +69,7 @@ test("publish policy: every failing rule keeps the draft with a reason", () => {
   assert.equal((dec({ flags: ["too_short"] }) as {publish:boolean}).publish, false);
   assert.equal((dec({ flags: ["needs_featured_image"], policy: { ...base.policy, requireFeaturedImage: true } }) as {publish:boolean}).publish, false);
   assert.deepEqual(dec({ flags: ["needs_featured_image"], policy: { ...base.policy, requireFeaturedImage: false } }), { publish: true });
-  assert.equal((dec({ publishedToday: 3 }) as {publish:boolean}).publish, false);
+  assert.equal((dec({ publishedThisRun: 3 }) as {publish:boolean}).publish, false);
   assert.deepEqual(dec({}), { publish: true });
 });
 
@@ -253,5 +253,5 @@ test("bug fix: one invalid stored field no longer resets (and disables) all auto
   assert.deepEqual(out.topicIdeas, ["ok"]);
   assert.deepEqual(out.topicSources, ["https://a.example"]);
   assert.equal(out.policy.autoPublish, true);
-  assert.equal(out.policy.maxPublishedPerDay, DEFAULT_AUTOMATION_SETTINGS.policy.maxPublishedPerDay);
+  assert.equal(out.policy.maxPublishedPerRun, DEFAULT_AUTOMATION_SETTINGS.policy.maxPublishedPerRun);
 });

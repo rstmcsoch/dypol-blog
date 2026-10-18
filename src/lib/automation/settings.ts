@@ -47,7 +47,8 @@ export const publishingPolicySchema = z.object({
   requireSources: z.boolean(),
   minSources: z.number().int().min(0).max(20),
   requireFeaturedImage: z.boolean(),
-  maxPublishedPerDay: z.number().int().min(0).max(20),
+/** t64: per-RUN cap (was maxPublishedPerDay before t64; values migrate on read). 0 = no per-run limit. */
+  maxPublishedPerRun: z.number().int().min(0).max(20),
 });
 
 export const scheduleSchema = z.object({
@@ -109,7 +110,7 @@ export const DEFAULT_AUTOMATION_SETTINGS: AutomationSettings = {
     requireSources: true,
     minSources: 2,
     requireFeaturedImage: false,
-    maxPublishedPerDay: 1,
+    maxPublishedPerRun: 2,
   },
   imageTransfer: "untested",
   schedule: DEFAULT_SCHEDULE,
@@ -125,6 +126,11 @@ export function normalizeAutomationSettings(input: unknown): AutomationSettings 
     if (raw.provider === "xai-api" && !raw.serverApi) raw.serverApi = { provider: "xai", model: "", baseUrl: "" };
   }
   delete raw.provider;
+  // t64 migration: the old per-profile daily cap becomes the per-run cap.
+  const rawPolicy = (raw.policy ?? {}) as { maxPublishedPerDay?: unknown; maxPublishedPerRun?: unknown };
+  if (typeof rawPolicy.maxPublishedPerRun !== "number" && typeof rawPolicy.maxPublishedPerDay === "number") {
+    raw.policy = { ...rawPolicy, maxPublishedPerRun: rawPolicy.maxPublishedPerDay };
+  }
   const merged = {
     ...DEFAULT_AUTOMATION_SETTINGS,
     ...raw,

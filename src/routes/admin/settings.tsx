@@ -70,6 +70,25 @@ function SettingsAdmin() {
           })}
         </fieldset>
         <fieldset className="block-card">
+          <legend>AI publishing limit</legend>
+          <label className="field">
+            <span>Maximum AI-published articles per day (whole website)</span>
+            <input
+              type="number"
+              min={0}
+              max={100}
+              value={site.aiDailyPublishLimit}
+              onChange={(e) => patch({ aiDailyPublishLimit: Math.max(0, Math.min(100, Math.floor(Number(e.target.value) || 0))) })}
+            />
+          </label>
+          <p className="field-help">
+            Counts every article published by AI automation (automatic and explicit MCP publishes, all automation
+            profiles together) per calendar day (UTC). When the limit is reached, AI publishing stops until the next
+            day; drafts are unaffected. Publishing manually here in the admin panel is never counted or blocked.
+            Set 0 for no limit.
+          </p>
+        </fieldset>
+        <fieldset className="block-card">
           <legend>Logo & icon</legend>
           <label className="field">
             <span>Logo</span>

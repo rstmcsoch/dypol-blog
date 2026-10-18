@@ -338,8 +338,14 @@ function AutomationDesk() {
           <div className="filters">
             <label className="field"><span>Minimum words</span><input type="number" min={100} max={10000} value={policy.minWords} onChange={(e) => setPolicy({ minWords: Number(e.target.value) })} /></label>
             <label className="field"><span>Minimum sources</span><input type="number" min={0} max={20} value={policy.minSources} onChange={(e) => setPolicy({ minSources: Number(e.target.value) })} /></label>
-            <label className="field"><span>Max auto-published per day</span><input type="number" min={0} max={20} value={policy.maxPublishedPerDay} onChange={(e) => setPolicy({ maxPublishedPerDay: Number(e.target.value) })} /></label>
+            <label className="field"><span>Maximum articles per run</span><input type="number" min={0} max={20} value={policy.maxPublishedPerRun} onChange={(e) => setPolicy({ maxPublishedPerRun: Number(e.target.value) })} /></label>
           </div>
+          <p className="desk-note">
+            One "run" is one automation execution: if the AI sends a run_id with its calls, publishes are counted
+            per run_id; otherwise publishes from this profile with less than 30 minutes between them count as one
+            run. This limit covers automatic and explicit MCP publishes. The whole-website daily limit lives in
+            Settings. Set 0 for no per-run limit.
+          </p>
           <Check
             checked={s.aiMayEditAllDrafts}
             onChange={(e) => setS((c) => ({ ...c, aiMayEditAllDrafts: e.target.checked }))}

@@ -70,8 +70,11 @@ A piece is published only if ALL hold: automation enabled & not paused; auto-pub
 its category is on the allow-list; it was created by automation and is still a draft; no
 blocking flags (`too_short`, `missing_sources`, `insufficient_sources`,
 `invalid_source_url`, `placeholder_text`, `duplicate_title`, `self_reported_uncertain`,
-and `needs_featured_image` when "Require a featured image" is on); and the daily cap is
-not reached. `unknown_tags_dropped` is advisory.
+and `needs_featured_image` when "Require a featured image" is on); the per-run cap
+(Automation tab: "Maximum articles per run", counted per run_id or 30-minute burst)
+is not reached; and the whole-website daily AI cap (Settings) is not reached.
+`unknown_tags_dropped` is advisory. Explicit publishes ignore the policy rules
+above but never the two hard caps.
 
 ## Modes and providers
 
