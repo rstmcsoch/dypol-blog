@@ -144,7 +144,7 @@ function ArticleIndex() {
                     </span>
                     {article.aiEditAllowed ? <span className="desk-status" title="An AI connected over MCP may edit this published article (never delete or unpublish it)"> · AI edit allowed</span> : null}
                   </td>
-                  <td>{article.categoryLabel}</td>
+                  <td>{article.categoryLabel}{(article.topicIds?.length ?? 0) > 1 ? <span className="desk-note"> +{article.topicIds.length - 1} more</span> : null}</td>
                   <td>{article.hasCover ? "✓ Image" : "No image"}</td>
                   <td>{formatDate(article.updatedAt)}</td>
                   <td>

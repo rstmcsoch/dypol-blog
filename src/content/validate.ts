@@ -42,6 +42,8 @@ export const articleWriteSchema = z.object({
   slug: z.string().trim().max(80),
   excerpt: z.string().trim().max(500),
   categoryId: z.string().min(1).max(80),
+  /** All topics (first = primary, stored into categoryId). Absent = just [categoryId]. Max 4, matching the AI guidance. */
+  topicIds: z.array(z.string().min(1).max(80)).max(4).optional(),
   tagIds: z.array(z.string().min(1).max(80)).max(24),
   motif: z.enum(["corner", "band", "split", "stamp", "stack", "edge"]),
   featured: z.boolean(),

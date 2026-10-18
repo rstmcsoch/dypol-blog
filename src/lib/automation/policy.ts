@@ -72,7 +72,8 @@ export function publishDecision(input: {
   active: { active: boolean; reason: string | null };
   policy: PublishingPolicy;
   status: string;
-  categoryId: string;
+  /** All topic ids the article is filed under (first = primary). */
+  categoryIds: string[];
   flags: DraftFlag[];
   publishedToday: number;
 }): PublishDecision {
@@ -80,10 +81,11 @@ export function publishDecision(input: {
   if (!input.active.active) reasons.push(input.active.reason ?? "Automation is not active.");
   if (!input.policy.autoPublish) reasons.push("Auto-publish is off in the publishing policy (default).");
   if (input.status !== "draft") reasons.push(`The article is ${input.status}, not a draft.`);
-  if (input.policy.allowedCategoryIds.length === 0) {
-    reasons.push("No topics are allowed for automatic publishing yet (admin → Automation → Publishing rules → Allowed topics).");
-  } else if (!input.policy.allowedCategoryIds.includes(input.categoryId)) {
-    reasons.push("Its topic is not on the policy's allowed list.");
+  // An empty allowlist means every topic is allowed (t44). Callers pass the
+  // list through effectiveAllowedTopics first, so a stored list naming only
+  // pre-migration topics also arrives here as empty.
+  if (input.policy.allowedCategoryIds.length > 0 && !input.categoryIds.some((id) => input.policy.allowedCategoryIds.includes(id))) {
+    reasons.push("None of its topics is on the policy's allowed list.");
   }
   const blocking = input.flags.filter(
     (flag) => !ADVISORY.includes(flag) && !(flag === "needs_featured_image" && !input.policy.requireFeaturedImage),

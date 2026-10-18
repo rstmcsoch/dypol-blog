@@ -90,6 +90,9 @@ async function seedIfEmpty(): Promise<void> {
       for (const tagId of article.tagIds) {
         await sql`insert or ignore into article_tags (article_id, tag_id) values (${article.id}, ${tagId})`;
       }
+      for (const topicId of article.topicIds) {
+        await sql`insert or ignore into article_topics (article_id, category_id) values (${article.id}, ${topicId})`.catch(() => undefined);
+      }
     }
     await sql`insert or ignore into site_settings (id, data) values ('site', ${JSON.stringify(site)}::jsonb)`;
   });
@@ -102,7 +105,7 @@ function iso(value: string | Date | null | undefined): string | null {
   return Number.isNaN(parsed.getTime()) ? String(value) : parsed.toISOString();
 }
 
-function mapArticle(row: ArticleRow, tagIds: string[]): Article {
+function mapArticle(row: ArticleRow, tagIds: string[], topicIds: string[]): Article {
   const blocks = typeof row.blocks === "string" ? (JSON.parse(row.blocks) as ArticleBlock[]) : row.blocks;
   return {
     id: row.id,
@@ -113,6 +116,7 @@ function mapArticle(row: ArticleRow, tagIds: string[]): Article {
     publishedAt: iso(row.published_at),
     updatedAt: iso(row.updated_at) ?? new Date(0).toISOString(),
     categoryId: row.category_id,
+    topicIds: topicIds.length ? topicIds : [row.category_id],
     tagIds,
     motif: row.motif,
     featured: Boolean(row.featured),
@@ -148,6 +152,34 @@ async function tagMap(sql: Sql, ids: string[]): Promise<Map<string, string[]>> {
   return map;
 }
 
+async function topicMap(sql: Sql, ids: string[]): Promise<Map<string, string[]>> {
+  // article_topics arrives with migration 0007. Until a database has it,
+  // articles simply have their primary topic only.
+  const map = new Map<string, string[]>();
+  if (ids.length === 0) return map;
+  try {
+    const links: { article_id: string; category_id: string }[] = [];
+    for (let start = 0; start < ids.length; start += 50) {
+      const chunk = ids.slice(start, start + 50);
+      const placeholders = chunk.map((_, index) => `$${index + 1}`).join(", ");
+      links.push(
+        ...(await sql.query<{ article_id: string; category_id: string }>(
+          `select article_id, category_id from article_topics where article_id in (${placeholders}) order by rowid`,
+          chunk,
+        )),
+      );
+    }
+    for (const link of links) {
+      const list = map.get(link.article_id) ?? [];
+      list.push(link.category_id);
+      map.set(link.article_id, list);
+    }
+  } catch {
+    return map;
+  }
+  return map;
+}
+
 async function loadArticles(sql: Sql, where = "", params: unknown[] = []): Promise<Article[]> {
   const rows = await sql.query<ArticleRow>(
     `select id, slug, title, excerpt, status, published_at, updated_at, category_id, motif, featured,
@@ -155,11 +187,17 @@ async function loadArticles(sql: Sql, where = "", params: unknown[] = []): Promi
      from articles ${where}`,
     params,
   );
-  const tags = await tagMap(
-    sql,
-    rows.map((row) => row.id),
-  );
-  return rows.map((row) => mapArticle(row, tags.get(row.id) ?? []));
+  const ids = rows.map((row) => row.id);
+  const tags = await tagMap(sql, ids);
+  const topics = await topicMap(sql, ids);
+  return rows.map((row) => {
+    const article = mapArticle(row, tags.get(row.id) ?? [], topics.get(row.id) ?? []);
+    // The primary topic always leads, even if the join table is stale.
+    if (article.topicIds[0] !== article.categoryId) {
+      article.topicIds = [article.categoryId, ...article.topicIds.filter((id) => id !== article.categoryId)];
+    }
+    return article;
+  });
 }
 
 function byNewest(a: Article, b: Article): number {
@@ -212,6 +250,7 @@ export function metaFor(articles: Article[], publishedOrder: Article[], categori
     meta[article.id] = {
       rank: rank === -1 ? 0 : rank + 1,
       categoryLabel: categoryOf(categories, article.categoryId)?.label ?? "",
+      topicLabels: article.topicIds.map((id) => categoryOf(categories, id)?.label ?? "").filter(Boolean),
       minutes: readingMinutes(article),
     };
   }
@@ -273,7 +312,7 @@ export async function readTopics() {
   return {
     topics: data.categories.map((category) => ({
       category,
-      count: live.filter((article) => article.categoryId === category.id).length,
+      count: live.filter((article) => article.topicIds.includes(category.id)).length,
     })),
   };
 }
@@ -282,7 +321,7 @@ export async function readTopic(slug: string) {
   const data = await publicCatalog();
   const category = categoryOf(data.categories, slug);
   if (!category) return null;
-  const live = published(data.articles).filter((article) => article.categoryId === category.id);
+  const live = published(data.articles).filter((article) => article.topicIds.includes(category.id));
   const all = published(data.articles);
   return { category, articles: live, meta: metaFor(live, all, data.categories) };
 }
@@ -309,7 +348,7 @@ async function articlePayload(
   live: Article[],
 ) {
   const index = live.findIndex((item) => item.id === article.id);
-  const same = live.filter((item) => item.categoryId === article.categoryId && item.id !== article.id);
+  const same = live.filter((item) => item.id !== article.id && item.topicIds.some((id) => article.topicIds.includes(id)));
   const rest = live.filter((item) => item.id !== article.id && !same.some((picked) => picked.id === item.id));
   const related = [...same, ...rest].slice(0, 3);
   const sidebar = data.site.articleSidebar.enabled
@@ -318,6 +357,9 @@ async function articlePayload(
   return {
     article,
     category: categoryOf(data.categories, article.categoryId) ?? null,
+    topics: article.topicIds
+      .map((id) => categoryOf(data.categories, id))
+      .filter((category): category is Category => Boolean(category)),
     tags: article.tagIds
       .map((id) => data.tags.find((tag) => tag.id === id))
       .filter((tag): tag is Tag => Boolean(tag)),
@@ -350,6 +392,7 @@ export type ArticleSummary = {
   updatedAt: string;
   categoryId: string;
   categoryLabel: string;
+  topicIds: string[];
   tagIds: string[];
   featured: boolean;
   hasCover: boolean;
@@ -398,6 +441,7 @@ function summarize(article: Article, categories: Category[], grants: Set<string>
     updatedAt: article.updatedAt,
     categoryId: article.categoryId,
     categoryLabel: categoryOf(categories, article.categoryId)?.label ?? "",
+    topicIds: article.topicIds,
     tagIds: article.tagIds,
     featured: article.featured,
     hasCover: Boolean(article.coverMediaId),
@@ -416,7 +460,7 @@ export async function adminList(input: {
   const q = input.q?.trim().toLowerCase() ?? "";
   let rows = data.articles.filter((article) => {
     if (input.status && article.status !== input.status) return false;
-    if (input.categoryId && article.categoryId !== input.categoryId) return false;
+    if (input.categoryId && !article.topicIds.includes(input.categoryId)) return false;
     if (input.tagId && !article.tagIds.includes(input.tagId)) return false;
     if (!q) return true;
     return article.title.toLowerCase().includes(q) || article.slug.toLowerCase().includes(q);
@@ -477,8 +521,13 @@ export async function saveArticle(raw: unknown): Promise<{ id: string; slug: str
     if (!(await library.exists(input.coverMediaId))) throw new ContentError("That cover image is not in the library.");
   }
   return withTransaction(async (sql) => {
-    const category = await sql<{ id: string }>`select id from categories where id = ${input.categoryId}`;
-    if (category.length === 0) throw new ContentError("Choose a topic that exists.");
+    const topicIds = [...new Set(input.topicIds?.length ? input.topicIds : [input.categoryId])];
+    const knownTopics = await sql.query<{ id: string }>(
+      `select id from categories where id in (${topicIds.map((_, i) => `$${i + 1}`).join(", ")})`,
+      topicIds,
+    );
+    if (knownTopics.length !== topicIds.length) throw new ContentError("One of the topics no longer exists. Choose from the current topic list.");
+    const categoryId = topicIds[0];
     const knownTags = input.tagIds.length
       ? await sql.query<{ id: string }>(
           `select id from tags where id in (${input.tagIds.map((_, i) => `$${i + 1}`).join(", ")})`,
@@ -520,7 +569,7 @@ export async function saveArticle(raw: unknown): Promise<{ id: string; slug: str
         status = ${status},
         published_at = ${publishedAt},
         updated_at = ${now},
-        category_id = ${input.categoryId},
+        category_id = ${categoryId},
         motif = ${input.motif},
         featured = ${input.featured},
         seo_title = ${seoTitle},
@@ -534,7 +583,7 @@ export async function saveArticle(raw: unknown): Promise<{ id: string; slug: str
         seo_title, seo_description, cover_media_id, blocks
       ) values (
         ${id}, ${slug}, ${input.title}, ${input.excerpt}, ${status}, ${publishedAt}, ${now},
-        ${input.categoryId}, ${input.motif}, ${input.featured}, ${seoTitle}, ${seoDescription},
+        ${categoryId}, ${input.motif}, ${input.featured}, ${seoTitle}, ${seoDescription},
         ${input.coverMediaId}, ${blocks}::jsonb
       )`;
     }
@@ -544,6 +593,14 @@ export async function saveArticle(raw: unknown): Promise<{ id: string; slug: str
     await sql`delete from article_tags where article_id = ${id}`;
     for (const tagId of input.tagIds) {
       await sql`insert into article_tags (article_id, tag_id) values (${id}, ${tagId})`;
+    }
+    try {
+      await sql`delete from article_topics where article_id = ${id}`;
+      for (const topicId of topicIds) {
+        await sql`insert into article_topics (article_id, category_id) values (${id}, ${topicId})`;
+      }
+    } catch {
+      throw new ContentError("Multiple topics need database migration 0007 (article_topics). Apply it to this database first.");
     }
     return { id, slug, status };
   });
@@ -570,6 +627,7 @@ export async function deleteArticle(id: string, options: { deleteCover?: boolean
   if (rows.length === 0) throw new ContentError("That article no longer exists.", 404);
   const cover = rows[0]?.cover_media_id ?? null;
   await sql`delete from article_tags where article_id = ${id}`;
+  await sql`delete from article_topics where article_id = ${id}`.catch(() => undefined);
   await sql`delete from automation_submissions where article_id = ${id}`.catch(() => undefined);
   await sql`delete from articles where id = ${id}`;
   let coverDeleted = false;
@@ -654,6 +712,7 @@ export type AiArticlePatch = {
   slug?: string;
   excerpt?: string;
   categoryId?: string;
+  topicIds?: string[];
   tagIds?: string[];
   seoTitle?: string;
   seoDescription?: string;
@@ -684,7 +743,8 @@ export async function updateArticleForAi(articleId: string, patch: AiArticlePatc
     title: patch.title ?? article.title,
     slug: patch.slug ?? article.slug,
     excerpt: patch.excerpt ?? article.excerpt,
-    categoryId: patch.categoryId ?? article.categoryId,
+    categoryId: patch.topicIds?.[0] ?? patch.categoryId ?? article.categoryId,
+    topicIds: patch.topicIds ?? article.topicIds,
     tagIds: patch.tagIds ?? article.tagIds,
     motif: article.motif,
     featured: article.featured,
@@ -756,7 +816,8 @@ export async function deleteCategory(id: string): Promise<void> {
   await ensureContent();
   const sql = await getSql();
   const used = await sql<{ n: number }>`select count(*)::int as n from articles where category_id = ${id}`;
-  if (Number(used[0]?.n ?? 0) > 0) throw new ContentError("Move the articles in this topic to another topic before deleting it.");
+  const linked = await sql<{ n: number }>`select count(*)::int as n from article_topics where category_id = ${id}`.catch(() => [{ n: 0 }]);
+  if (Number(used[0]?.n ?? 0) > 0 || Number(linked[0]?.n ?? 0) > 0) throw new ContentError("Move the articles in this topic to another topic before deleting it.");
   const result = await sql`delete from categories where id = ${id} returning id`;
   if (result.length === 0) throw new ContentError("That topic is gone.", 404);
 }

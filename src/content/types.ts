@@ -21,6 +21,8 @@ export type Article = {
   publishedAt: string | null;
   updatedAt: string;
   categoryId: string;
+  /** All topics the article is filed under (migration 0007). categoryId is always topicIds[0], the primary topic. */
+  topicIds: string[];
   tagIds: string[];
   motif: CoverMotif;
   featured: boolean;

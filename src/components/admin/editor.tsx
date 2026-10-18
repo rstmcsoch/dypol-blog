@@ -15,6 +15,8 @@ type Draft = {
   slug: string;
   excerpt: string;
   categoryId: string;
+  /** Extra topics beyond the main one (categoryId). Full set sent on save = [categoryId, ...topicIds]. */
+  topicIds: string[];
   tagIds: string[];
   motif: CoverMotif;
   featured: boolean;
@@ -49,6 +51,7 @@ function fromArticle(article: Article): Draft {
     slug: article.slug,
     excerpt: article.excerpt,
     categoryId: article.categoryId,
+    topicIds: article.topicIds.filter((id) => id !== article.categoryId),
     tagIds: article.tagIds,
     motif: article.motif,
     featured: article.featured,
@@ -68,6 +71,7 @@ function blank(categoryId: string): Draft {
     slug: "",
     excerpt: "",
     categoryId,
+    topicIds: [],
     tagIds: [],
     motif: "corner",
     featured: false,
@@ -152,6 +156,7 @@ export function ArticleEditor({
           slug: draft.slug,
           excerpt: draft.excerpt,
           categoryId: draft.categoryId,
+          topicIds: [draft.categoryId, ...draft.topicIds.filter((id) => id !== draft.categoryId)],
           tagIds: draft.tagIds,
           motif: draft.motif,
           featured: draft.featured,
@@ -291,8 +296,11 @@ export function ArticleEditor({
             />
           </label>
           <label className="field">
-            <span>Topic</span>
-            <select value={draft.categoryId} onChange={(event) => update({ categoryId: event.target.value })}>
+            <span>Main topic</span>
+            <select
+              value={draft.categoryId}
+              onChange={(event) => update({ categoryId: event.target.value, topicIds: draft.topicIds.filter((id) => id !== event.target.value) })}
+            >
               {categories.map((category) => (
                 <option key={category.id} value={category.id}>
                   {category.label}
@@ -300,6 +308,29 @@ export function ArticleEditor({
               ))}
             </select>
           </label>
+          <fieldset className="block-card">
+            <legend>Also file under these topics (optional, up to 3 more)</legend>
+            {categories
+              .filter((category) => category.id !== draft.categoryId)
+              .map((category) => (
+                <label key={category.id} className="check-row">
+                  <input
+                    type="checkbox"
+                    checked={draft.topicIds.includes(category.id)}
+                    disabled={!draft.topicIds.includes(category.id) && draft.topicIds.length >= 3}
+                    onChange={(event) => {
+                      update({
+                        topicIds: event.target.checked
+                          ? [...draft.topicIds, category.id]
+                          : draft.topicIds.filter((id) => id !== category.id),
+                      });
+                    }}
+                  />
+                  {category.label}
+                </label>
+              ))}
+            <p className="desk-note">An article can appear under several topics. The main topic is the one shown first on cards; the article is listed on every topic page it is filed under.</p>
+          </fieldset>
           <fieldset className="block-card">
             <legend>Tags</legend>
             {tags.map((tag) => (

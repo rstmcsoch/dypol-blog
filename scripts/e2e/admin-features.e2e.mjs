@@ -169,6 +169,8 @@ await check("homepage builder: add topic/text/CTA blocks, hide, reorder, layout,
   const n = await blocks.count();
   await blocks.nth(n - 2).locator("textarea").fill("Hello from the **builder**.");
   await blocks.nth(n - 3).locator('input[placeholder]').first().fill("E2E topic block");
+  // Pick a topic that actually has stories (the default first topic may be empty; empty blocks are hidden).
+  await blocks.nth(n - 3).locator('label:has-text("Topic") select').selectOption("tech-news");
   await blocks.nth(n - 3).locator('label:has-text("Layout") select').selectOption("cards");
   await page.uncheck('[data-testid="home-blocks"] [data-block="also"] input[type="checkbox"]');
   await page.click('[aria-label="Move Topics grid up"]');

@@ -17,6 +17,12 @@ function Thumb({ c, className = "story-card__img" }: { c: Card; className?: stri
   );
 }
 
+export function topicLine(c: Card): string {
+  const labels = c.topicLabels.length ? c.topicLabels : c.categoryLabel ? [c.categoryLabel] : [];
+  if (labels.length <= 2) return labels.join(" · ");
+  return `${labels.slice(0, 2).join(" · ")} +${labels.length - 2}`;
+}
+
 function CardList({ cards, layout, minRead }: { cards: Card[]; layout: "list" | "grid" | "cards"; minRead: string }) {
   if (layout === "list") {
     return (
@@ -35,7 +41,7 @@ function CardList({ cards, layout, minRead }: { cards: Card[]; layout: "list" | 
                 <span className="index-row__excerpt">{c.excerpt}</span>
               </span>
               <span className="index-row__meta">
-                {c.categoryLabel ? <span>{c.categoryLabel}</span> : null}
+                {c.topicLabels.length ? <span>{topicLine(c)}</span> : null}
                 {c.publishedAt ? <span>{formatDate(c.publishedAt)}</span> : null}
                 <span>
                   {c.minutes} {minRead}
@@ -53,7 +59,7 @@ function CardList({ cards, layout, minRead }: { cards: Card[]; layout: "list" | 
         <li key={c.id}>
           <Link to="/articles/$slug" params={{ slug: c.slug }} className="story-card">
             <Thumb c={c} />
-            {c.categoryLabel ? <span className="story-card__cat">{c.categoryLabel}</span> : null}
+            {c.topicLabels.length ? <span className="story-card__cat">{topicLine(c)}</span> : null}
             <span className="story-card__title">{c.title}</span>
             {layout === "cards" ? <span className="story-card__excerpt">{c.excerpt}</span> : null}
             <span className="story-card__meta">
@@ -77,7 +83,7 @@ function Featured({ r, site }: { r: ResolvedBlock; site: SiteConfig }) {
         <div className="lead-copy">
           <p className="kicker">
             {r.title}
-            {lead.categoryLabel ? ` · ${lead.categoryLabel}` : ""}
+            {lead.topicLabels.length ? ` · ${topicLine(lead)}` : ""}
           </p>
           <h1 className="display">
             <Link to="/articles/$slug" params={{ slug: lead.slug }}>
@@ -141,7 +147,7 @@ export function HomeBlocks({ blocks, site }: { blocks: ResolvedBlock[]; site: Si
                   {r.cards.map((c) => (
                     <li key={c.id}>
                       <Link to="/articles/$slug" params={{ slug: c.slug }} className="band-link">
-                        {c.categoryLabel ? <span className="band-link__cat">{c.categoryLabel}</span> : null}
+                        {c.topicLabels.length ? <span className="band-link__cat">{topicLine(c)}</span> : null}
                         <span className="band-link__title">{c.title}</span>
                       </Link>
                     </li>

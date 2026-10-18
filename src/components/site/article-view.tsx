@@ -12,6 +12,7 @@ import { IndexList } from "./index-list";
 export function ArticleView({
   article,
   category,
+  topics = [],
   tags,
   related,
   neighbors,
@@ -22,6 +23,7 @@ export function ArticleView({
 }: {
   article: Article;
   category: Category | null;
+  topics?: Category[];
   tags: Tag[];
   related: Article[];
   neighbors: { newer?: Article; older?: Article };
@@ -36,11 +38,16 @@ export function ArticleView({
     <article className="article">
       <div className="container">
         <header className="article-top">
-          {category ? (
+          {(topics.length ? topics : category ? [category] : []).length ? (
             <p className="article-kicker">
-              <Link to="/topics/$slug" params={{ slug: category.slug }}>
-                {category.label}
-              </Link>
+              {(topics.length ? topics : category ? [category] : []).map((topic, i) => (
+                <span key={topic.id}>
+                  {i > 0 ? " · " : ""}
+                  <Link to="/topics/$slug" params={{ slug: topic.slug }}>
+                    {topic.label}
+                  </Link>
+                </span>
+              ))}
             </p>
           ) : null}
           <h1 className="article-title">{article.title}</h1>

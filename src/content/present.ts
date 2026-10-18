@@ -18,5 +18,7 @@ function blockText(blocks: ArticleBlock[]): string {
 export type ArticleMeta = {
   rank: number;
   categoryLabel: string;
+  /** Labels of every topic the article is filed under, primary first. */
+  topicLabels: string[];
   minutes: number;
 };

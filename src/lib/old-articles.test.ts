@@ -5,7 +5,7 @@ import type { Article } from "../content/types.ts";
 
 const NOW = new Date("2026-10-18T12:00:00.000Z");
 const art = (id: string, status: Article["status"], publishedAt: string | null, updatedAt: string): Article => ({
-  id, slug: id, title: id, excerpt: "", status, publishedAt, updatedAt, categoryId: "c", tagIds: [], motif: "corner", featured: false, blocks: [],
+  id, slug: id, title: id, excerpt: "", status, publishedAt, updatedAt, categoryId: "c", topicIds: ["c"], tagIds: [], motif: "corner", featured: false, blocks: [],
 });
 
 test("boundary: exactly 1 week old is NOT included; 1 week + 1 second is", () => {

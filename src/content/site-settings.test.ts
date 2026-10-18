@@ -82,7 +82,7 @@ test("saving rejects bad values with clear paths", () => {
 });
 
 const art = (n: number): Article => ({
-  id: `id${n}`, slug: `s${n}`, title: `T${n}`, excerpt: "", status: "published", publishedAt: null, updatedAt: "", categoryId: "c", tagIds: [], motif: "corner", featured: false, blocks: [],
+  id: `id${n}`, slug: `s${n}`, title: `T${n}`, excerpt: "", status: "published", publishedAt: null, updatedAt: "", categoryId: "c", topicIds: ["c"], tagIds: [], motif: "corner", featured: false, blocks: [],
 });
 
 test("ticker sources: latest, pinned, custom, count, disabled", () => {

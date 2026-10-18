@@ -43,7 +43,7 @@ test("draft flags", () => {
 });
 
 test("publish policy: default keeps drafts; only explicit rules publish", () => {
-  const base = { active: { active: true, reason: null }, status: "draft", categoryId: "cat-a", flags: [], publishedToday: 0 };
+  const base = { active: { active: true, reason: null }, status: "draft", categoryIds: ["cat-a"], flags: [], publishedToday: 0 };
   const off = publishDecision({ ...base, policy });
   assert.equal(off.publish, false);
   assert.match((off as { reasons: string[] }).reasons.join(" "), /Auto-publish is off/);
@@ -51,7 +51,7 @@ test("publish policy: default keeps drafts; only explicit rules publish", () => 
   assert.deepEqual(publishDecision({ ...base, policy: on }), { publish: true });
   assert.deepEqual(publishDecision({ ...base, policy: on, flags: ["needs_featured_image", "unknown_tags_dropped"] }), { publish: true });
   assert.equal(publishDecision({ ...base, policy: { ...on, requireFeaturedImage: true }, flags: ["needs_featured_image"] }).publish, false);
-  assert.equal(publishDecision({ ...base, policy: on, categoryId: "cat-b" }).publish, false);
+  assert.equal(publishDecision({ ...base, policy: on, categoryIds: ["cat-b"] }).publish, false);
   assert.equal(publishDecision({ ...base, policy: on, flags: ["too_short"] }).publish, false);
   assert.equal(publishDecision({ ...base, policy: on, publishedToday: 1 }).publish, false);
   assert.equal(publishDecision({ ...base, policy: on, status: "published" }).publish, false);
@@ -59,11 +59,13 @@ test("publish policy: default keeps drafts; only explicit rules publish", () => 
 });
 
 test("publish policy: every failing rule keeps the draft with a reason", () => {
-  const base = { active: { active: true, reason: null }, status: "draft", categoryId: "ai", flags: [], publishedToday: 0, policy: { ...policy, autoPublish: true, allowedCategoryIds: ["ai"], requireFeaturedImage: false, maxPublishedPerDay: 3 } };
+  const base = { active: { active: true, reason: null }, status: "draft", categoryIds: ["ai"], flags: [], publishedToday: 0, policy: { ...policy, autoPublish: true, allowedCategoryIds: ["ai"], requireFeaturedImage: false, maxPublishedPerDay: 3 } };
   const dec = (o: object) => publishDecision({ ...base, ...o } as never);
   assert.equal((dec({ policy: { ...base.policy, autoPublish: false } }) as {publish:boolean}).publish, false);
-  assert.match((dec({ policy: { ...base.policy, allowedCategoryIds: [] } }) as {reasons:string[]}).reasons.join(" "), /No topics are allowed/);
-  assert.match((dec({ policy: { ...base.policy, allowedCategoryIds: ["design"] } }) as {reasons:string[]}).reasons.join(" "), /not on the policy's allowed list/);
+  // Empty allowlist = every topic allowed (t44); any one matching topic is enough.
+  assert.deepEqual(dec({ policy: { ...base.policy, allowedCategoryIds: [] } }), { publish: true });
+  assert.deepEqual(dec({ categoryIds: ["design", "ai"] }), { publish: true });
+  assert.match((dec({ policy: { ...base.policy, allowedCategoryIds: ["design"] } }) as {reasons:string[]}).reasons.join(" "), /None of its topics is on the policy's allowed list/);
   assert.equal((dec({ flags: ["too_short"] }) as {publish:boolean}).publish, false);
   assert.equal((dec({ flags: ["needs_featured_image"], policy: { ...base.policy, requireFeaturedImage: true } }) as {publish:boolean}).publish, false);
   assert.deepEqual(dec({ flags: ["needs_featured_image"], policy: { ...base.policy, requireFeaturedImage: false } }), { publish: true });

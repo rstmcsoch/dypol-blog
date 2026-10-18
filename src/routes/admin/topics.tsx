@@ -37,6 +37,7 @@ function TopicsDesk() {
       <p className="desk-kicker">Taxonomy</p>
       <h1 className="desk-title">Topics and tags</h1>
       <p className="desk-note">A topic or tag that is still used by an article cannot be deleted.</p>
+      <p className="desk-note">These topics are the list the AI picks from: every AI article is filed under 1–4 of them by its content (an article can be under several topics at once). Renaming a topic renames it everywhere; articles keep working.</p>
       {error ? (
         <p className="banner banner--bad" role="alert">
           {error}
@@ -50,7 +51,7 @@ function TopicsDesk() {
       <section className="desk-section">
         <h2>Topics</h2>
         {data.categories.map((category) => {
-          const count = data.articles.filter((article) => article.categoryId === category.id).length;
+          const count = data.articles.filter((article) => (article.topicIds ?? [article.categoryId]).includes(category.id)).length;
           return (
             <form
               key={category.id}

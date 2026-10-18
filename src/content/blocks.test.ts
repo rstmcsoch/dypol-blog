@@ -7,7 +7,7 @@ import type { Article, Category } from "./types.ts";
 
 const cats: Category[] = [{ id: "c1", slug: "design", label: "Design", description: "" } as Category, { id: "c2", slug: "notes", label: "Notes", description: "" } as Category];
 const art = (n: number, cat = "c1", extra: Partial<Article> = {}): Article =>
-  ({ id: `a${n}`, slug: `s${n}`, title: `T${n}`, excerpt: "e", categoryId: cat, tagIds: [], blocks: [{ type: "paragraph", text: "x" }], status: "published", publishedAt: `2026-10-${10 + n}`, featured: false, motif: "corner", coverMediaId: null, ...extra }) as unknown as Article;
+  ({ id: `a${n}`, slug: `s${n}`, title: `T${n}`, excerpt: "e", categoryId: cat, topicIds: [cat], tagIds: [], blocks: [{ type: "paragraph", text: "x" }], status: "published", publishedAt: `2026-10-${10 + n}`, featured: false, motif: "corner", coverMediaId: null, ...extra }) as unknown as Article;
 const live = [art(5), art(4, "c2"), art(3), art(2, "c2"), art(1)];
 const ctx = { site, live, categories: cats, tags: [], views: { a3: 9, a1: 2 } };
 
