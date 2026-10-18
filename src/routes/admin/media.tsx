@@ -16,6 +16,7 @@ function MediaDesk() {
   const [pending, setPending] = useState(false);
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState("all");
 
   return (
     <>
@@ -130,20 +131,39 @@ function MediaDesk() {
           {pending ? "Uploading…" : "Upload"}
         </button>
       </form>
-      <label className="field" style={{ marginTop: "1rem", maxWidth: "24rem" }}>
-        <span>Search the library</span>
-        <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Filename or alt text…" />
-      </label>
+      <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap", marginTop: "1rem" }}>
+        <label className="field" style={{ maxWidth: "24rem", flex: 1 }}>
+          <span>Search the library</span>
+          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Filename or alt text…" />
+        </label>
+        <label className="field">
+          <span>Show</span>
+          <select value={filter} onChange={(e) => setFilter(e.target.value)}>
+            <option value="all">All images</option>
+            <option value="used">Used as a cover</option>
+            <option value="unused">Not used as a cover</option>
+            <option value="legacy">Legacy (not optimized)</option>
+            <option value="optimized">Optimized (has variants)</option>
+          </select>
+        </label>
+      </div>
       {data.media.length === 0 ? <p className="desk-note">The library is empty.</p> : null}
       <div className="media-grid">
         {data.media
           .filter((item) => !query.trim() || `${item.filename} ${item.alt}`.toLowerCase().includes(query.trim().toLowerCase()))
+          .filter((item) =>
+            filter === "all" ? true
+            : filter === "used" ? item.usedAsCover
+            : filter === "unused" ? !item.usedAsCover
+            : filter === "legacy" ? !item.hasVariants
+            : item.hasVariants,
+          )
           .map((item) => (
           <article key={item.id} className="media-card">
             <img src={`/media/${item.id}`} alt={item.alt || ""} />
             <div>
               <p>{item.filename}</p>
-              <p>{Math.max(1, Math.round(item.bytes / 1024))} KB original</p>
+              <p>{Math.max(1, Math.round(item.bytes / 1024))} KB original{item.usedAsCover ? " · used as a cover" : ""}</p>
               {item.hasVariants ? (
                 <p>
                   {item.width}×{item.height} · hero {Math.max(1, Math.round(item.heroBytes / 1024))} KB · thumb{" "}

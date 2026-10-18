@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useBlocker, useNavigate, useRouter } from "@tanstack/react-router";
-import { adminSaveArticle, adminSetAiEditAllowed } from "@/content/admin-api";
+import { adminRestoreRevision, adminRevisions, adminSaveArticle, adminSetAiEditAllowed } from "@/content/admin-api";
 import { DeleteArticleButton } from "./delete-article";
 import { readingMinutes } from "@/content/present";
 import type { Article, ArticleBlock, Category, CoverMotif, PublicationStatus, Tag } from "@/content/types";
@@ -110,6 +110,11 @@ export function ArticleEditor({
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<"publish" | "unpublish" | null>(null);
+  const [revisions, setRevisions] = useState<Array<{ id: string; savedAt: string; title: string; status: string }>>([]);
+  useEffect(() => {
+    if (!article?.id) return;
+    void adminRevisions({ data: { articleId: article.id } }).then(setRevisions).catch(() => undefined);
+  }, [article?.id]);
   const dirty = JSON.stringify(draft) !== baseline;
   const blocker = useBlocker({
     shouldBlockFn: () => dirty && !pending,
@@ -455,7 +460,38 @@ export function ArticleEditor({
               </span>
             </label>
           ) : null}
-          <SeoChecklist draft={draft} />
+          <fieldset className="panel">
+        <legend>History</legend>
+        <p className="desk-note">
+          The last 20 versions of this article, saved automatically before each change. Restoring brings back the
+          text and settings of that version — it never changes publish status, and your current version is saved
+          first, so a restore can itself be undone.
+        </p>
+        {revisions.length === 0 ? (
+          <p className="desk-note">No earlier versions yet. The next save will create the first one.</p>
+        ) : (
+          <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: "0.4rem" }}>
+            {revisions.map((r) => (
+              <li key={r.id} style={{ display: "flex", gap: "0.6rem", alignItems: "baseline", flexWrap: "wrap" }}>
+                <span style={{ flex: 1, minWidth: 200 }}>{r.title || "(untitled)"} <span className="desk-note">· was {r.status}</span></span>
+                <span className="desk-note">{new Date(r.savedAt).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}</span>
+                <button
+                  type="button" className="btn btn--ghost" disabled={Boolean(pending)}
+                  onClick={() => {
+                    if (!window.confirm("Restore this version? Your current version is saved to History first.")) return;
+                    setPending("restore");
+                    void adminRestoreRevision({ data: { revisionId: r.id } })
+                      .then(async () => { setMessage("Version restored."); await router.invalidate(); })
+                      .catch((caught: unknown) => setError(errorText(caught)))
+                      .finally(() => setPending(null));
+                  }}
+                >Restore</button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </fieldset>
+      <SeoChecklist draft={draft} />
           <div className="inline-actions">
             <button className="btn" type="submit" disabled={Boolean(pending)}>
               {pending === "save" ? "Saving…" : "Save"}
