@@ -3,12 +3,12 @@
  *
  * SSRF rules for URL fetches: https only, port 443, no IP-literal hosts, no
  * localhost / *.local / *.internal / single-label hosts, no credentials in the
- * URL, redirects followed manually (max 3) and re-checked each hop, 1.5 MB cap
+ * URL, redirects followed manually (max 3) and re-checked each hop, 10 MB cap
  * enforced while streaming, 10 s timeout, and the bytes must be JPEG, PNG or
  * WebP by magic number regardless of the declared Content-Type. (Workers
  * cannot reach private networks; the host rules are defence in depth.)
  */
-export const MAX_IMAGE_BYTES = 1_500_000;
+export const MAX_IMAGE_BYTES = 10_000_000;
 export type ImageMime = "image/jpeg" | "image/png" | "image/webp";
 
 export function sniffImage(bytes: Uint8Array): ImageMime | null {
@@ -96,11 +96,11 @@ export function assertUsableCover(bytes: Uint8Array, mime: ImageMime): { width: 
 export function decodeBase64Image(data: string): { bytes: Uint8Array; mime: ImageMime } {
   const cleaned = data.replace(/^data:[^,]*,/, "").replace(/\s+/g, "");
   if (!/^[A-Za-z0-9+/]*={0,2}$/.test(cleaned)) throw new ImageIntakeError("Image data is not valid base64.");
-  if (cleaned.length > Math.ceil((MAX_IMAGE_BYTES * 4) / 3) + 4) throw new ImageIntakeError("Image must be under 1.5 MB.");
+  if (cleaned.length > Math.ceil((MAX_IMAGE_BYTES * 4) / 3) + 4) throw new ImageIntakeError("Image must be under 10 MB.");
   const bin = atob(cleaned);
   const bytes = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i);
-  if (bytes.length === 0 || bytes.length > MAX_IMAGE_BYTES) throw new ImageIntakeError("Image must be under 1.5 MB.");
+  if (bytes.length === 0 || bytes.length > MAX_IMAGE_BYTES) throw new ImageIntakeError("Image must be under 10 MB.");
   const mime = sniffImage(bytes);
   if (!mime) throw new ImageIntakeError("Only real JPEG, PNG or WebP images are accepted.");
   return { bytes, mime };
@@ -132,7 +132,7 @@ export async function fetchImage(
       }
       if (!response.ok || !response.body) throw new ImageIntakeError(`Image fetch failed (${response.status}).`);
       const declared = Number(response.headers.get("content-length") ?? 0);
-      if (declared > MAX_IMAGE_BYTES) throw new ImageIntakeError("Image must be under 1.5 MB.");
+      if (declared > MAX_IMAGE_BYTES) throw new ImageIntakeError("Image must be under 10 MB.");
       const reader = response.body.getReader();
       const chunks: Uint8Array[] = [];
       let size = 0;
@@ -142,7 +142,7 @@ export async function fetchImage(
         size += value.byteLength;
         if (size > MAX_IMAGE_BYTES) {
           await reader.cancel();
-          throw new ImageIntakeError("Image must be under 1.5 MB.");
+          throw new ImageIntakeError("Image must be under 10 MB.");
         }
         chunks.push(value);
       }

@@ -58,6 +58,19 @@ test("publish policy: default keeps drafts; only explicit rules publish", () => 
   assert.equal(publishDecision({ ...base, policy: on, active: { active: false, reason: "paused" } }).publish, false);
 });
 
+test("publish policy: every failing rule keeps the draft with a reason", () => {
+  const base = { active: { active: true, reason: null }, status: "draft", categoryId: "ai", flags: [], publishedToday: 0, policy: { ...policy, autoPublish: true, allowedCategoryIds: ["ai"], requireFeaturedImage: false, maxPublishedPerDay: 3 } };
+  const dec = (o: object) => publishDecision({ ...base, ...o } as never);
+  assert.equal((dec({ policy: { ...base.policy, autoPublish: false } }) as {publish:boolean}).publish, false);
+  assert.match((dec({ policy: { ...base.policy, allowedCategoryIds: [] } }) as {reasons:string[]}).reasons.join(" "), /No topics are allowed/);
+  assert.match((dec({ policy: { ...base.policy, allowedCategoryIds: ["design"] } }) as {reasons:string[]}).reasons.join(" "), /not on the policy's allowed list/);
+  assert.equal((dec({ flags: ["too_short"] }) as {publish:boolean}).publish, false);
+  assert.equal((dec({ flags: ["needs_featured_image"], policy: { ...base.policy, requireFeaturedImage: true } }) as {publish:boolean}).publish, false);
+  assert.deepEqual(dec({ flags: ["needs_featured_image"], policy: { ...base.policy, requireFeaturedImage: false } }), { publish: true });
+  assert.equal((dec({ publishedToday: 3 }) as {publish:boolean}).publish, false);
+  assert.deepEqual(dec({}), { publish: true });
+});
+
 test("image intake: magic bytes, size cap, base64", () => {
   assert.equal(sniffImage(PNG), "image/png");
   assert.equal(sniffImage(new Uint8Array([0xff, 0xd8, 0xff, 0xe0])), "image/jpeg");
@@ -68,7 +81,7 @@ test("image intake: magic bytes, size cap, base64", () => {
   assert.equal(decodeBase64Image(`data:image/png;base64,${PNG.toString("base64")}`).bytes.length, PNG.length);
   assert.throws(() => decodeBase64Image(Buffer.from("<html>").toString("base64")), ImageIntakeError);
   assert.throws(() => decodeBase64Image("!!!"), ImageIntakeError);
-  assert.throws(() => decodeBase64Image(Buffer.alloc(MAX_IMAGE_BYTES + 10, 0xff).toString("base64")), /1.5 MB/);
+  assert.throws(() => decodeBase64Image(Buffer.alloc(MAX_IMAGE_BYTES + 10, 0xff).toString("base64")), /10 MB/);
 });
 
 test("SSRF guard rejects unsafe URLs", () => {
@@ -118,7 +131,7 @@ test("fetchImage follows safe redirects, blocks unsafe hops, enforces type and s
   await assert.rejects(fetchImage("https://a.org/h", fakeFetch({ "https://a.org/h": () => new Response("<html>", { headers: { "content-type": "image/png" } }) })), /did not return/);
   await assert.rejects(
     fetchImage("https://a.org/big", fakeFetch({ "https://a.org/big": () => new Response(new Uint8Array(MAX_IMAGE_BYTES + 1).fill(0xff)) })),
-    /1.5 MB/,
+    /10 MB/,
   );
   const loop = fakeFetch({ "https://a.org/l": () => new Response(null, { status: 302, headers: { location: "https://a.org/l" } }) });
   await assert.rejects(fetchImage("https://a.org/l", loop), /Too many redirects/);

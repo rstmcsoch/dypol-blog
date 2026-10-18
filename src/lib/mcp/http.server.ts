@@ -9,7 +9,7 @@ import { buildTools } from "./tools.server";
  * POST /mcp — Streamable HTTP transport, stateless, JSON responses.
  * Order of checks: method -> origin -> rate limit -> auth -> size -> JSON-RPC.
  */
-export const MAX_REQUEST_BYTES = 2_500_000;
+export const MAX_REQUEST_BYTES = 15_000_000; // room for a 10 MB base64 cover image
 export const MCP_RATE = { limit: 30, periodSeconds: 60 };
 
 type Limiter = { limit(o: { key: string }): Promise<{ success: boolean }> };

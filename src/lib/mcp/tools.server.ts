@@ -39,6 +39,7 @@ const submitSchema = z.object({
   seo_title: z.string().trim().max(200).optional(),
   seo_description: z.string().trim().max(300).optional(),
   source_urls: z.array(z.string().trim().max(500)).max(20).describe("https URLs of sources actually used. Never invent citations."),
+  cover_media_id: z.string().trim().min(1).max(80).optional().describe("Media id returned by an earlier upload_featured_image call (without article_id). Attached as the cover; lets the draft be auto-published in this same call if policy passes."),
   uncertain: z.boolean().optional().describe("Set true if any claim could not be verified; the piece will stay a draft."),
   notes: z.string().trim().max(1000).optional().describe("Notes for the editor (not published)."),
 });
@@ -53,7 +54,7 @@ const publishSchema = z.object({ article_id: articleIdSchema });
 const imageSchema = z
   .object({
     article_id: articleIdSchema.optional().describe("Automation-created draft to attach the image to as its cover."),
-    image_base64: z.string().max(2_100_000).optional().describe("JPEG/PNG/WebP bytes, base64 (max 1.5 MB decoded)."),
+    image_base64: z.string().max(14_000_000).optional().describe("JPEG/PNG/WebP bytes, base64 (max 10 MB decoded). Prefer the url option for large generated images when your app can host them."),
     url: z.string().trim().max(2000).optional().describe("Public https image URL (fetched with SSRF protection)."),
     filename: z.string().trim().max(120).optional(),
     alt: z.string().trim().min(1).max(200).describe("Alt text describing the image."),
@@ -110,6 +111,34 @@ async function taxonomy() {
   return { categories, tags };
 }
 
+/**
+ * Evaluates the publishing policy for an automation draft and publishes it
+ * in the same call when every rule passes. Used by submit (with a cover),
+ * by upload_featured_image (after attaching), and by the publish tool, so
+ * an AI that forgets the separate publish step no longer strands a
+ * publishable draft. Returns clear reasons when it stays a draft.
+ */
+async function attemptAutoPublish(articleId: string, profileId: string, auth: string): Promise<{ published: boolean; status: string; reasons: string[] }> {
+  const store = await import("@/content/automation.server");
+  const settings = await loadSettings(profileId);
+  const submission = await store.findSubmission({ articleId });
+  if (!submission) return { published: false, status: "draft", reasons: ["Only drafts created by automation can be published by automation."] };
+  if ((submission.profileId ?? "default") !== profileId) return { published: false, status: "draft", reasons: ["That draft was created by a different automation profile; only that profile (or the owner) can publish it."] };
+  const sql = await getSql();
+  const rows = await sql<{ status: string; category_id: string; slug: string }>`select status, category_id, slug from articles where id = ${articleId}`;
+  if (!rows[0]) return { published: false, status: "missing", reasons: ["That article no longer exists."] };
+  const decision = publishDecision({ active: automationActive(settings), policy: settings.policy, status: rows[0].status, categoryId: rows[0].category_id, flags: submission.flags as DraftFlag[], publishedToday: await store.automatedPublishesToday(profileId) });
+  if (!decision.publish) {
+    await store.recordRun({ profileId, tool: "publish_article_if_allowed", outcome: "kept_draft", reason: decision.reasons.join(" "), articleId, auth });
+    return { published: false, status: rows[0].status, reasons: decision.reasons };
+  }
+  if (!(await writesAllowed())) return { published: false, status: rows[0].status, reasons: ["This deployment is read-only."] };
+  const now = new Date().toISOString();
+  await sql`update articles set status = 'published', published_at = ${now}, updated_at = ${now} where id = ${articleId} and status = 'draft'`;
+  await store.recordRun({ profileId, tool: "publish_article_if_allowed", outcome: "published", articleId, auth });
+  return { published: true, status: "published", reasons: [] };
+}
+
 function pick<T extends { id: string; slug: string; label: string }>(items: T[], ref: string): T | undefined {
   const needle = ref.trim().toLowerCase();
   return items.find((i) => i.id.toLowerCase() === needle || i.slug === needle || i.label.toLowerCase() === needle);
@@ -146,6 +175,9 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
               enabled: settings.enabled,
               paused: settings.paused,
               provider: providerStatus(settings, env),
+              schedule: settings.schedule,
+              nextExpectedRun: (await import("@/lib/automation/schedule")).nextExpectedRun(settings.schedule)?.toISOString() ?? null,
+              scheduleNote: "This website has no scheduler. Run times are set in your AI app; nextExpectedRun is only the owner's configured expectation.",
               topicIdeas: settings.topicIdeas,
               topicSources: settings.topicSources,
               publishingPolicy: settings.policy,
@@ -255,7 +287,7 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
           policy: settings.policy,
           duplicateTitle: sameTitle.length > 0,
           uncertain: input.uncertain ?? false,
-          hasImage: false,
+          hasImage: Boolean(input.cover_media_id),
           droppedTags: dropped,
         });
         const { saveArticle, deleteDraft, ContentError } = await import("@/content/repository.server");
@@ -272,7 +304,7 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
             featured: false,
             seoTitle: input.seo_title ?? "",
             seoDescription: input.seo_description ?? "",
-            coverMediaId: null,
+            coverMediaId: input.cover_media_id ?? null,
             publishedAt: null,
             blocks,
             intent: "save",
@@ -307,13 +339,16 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
           auth,
           details: { notes: input.notes ?? "", sources: sources.length },
         });
+        const auto = await attemptAutoPublish(saved.id, profileId, auth);
         return {
           ok: true,
           data: {
             duplicate: false,
             article_id: saved.id,
             slug: saved.slug,
-            status: "draft",
+            status: auto.published ? "published" : "draft",
+            published: auto.published,
+            publish_reasons: auto.reasons,
             flags,
             preview_path: `/preview/${saved.id}`,
             admin_path: `/admin/articles/${saved.id}`,
@@ -332,37 +367,16 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
       run: async (args) => {
         const parsed = publishSchema.safeParse(args ?? {});
         if (!parsed.success) return invalid(parsed.error);
-        const store = await import("@/content/automation.server");
-        const settings = await loadSettings(profileId);
-        const submission = await store.findSubmission({ articleId: parsed.data.article_id });
+        const submission = await (await import("@/content/automation.server")).findSubmission({ articleId: parsed.data.article_id });
         if (!submission) return { ok: false, error: "Only drafts created by automation can be published by automation." };
         if ((submission.profileId ?? "default") !== profileId) {
           return { ok: false, error: "That draft was created by a different automation profile; only that profile (or the owner) can publish it." };
         }
-        const sql = await getSql();
-        const rows = await sql<{ status: string; category_id: string; slug: string }>`
-          select status, category_id, slug from articles where id = ${parsed.data.article_id}`;
-        if (!rows[0]) return { ok: false, error: "That article no longer exists." };
-        const decision = publishDecision({
-          active: automationActive(settings),
-          policy: settings.policy,
-          status: rows[0].status,
-          categoryId: rows[0].category_id,
-          flags: submission.flags as DraftFlag[],
-          publishedToday: await store.automatedPublishesToday(profileId),
-        });
-        if (decision.publish && !(await writesAllowed())) {
-          return { ok: true, data: { published: false, status: rows[0].status, reasons: ["This deployment is read-only."] } };
-        }
-        if (!decision.publish) {
-          await store.recordRun({ profileId, tool: "publish_article_if_allowed", outcome: "kept_draft", reason: decision.reasons.join(" "), articleId: parsed.data.article_id, auth });
-          return { ok: true, data: { published: false, status: rows[0].status, reasons: decision.reasons } };
-        }
-        const now = new Date().toISOString();
-        await sql`update articles set status = 'published', published_at = ${now}, updated_at = ${now}
-          where id = ${parsed.data.article_id} and status = 'draft'`;
-        await store.recordRun({ profileId, tool: "publish_article_if_allowed", outcome: "published", articleId: parsed.data.article_id, auth });
-        return { ok: true, data: { published: true, status: "published", path: `/articles/${rows[0].slug}` } };
+        const auto = await attemptAutoPublish(parsed.data.article_id, profileId, auth);
+        if (auto.status === "missing") return { ok: false, error: "That article no longer exists." };
+        const sql2 = await getSql();
+        const rows2 = await sql2<{ slug: string }>`select slug from articles where id = ${parsed.data.article_id}`;
+        return { ok: true, data: { published: auto.published, status: auto.status, reasons: auto.reasons, ...(auto.published ? { path: `/articles/${rows2[0]?.slug ?? ""}` } : {}) } };
       },
     },
     {
@@ -370,7 +384,7 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
       title: "Upload featured image",
       description:
         "Store a featured image in the blog's media library (R2) and optionally attach it to an automation draft. " +
-        "Accepts real JPEG/PNG/WebP bytes as base64, or a public https URL (no private hosts/IPs, max 1.5 MB, at least 400x200 px). " +
+        "Accepts real JPEG/PNG/WebP bytes as base64, or a public https URL (no private hosts/IPs, max 10 MB, at least 400x200 px). " +
         "If you cannot create an image, pass the direct https URL of a relevant, properly licensed image (Wikimedia Commons, " +
         "Unsplash, Pexels, or the publisher's own press image) and fill credit + source_page. The credit is added to the draft.",
       inputSchema: schemaOf(imageSchema),
@@ -426,12 +440,13 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
           }
         }
         await store.recordRun({ profileId, tool: "upload_featured_image", outcome: "stored", articleId: input.article_id ?? null, auth, details: { mediaId, bytes: image.bytes.length, mime: image.mime, attached, credit: input.credit ?? null, sourcePage: input.source_page ?? null } });
+        const auto = attached && input.article_id ? await attemptAutoPublish(input.article_id, profileId, auth) : null;
         const note = input.article_id && !attached
           ? submission
             ? "Stored in the media library but not attached: the article is no longer a draft (the owner may have published it). Attach it in the admin panel."
             : "Stored in the media library but not attached: only drafts created by automation can get a cover this way."
           : undefined;
-        return { ok: true, data: { media_id: mediaId, mime: image.mime, bytes: image.bytes.length, attached, path: `/media/${mediaId}`, ...(note ? { note } : {}) } };
+        return { ok: true, data: { media_id: mediaId, mime: image.mime, bytes: image.bytes.length, attached, path: `/media/${mediaId}`, ...(auto ? { published: auto.published, publish_reasons: auto.reasons, status: auto.status } : {}), ...(note ? { note } : {}) } };
       },
     },
     {

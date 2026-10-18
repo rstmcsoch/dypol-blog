@@ -120,6 +120,7 @@ function ArticleIndex() {
                 <th>Title</th>
                 <th>Status</th>
                 <th>Topic</th>
+                <th>Cover</th>
                 <th>Updated</th>
                 <th>
                   <span className="sr-only">Actions</span>
@@ -142,6 +143,7 @@ function ArticleIndex() {
                     </span>
                   </td>
                   <td>{article.categoryLabel}</td>
+                  <td>{article.hasCover ? "✓ Image" : "No image"}</td>
                   <td>{formatDate(article.updatedAt)}</td>
                   <td>
                     <div className="adm-row-actions">

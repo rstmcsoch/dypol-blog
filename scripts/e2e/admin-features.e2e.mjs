@@ -192,14 +192,23 @@ await check("homepage builder: add topic/text/CTA blocks, hide, reorder, layout,
 await check("admin dark mode: toggle persists and does not touch the public site", async () => {
   await page.goto(BASE + "/admin");
   await page.waitForLoadState("networkidle");
-  await page.selectOption('[data-testid="admin-theme"]', "dark");
+  const toggle = page.locator('[data-testid="admin-theme-toggle"]');
+  await toggle.waitFor();
+  // Icon-only binary toggle in the top-right: one click flips the mode.
+  assert.equal((await toggle.innerText()).trim(), "");
+  if ((await toggle.getAttribute("data-theme-value")) !== "dark") await toggle.click();
   const bg = await page.$eval(".desk", (e) => getComputedStyle(e).backgroundColor);
   assert.equal(bg, "rgb(18, 20, 23)");
   await page.reload();
   await page.waitForLoadState("networkidle");
   assert.equal(await page.$eval(".desk", (e) => e.getAttribute("data-theme")), "dark");
-  await page.selectOption('[data-testid="admin-theme"]', "light");
+  await page.locator('[data-testid="admin-theme-toggle"]').click();
   assert.equal(await page.$eval(".desk", (e) => getComputedStyle(e).backgroundColor), "rgb(246, 247, 249)");
+  // Sidebar: every nav option is its own boxed item, current page highlighted.
+  await page.waitForTimeout(400); // let the 120ms hover/theme transition settle
+  const activeBox = await page.$eval(".adm-nav__item.is-active", (e) => { const s = getComputedStyle(e); return { r: s.borderRadius, bg: s.backgroundColor }; });
+  assert.notEqual(activeBox.r, "0px");
+  assert.equal(activeBox.bg, "rgb(47, 91, 234)");
 });
 await check("invalid settings are refused with a readable message", async () => {
   await page.goto(BASE + "/admin/appearance");

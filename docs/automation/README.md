@@ -58,7 +58,7 @@ or exposed. Automation can only publish or attach images to drafts it created.
   is writable (existing write guard).
 - **Audit:** `automation_runs` (tool, outcome, reason, article, client: `bearer`, `oauth`,
   or `oauth:<registered client name>`) — never tokens. Client names are self-asserted.
-- **Images:** JPEG/PNG/WebP by magic bytes only (SVG/GIF/HTML rejected), 1.5 MB cap.
+- **Images:** JPEG/PNG/WebP by magic bytes only (SVG/GIF/HTML rejected), 10 MB cap.
   URL fetch: https only, port 443, no IP literals, no localhost/.local/.internal/
   single-label hosts, no credentials, manual redirects (max 3, re-checked), streamed
   size cap, 10 s timeout.
