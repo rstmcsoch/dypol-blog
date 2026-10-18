@@ -8,6 +8,7 @@ import { bodyToBlocks, contentHash, wordCount } from "@/lib/automation/body";
 import { draftFlags, publishDecision, sourceProblems, type DraftFlag } from "@/lib/automation/policy";
 import { assertUsableCover, decodeBase64Image, fetchImage, ImageIntakeError, MAX_IMAGE_BYTES, type ImageMime } from "@/lib/automation/image-fetch";
 import { providerStatus } from "@/lib/automation/provider";
+import { advanceCursor, computeTopicSelection } from "@/lib/automation/topic-selection";
 import type { ToolDefinition, ToolResult } from "./protocol";
 import type { ArticleBlock, CoverMotif } from "@/content/types";
 
@@ -39,6 +40,8 @@ const submitSchema = z.object({
   seo_title: z.string().trim().max(200).optional(),
   seo_description: z.string().trim().max(300).optional(),
   source_urls: z.array(z.string().trim().max(500)).max(20).describe("https URLs of sources actually used. Never invent citations."),
+  topic_idea_used: z.string().trim().max(300).optional().describe("The topic idea from get_blog_settings selection that this draft uses (sequence/random modes)."),
+  used_topic_index: z.number().int().min(0).max(10000).optional().describe("Index of the topic idea used, from selection.suggestedIndex. In sequence mode the server advances its cursor only when a draft is submitted."),
   cover_media_id: z.string().trim().min(1).max(80).optional().describe("Media id returned by an earlier upload_featured_image call (without article_id). Attached as the cover; lets the draft be auto-published in this same call if policy passes."),
   uncertain: z.boolean().optional().describe("Set true if any claim could not be verified; the piece will stay a draft."),
   notes: z.string().trim().max(1000).optional().describe("Notes for the editor (not published)."),
@@ -69,6 +72,8 @@ const imageSchema = z
   .refine((v) => Boolean(v.image_base64) !== Boolean(v.url), "Provide exactly one of image_base64 or url.");
 
 const runSchema = z.object({
+  topic_idea_used: z.string().trim().max(300).optional().describe("Topic idea this run used (recorded; does not advance the sequence cursor — submit_article_draft does)."),
+  used_topic_index: z.number().int().min(0).max(10000).optional(),
   outcome: z.enum(["skipped", "completed", "failed"]),
   reason: z.string().trim().min(1).max(500),
   article_id: articleIdSchema.optional(),
@@ -178,6 +183,7 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
               schedule: settings.schedule,
               nextExpectedRun: (await import("@/lib/automation/schedule")).nextExpectedRun(settings.schedule)?.toISOString() ?? null,
               scheduleNote: "This website has no scheduler. Run times are set in your AI app; nextExpectedRun is only the owner's configured expectation.",
+              selection: computeTopicSelection(settings.topicSelection, settings.topicIdeas, await (await import("@/content/automation.server")).readTopicCursor(profileId)),
               topicIdeas: settings.topicIdeas,
               topicSources: settings.topicSources,
               publishingPolicy: settings.policy,
@@ -337,8 +343,21 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
           reason: flags.length ? `flags: ${flags.join(", ")}` : "",
           articleId: saved.id,
           auth,
-          details: { notes: input.notes ?? "", sources: sources.length },
+          details: { notes: input.notes ?? "", sources: sources.length, selectionMode: settings.topicSelection.mode, topicIdeaUsed: input.topic_idea_used ?? (input.used_topic_index !== undefined ? settings.topicIdeas[input.used_topic_index] ?? null : null), usedTopicIndex: input.used_topic_index ?? null },
         });
+        // Sequence mode: a real draft confirms usage — advance the cursor.
+        let usedIndex: number | null = null;
+        if (settings.topicSelection.mode === "sequence" && settings.topicIdeas.length) {
+          const store2 = await import("@/content/automation.server");
+          const cursor = await store2.readTopicCursor(profileId);
+          const sel = computeTopicSelection(settings.topicSelection, settings.topicIdeas, cursor);
+          usedIndex = input.used_topic_index !== undefined && settings.topicIdeas[input.used_topic_index] !== undefined
+            ? input.used_topic_index
+            : input.topic_idea_used && settings.topicIdeas.includes(input.topic_idea_used)
+              ? settings.topicIdeas.indexOf(input.topic_idea_used)
+              : sel.suggestedIndex;
+          if (usedIndex !== null) await store2.writeTopicCursor(profileId, advanceCursor(usedIndex, settings.topicSelection.step, settings.topicIdeas.length));
+        }
         const auto = await attemptAutoPublish(saved.id, profileId, auth);
         return {
           ok: true,
@@ -350,6 +369,7 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
             published: auto.published,
             publish_reasons: auto.reasons,
             flags,
+            topic_selection: { mode: settings.topicSelection.mode, used_index: usedIndex },
             preview_path: `/preview/${saved.id}`,
             admin_path: `/admin/articles/${saved.id}`,
           },
@@ -467,7 +487,7 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
           reason: parsed.data.reason,
           articleId: parsed.data.article_id ?? null,
           auth,
-          details: { topic: parsed.data.topic ?? "" },
+          details: { topic: parsed.data.topic ?? "", selectionMode: (await loadSettings(profileId)).topicSelection.mode, topicIdeaUsed: parsed.data.topic_idea_used ?? null, usedTopicIndex: parsed.data.used_topic_index ?? null },
         });
         return id ? { ok: true, data: { recorded: true, run_id: id } } : { ok: false, error: "Could not record the run." };
       },

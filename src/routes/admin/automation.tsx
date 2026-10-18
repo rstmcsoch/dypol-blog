@@ -230,7 +230,8 @@ function AutomationDesk() {
         </fieldset>
         <fieldset className="block-card">
           <legend>Topic sources</legend>
-          <label className="field"><span>Topic ideas (one per line)</span><textarea value={ideas} onChange={(e) => setIdeas(e.target.value)} /></label>
+          <label className="field"><span>Topic ideas (one per line, up to 500)</span><textarea value={ideas} onChange={(e) => setIdeas(e.target.value)} /></label>
+          <p className="desk-note" data-testid="topic-idea-count">{ideas.split("\n").filter((x) => x.trim()).length} / 500 ideas</p>
           <label className="field"><span>Source sites to research (https URLs, one per line)</span><textarea value={sources} onChange={(e) => setSources(e.target.value)} /></label>
         </fieldset>
         {isDefault ? <fieldset className="block-card">
@@ -241,6 +242,42 @@ function AutomationDesk() {
           </p>
           <label className="field"><span>Extra client hosts</span><textarea value={hosts} onChange={(e) => setHosts(e.target.value)} /></label>
         </fieldset> : null}
+        <fieldset className="block-card">
+          <legend>How topics are chosen</legend>
+          <label className="field">
+            <span>Topic choice</span>
+            <select value={s.topicSelection.mode} onChange={(e) => setS({ ...s, topicSelection: { ...s.topicSelection, mode: e.target.value as AutomationSettings["topicSelection"]["mode"] } })} data-testid="topic-mode">
+              <option value="trend-first">Trend first — research what is hot now, then write</option>
+              <option value="random">Random — pick randomly from my idea list</option>
+              <option value="sequence">In order (loop) — work through my list in order</option>
+              <option value="ai-choice">Let AI choose — from my list and its own research</option>
+            </select>
+          </label>
+          {s.topicSelection.mode === "sequence" ? (
+            <>
+              <label className="field"><span>Take every Nth idea (step 1–20). Step 1 = next idea, step 3 = every 3rd idea, looping back to the start.</span>
+                <input type="number" min={1} max={20} value={s.topicSelection.step} onChange={(e) => setS({ ...s, topicSelection: { ...s.topicSelection, step: Number(e.target.value) } })} data-testid="topic-step" /></label>
+              <p className="desk-note" data-testid="next-topic">Next topic in order: {data.selection.suggestedTopic ? `#${(data.selection.suggestedIndex ?? 0) + 1} “${data.selection.suggestedTopic}”` : "your list is empty"}. The position only moves when an AI draft actually uses a topic.</p>
+            </>
+          ) : null}
+          {s.topicSelection.mode === "random" ? <p className="desk-note">Each time the AI connects, the site suggests one random idea from your list.</p> : null}
+          {s.topicSelection.mode === "trend-first" ? (
+            <div className="field">
+              <span>Look for trends on</span>
+              {([["google-news", "Google News"], ["web", "Web / news sites"], ["x", "X (Twitter)"], ["social", "Other social media"]] as const).map(([v, label]) => (
+                <label key={v} style={checkRow}><input style={{ width: "auto" }} type="checkbox" checked={s.topicSelection.trendSources.includes(v)} onChange={(e) => setS({ ...s, topicSelection: { ...s.topicSelection, trendSources: e.target.checked ? [...s.topicSelection.trendSources, v] : s.topicSelection.trendSources.filter((x) => x !== v) } })} /> {label}</label>
+              ))}
+            </div>
+          ) : null}
+          <label className="field">
+            <span>If there is no usable topic (list empty, or no trend fits)</span>
+            <select value={s.topicSelection.fallback} onChange={(e) => setS({ ...s, topicSelection: { ...s.topicSelection, fallback: e.target.value as AutomationSettings["topicSelection"]["fallback"] } })}>
+              <option value="use-ideas">Use my idea list</option>
+              <option value="ai-choice">Let the AI choose freely</option>
+              <option value="skip">Skip this run (write nothing)</option>
+            </select>
+          </label>
+        </fieldset>
         <fieldset className="block-card">
           <legend>When this automation runs (set in your AI app)</legend>
           <p className="desk-note">

@@ -304,6 +304,30 @@ export async function revokeProfileToken(id: string): Promise<void> {
   await sql`update automation_profiles set token_hash = null, token_hint = null, token_created_at = null, updated_at = ${new Date().toISOString()} where id = ${id}`;
 }
 
+// ---- Topic-selection cursor (sequence mode) --------------------------------
+/** Next sequence index for a profile. 0 until migration 0005 is applied. */
+export async function readTopicCursor(profileId: string): Promise<number> {
+  try {
+    const sql = await getSql();
+    const rows = await sql<{ cursor: number }>`select cursor from automation_topic_state where profile_id = ${profileId}`;
+    return Number(rows[0]?.cursor ?? 0);
+  } catch {
+    return 0;
+  }
+}
+
+/** Store the next sequence index after a topic was actually used. Best-effort. */
+export async function writeTopicCursor(profileId: string, cursor: number): Promise<void> {
+  try {
+    const sql = await getSql();
+    const now = new Date().toISOString();
+    await sql`insert into automation_topic_state (profile_id, cursor, updated_at) values (${profileId}, ${cursor}, ${now})
+      on conflict (profile_id) do update set cursor = excluded.cursor, updated_at = excluded.updated_at`;
+  } catch {
+    // Migration 0005 not applied yet: sequence suggestions still work from 0.
+  }
+}
+
 /** Resolver used by MCP auth: token -> profile, and "is this binding still current?". */
 export const profileResolver: ProfileResolver = {
   async byToken(token: string): Promise<ProfileBinding | null> {
