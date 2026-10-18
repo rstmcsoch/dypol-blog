@@ -257,7 +257,7 @@ function AutomationDesk() {
             <>
               <label className="field"><span>Take every Nth idea (step 1–20). Step 1 = next idea, step 3 = every 3rd idea, looping back to the start.</span>
                 <input type="number" min={1} max={20} value={s.topicSelection.step} onChange={(e) => setS({ ...s, topicSelection: { ...s.topicSelection, step: Number(e.target.value) } })} data-testid="topic-step" /></label>
-              <p className="desk-note" data-testid="next-topic">Next topic in order: {data.selection.suggestedTopic ? `#${(data.selection.suggestedIndex ?? 0) + 1} “${data.selection.suggestedTopic}”` : "your list is empty"}. The position only moves when an AI draft actually uses a topic.</p>
+              <p className="desk-note" data-testid="next-topic">Next topic in order: {(() => { const list = ideas.split("\n").map((x) => x.trim()).filter(Boolean); if (!list.length) return "your list is empty"; const idx = ((data.topicCursor % list.length) + list.length) % list.length; return `#${idx + 1} “${list[idx]}”`; })()}. The position only moves when an AI draft actually uses a topic.</p>
             </>
           ) : null}
           {s.topicSelection.mode === "random" ? <p className="desk-note">Each time the AI connects, the site suggests one random idea from your list.</p> : null}

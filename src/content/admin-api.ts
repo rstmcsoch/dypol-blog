@@ -264,6 +264,7 @@ export const adminAutomation = createServerFn({ method: "GET" })
       profiles,
       settings,
       selection: computeTopicSelection(settings.topicSelection, settings.topicIdeas, await readTopicCursor(profileId)),
+      topicCursor: await readTopicCursor(profileId),
       runs: await recentRuns(25),
       categories: list.categories.map((c) => ({ id: c.id, label: c.label })),
       provider: providerStatus(settings, env),
