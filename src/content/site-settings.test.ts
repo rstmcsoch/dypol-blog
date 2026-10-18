@@ -28,9 +28,20 @@ test("one invalid new group falls back alone, the rest is kept", () => {
 
 test("PR #5 homepage sections become builder blocks (unknown/duplicate dropped, order kept)", () => {
   const out = normalizeSite({ home: { sections: [{ id: "latest", enabled: false, count: 5 }, { id: "bogus", enabled: true, count: 1 }, { id: "latest", enabled: true, count: 9 }, { id: "featured", enabled: true, count: 1 }] } });
-  assert.deepEqual(out.home.blocks.map((b) => b.type), ["latest", "featured"]);
+  // Sections shape gets the same essential-section backfill as blocks shape.
+  assert.deepEqual(out.home.blocks.map((b) => b.type), ["latest", "featured", "related", "topics", "tags"]);
   assert.equal(out.home.blocks[0]?.enabled, false);
   assert.equal(out.home.blocks[0]?.count, 5);
+  assert.equal(out.home.blocks[0]?.title, "Our new articles");
+});
+
+test("prod-shaped sections row (featured/also/latest/topics) gains Related + Tags and section titles", () => {
+  const out = normalizeSite({ home: { sections: [{ id: "featured", enabled: true, count: 1 }, { id: "also", enabled: true, count: 3 }, { id: "latest", enabled: true, count: 5 }, { id: "topics", enabled: true, count: 12 }] } });
+  const types = out.home.blocks.map((b) => b.type);
+  for (const need of ["featured", "also", "latest", "related", "topics", "tags"] as const) assert.ok(types.includes(need), need);
+  assert.equal(out.home.blocks.find((b) => b.type === "latest")?.title, "Our new articles");
+  assert.equal(out.home.blocks.find((b) => b.type === "related")?.title, "You may also like");
+  assert.equal(out.home.blocks.find((b) => b.type === "topics")?.title, "Browse by topics");
 });
 
 test("homepage backfill: missing essential sections are added, disabled ones stay disabled", () => {

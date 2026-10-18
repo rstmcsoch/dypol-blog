@@ -218,26 +218,29 @@ export const ESSENTIAL_HOME_BLOCKS: ContentBlock[] = [
 
 export function upgradeHome(raw: unknown): unknown {
   const r = (raw ?? {}) as { blocks?: unknown; sections?: { id: string; enabled?: boolean; count?: number }[] };
+  let blocks: ContentBlock[] | null = null;
   if (Array.isArray(r.blocks)) {
-    const blocks = r.blocks.map((b) => {
-      const filled = fill(b as ContentBlock);
-      if (!filled.title && filled.type === "latest") filled.title = "Our new articles";
-      if (!filled.title && filled.type === "topics") filled.title = "Browse by topics";
-      if (!filled.title && filled.type === "related") filled.title = "You may also like";
-      return filled;
-    });
-    const have = new Set(blocks.map((b) => b.type));
-    const missing = ESSENTIAL_HOME_BLOCKS.filter((b) => !have.has(b.type));
-    // Featured belongs first; the rest append in default order, respecting the owner's existing order/visibility.
-    const featured = missing.filter((b) => b.type === "featured");
-    return { blocks: [...featured, ...blocks, ...missing.filter((b) => b.type !== "featured")] };
-  }
-  if (Array.isArray(r.sections)) {
+    blocks = r.blocks.map((b) => fill(b as ContentBlock));
+  } else if (Array.isArray(r.sections)) {
+    // Pre-block-list shape (PR #5): convert, then fall through to the same
+    // title-fill + essential-section backfill as the blocks shape. Prod
+    // still stores this shape, so skipping the backfill here left the
+    // homepage without Latest/Related/Tags sections.
     const seen = new Set<string>();
     const known = r.sections.filter((sec) => (HOME_BLOCK_TYPES as readonly string[]).includes(sec?.id) && !seen.has(sec.id) && seen.add(sec.id));
-    return { blocks: known.map((sec) => fill({ id: `home-${sec.id}`, type: sec.id as ContentBlock["type"], enabled: sec.enabled ?? true, count: sec.count ?? 5 })) };
+    blocks = known.map((sec) => fill({ id: `home-${sec.id}`, type: sec.id as ContentBlock["type"], enabled: sec.enabled ?? true, count: sec.count ?? 5 }));
   }
-  return site.home;
+  if (!blocks) return site.home;
+  for (const filled of blocks) {
+    if (!filled.title && filled.type === "latest") filled.title = "Our new articles";
+    if (!filled.title && filled.type === "topics") filled.title = "Browse by topics";
+    if (!filled.title && filled.type === "related") filled.title = "You may also like";
+  }
+  const have = new Set(blocks.map((b) => b.type));
+  const missing = ESSENTIAL_HOME_BLOCKS.filter((b) => !have.has(b.type));
+  // Featured belongs first; the rest append in default order, respecting the owner's existing order/visibility.
+  const featured = missing.filter((b) => b.type === "featured");
+  return { blocks: [...featured, ...blocks, ...missing.filter((b) => b.type !== "featured")] };
 }
 
 export function upgradeSidebar(raw: unknown): unknown {
