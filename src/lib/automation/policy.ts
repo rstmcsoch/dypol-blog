@@ -12,7 +12,8 @@ export type DraftFlag =
   | "duplicate_title"
   | "self_reported_uncertain"
   | "needs_featured_image"
-  | "unknown_tags_dropped";
+  | "unknown_tags_dropped"
+  | "topic_review";
 
 const PLACEHOLDER = /\b(lorem ipsum|todo:|tbd\b|\[citation needed\]|insert (link|source|citation)|example\.com)\b/i;
 

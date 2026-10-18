@@ -34,14 +34,33 @@ step says so.
 3. Pick ONE subject following step 1. When you submit,
    pass `topic_idea_used` and `used_topic_index` for the idea you used (sequence
    mode advances only when a draft is submitted).
-3b. File the article under the blog's topics. `get_blog_settings` returns the
-   canonical topic list in `topics` (25 topics, slug + name). By the article's
-   actual content, choose 1–4 that genuinely fit — an article can belong to
-   several topics (a phone review can be `product-reviews`,
-   `smartphones-android-iphone-wearables` and `buying-guides`). Best fit first:
-   the first topic is the main one shown on cards. Never invent a topic and
-   never pad with topics that don't fit; an unknown topic is rejected with the
-   valid list, so fix it and resubmit if that happens.
+3b. File the article under the blog's topics — BY ITS ACTUAL CONTENT, never by
+   rote. `get_blog_settings` returns the canonical topics in `topics` (25 topics,
+   each with a `fileWhen` line — read it) and `topicInstructions`. Rules:
+   - Choose 1–4 topics that genuinely fit; best fit first — THE FIRST IS THE
+     MAIN TOPIC: the article's main subject, NOT a default. Ask yourself
+     "what is this article mainly about?" before choosing.
+   - Never default to `artificial-intelligence-ai-tools` (or `tech-news`) just
+     because the blog covers tech or an AI company/lab is mentioned. File
+     under every topic that genuinely fits: subject + company/industry +
+     business angle (usually 2–4).
+   - `tech-news` is a last resort only — never the only topic when a subject
+     topic fits. The order of the topic list is not a priority order.
+   - Worked examples: a quantum-computing result → `emerging-technology`,
+     `robotics-science`, `big-tech-companies` (NOT AI — even if the lab is
+     called an "AI lab"). A robot foundation model → `robotics-science` first,
+     then `artificial-intelligence-ai-tools`. Chip-company earnings →
+     `chips-gaming`, `funding-tech-business`, then AI if AI demand drives it.
+     A phone review → `product-reviews`, `smartphones-android-iphone-wearables`,
+     `buying-guides`. An open-source developer tool → `developer-tools`,
+     `coding-open-source`, then AI/cloud if they genuinely fit.
+   - Never invent a topic and never pad with topics that don't fit; an unknown
+     topic is rejected with the valid list, so fix it and resubmit if that
+     happens. The server also checks content signals: a single-topic filing
+     whose text strongly signals other topics comes back with
+     `topic_advice.suggested_missing` and a `topic_review` flag (the draft
+     will not auto-publish) — if the suggestions fit, re-file with
+     `update_article_draft` (`topics`, best fit first) instead of arguing.
 4. Research it now on the web. Read the primary sources yourself. Keep the exact URL of
    every source you actually used. Prefer primary, dated, reputable sources; confirm
    facts that matter (numbers, dates, names, quotes) in at least two sources.

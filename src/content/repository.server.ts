@@ -562,6 +562,8 @@ export type ArticleSummary = {
   views: number;
   words: number;
   scheduledAt: string | null;
+  /** t72: draft flagged topic_review by the automation signal check. */
+  topicReview?: boolean;
 };
 
 export async function adminOverview() {
@@ -707,8 +709,15 @@ export async function adminList(input: {
   });
   const grants = await aiEditGrantIds();
   const views = await viewCounts(data.site).catch(() => ({}) as Record<string, number>);
+  // t72: surface the topic_review flag on drafts so rote filings are visible.
+  let topicReview = new Set<string>();
+  try {
+    const sql = await getSql();
+    const flagged = await sql<{ article_id: string }>`select article_id from automation_submissions where flags like '%topic_review%'`;
+    topicReview = new Set(flagged.map((r) => r.article_id));
+  } catch { /* submissions table absent on very old dbs */ }
   return {
-    articles: rows.map((article) => summarize(article, data.categories, grants, views[article.id] ?? 0)),
+    articles: rows.map((article) => ({ ...summarize(article, data.categories, grants, views[article.id] ?? 0), topicReview: topicReview.has(article.id) })),
     categories: data.categories,
     tags: data.tags,
   };
