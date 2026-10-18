@@ -1,40 +1,35 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { socialMeta } from "@/lib/seo";
-import { PagePending } from "@/components/site/states";
-import { useSite } from "@/components/site/use-site";
+import { createFileRoute, notFound } from "@tanstack/react-router";
+import { NotFoundState, PagePending } from "@/components/site/states";
+import { StaticPage } from "@/components/site/static-page";
+import { getPage } from "@/content/public-api";
+import { absoluteUrl, socialMeta } from "@/lib/seo";
 
+/** About Us (t52): content lives in the Pages system (Admin → Pages). */
 export const Route = createFileRoute("/about")({
-  head: () => {
-    const title = "About — DYPOL Blog";
-    const description = "DYPOL Blog is the public journal of DYPOL Labs.";
+  loader: async () => {
+    const data = await getPage({ data: { slug: "about" } });
+    if (!data) throw notFound();
+    return data;
+  },
+  head: ({ loaderData }) => {
+    if (!loaderData) return { meta: [{ title: "About Us — DYPOL Blog" }] };
+    const origin = loaderData.origin ?? "";
+    const title = "About Us — DYPOL Blog";
     return {
       meta: [
         { title },
-        { name: "description", content: description },
-        ...socialMeta({ title, description, url: "/about", type: "website", siteName: "DYPOL Blog", image: "/og.jpg" }),
+        { name: "description", content: loaderData.description },
+        ...socialMeta({ title, description: loaderData.description, url: absoluteUrl(origin, "/about"), type: "website", siteName: "DYPOL Blog", image: absoluteUrl(origin, "/og.jpg") }),
       ],
-      links: [{ rel: "canonical", href: "/about" }],
+      links: [{ rel: "canonical", href: absoluteUrl(origin, "/about") }],
     };
   },
   pendingComponent: PagePending,
-  component: AboutPage,
+  notFoundComponent: NotFoundState,
+  component: AboutRoute,
 });
 
-function AboutPage() {
-  const site = useSite();
-  return (
-    <div className="page">
-      <div className="container">
-        <header className="page-header">
-          <p className="kicker">{site.labels.aboutKicker}</p>
-          <h1 className="page-title">{site.labels.aboutTitle}</h1>
-        </header>
-        <div className="about-body">
-          {site.about.paragraphs.map((paragraph) => (
-            <p key={paragraph}>{paragraph}</p>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
+function AboutRoute() {
+  const data = Route.useLoaderData();
+  return <StaticPage page={data} />;
 }

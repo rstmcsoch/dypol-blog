@@ -18,7 +18,7 @@ export const getShell = createServerFn({ method: "GET" }).handler(async () => {
     // The site frame must always render, even if the content layer is broken.
     console.error("[shell] falling back to the built-in site config.", error);
     const { site } = await import("./site");
-    return { site, trending: [] as import("./ticker").TickerEntry[] };
+    return { site, trending: [] as import("./ticker").TickerEntry[], pages: [] as { slug: string; title: string }[] };
   }
 });
 
@@ -57,3 +57,22 @@ export const getSitemapEntries = createServerFn({ method: "GET" }).handler(async
   const { readSitemap } = await import("./repository.server");
   return readSitemap();
 });
+
+export const getPage = createServerFn({ method: "GET" })
+  .validator((input: { slug: string }) => input)
+  .handler(async ({ data }) => {
+    const { readPage } = await import("./repository.server");
+    const { standardPage } = await import("./pages-seed");
+    const { pageExcerpt } = await import("@/lib/pages");
+    const row = await readPage(data.slug);
+    if (!row) return null;
+    const seed = standardPage(row.slug);
+    return {
+      slug: row.slug,
+      title: row.title,
+      body: row.body,
+      updatedAt: row.updated_at,
+      description: seed?.description ?? pageExcerpt(row.body, row.title),
+      origin: await requestOrigin(),
+    };
+  });

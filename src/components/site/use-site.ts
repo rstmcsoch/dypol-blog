@@ -13,3 +13,8 @@ export function useTrending(): import("@/content/ticker").TickerEntry[] {
   const data = rootRoute.useLoaderData();
   return data?.trending ?? [];
 }
+
+export function usePages(): { slug: string; title: string }[] {
+  const data = rootRoute.useLoaderData();
+  return data?.pages ?? [];
+}

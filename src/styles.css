@@ -1341,8 +1341,13 @@ html[data-theme="dark"] .theme-switch__btn[data-value="dark"] .theme-switch__mar
 
 @media (min-width: 800px) {
   .footer-grid {
-    grid-template-columns: minmax(0, 1.4fr) auto;
-    align-items: end;
+    grid-template-columns: minmax(16rem, 1fr) minmax(0, 36rem);
+    align-items: start;
+  }
+
+  .footer-nav {
+    justify-content: flex-end;
+    text-align: right;
   }
 
   .footer-sign {
@@ -1918,3 +1923,31 @@ html[data-theme="dark"] .theme-switch__btn[data-value="dark"] .theme-switch__mar
 .adm-block.is-dragging { opacity: 0.5; }
 .adm-muted { color: var(--a-muted); font-weight: 400; }
 .adm-radios { border: 0; padding: 0; margin: 0; display: grid; gap: 0.35rem; }
+
+/* t52: standard pages body typography (markdown headings/lists) */
+.page-body h2 {
+  font-family: var(--font-sans, inherit);
+  font-size: 1.35em;
+  line-height: 1.25;
+  margin-top: 1.6em;
+}
+.page-body h3 {
+  font-family: var(--font-sans, inherit);
+  font-size: 1.12em;
+  margin-top: 1.3em;
+}
+.page-body ul,
+.page-body ol {
+  padding-left: 1.4em;
+  display: grid;
+  gap: 0.45em;
+}
+.page-body a {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.page-updated {
+  opacity: 0.7;
+  font-size: 0.95rem;
+  margin-top: 0.4rem;
+}

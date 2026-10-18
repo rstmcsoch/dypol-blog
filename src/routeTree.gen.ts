@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SplatRouteImport } from './routes/$'
+import { Route as PageRouteImport } from './routes/$page'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as FeedDotxmlRouteImport } from './routes/feed[.]xml'
@@ -28,6 +29,7 @@ import { Route as AdminAutomationRouteImport } from './routes/admin/automation'
 import { Route as AdminHelpRouteImport } from './routes/admin/help'
 import { Route as AdminHomepageRouteImport } from './routes/admin/homepage'
 import { Route as AdminMediaRouteImport } from './routes/admin/media'
+import { Route as AdminPagesRouteImport } from './routes/admin/pages'
 import { Route as AdminSettingsRouteImport } from './routes/admin/settings'
 import { Route as AdminSiteTextRouteImport } from './routes/admin/site-text'
 import { Route as AdminTickerRouteImport } from './routes/admin/ticker'
@@ -56,6 +58,11 @@ const IndexRoute = IndexRouteImport.update({
 const SplatRoute = SplatRouteImport.update({
   id: '/$',
   path: '/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PageRoute = PageRouteImport.update({
+  id: '/$page',
+  path: '/$page',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AboutRoute = AboutRouteImport.update({
@@ -143,6 +150,11 @@ const AdminHomepageRoute = AdminHomepageRouteImport.update({
 const AdminMediaRoute = AdminMediaRouteImport.update({
   id: '/media',
   path: '/media',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminPagesRoute = AdminPagesRouteImport.update({
+  id: '/pages',
+  path: '/pages',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminSettingsRoute = AdminSettingsRouteImport.update({
@@ -245,6 +257,7 @@ const ApiViewsSlugRoute = ApiViewsSlugRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/$': typeof SplatRoute
+  '/$page': typeof PageRoute
   '/about': typeof AboutRoute
   '/admin': typeof AdminRouteWithChildren
   '/feed.xml': typeof FeedDotxmlRoute
@@ -261,6 +274,7 @@ export interface FileRoutesByFullPath {
   '/admin/help': typeof AdminHelpRoute
   '/admin/homepage': typeof AdminHomepageRoute
   '/admin/media': typeof AdminMediaRoute
+  '/admin/pages': typeof AdminPagesRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/site-text': typeof AdminSiteTextRoute
   '/admin/ticker': typeof AdminTickerRoute
@@ -285,6 +299,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/$': typeof SplatRoute
+  '/$page': typeof PageRoute
   '/about': typeof AboutRoute
   '/feed.xml': typeof FeedDotxmlRoute
   '/login': typeof LoginRoute
@@ -300,6 +315,7 @@ export interface FileRoutesByTo {
   '/admin/help': typeof AdminHelpRoute
   '/admin/homepage': typeof AdminHomepageRoute
   '/admin/media': typeof AdminMediaRoute
+  '/admin/pages': typeof AdminPagesRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/site-text': typeof AdminSiteTextRoute
   '/admin/ticker': typeof AdminTickerRoute
@@ -325,6 +341,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/$': typeof SplatRoute
+  '/$page': typeof PageRoute
   '/about': typeof AboutRoute
   '/admin': typeof AdminRouteWithChildren
   '/feed.xml': typeof FeedDotxmlRoute
@@ -341,6 +358,7 @@ export interface FileRoutesById {
   '/admin/help': typeof AdminHelpRoute
   '/admin/homepage': typeof AdminHomepageRoute
   '/admin/media': typeof AdminMediaRoute
+  '/admin/pages': typeof AdminPagesRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/site-text': typeof AdminSiteTextRoute
   '/admin/ticker': typeof AdminTickerRoute
@@ -367,6 +385,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/$'
+    | '/$page'
     | '/about'
     | '/admin'
     | '/feed.xml'
@@ -383,6 +402,7 @@ export interface FileRouteTypes {
     | '/admin/help'
     | '/admin/homepage'
     | '/admin/media'
+    | '/admin/pages'
     | '/admin/settings'
     | '/admin/site-text'
     | '/admin/ticker'
@@ -407,6 +427,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/$'
+    | '/$page'
     | '/about'
     | '/feed.xml'
     | '/login'
@@ -422,6 +443,7 @@ export interface FileRouteTypes {
     | '/admin/help'
     | '/admin/homepage'
     | '/admin/media'
+    | '/admin/pages'
     | '/admin/settings'
     | '/admin/site-text'
     | '/admin/ticker'
@@ -446,6 +468,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/$'
+    | '/$page'
     | '/about'
     | '/admin'
     | '/feed.xml'
@@ -462,6 +485,7 @@ export interface FileRouteTypes {
     | '/admin/help'
     | '/admin/homepage'
     | '/admin/media'
+    | '/admin/pages'
     | '/admin/settings'
     | '/admin/site-text'
     | '/admin/ticker'
@@ -487,6 +511,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   SplatRoute: typeof SplatRoute
+  PageRoute: typeof PageRoute
   AboutRoute: typeof AboutRoute
   AdminRoute: typeof AdminRouteWithChildren
   FeedDotxmlRoute: typeof FeedDotxmlRoute
@@ -525,6 +550,13 @@ declare module '@tanstack/react-router' {
       path: '/$'
       fullPath: '/$'
       preLoaderRoute: typeof SplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/$page': {
+      id: '/$page'
+      path: '/$page'
+      fullPath: '/$page'
+      preLoaderRoute: typeof PageRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/about': {
@@ -644,6 +676,13 @@ declare module '@tanstack/react-router' {
       path: '/media'
       fullPath: '/admin/media'
       preLoaderRoute: typeof AdminMediaRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/pages': {
+      id: '/admin/pages'
+      path: '/pages'
+      fullPath: '/admin/pages'
+      preLoaderRoute: typeof AdminPagesRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/settings': {
@@ -788,6 +827,7 @@ interface AdminRouteChildren {
   AdminHelpRoute: typeof AdminHelpRoute
   AdminHomepageRoute: typeof AdminHomepageRoute
   AdminMediaRoute: typeof AdminMediaRoute
+  AdminPagesRoute: typeof AdminPagesRoute
   AdminSettingsRoute: typeof AdminSettingsRoute
   AdminSiteTextRoute: typeof AdminSiteTextRoute
   AdminTickerRoute: typeof AdminTickerRoute
@@ -804,6 +844,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminHelpRoute: AdminHelpRoute,
   AdminHomepageRoute: AdminHomepageRoute,
   AdminMediaRoute: AdminMediaRoute,
+  AdminPagesRoute: AdminPagesRoute,
   AdminSettingsRoute: AdminSettingsRoute,
   AdminSiteTextRoute: AdminSiteTextRoute,
   AdminTickerRoute: AdminTickerRoute,
@@ -834,6 +875,7 @@ const DotwellKnownOauthProtectedResourceRouteWithChildren =
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   SplatRoute: SplatRoute,
+  PageRoute: PageRoute,
   AboutRoute: AboutRoute,
   AdminRoute: AdminRouteWithChildren,
   FeedDotxmlRoute: FeedDotxmlRoute,

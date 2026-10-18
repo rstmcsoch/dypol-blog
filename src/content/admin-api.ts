@@ -356,3 +356,30 @@ export const adminHomePreview = createServerFn({ method: "POST" })
     const draft = normalizeSite({ ...site, ...((data ?? {}) as object) });
     return { site: draft, ...(await readHome(draft)) };
   });
+
+// ---------- pages (t52; admin-only, deliberately no MCP equivalent) -------
+export const adminPages = createServerFn({ method: "GET" }).handler(async () => {
+  await guard();
+  const { adminListPages } = await import("./repository.server");
+  return adminListPages();
+});
+
+export const adminSavePageFn = createServerFn({ method: "POST" })
+  .validator((input: unknown) => input)
+  .handler(async ({ data }) => {
+    const admin = await writeGuard();
+    const { pageWriteSchema, checkPageSlug } = await import("@/lib/pages");
+    const page = pageWriteSchema.parse(data);
+    const slugError = checkPageSlug(page.slug);
+    if (slugError) throw new Error(slugError);
+    const { adminSavePage } = await import("./repository.server");
+    return adminSavePage({ ...page, actor: admin.email ?? "admin" });
+  });
+
+export const adminDeletePageFn = createServerFn({ method: "POST" })
+  .validator((input: { id: string }) => input)
+  .handler(async ({ data }) => {
+    await writeGuard();
+    const { adminDeletePage } = await import("./repository.server");
+    return adminDeletePage({ id: data.id, actor: "admin" });
+  });
