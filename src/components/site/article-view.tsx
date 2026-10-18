@@ -5,7 +5,8 @@ import type { Article, Category, SiteConfig, Tag } from "@/content/types";
 import { formatDate, padIndex } from "@/lib/format";
 import { ArticleBody } from "./article-body";
 import { Cover, hasCover } from "./cover";
-import { ShareLinks } from "./share";
+import { SidebarBlocks } from "./blocks";
+import type { ResolvedBlock } from "@/content/blocks";
 import { IndexList } from "./index-list";
 
 export function ArticleView({
@@ -17,8 +18,7 @@ export function ArticleView({
   rank,
   meta,
   site,
-  alsoLike = [],
-  latest = [],
+  sidebar = [],
 }: {
   article: Article;
   category: Category | null;
@@ -28,15 +28,9 @@ export function ArticleView({
   rank: number;
   meta: Record<string, ArticleMeta>;
   site: SiteConfig;
-  alsoLike?: { id: string; slug: string; title: string }[];
-  latest?: { id: string; slug: string; title: string; publishedAt: string | null }[];
+  sidebar?: ResolvedBlock[];
 }) {
-  const sidebar = site.articleSidebar;
-  const blocks = sidebar.enabled
-    ? sidebar.blocks.filter((block) =>
-        block === "tags" ? tags.length > 0 : block === "related" ? alsoLike.length > 0 : block === "newStories" ? latest.length > 0 : true,
-      )
-    : [];
+  const blocks = sidebar;
   const fallback = site.appearance.coverFallback;
   return (
     <article className="article">
@@ -75,47 +69,7 @@ export function ArticleView({
           <ArticleBody blocks={article.blocks} />
           {blocks.length > 0 ? (
             <aside className="article-aside">
-              {blocks.map((block) => {
-                if (block === "tags") {
-                  return (
-                    <div className="aside-block" key="tags">
-                      <h2 className="aside-head">{site.labels.tags}</h2>
-                      <ul className="tag-list">
-                        {tags.map((tag) => (
-                          <li key={tag.id}>{tag.label}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  );
-                }
-                if (block === "share") {
-                  return (
-                    <ShareLinks
-                      key="share"
-                      title={article.title}
-                      path={`/articles/${article.slug}`}
-                      label={site.labels.share}
-                      copyLabel={site.labels.copyLink}
-                      copiedLabel={site.labels.linkCopied}
-                    />
-                  );
-                }
-                const list = block === "related" ? alsoLike : latest;
-                return (
-                  <div className="aside-block" key={block}>
-                    <h2 className="aside-head">{block === "related" ? site.labels.alsoLike : site.labels.newStories}</h2>
-                    <ul className="aside-list">
-                      {list.map((item) => (
-                        <li key={item.id}>
-                          <Link to="/articles/$slug" params={{ slug: item.slug }}>
-                            {item.title}
-                          </Link>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                );
-              })}
+              <SidebarBlocks blocks={blocks} site={site} title={article.title} slug={article.slug} />
             </aside>
           ) : null}
         </div>

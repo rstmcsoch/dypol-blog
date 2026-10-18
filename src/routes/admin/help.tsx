@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Markdown } from "@/components/admin/markdown";
+import { Markdown } from "@/components/markdown";
 import guide from "../../../docs/ADMIN-GUIDE.md?raw";
 
 export const Route = createFileRoute("/admin/help")({

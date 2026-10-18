@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Link, useRouter, useRouterState } from "@tanstack/react-router";
 import { adminSignOut } from "@/content/admin-api";
 
@@ -17,7 +17,8 @@ const groups: { label: string; links: NavLinkDef[] }[] = [
   {
     label: "Site",
     links: [
-      { to: "/admin/homepage", label: "Homepage" },
+      { to: "/admin/homepage", label: "Homepage builder" },
+      { to: "/admin/ticker", label: "Top strip / Ticker" },
       { to: "/admin/site-text", label: "Site text" },
       { to: "/admin/appearance", label: "Appearance" },
     ],
@@ -47,8 +48,18 @@ export function AdminShell({
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  // Admin-only colour mode, saved in this browser. The public site is unaffected.
+  const [theme, setTheme] = useState<"light" | "dark" | "system">("light");
+  useEffect(() => {
+    const saved = window.localStorage.getItem("dypol-admin-theme");
+    if (saved === "light" || saved === "dark" || saved === "system") setTheme(saved);
+  }, []);
+  const chooseTheme = (next: "light" | "dark" | "system") => {
+    setTheme(next);
+    window.localStorage.setItem("dypol-admin-theme", next);
+  };
   return (
-    <div className="desk">
+    <div className="desk" data-theme={theme}>
       <aside className={open ? "adm-side is-open" : "adm-side"}>
         <div className="adm-brand">
           <Link to="/admin" onClick={() => setOpen(false)}>
@@ -94,6 +105,14 @@ export function AdminShell({
             >
               Sign out
             </button>
+            <label className="adm-theme">
+              <span>Admin colours</span>
+              <select value={theme} onChange={(e) => chooseTheme(e.target.value as "light" | "dark" | "system")} data-testid="admin-theme">
+                <option value="light">Light</option>
+                <option value="dark">Dark</option>
+                <option value="system">Match my device</option>
+              </select>
+            </label>
             <p className="adm-who">{mode === "dev" ? "Local preview" : (email ?? "Signed in with admin token")}</p>
           </div>
         </nav>
