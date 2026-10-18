@@ -19,6 +19,7 @@ export function StaticPage({ page }: { page: PageView }) {
   return (
     <div className="page">
       <div className="container">
+       <div className="static-column">
         <header className="page-header">
           <p className="kicker">DYPOL Blog</p>
           <h1 className="page-title">{page.title}</h1>
@@ -27,6 +28,7 @@ export function StaticPage({ page }: { page: PageView }) {
         <div className="about-body page-body">
           <Markdown source={page.body} />
         </div>
+       </div>
       </div>
     </div>
   );

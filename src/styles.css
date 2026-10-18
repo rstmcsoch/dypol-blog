@@ -1213,6 +1213,23 @@ html[data-theme="dark"] .theme-switch__btn[data-value="dark"] .theme-switch__mar
   }
 }
 
+/* t77: info pages (About/Terms/Privacy/…) get ONE centered reading column
+   that fills the container up to a generous 78ch — no orphaned side track
+   like the article layout's sidebar. Articles are untouched. */
+.static-column {
+  max-width: 78ch;
+  margin-inline: auto;
+  min-width: 0;
+}
+
+.static-column .page-header {
+  max-width: none;
+}
+
+.static-column .about-body {
+  max-width: none;
+}
+
 .about-body {
   display: grid;
   gap: 1rem;
