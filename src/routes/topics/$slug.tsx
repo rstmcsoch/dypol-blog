@@ -20,6 +20,9 @@ export const Route = createFileRoute("/topics/$slug")({
       meta: [
         { title },
         { name: "description", content: description },
+        // A topic with nothing published yet is a thin/empty hub: keep it
+        // crawlable for discovery but out of the index until it has stories.
+        ...(loaderData.articles.length === 0 ? [{ name: "robots", content: "noindex, follow" }] : []),
         ...socialMeta({ title, description, url: absoluteUrl(origin, `/topics/${loaderData.category.slug}`), type: "website", siteName: "DYPOL Blog", image: absoluteUrl(origin, "/og.jpg") }),
       ],
       links: [{ rel: "canonical", href: absoluteUrl(origin, `/topics/${loaderData.category.slug}`) }],

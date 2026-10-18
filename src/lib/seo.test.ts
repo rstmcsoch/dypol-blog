@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { absoluteUrl, articleJsonLd, breadcrumbJsonLd, itemListJsonLd, newsSitemapXml, rssXml, sitemapXml, socialMeta, websiteJsonLd, xmlEscape } from "./seo.ts";
+import { absoluteUrl, articleJsonLd, breadcrumbJsonLd, canonicalOriginFrom, itemListJsonLd, newsSitemapXml, rssXml, sitemapXml, socialMeta, websiteJsonLd, xmlEscape } from "./seo.ts";
 
 const article = {
   slug: "hello-world",
@@ -71,4 +71,19 @@ test("social meta: article times only for articles, large card with image", () =
   const web = socialMeta({ title: "T", description: "D", url: "https://e.com/", type: "website", siteName: "S" });
   assert.ok(!web.some((m) => m.property === "article:published_time"));
   assert.equal(xmlEscape(`a & "b" <c>`), "a &amp; &quot;b&quot; &lt;c&gt;");
+});
+
+test("publisher logo uses the dedicated brand asset, not the favicon (t58)", () => {
+  const ld = articleJsonLd({ origin: "https://example.com", siteName: "DYPOL Blog", publisher: "DYPOL Labs", article });
+  assert.equal(ld.publisher.logo.url, "https://example.com/logo.svg");
+  const site = websiteJsonLd({ origin: "https://example.com", siteName: "DYPOL Blog", title: "DYPOL Blog", description: "d", publisher: "DYPOL Labs" });
+  const org = site["@graph"].find((n) => n["@type"] === "Organization");
+  assert.ok(org);
+  assert.equal(org.logo, "https://example.com/logo.svg");
+});
+
+test("canonical origin consolidates workers.dev aliases, keeps custom domains (t58)", () => {
+  assert.equal(canonicalOriginFrom("https://dypol-blog.rstmcsoch.workers.dev/articles/x"), "https://dypolblog.rstmcsoch.workers.dev");
+  assert.equal(canonicalOriginFrom("https://abc123-dypolblog.rstmcsoch.workers.dev/"), "https://dypolblog.rstmcsoch.workers.dev");
+  assert.equal(canonicalOriginFrom("https://blog.example.com/articles/x"), "https://blog.example.com");
 });

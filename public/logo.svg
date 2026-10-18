@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 264 64" fill="none" role="img" aria-label="DYPOL Blog">
+  <rect x="2" y="6" width="52" height="52" fill="#FFFFFF" stroke="#111111" stroke-width="3"/>
+  <rect x="10" y="14" width="52" height="52" fill="#FF4D00" stroke="#111111" stroke-width="3" transform="translate(-4 2)"/>
+  <path d="M17 20h9.2c5.4 0 8.9 3 8.9 7.6 0 3.2-1.6 5.6-4.5 6.6 3.4.8 5.4 3.4 5.4 7.2 0 5-3.9 8.2-9.8 8.2H17V20zm5 4v7h3.6c2.5 0 4-1.2 4-3.5s-1.5-3.5-4-3.5H22zm0 11v7.6h4c2.9 0 4.6-1.4 4.6-3.8s-1.7-3.8-4.6-3.8h-4z" fill="#111111" transform="translate(-2 -1)"/>
+  <text x="76" y="42" font-family="Arial, Helvetica, sans-serif" font-size="30" font-weight="700" letter-spacing="-0.5" fill="#111111">DYPOL</text>
+  <text x="196" y="42" font-family="Arial, Helvetica, sans-serif" font-size="30" font-weight="700" letter-spacing="-0.5" fill="#FF4D00">BLOG</text>
+</svg>

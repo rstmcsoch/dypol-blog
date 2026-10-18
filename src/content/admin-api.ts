@@ -354,7 +354,7 @@ export const adminHomePreview = createServerFn({ method: "POST" })
     const { normalizeSite } = await import("./validate");
     const { site } = await readSettings();
     const draft = normalizeSite({ ...site, ...((data ?? {}) as object) });
-    return { site: draft, ...(await readHome(draft)) };
+    return { ...(await readHome(draft)), site: draft };
   });
 
 // ---------- pages (t52; admin-only, deliberately no MCP equivalent) -------

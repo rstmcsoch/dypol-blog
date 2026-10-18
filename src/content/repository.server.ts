@@ -106,7 +106,7 @@ function iso(value: string | Date | null | undefined): string | null {
   return Number.isNaN(parsed.getTime()) ? String(value) : parsed.toISOString();
 }
 
-function mapArticle(row: ArticleRow, tagIds: string[], topicIds: string[]): Article {
+function mapArticle(row: ArticleRow, tagIds: string[], topicIds: string[], coverAlt: string | null = null): Article {
   const blocks = typeof row.blocks === "string" ? (JSON.parse(row.blocks) as ArticleBlock[]) : row.blocks;
   return {
     id: row.id,
@@ -124,6 +124,7 @@ function mapArticle(row: ArticleRow, tagIds: string[], topicIds: string[]): Arti
     seoTitle: row.seo_title ?? undefined,
     seoDescription: row.seo_description ?? undefined,
     coverMediaId: row.cover_media_id,
+    coverAlt,
     blocks,
   };
 }
@@ -193,15 +194,33 @@ async function loadArticles(sql: Sql, where = "", params: unknown[] = []): Promi
   const ids = rows.map((row) => row.id);
   // Independent lookups run together: each D1 round-trip is a network hop,
   // so serial awaits were the article page's main server-side cost (t56).
-  const [tags, topics] = await Promise.all([tagMap(sql, ids), topicMap(sql, ids)]);
+  const [tags, topics, coverAlts] = await Promise.all([tagMap(sql, ids), topicMap(sql, ids), coverAltMap(sql, rows)]);
   return rows.map((row) => {
-    const article = mapArticle(row, tags.get(row.id) ?? [], topics.get(row.id) ?? []);
+    const article = mapArticle(row, tags.get(row.id) ?? [], topics.get(row.id) ?? [], row.cover_media_id ? (coverAlts.get(row.cover_media_id) ?? null) : null);
     // The primary topic always leads, even if the join table is stale.
     if (article.topicIds[0] !== article.categoryId) {
       article.topicIds = [article.categoryId, ...article.topicIds.filter((id) => id !== article.categoryId)];
     }
     return article;
   });
+}
+
+/** media id -> stored alt text for cover images. Never throws (older DBs just fall back to titles). */
+async function coverAltMap(sql: Sql, rows: ArticleRow[]): Promise<Map<string, string>> {
+  const map = new Map<string, string>();
+  const mediaIds = [...new Set(rows.map((r) => r.cover_media_id).filter((v): v is string => Boolean(v)))];
+  if (mediaIds.length === 0) return map;
+  try {
+    for (let start = 0; start < mediaIds.length; start += 50) {
+      const chunk = mediaIds.slice(start, start + 50);
+      const placeholders = chunk.map((_, i) => `$${i + 1}`).join(", ");
+      const found = await sql.query<{ id: string; alt: string }>(`select id, alt from media where id in (${placeholders})`, chunk);
+      for (const m of found) if (m.alt?.trim()) map.set(m.id, m.alt.trim());
+    }
+  } catch {
+    return map;
+  }
+  return map;
 }
 
 function byNewest(a: Article, b: Article): number {
@@ -371,7 +390,7 @@ export async function readHome(draftSite?: SiteConfig) {
   const site = draftSite ?? data.site;
   const live = published(data.articles);
   const blocks = resolveBlocks(site.home.blocks, { site, live, categories: data.categories, tags: data.tags, views: await viewCounts(site) }, "home");
-  return { blocks, empty: live.length === 0 };
+  return { blocks, empty: live.length === 0, site };
 }
 
 export async function readIndex() {
@@ -468,7 +487,7 @@ export async function readSitemap() {
     topics: data.categories.map((category) => {
       const inTopic = live.filter((a) => a.topicIds.includes(category.id));
       const lastmod = inTopic.reduce<string | null>((max, a) => (max && max > a.updatedAt ? max : a.updatedAt), null);
-      return { slug: category.slug, lastmod };
+      return { slug: category.slug, lastmod, count: inTopic.length };
     }),
   };
 }

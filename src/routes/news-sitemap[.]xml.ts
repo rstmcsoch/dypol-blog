@@ -8,7 +8,8 @@ export const Route = createFileRoute("/news-sitemap.xml")({
         const { newsSitemapXml } = await import("@/lib/seo");
         const { site } = await import("@/content/site");
         const entries = await readSitemap();
-        const origin = new URL(request.url).origin;
+        const { canonicalOriginFrom } = await import("@/lib/seo");
+        const origin = canonicalOriginFrom(request.url);
         const body = newsSitemapXml({
           origin,
           publicationName: site.name,

@@ -1,36 +1,32 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# DYPOL Blog
 
-## Getting Started
+Technology news and explainers from DYPOL Labs — live at
+https://dypolblog.rstmcsoch.workers.dev
 
-First, run the development server:
+## Stack
+
+- **Frontend/server:** React + TanStack Router/Start (SSR), built with Vite (vinext)
+- **Hosting:** Cloudflare Workers (`dypolblog`), D1 (`dypol-blog-db`) for content/settings, R2 (`dypol-blog-media`) for images
+- **Content:** articles in D1 with a 25-topic taxonomy, admin panel at `/admin`, AI publishing via the blog's MCP tools (see `docs/automation/`)
+- **SEO:** dynamic sitemap + news sitemap, RSS feed, OG/Twitter cards, NewsArticle/WebSite/Organization JSON-LD (see `SEO-REPORT.md`)
+
+## Develop
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npm run dev        # local dev
+npm run build      # production build (regenerates the route tree)
+npm run typecheck
+npm test           # unit + script tests
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Local D1 migrations live in `migrations/d1/` and are applied with
+`wrangler d1 migrations apply DB --local` (production: `--remote`, or the
+Cloudflare D1 API). Production deploys happen through Cloudflare Workers
+Builds on merge to `main`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Docs
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- `docs/ADMIN-GUIDE.md` — owner/admin guide (articles, topics, pages, automation)
+- `docs/automation/automation-prompt.md` — the AI publishing prompt
+- `SEO-REPORT.md` — SEO audit and implementation record

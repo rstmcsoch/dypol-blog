@@ -1,3 +1,11 @@
+> **Status update (18 Oct 2026, later the same day):** PR #18 (this report's
+> implementation) is **merged and verified live**, PR #19 (standard pages) is
+> merged with migration `0008_pages.sql` applied to prod D1, and PRs #20
+> (smaller theme toggle), #21 (article sidebar/loading speed) are merged.
+> The "not merged" wording and account-setup steps below are the historical
+> record from when the report was written; follow `PDF-ANALYSIS.md` (if
+> present) and the PR list for current state.
+
 # DYPOL Blog — SEO & Traffic Report (t48)
 
 **Site:** https://dypolblog.rstmcsoch.workers.dev · **Date:** 18 Oct 2026 · **Companion PR:** #18 (branch `t48-seo`, not merged — review before it goes live)

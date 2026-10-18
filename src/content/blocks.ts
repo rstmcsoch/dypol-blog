@@ -13,6 +13,7 @@ export type Card = {
   /** Labels of every topic the article is filed under, primary first. */
   topicLabels: string[];
   coverMediaId: string | null;
+  coverAlt: string | null;
   motif: Article["motif"];
   minutes: number;
   rank: number;
@@ -80,6 +81,7 @@ export function toCard(article: Article, live: Article[], categories: Category[]
     categoryLabel: categories.find((c) => c.id === article.categoryId)?.label ?? "",
     topicLabels: article.topicIds.map((id) => categories.find((c) => c.id === id)?.label ?? "").filter(Boolean),
     coverMediaId: article.coverMediaId ?? null,
+    coverAlt: article.coverAlt ?? null,
     motif: article.motif,
     minutes: readingMinutes(article),
     rank: live.findIndex((a) => a.id === article.id) + 1,

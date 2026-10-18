@@ -65,6 +65,8 @@ export function ArticleView({
           <div className="article-plate">
             <Cover
               mediaId={article.coverMediaId}
+              alt={article.coverAlt}
+              priority
               fallback={fallback}
               motif={article.motif}
               index={padIndex(rank || 1)}
