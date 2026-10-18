@@ -28,7 +28,8 @@
     "test:e2e:mcp": "node scripts/e2e/mcp.e2e.mjs",
     "test:e2e:oauth-browser": "node scripts/e2e/oauth-browser.e2e.mjs",
     "test:e2e:oauth-clients": "node scripts/e2e/oauth-clients.e2e.mjs",
-    "test:e2e:admin-features": "node scripts/e2e/admin-features.e2e.mjs"
+    "test:e2e:admin-features": "node scripts/e2e/admin-features.e2e.mjs",
+    "test:e2e:profiles": "node scripts/e2e/profiles-concurrent.e2e.mjs"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.4",
