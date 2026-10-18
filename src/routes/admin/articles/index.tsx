@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate, useRouter } from "@tanstack/react-router";
 import { DeleteArticleButton } from "@/components/admin/delete-article";
 import { DeleteOldArticles } from "@/components/admin/delete-old-articles";
-import { adminArticles, adminSetAiEditAllowed } from "@/content/admin-api";
+import { adminArticles, adminDuplicateArticle, adminSetAiEditAllowed } from "@/content/admin-api";
 import { publicationStatuses } from "@/content/types";
 import { formatDate } from "@/lib/format";
 
@@ -122,6 +122,8 @@ function ArticleIndex() {
                 <th>Status</th>
                 <th>Topic</th>
                 <th>Cover</th>
+                <th>Views</th>
+                <th>Words</th>
                 <th>Updated</th>
                 <th>
                   <span className="sr-only">Actions</span>
@@ -142,10 +144,13 @@ function ArticleIndex() {
                       {article.status}
                       {article.featured ? " · featured" : ""}
                     </span>
+                    {article.scheduledAt ? <span className="desk-status" title={`Scheduled to publish ${formatDate(article.scheduledAt)}`}> · scheduled {formatDate(article.scheduledAt)}</span> : null}
                     {article.aiEditAllowed ? <span className="desk-status" title="An AI connected over MCP may edit this published article (never delete or unpublish it)"> · AI edit allowed</span> : null}
                   </td>
                   <td>{article.categoryLabel}{(article.topicIds?.length ?? 0) > 1 ? <span className="desk-note"> +{article.topicIds.length - 1} more</span> : null}</td>
                   <td>{article.hasCover ? "✓ Image" : "No image"}</td>
+                  <td>{article.views.toLocaleString()}</td>
+                  <td>{article.words.toLocaleString()}</td>
                   <td>{formatDate(article.updatedAt)}</td>
                   <td>
                     <div className="adm-row-actions">
@@ -157,6 +162,18 @@ function ArticleIndex() {
                           View
                         </a>
                       ) : null}
+                      <button
+                        type="button"
+                        className="btn btn--ghost"
+                        title="Copy this article into a new draft"
+                        onClick={() => {
+                          void adminDuplicateArticle({ data: { id: article.id } })
+                            .then((copy) => router.navigate({ to: "/admin/articles/$id", params: { id: copy.id } }))
+                            .catch(() => router.invalidate());
+                        }}
+                      >
+                        Duplicate
+                      </button>
                       {article.status === "published" ? (
                         <button
                           type="button"

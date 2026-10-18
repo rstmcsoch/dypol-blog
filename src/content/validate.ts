@@ -52,6 +52,7 @@ export const articleWriteSchema = z.object({
   seoDescription: z.string().trim().max(300),
   coverMediaId: z.string().min(1).max(80).nullable(),
   publishedAt: z.string().datetime().nullable(),
+  scheduledAt: z.string().datetime().nullable().optional(),
   blocks: z.array(blockSchema).max(80),
   intent: z.enum(["save", "publish", "unpublish"]),
 });

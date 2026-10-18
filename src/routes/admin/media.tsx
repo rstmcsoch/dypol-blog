@@ -15,6 +15,7 @@ function MediaDesk() {
   const [message, setMessage] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
 
   return (
     <>
@@ -129,9 +130,15 @@ function MediaDesk() {
           {pending ? "Uploading…" : "Upload"}
         </button>
       </form>
+      <label className="field" style={{ marginTop: "1rem", maxWidth: "24rem" }}>
+        <span>Search the library</span>
+        <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Filename or alt text…" />
+      </label>
       {data.media.length === 0 ? <p className="desk-note">The library is empty.</p> : null}
       <div className="media-grid">
-        {data.media.map((item) => (
+        {data.media
+          .filter((item) => !query.trim() || `${item.filename} ${item.alt}`.toLowerCase().includes(query.trim().toLowerCase()))
+          .map((item) => (
           <article key={item.id} className="media-card">
             <img src={`/media/${item.id}`} alt={item.alt || ""} />
             <div>

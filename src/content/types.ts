@@ -19,6 +19,8 @@ export type Article = {
   excerpt: string;
   status: PublicationStatus;
   publishedAt: string | null;
+  /** t68: draft is scheduled to publish at this time (request-time sweep). */
+  scheduledAt?: string | null;
   updatedAt: string;
   categoryId: string;
   /** All topics the article is filed under (migration 0007). categoryId is always topicIds[0], the primary topic. */
