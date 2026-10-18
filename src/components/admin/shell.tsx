@@ -1,37 +1,38 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, useRouter, useRouterState } from "@tanstack/react-router";
+import { Bot, FileText, HelpCircle, Image, LayoutDashboard, LayoutTemplate, LogOut, Megaphone, Moon, Palette, Settings, Sun, Tags, Type, ExternalLink, type LucideIcon } from "lucide-react";
 import { adminSignOut } from "@/content/admin-api";
 
-type NavLinkDef = { to: string; label: string; exact?: boolean };
+type NavLinkDef = { to: string; label: string; exact?: boolean; icon: LucideIcon };
 
 const groups: { label: string; links: NavLinkDef[] }[] = [
   {
     label: "Content",
     links: [
-      { to: "/admin", label: "Dashboard", exact: true },
-      { to: "/admin/articles", label: "Articles" },
-      { to: "/admin/topics", label: "Topics & tags" },
-      { to: "/admin/media", label: "Media" },
+      { to: "/admin", label: "Dashboard", exact: true, icon: LayoutDashboard },
+      { to: "/admin/articles", label: "Articles", icon: FileText },
+      { to: "/admin/topics", label: "Topics & tags", icon: Tags },
+      { to: "/admin/media", label: "Media", icon: Image },
     ],
   },
   {
     label: "Site",
     links: [
-      { to: "/admin/homepage", label: "Homepage builder" },
-      { to: "/admin/ticker", label: "Top strip / Ticker" },
-      { to: "/admin/site-text", label: "Site text" },
-      { to: "/admin/appearance", label: "Appearance" },
+      { to: "/admin/homepage", label: "Homepage builder", icon: LayoutTemplate },
+      { to: "/admin/ticker", label: "Top strip / Ticker", icon: Megaphone },
+      { to: "/admin/site-text", label: "Site text", icon: Type },
+      { to: "/admin/appearance", label: "Appearance", icon: Palette },
     ],
   },
   {
     label: "Automation",
-    links: [{ to: "/admin/automation", label: "AI automation" }],
+    links: [{ to: "/admin/automation", label: "AI automation", icon: Bot }],
   },
   {
     label: "System",
     links: [
-      { to: "/admin/settings", label: "Settings" },
-      { to: "/admin/help", label: "Help" },
+      { to: "/admin/settings", label: "Settings", icon: Settings },
+      { to: "/admin/help", label: "Help", icon: HelpCircle },
     ],
   },
 ];
@@ -48,16 +49,33 @@ export function AdminShell({
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  // Admin-only colour mode, saved in this browser. The public site is unaffected.
-  const [theme, setTheme] = useState<"light" | "dark" | "system">("light");
+  // Admin-only binary colour mode, saved in this browser. First visit follows
+  // the device; after that the toggle choice wins. Public site is unaffected.
+  const [theme, setTheme] = useState<"light" | "dark">("light");
   useEffect(() => {
     const saved = window.localStorage.getItem("dypol-admin-theme");
-    if (saved === "light" || saved === "dark" || saved === "system") setTheme(saved);
+    if (saved === "light" || saved === "dark") setTheme(saved);
+    else if (window.matchMedia("(prefers-color-scheme: dark)").matches) setTheme("dark");
   }, []);
-  const chooseTheme = (next: "light" | "dark" | "system") => {
+  const toggleTheme = () => {
+    const next = theme === "dark" ? "light" : "dark";
     setTheme(next);
     window.localStorage.setItem("dypol-admin-theme", next);
   };
+  const themeButton = (
+    <button
+      type="button"
+      className="adm-theme-toggle"
+      onClick={toggleTheme}
+      aria-label={theme === "dark" ? "Switch admin to light mode" : "Switch admin to dark mode"}
+      title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+      aria-pressed={theme === "dark"}
+      data-testid="admin-theme-toggle"
+      data-theme-value={theme}
+    >
+      {theme === "dark" ? <Sun aria-hidden="true" size={19} /> : <Moon aria-hidden="true" size={19} />}
+    </button>
+  );
   return (
     <div className="desk" data-theme={theme}>
       <aside className={open ? "adm-side is-open" : "adm-side"}>
@@ -69,9 +87,11 @@ export function AdminShell({
               <small>Admin</small>
             </span>
           </Link>
-          <button type="button" className="adm-menu-btn" aria-expanded={open} aria-controls="adm-nav" onClick={() => setOpen((v) => !v)}>
-            {open ? "Close" : "Menu"}
-          </button>
+          <span className="adm-brand__actions">
+            <button type="button" className="adm-menu-btn" aria-expanded={open} aria-controls="adm-nav" onClick={() => setOpen((v) => !v)}>
+              {open ? "Close" : "Menu"}
+            </button>
+          </span>
         </div>
         <nav id="adm-nav" className="adm-nav" aria-label="Admin">
           {groups.map((group) => (
@@ -79,45 +99,43 @@ export function AdminShell({
               <p className="adm-group__label">{group.label}</p>
               {group.links.map((link) => {
                 const active = link.exact ? pathname === link.to || pathname === `${link.to}/` : pathname === link.to || pathname.startsWith(`${link.to}/`);
+                const Icon = link.icon;
                 return (
                   <Link
                     key={link.to}
                     to={link.to}
-                    className={active ? "is-active" : undefined}
+                    className={active ? "adm-nav__item is-active" : "adm-nav__item"}
                     aria-current={active ? "page" : undefined}
                     onClick={() => setOpen(false)}
                   >
-                    {link.label}
+                    <Icon aria-hidden="true" size={18} className="adm-nav__icon" />
+                    <span>{link.label}</span>
                   </Link>
                 );
               })}
             </div>
           ))}
           <div className="adm-group adm-group--foot">
-            <a href="/" target="_blank" rel="noreferrer">
-              View site ↗
+            <a href="/" target="_blank" rel="noreferrer" className="adm-nav__item">
+              <ExternalLink aria-hidden="true" size={18} className="adm-nav__icon" />
+              <span>View site</span>
             </a>
             <button
               type="button"
+              className="adm-nav__item"
               onClick={() => {
                 void adminSignOut().then(() => router.navigate({ to: "/login", search: { denied: false } }));
               }}
             >
-              Sign out
+              <LogOut aria-hidden="true" size={18} className="adm-nav__icon" />
+              <span>Sign out</span>
             </button>
-            <label className="adm-theme">
-              <span>Admin colours</span>
-              <select value={theme} onChange={(e) => chooseTheme(e.target.value as "light" | "dark" | "system")} data-testid="admin-theme">
-                <option value="light">Light</option>
-                <option value="dark">Dark</option>
-                <option value="system">Match my device</option>
-              </select>
-            </label>
             <p className="adm-who">{mode === "dev" ? "Local preview" : (email ?? "Signed in with admin token")}</p>
           </div>
         </nav>
       </aside>
       <main className="desk-main">
+        <div className="adm-topbar">{themeButton}</div>
         <div className="adm-content">{children}</div>
       </main>
     </div>

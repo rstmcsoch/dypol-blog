@@ -1402,11 +1402,19 @@ html[data-theme="dark"] .theme-switch__btn[data-value="dark"] .theme-switch__mar
 .adm-menu-btn { border: 1px solid var(--a-line-strong); border-radius: 8px; background: var(--a-surface); color: var(--a-text); font: inherit; font-size: 0.875rem; padding: 0.35rem 0.75rem; cursor: pointer; }
 .adm-nav { display: none; padding: 0.25rem 0.75rem 1rem; }
 .adm-side.is-open .adm-nav { display: block; }
-.adm-group { display: grid; gap: 2px; padding: 0.5rem 0; }
-.adm-group__label { margin: 0 0 0.25rem; padding: 0 0.6rem; color: var(--a-muted); font-size: 0.72rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
-.adm-group a, .adm-group button { display: block; width: 100%; border: 0; border-radius: 8px; background: transparent; color: var(--a-text); font: inherit; font-size: 0.925rem; text-align: left; text-decoration: none; padding: 0.45rem 0.6rem; cursor: pointer; }
-.adm-group a:hover, .adm-group button:hover { background: var(--a-bg); }
-.adm-group a.is-active { background: var(--a-primary-soft); color: var(--a-primary); font-weight: 600; }
+.adm-group { display: grid; gap: 0.45rem; padding: 0.55rem 0; }
+.adm-group__label { margin: 0 0 0.15rem; padding: 0 0.35rem; color: var(--a-muted); font-size: 0.72rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+.adm-nav__item { display: flex; align-items: center; gap: 0.6rem; width: 100%; border: 1px solid var(--a-line); border-radius: 12px; background: var(--a-surface); box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05); color: var(--a-text); font: inherit; font-size: 0.925rem; text-align: left; text-decoration: none; padding: 0.55rem 0.7rem; cursor: pointer; transition: border-color 120ms ease, background 120ms ease, transform 120ms ease, box-shadow 120ms ease; }
+.adm-nav__icon { flex: 0 0 auto; color: var(--a-muted); }
+.adm-nav__item:hover { border-color: var(--a-line-strong); background: var(--a-primary-soft); transform: translateY(-1px); box-shadow: 0 3px 8px rgba(16, 24, 40, 0.09); }
+.adm-nav__item:hover .adm-nav__icon { color: var(--a-primary); }
+.adm-nav__item.is-active { background: var(--a-primary); border-color: var(--a-primary); color: var(--a-primary-ink); font-weight: 650; box-shadow: 0 3px 10px rgba(16, 24, 40, 0.18); }
+.adm-nav__item.is-active .adm-nav__icon { color: var(--a-primary-ink); }
+.adm-nav__item:focus-visible, .adm-theme-toggle:focus-visible { outline: 2px solid var(--a-primary); outline-offset: 2px; }
+.adm-topbar { position: sticky; top: 0; z-index: 15; display: flex; justify-content: flex-end; align-items: center; padding: 0.6rem 1rem; background: var(--a-bg); }
+.adm-theme-toggle { display: inline-grid; place-items: center; width: 2.4rem; height: 2.4rem; border: 1px solid var(--a-line); border-radius: 999px; background: var(--a-surface); color: var(--a-text); box-shadow: var(--a-shadow); cursor: pointer; transition: border-color 120ms ease, background 120ms ease, transform 120ms ease; }
+.adm-theme-toggle:hover { border-color: var(--a-line-strong); background: var(--a-primary-soft); transform: translateY(-1px); }
+.adm-brand__actions { display: inline-flex; align-items: center; gap: 0.5rem; }
 .adm-group--foot { margin-top: 0.5rem; border-top: 1px solid var(--a-line); padding-top: 0.75rem; }
 .adm-who { margin: 0.4rem 0 0; padding: 0 0.6rem; color: var(--a-muted); font-size: 0.78rem; overflow-wrap: anywhere; }
 .desk-main { min-width: 0; }
@@ -1863,27 +1871,6 @@ html[data-theme="dark"] .theme-switch__btn[data-value="dark"] .theme-switch__mar
   --a-ok-soft: #173326;
   color-scheme: dark;
 }
-@media (prefers-color-scheme: dark) {
-  .desk[data-theme="system"] {
-  --a-bg: #121417;
-  --a-surface: #1b1e23;
-  --a-side: #16191d;
-  --a-text: #e6e8ec;
-  --a-muted: #a2a9b4;
-  --a-line: #2c3138;
-  --a-line-strong: #3d434c;
-  --a-primary: #7c9cff;
-  --a-primary-ink: #0d1117;
-  --a-primary-soft: #1f2a44;
-  --a-danger: #ff7b7b;
-  --a-danger-soft: #3a1d1d;
-  --a-ok: #5fd39a;
-  --a-ok-soft: #173326;
-  color-scheme: dark;
-  }
-}
-.adm-theme { display: grid; gap: 0.25rem; font-size: 0.8rem; color: var(--a-muted); }
-.adm-theme select { background: var(--a-surface); color: var(--a-text); border: 1px solid var(--a-line-strong); border-radius: 6px; padding: 0.3rem; }
 .desk input, .desk select, .desk textarea { background-color: var(--a-surface); color: var(--a-text); }
 .adm-builder { display: grid; gap: 1.25rem; }
 @media (min-width: 1200px) { .adm-builder { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; } }
