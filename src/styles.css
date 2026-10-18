@@ -1769,7 +1769,7 @@ html[data-theme="dark"] .theme-switch__btn[data-value="dark"] .theme-switch__mar
 }
 
 @media (max-width: 560px) { .index-row { grid-template-columns: auto 4rem minmax(0, 1fr); } .index-row__thumb { width: 4rem; } }
-.index-row__thumb { display: block; width: 5.5rem; aspect-ratio: 4 / 3; overflow: hidden; border: var(--line) solid var(--ink); background: color-mix(in srgb, var(--ink) 6%, var(--paper)); }
+.index-row__thumb { display: block; width: 100%; aspect-ratio: 4 / 3; overflow: hidden; border: var(--line) solid var(--ink); background: color-mix(in srgb, var(--ink) 6%, var(--paper)); }
 .index-row__thumb img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: center; }
 .index-row__thumb--empty { display: grid; place-items: end start; padding: 0.35rem; color: var(--muted); font-size: 0.6rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; }
 .aside-thumb { display: inline-block; vertical-align: middle; width: 3.5rem; aspect-ratio: 4 / 3; object-fit: cover; object-position: center; border: 1px solid var(--ink); margin-right: 0.5rem; background: color-mix(in srgb, var(--ink) 6%, var(--paper)); }
@@ -1814,6 +1814,37 @@ html[data-theme="dark"] .theme-switch__btn[data-value="dark"] .theme-switch__mar
 .story-card__meta {
   color: var(--muted);
   font-size: 0.78rem;
+}
+
+/* Card text clamping (display only — full text stays in the data/HTML):
+   card titles max 2 lines, excerpts max 3 lines on larger cards and 2 lines
+   in dense rows, then an ellipsis. This keeps card heights uniform without
+   touching the featured hero (.display/.lede) or article page headers. */
+.story-card__title,
+.index-row__title,
+.band-link__title,
+.topic-card__label,
+.aside-title {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+.story-card__excerpt,
+.topic-card__desc {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+  line-height: 1.45;
+}
+
+.index-row__excerpt {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
 }
 
 .text-block {

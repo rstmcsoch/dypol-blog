@@ -243,7 +243,7 @@ export function SidebarBlocks({ blocks, site, title, slug }: { blocks: ResolvedB
                   <li key={c.id}>
                     <Link to="/articles/$slug" params={{ slug: c.slug }}>
                       {c.coverMediaId ? <img className="aside-thumb" src={`/media/${c.coverMediaId}`} alt="" loading="lazy" /> : null}
-                      {c.title}
+                      <span className="aside-title">{c.title}</span>
                     </Link>
                   </li>
                 ))}
