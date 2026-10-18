@@ -36,7 +36,7 @@ test("PR #5 homepage sections become builder blocks (unknown/duplicate dropped, 
 test("homepage backfill: missing essential sections are added, disabled ones stay disabled", () => {
   const out = normalizeSite({ home: { blocks: [{ id: "home-latest", type: "latest", enabled: false, title: "", count: 5, layout: "list", categoryId: "", tagId: "", body: "", ctaLabel: "", ctaHref: "" }] } });
   const types = out.home.blocks.map((b) => b.type);
-  for (const need of ["featured", "latest", "related", "topics", "tags"]) assert.ok(types.includes(need), need);
+  for (const need of ["featured", "latest", "related", "topics", "tags"] as const) assert.ok(types.includes(need), need);
   assert.equal(out.home.blocks.find((b) => b.type === "latest")?.enabled, false);
   assert.equal(out.home.blocks[0]?.type, "featured");
 });

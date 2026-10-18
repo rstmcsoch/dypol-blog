@@ -219,7 +219,13 @@ export const ESSENTIAL_HOME_BLOCKS: ContentBlock[] = [
 export function upgradeHome(raw: unknown): unknown {
   const r = (raw ?? {}) as { blocks?: unknown; sections?: { id: string; enabled?: boolean; count?: number }[] };
   if (Array.isArray(r.blocks)) {
-    const blocks = r.blocks.map((b) => fill(b as ContentBlock));
+    const blocks = r.blocks.map((b) => {
+      const filled = fill(b as ContentBlock);
+      if (!filled.title && filled.type === "latest") filled.title = "Our new articles";
+      if (!filled.title && filled.type === "topics") filled.title = "Browse by topics";
+      if (!filled.title && filled.type === "related") filled.title = "You may also like";
+      return filled;
+    });
     const have = new Set(blocks.map((b) => b.type));
     const missing = ESSENTIAL_HOME_BLOCKS.filter((b) => !have.has(b.type));
     // Featured belongs first; the rest append in default order, respecting the owner's existing order/visibility.

@@ -20,6 +20,11 @@ export function IndexList({
           <li key={article.id}>
             <Link to="/articles/$slug" params={{ slug: article.slug }} className="index-row">
               <span className="index-row__num">{padIndex(row?.rank ?? 0)}</span>
+              {article.coverMediaId ? (
+                <span className="index-row__thumb"><img src={`/media/${article.coverMediaId}`} alt="" loading="lazy" /></span>
+              ) : (
+                <span className="index-row__thumb index-row__thumb--empty" aria-hidden="true">{row?.categoryLabel ?? ""}</span>
+              )}
               <span className="index-row__main">
                 <span className="index-row__title">{article.title}</span>
                 <span className="index-row__excerpt">{article.excerpt}</span>

@@ -7,6 +7,16 @@ import { Cover, hasCover } from "./cover";
 import { ShareLinks } from "./share";
 import { TopicGrid } from "./topic-grid";
 
+/** Each card's OWN cover (16/9), or a clean fallback panel with its topic — never another article's image. */
+function Thumb({ c, className = "story-card__img" }: { c: Card; className?: string }) {
+  if (c.coverMediaId) return <img className={className} src={`/media/${c.coverMediaId}`} alt="" loading="lazy" />;
+  return (
+    <span className={`${className} story-card__img--empty`} aria-hidden="true">
+      {c.categoryLabel || c.title}
+    </span>
+  );
+}
+
 function CardList({ cards, layout, minRead }: { cards: Card[]; layout: "list" | "grid" | "cards"; minRead: string }) {
   if (layout === "list") {
     return (
@@ -15,6 +25,11 @@ function CardList({ cards, layout, minRead }: { cards: Card[]; layout: "list" | 
           <li key={c.id}>
             <Link to="/articles/$slug" params={{ slug: c.slug }} className="index-row">
               <span className="index-row__num">{padIndex(c.rank)}</span>
+              {c.coverMediaId ? (
+                <span className="index-row__thumb"><img src={`/media/${c.coverMediaId}`} alt="" loading="lazy" /></span>
+              ) : (
+                <span className="index-row__thumb index-row__thumb--empty" aria-hidden="true">{c.categoryLabel}</span>
+              )}
               <span className="index-row__main">
                 <span className="index-row__title">{c.title}</span>
                 <span className="index-row__excerpt">{c.excerpt}</span>
@@ -37,15 +52,7 @@ function CardList({ cards, layout, minRead }: { cards: Card[]; layout: "list" | 
       {cards.map((c) => (
         <li key={c.id}>
           <Link to="/articles/$slug" params={{ slug: c.slug }} className="story-card">
-            {layout === "cards" ? (
-              c.coverMediaId ? (
-                <img className="story-card__img" src={`/media/${c.coverMediaId}`} alt="" loading="lazy" />
-              ) : (
-                <span className="story-card__img story-card__img--empty" aria-hidden="true">
-                  {c.categoryLabel}
-                </span>
-              )
-            ) : null}
+            <Thumb c={c} />
             {c.categoryLabel ? <span className="story-card__cat">{c.categoryLabel}</span> : null}
             <span className="story-card__title">{c.title}</span>
             {layout === "cards" ? <span className="story-card__excerpt">{c.excerpt}</span> : null}
@@ -235,6 +242,7 @@ export function SidebarBlocks({ blocks, site, title, slug }: { blocks: ResolvedB
                 {r.cards.map((c) => (
                   <li key={c.id}>
                     <Link to="/articles/$slug" params={{ slug: c.slug }}>
+                      {c.coverMediaId ? <img className="aside-thumb" src={`/media/${c.coverMediaId}`} alt="" loading="lazy" /> : null}
                       {c.title}
                     </Link>
                   </li>
