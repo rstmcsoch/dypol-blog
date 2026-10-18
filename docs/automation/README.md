@@ -140,12 +140,9 @@ If its OAuth callback is on a host not listed above, add that host in Desk → A
 
 Then create the daily task with `automation-prompt.md`.
 
-## Production steps (not done here)
+## Production steps (not done in this PR)
 
-1. Confirm the production Worker is bound to `dypol-blog-db` in `wrangler.jsonc` and inspect its migration tracker with `npx wrangler d1 migrations list DB --remote --config wrangler.jsonc`.
-2. Use the production-only `npm run deploy` path: it builds, applies only pending D1 migrations to the configured production database, then deploys the Worker. The schema changes are additive; the code never resets the database. Do not use this command for a preview deployment.
-3. If `0004_automations.sql` is already recorded as applied but `automation_schedule` is absent, stop and verify the live binding and migration state before making a new forward-only repair. Do not rerun the `ALTER TABLE` statements manually or reset/recreate D1.
-4. `npx wrangler secret put MCP_TOKEN --name <worker>` with a fresh `openssl rand -hex 32` (only if MCP is needed).
-5. Desk → Automation: enable, keep auto-publish off until a few drafts look right.
-
-See [D1 schema recovery](./D1-schema-recovery.md) for the symptom, binding, safe verification steps and current access blockers.
+1. Merge the PR (Workers Builds deploys both Workers; adds the `MCP_LIMITER` binding).
+2. `npx wrangler d1 migrations apply DB --remote` (applies `0003_automation.sql`, additive).
+3. `npx wrangler secret put MCP_TOKEN --name <worker>` with a fresh `openssl rand -hex 32`.
+4. Desk → Automation: enable, keep auto-publish off until a few drafts look right.

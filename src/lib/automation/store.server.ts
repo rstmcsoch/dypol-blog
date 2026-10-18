@@ -8,7 +8,6 @@ import {
   type AutomationRecord,
 } from "./automation";
 import { normalizeAutomationSettings, type AutomationSettings } from "./settings";
-import { assertAutomationSchemaReady } from "./schema";
 
 /**
  * Persistence for independent automations: definitions, durable schedule state,
@@ -229,8 +228,6 @@ async function insert(sql: Sql, id: string, input: AutomationInput, sortOrder: n
  */
 export async function listAutomations(): Promise<AutomationRecord[]> {
   const sql = await getSql();
-  const env = await workerEnv();
-  await assertAutomationSchemaReady(sql, env.DYPOL_ENV);
   const existing = await selectAll(sql);
   if (existing.length > 0) return existing;
   const legacy = await legacySettings(sql);
@@ -383,8 +380,6 @@ export type ScheduleState = {
 
 export async function readSchedules(): Promise<Map<string, ScheduleState>> {
   const sql = await getSql();
-  const env = await workerEnv();
-  await assertAutomationSchemaReady(sql, env.DYPOL_ENV);
   const rows = await sql<
     { automation_id: string; next_run_at: string | null; last_run_at: string | null; last_status: string; last_reason: string; locked_until: string | null; failure_streak: number }
   >`select automation_id, next_run_at, last_run_at, last_status, last_reason, locked_until, failure_streak from automation_schedule`;
@@ -571,18 +566,26 @@ export async function recordRun(run: RunRecordInput): Promise<string | null> {
 }
 
 export async function recentRuns(limit = 25, automationId?: string): Promise<RunRow[]> {
-  const sql = await getSql();
-  const rows = automationId
-    ? await sql.query<Record<string, unknown>>(`select ${RUN_COLUMNS} from automation_runs where automation_id = ? order by created_at desc limit ?`, [automationId, limit])
-    : await sql.query<Record<string, unknown>>(`select ${RUN_COLUMNS} from automation_runs order by created_at desc limit ?`, [limit]);
-  return rows.map(toRun);
+  try {
+    const sql = await getSql();
+    const rows = automationId
+      ? await sql.query<Record<string, unknown>>(`select ${RUN_COLUMNS} from automation_runs where automation_id = ? order by created_at desc limit ?`, [automationId, limit])
+      : await sql.query<Record<string, unknown>>(`select ${RUN_COLUMNS} from automation_runs order by created_at desc limit ?`, [limit]);
+    return rows.map(toRun);
+  } catch {
+    return [];
+  }
 }
 
 export async function runCounts(automationId: string): Promise<{ total: number; failed: number }> {
-  const sql = await getSql();
-  const rows = await sql<{ total: number; failed: number }>`select count(*) as total,
-    sum(case when status = 'failed' then 1 else 0 end) as failed from automation_runs where automation_id = ${automationId}`;
-  return { total: Number(rows[0]?.total ?? 0), failed: Number(rows[0]?.failed ?? 0) };
+  try {
+    const sql = await getSql();
+    const rows = await sql<{ total: number; failed: number }>`select count(*) as total,
+      sum(case when status = 'failed' then 1 else 0 end) as failed from automation_runs where automation_id = ${automationId}`;
+    return { total: Number(rows[0]?.total ?? 0), failed: Number(rows[0]?.failed ?? 0) };
+  } catch {
+    return { total: 0, failed: 0 };
+  }
 }
 
 export async function automatedPublishesToday(automationId?: string): Promise<number> {

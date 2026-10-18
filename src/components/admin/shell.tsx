@@ -1,8 +1,7 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { Link, useRouter, useRouterState } from "@tanstack/react-router";
-import { Monitor, Moon, Sun } from "lucide-react";
 import { adminSetDeskTheme, adminSignOut } from "@/content/admin-api";
-import type { DeskTheme } from "@/lib/admin-theme";
+import { DESK_THEME_LABELS, deskThemes, type DeskTheme } from "@/lib/admin-theme";
 
 type NavLinkDef = { to: string; label: string; exact?: boolean };
 
@@ -59,16 +58,7 @@ export function AdminShell({
   // The server already picked this from the cookie, so the desk never flashes
   // the wrong palette; changing it writes the cookie and updates in place.
   const [theme, setTheme] = useState<DeskTheme>(storedTheme);
-  const [systemDark, setSystemDark] = useState(false);
   const [themeError, setThemeError] = useState<string | null>(null);
-  useEffect(() => {
-    const media = window.matchMedia("(prefers-color-scheme: dark)");
-    const update = () => setSystemDark(media.matches);
-    update();
-    media.addEventListener?.("change", update);
-    return () => media.removeEventListener?.("change", update);
-  }, []);
-  const darkActive = theme === "dark" || (theme === "system" && systemDark);
   const chooseTheme = (next: DeskTheme) => {
     const previous = theme;
     setTheme(next);
@@ -92,6 +82,20 @@ export function AdminShell({
           <button type="button" className="adm-menu-btn" aria-expanded={open} aria-controls="adm-nav" onClick={() => setOpen((v) => !v)}>
             {open ? "Close" : "Menu"}
           </button>
+        </div>
+        <div className="adm-topbar">
+          <div className="desk-theme" role="group" aria-label="Desk appearance">
+            {deskThemes.map((choice) => (
+              <button key={choice} type="button" aria-pressed={theme === choice} onClick={() => chooseTheme(choice)}>
+                {DESK_THEME_LABELS[choice]}
+              </button>
+            ))}
+          </div>
+          {themeError ? (
+            <p className="desk-note" role="alert">
+              {themeError}
+            </p>
+          ) : null}
         </div>
         <nav id="adm-nav" className="adm-nav" aria-label="Admin">
           {groups.map((group) => (
@@ -130,33 +134,6 @@ export function AdminShell({
         </nav>
       </aside>
       <main className="desk-main">
-        <header className="adm-topbar">
-          {themeError ? <p className="desk-note" role="alert">{themeError}</p> : null}
-          <div className="desk-theme-controls" role="group" aria-label="Admin appearance">
-            <button
-              type="button"
-              className="desk-theme-toggle"
-              aria-pressed={darkActive}
-              aria-label={darkActive ? "Dark appearance active. Switch to light mode." : "Light appearance active. Switch to dark mode."}
-              title={darkActive ? "Switch to light mode" : "Switch to dark mode"}
-              onClick={() => chooseTheme(darkActive ? "light" : "dark")}
-            >
-              {darkActive ? <Moon aria-hidden="true" size={18} /> : <Sun aria-hidden="true" size={18} />}
-              <span className="sr-only">{darkActive ? "Dark mode" : "Light mode"}</span>
-            </button>
-            <details className="desk-theme-options">
-              <summary aria-label="More appearance options" title="More appearance options">
-                <Monitor aria-hidden="true" size={16} />
-              </summary>
-              <div className="desk-theme-options__menu">
-                <p>Theme preference</p>
-                <button type="button" aria-pressed={theme === "system"} onClick={() => chooseTheme("system")}>
-                  Use device setting {theme === "system" ? "· active" : ""}
-                </button>
-              </div>
-            </details>
-          </div>
-        </header>
         <div className="adm-content">{children}</div>
       </main>
     </div>
