@@ -25,8 +25,26 @@ export type StoredMedia = {
   filename: string;
   mime: string;
   alt: string;
+  /** Original uploaded bytes (byte_size). */
   bytes: number;
   createdAt: string;
+  /** t60 variants: stored bytes per variant (0 when absent). */
+  heroBytes: number;
+  thumbBytes: number;
+  width: number;
+  height: number;
+  /** "images-binding" | "original-within-target" | "legacy" | backfill value. */
+  processing: string;
+  hasVariants: boolean;
+};
+
+export type MediaStorageStats = {
+  files: number;
+  /** Bytes actually stored in R2: hero (or legacy original) + thumb. */
+  storedBytes: number;
+  /** Sum of original upload sizes, for before/after comparison. */
+  originalBytes: number;
+  variantBytes: number;
 };
 
 export type MediaBucket = {
@@ -48,7 +66,32 @@ type MediaRow = {
   alt: string;
   byte_size: number;
   created_at: string;
+  hero_key?: string | null;
+  thumb_key?: string | null;
+  hero_byte_size?: number;
+  thumb_byte_size?: number;
+  width?: number;
+  height?: number;
+  processing?: string;
 };
+
+const MEDIA_COLUMNS =
+  "id, object_key, filename, mime, alt, byte_size, created_at, hero_key, thumb_key, hero_byte_size, thumb_byte_size, width, height, processing";
+
+export function heroObjectKey(id: string, contentType = "image/webp"): string {
+  return `${mediaObjectKey(id)}/hero.${contentType === "image/webp" ? "webp" : extensionForMime(contentType)}`;
+}
+
+export function thumbObjectKey(id: string, contentType = "image/webp"): string {
+  return `${mediaObjectKey(id)}/thumb.${contentType === "image/webp" ? "webp" : extensionForMime(contentType)}`;
+}
+
+function extensionForMime(mime: string): string {
+  if (mime === "image/jpeg") return "jpg";
+  if (mime === "image/png") return "png";
+  if (mime === "image/gif") return "gif";
+  return "webp";
+}
 
 export function mediaObjectKey(id: string): string {
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
@@ -58,6 +101,8 @@ export function mediaObjectKey(id: string): string {
 }
 
 function rowToItem(row: MediaRow): StoredMedia {
+  const heroBytes = Number(row.hero_byte_size ?? 0);
+  const thumbBytes = Number(row.thumb_byte_size ?? 0);
   return {
     id: row.id,
     filename: row.filename,
@@ -65,6 +110,12 @@ function rowToItem(row: MediaRow): StoredMedia {
     alt: row.alt,
     bytes: Number(row.byte_size),
     createdAt: row.created_at,
+    heroBytes,
+    thumbBytes,
+    width: Number(row.width ?? 0),
+    height: Number(row.height ?? 0),
+    processing: row.processing || "legacy",
+    hasVariants: Boolean(row.hero_key),
   };
 }
 
@@ -78,25 +129,54 @@ const ENSURE_MEDIA_TABLE = `create table if not exists media (
   created_at text not null
 )`;
 
+/** t60 variant columns (migration 0009). Added idempotently so local
+ * databases created before 0009 keep working; duplicate-column errors
+ * are expected and swallowed. */
+const ENSURE_MEDIA_VARIANT_COLUMNS = [
+  "alter table media add column hero_key text",
+  "alter table media add column thumb_key text",
+  "alter table media add column hero_byte_size integer not null default 0",
+  "alter table media add column thumb_byte_size integer not null default 0",
+  "alter table media add column width integer not null default 0",
+  "alter table media add column height integer not null default 0",
+  "alter table media add column processing text not null default 'legacy'",
+];
+
 export function createMediaStore(bucket: MediaBucket, db: MediaDatabase) {
-  const ready = db.run(ENSURE_MEDIA_TABLE).catch((error) => {
-    throw error;
-  });
+  const ready = (async () => {
+    await db.run(ENSURE_MEDIA_TABLE);
+    for (const statement of ENSURE_MEDIA_VARIANT_COLUMNS) {
+      try {
+        await db.run(statement);
+      } catch {
+        // Column already exists (migration 0009 applied) — fine.
+      }
+    }
+  })();
   return {
     ready,
     async list(): Promise<StoredMedia[]> {
       await ready;
-      const rows = await db.all<MediaRow>(
-        "select id, object_key, filename, mime, alt, byte_size, created_at from media order by created_at desc",
-      );
+      const rows = await db.all<MediaRow>(`select ${MEDIA_COLUMNS} from media order by created_at desc`);
       return rows.map(rowToItem);
     },
     async stats(): Promise<{ files: number; bytes: number }> {
+      const detailed = await this.storageStats();
+      return { files: detailed.files, bytes: detailed.storedBytes };
+    },
+    /** Storage accounting including variants (t60 §storage). */
+    async storageStats(): Promise<MediaStorageStats> {
       await ready;
-      const rows = await db.all<{ files: number; bytes: number }>(
-        "select count(*) as files, coalesce(sum(byte_size), 0) as bytes from media",
+      const rows = await db.all<{ files: number; bytes: number; original_bytes: number; variant_bytes: number }>(
+        "select count(*) as files, coalesce(sum(coalesce(nullif(hero_byte_size, 0), byte_size) + thumb_byte_size), 0) as bytes, coalesce(sum(byte_size), 0) as original_bytes, coalesce(sum(hero_byte_size + thumb_byte_size), 0) as variant_bytes from media",
       );
-      return { files: Number(rows[0]?.files ?? 0), bytes: Number(rows[0]?.bytes ?? 0) };
+      const row = rows[0];
+      return {
+        files: Number(row?.files ?? 0),
+        storedBytes: Number(row?.bytes ?? 0),
+        originalBytes: Number(row?.original_bytes ?? 0),
+        variantBytes: Number(row?.variant_bytes ?? 0),
+      };
     },
     async exists(id: string): Promise<boolean> {
       await ready;
@@ -124,24 +204,145 @@ export function createMediaStore(bucket: MediaBucket, db: MediaDatabase) {
         throw error;
       }
     },
-    async read(id: string): Promise<{ mime: string; bytes: Uint8Array } | null> {
+    /**
+     * Store an upload that has already been processed by the image
+     * pipeline. Both R2 objects are written first; if the D1 insert
+     * fails, every object written for this upload is deleted, so a
+     * failed upload never leaves partial media behind.
+     */
+    async putProcessed(input: {
+      id: string;
+      filename: string;
+      mime: string;
+      alt: string;
+      originalByteSize: number;
+      hero: { bytes: Uint8Array; contentType: string; width: number; height: number };
+      /** null reuses the hero object as the thumb (documented fallback). */
+      thumb: { bytes: Uint8Array; contentType: string } | null;
+      processing: string;
+      createdAt: string;
+    }): Promise<void> {
+      await ready;
+      const heroKey = heroObjectKey(input.id, input.hero.contentType);
+      const thumbKey = input.thumb ? thumbObjectKey(input.id, input.thumb.contentType) : heroKey;
+      const written: string[] = [];
+      try {
+        await bucket.put(heroKey, input.hero.bytes, input.hero.contentType);
+        written.push(heroKey);
+        if (input.thumb && thumbKey !== heroKey) {
+          await bucket.put(thumbKey, input.thumb.bytes, input.thumb.contentType);
+          written.push(thumbKey);
+        }
+        await db.run(
+          "insert into media (id, object_key, filename, mime, alt, byte_size, created_at, hero_key, thumb_key, hero_byte_size, thumb_byte_size, width, height, processing) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+          [
+            input.id,
+            heroKey,
+            input.filename,
+            input.mime,
+            input.alt,
+            input.originalByteSize,
+            input.createdAt,
+            heroKey,
+            thumbKey,
+            input.hero.bytes.byteLength,
+            input.thumb ? input.thumb.bytes.byteLength : 0,
+            input.hero.width,
+            input.hero.height,
+            input.processing,
+          ],
+        );
+      } catch (error) {
+        for (const key of [...new Set(written)]) {
+          await bucket.delete(key).catch(() => undefined);
+        }
+        throw error;
+      }
+    },
+    /** Legacy rows (uploaded before t60) that have no variants yet. */
+    async legacyBatch(limit: number): Promise<StoredMedia[]> {
       await ready;
       const rows = await db.all<MediaRow>(
-        "select id, object_key, filename, mime, alt, byte_size, created_at from media where id = ?",
-        [id],
+        `select ${MEDIA_COLUMNS} from media where hero_key is null order by created_at asc limit ?`,
+        [Math.max(1, Math.min(100, Math.floor(limit) || 10))],
       );
+      return rows.map(rowToItem);
+    },
+    /**
+     * Backfill one legacy row: write variant objects, then point the
+     * row at them. Idempotent — a row that already has variants is
+     * skipped untouched. On D1 failure the new objects are deleted.
+     */
+    async recordVariants(input: {
+      id: string;
+      hero: { bytes: Uint8Array; contentType: string; width: number; height: number };
+      thumb: { bytes: Uint8Array; contentType: string } | null;
+      processing: string;
+    }): Promise<boolean> {
+      await ready;
+      const rows = await db.all<MediaRow>(`select ${MEDIA_COLUMNS} from media where id = ?`, [input.id]);
+      const row = rows[0];
+      if (!row || row.hero_key) return false;
+      const heroKey = heroObjectKey(input.id, input.hero.contentType);
+      const thumbKey = input.thumb ? thumbObjectKey(input.id, input.thumb.contentType) : heroKey;
+      const written: string[] = [];
+      try {
+        await bucket.put(heroKey, input.hero.bytes, input.hero.contentType);
+        written.push(heroKey);
+        if (input.thumb && thumbKey !== heroKey) {
+          await bucket.put(thumbKey, input.thumb.bytes, input.thumb.contentType);
+          written.push(thumbKey);
+        }
+        await db.run(
+          "update media set hero_key = ?, thumb_key = ?, hero_byte_size = ?, thumb_byte_size = ?, width = ?, height = ?, processing = ? where id = ? and hero_key is null",
+          [
+            heroKey,
+            thumbKey,
+            input.hero.bytes.byteLength,
+            input.thumb ? input.thumb.bytes.byteLength : 0,
+            input.hero.width,
+            input.hero.height,
+            input.processing,
+            input.id,
+          ],
+        );
+      } catch (error) {
+        for (const key of [...new Set(written)]) {
+          await bucket.delete(key).catch(() => undefined);
+        }
+        throw error;
+      }
+      return true;
+    },
+    async read(id: string, variant: "hero" | "thumb" = "hero"): Promise<{ mime: string; bytes: Uint8Array } | null> {
+      await ready;
+      const rows = await db.all<MediaRow>(`select ${MEDIA_COLUMNS} from media where id = ?`, [id]);
       const row = rows[0];
       if (!row) return null;
-      const object = await bucket.get(row.object_key);
-      if (!object) return null;
-      return { mime: object.contentType || row.mime, bytes: object.bytes };
+      // Legacy rows (no variants) fall back to the original object.
+      const key = variant === "thumb" ? row.thumb_key || row.hero_key || row.object_key : row.hero_key || row.object_key;
+      const object = await bucket.get(key);
+      if (!object) {
+        // Variant object missing (partial legacy state): serve the original.
+        if (key !== row.object_key) {
+          const original = await bucket.get(row.object_key);
+          if (original) return { mime: original.contentType || row.mime, bytes: original.bytes };
+        }
+        return null;
+      }
+      return { mime: object.contentType || (key.endsWith(".webp") ? "image/webp" : row.mime), bytes: object.bytes };
     },
     async remove(id: string): Promise<boolean> {
       await ready;
-      const rows = await db.all<{ object_key: string }>("select object_key from media where id = ?", [id]);
+      const rows = await db.all<{ object_key: string; hero_key?: string | null; thumb_key?: string | null }>(
+        `select ${MEDIA_COLUMNS} from media where id = ?`,
+        [id],
+      );
       const row = rows[0];
       if (!row) return false;
-      await bucket.delete(row.object_key);
+      for (const key of [...new Set([row.object_key, row.hero_key, row.thumb_key].filter(Boolean) as string[])]) {
+        await bucket.delete(key);
+      }
       await db.run("delete from media where id = ?", [id]);
       return true;
     },

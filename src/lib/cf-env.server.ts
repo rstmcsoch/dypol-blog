@@ -30,6 +30,8 @@ export type WorkerBindings = {
   ANTHROPIC_API_KEY?: string;
   GEMINI_API_KEY?: string;
   OPENROUTER_API_KEY?: string;
+  /** Cloudflare Images binding (t60 image pipeline). */
+  IMAGES?: unknown;
   MCP_LIMITER?: { limit(options: { key: string }): Promise<{ success: boolean }> };
   SIGNIN_LIMITER?: { limit(options: { key: string }): Promise<{ success: boolean }> };
 };

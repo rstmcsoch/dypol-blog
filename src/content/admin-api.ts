@@ -209,6 +209,15 @@ export const adminUploadMedia = createServerFn({ method: "POST" })
     return uploadMedia(data);
   });
 
+/** t60 legacy backfill: dry-run report (apply:false) or one bounded batch. */
+export const adminBackfillMedia = createServerFn({ method: "POST" })
+  .validator((input: { apply: boolean; limit?: number }) => input)
+  .handler(async ({ data }) => {
+    await writeGuard();
+    const { backfillMediaVariants } = await import("./repository.server");
+    return backfillMediaVariants({ apply: data.apply === true, limit: data.limit });
+  });
+
 export const adminDeleteMedia = createServerFn({ method: "POST" })
   .validator((input: { id: string }) => input)
   .handler(async ({ data }) => {
