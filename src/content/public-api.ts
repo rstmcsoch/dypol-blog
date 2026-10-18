@@ -4,7 +4,9 @@ async function requestOrigin(): Promise<string> {
   try {
     const { getRequest } = await import("@tanstack/react-start/server");
     const request = getRequest();
-    return request ? new URL(request.url).origin : "";
+    if (!request) return "";
+    const { canonicalOriginFrom } = await import("@/lib/seo");
+    return canonicalOriginFrom(request.url);
   } catch {
     return "";
   }

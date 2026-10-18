@@ -7,7 +7,8 @@ export const Route = createFileRoute("/feed.xml")({
         const { readFeed } = await import("@/content/repository.server");
         const { rssXml } = await import("@/lib/seo");
         const { site } = await import("@/content/site");
-        const origin = new URL(request.url).origin;
+        const { canonicalOriginFrom } = await import("@/lib/seo");
+        const origin = canonicalOriginFrom(request.url);
         const articles = await readFeed(20);
         const body = rssXml({
           origin,

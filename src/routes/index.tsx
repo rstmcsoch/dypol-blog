@@ -11,18 +11,19 @@ export const Route = createFileRoute("/")({
   head: ({ loaderData }) => {
     const origin = loaderData?.origin ?? "";
     const url = absoluteUrl(origin, "/");
+    const current = loaderData?.site ?? fallbackSite;
     return {
       meta: [
-        { title: fallbackSite.title },
-        { name: "description", content: fallbackSite.description },
-        ...socialMeta({ title: fallbackSite.title, description: fallbackSite.description, url, type: "website", siteName: fallbackSite.name, image: absoluteUrl(origin, "/og.jpg") }),
+        { title: current.title },
+        { name: "description", content: current.description },
+        ...socialMeta({ title: current.title, description: current.description, url, type: "website", siteName: current.name, image: absoluteUrl(origin, "/og.jpg") }),
       ],
       links: [{ rel: "canonical", href: url }],
       scripts: [
         {
           type: "application/ld+json",
           children: JSON.stringify(
-            websiteJsonLd({ origin, siteName: fallbackSite.name, title: fallbackSite.title, description: fallbackSite.description, publisher: fallbackSite.publisher }),
+            websiteJsonLd({ origin, siteName: current.name, title: current.title, description: current.description, publisher: current.publisher }),
           ),
         },
       ],

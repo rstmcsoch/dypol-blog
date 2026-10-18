@@ -32,7 +32,8 @@ const slug = slugMatch[1];
 await check("robots.txt: public allowed, private paths disallowed, sitemaps listed", async () => {
   const { status, text } = await get("/robots.txt");
   assert.equal(status, 200);
-  for (const line of ["Allow: /", "Disallow: /admin", "Disallow: /login", "Disallow: /mcp", "Disallow: /api/", "Sitemap: ", "/news-sitemap.xml"]) assert.ok(text.includes(line), line);
+  for (const line of ["Allow: /", "Disallow: /admin", "Disallow: /mcp", "Disallow: /api/", "Sitemap: ", "/news-sitemap.xml", "User-agent: OAI-SearchBot", "User-agent: Claude-SearchBot", "User-agent: Claude-User"]) assert.ok(text.includes(line), line);
+  assert.ok(!/^Disallow: \/login$/m.test(text), "/login must stay crawlable so its noindex can be read");
 });
 
 await check("sitemap.xml: absolute URLs with lastmod for articles and topics", async () => {

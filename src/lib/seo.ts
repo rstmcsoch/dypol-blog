@@ -31,6 +31,20 @@ export type SeoArticle = {
   coverMediaId?: string | null;
 };
 
+/** The one public host. Both Worker names (and version-preview URLs) serve
+ * the same content on workers.dev, so SEO URLs must consolidate here. */
+export const CANONICAL_ORIGIN = "https://dypolblog.rstmcsoch.workers.dev";
+
+export function canonicalOriginFrom(requestUrl: string): string {
+  try {
+    const url = new URL(requestUrl);
+    if (url.hostname.endsWith(".workers.dev")) return CANONICAL_ORIGIN;
+    return url.origin;
+  } catch {
+    return CANONICAL_ORIGIN;
+  }
+}
+
 function isoOrNull(value: string | null | undefined): string | null {
   if (!value) return null;
   const d = new Date(value);
@@ -56,7 +70,7 @@ export function articleJsonLd(input: { origin: string; siteName: string; publish
       "@type": "Organization",
       name: publisher,
       url: absoluteUrl(origin, "/"),
-      logo: { "@type": "ImageObject", url: absoluteUrl(origin, "/favicon.svg") },
+      logo: { "@type": "ImageObject", url: absoluteUrl(origin, "/logo.svg") },
     },
     mainEntityOfPage: { "@type": "WebPage", "@id": url },
     isAccessibleForFree: true,
@@ -97,7 +111,7 @@ export function websiteJsonLd(input: { origin: string; siteName: string; title: 
         "@id": `${home}#organization`,
         name: input.publisher,
         url: home,
-        logo: absoluteUrl(input.origin, "/favicon.svg"),
+        logo: absoluteUrl(input.origin, "/logo.svg"),
       },
     ],
   };
