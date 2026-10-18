@@ -73,13 +73,13 @@ test("social meta: article times only for articles, large card with image", () =
   assert.equal(xmlEscape(`a & "b" <c>`), "a &amp; &quot;b&quot; &lt;c&gt;");
 });
 
-test("publisher logo uses the dedicated brand asset, not the favicon (t58)", () => {
+test("publisher logo uses the dedicated raster brand asset, not the favicon (t58/t74)", () => {
   const ld = articleJsonLd({ origin: "https://example.com", siteName: "DYPOL Blog", publisher: "DYPOL Labs", article });
-  assert.equal(ld.publisher.logo.url, "https://example.com/logo.svg");
+  assert.equal(ld.publisher.logo.url, "https://example.com/logo.png");
   const site = websiteJsonLd({ origin: "https://example.com", siteName: "DYPOL Blog", title: "DYPOL Blog", description: "d", publisher: "DYPOL Labs" });
   const org = site["@graph"].find((n) => n["@type"] === "Organization");
   assert.ok(org);
-  assert.equal(org.logo, "https://example.com/logo.svg");
+  assert.equal(org.logo, "https://example.com/logo.png");
 });
 
 test("canonical origin consolidates workers.dev aliases, keeps custom domains (t58)", () => {

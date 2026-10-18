@@ -70,7 +70,7 @@ export function articleJsonLd(input: { origin: string; siteName: string; publish
       "@type": "Organization",
       name: publisher,
       url: absoluteUrl(origin, "/"),
-      logo: { "@type": "ImageObject", url: absoluteUrl(origin, "/logo.svg") },
+      logo: { "@type": "ImageObject", url: absoluteUrl(origin, "/logo.png"), width: 1056, height: 256 },
     },
     mainEntityOfPage: { "@type": "WebPage", "@id": url },
     isAccessibleForFree: true,
@@ -111,7 +111,7 @@ export function websiteJsonLd(input: { origin: string; siteName: string; title: 
         "@id": `${home}#organization`,
         name: input.publisher,
         url: home,
-        logo: absoluteUrl(input.origin, "/logo.svg"),
+        logo: absoluteUrl(input.origin, "/logo.png"),
       },
     ],
   };

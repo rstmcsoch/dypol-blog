@@ -24,18 +24,23 @@ export const Route = createRootRoute({
         { name: "viewport", content: "width=device-width, initial-scale=1" },
         { title: current.title },
         { name: "description", content: current.description },
-        { name: "theme-color", content: "#111111" },
+        { name: "theme-color", media: "(prefers-color-scheme: light)", content: "#ffffff" },
+        { name: "theme-color", media: "(prefers-color-scheme: dark)", content: "#0a0a0a" },
         { name: "robots", content: "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" },
       ],
       links: [
-        {
-          rel: "icon",
-          type: "image/svg+xml",
-          href: current.faviconMediaId ? `/media/${current.faviconMediaId}` : "/favicon.svg",
-        },
+        // t74: hardcoded favicon set at STABLE root paths (never hashed, never
+        // admin-overridable) so Google/Bing/browsers always find real files:
+        // /favicon.ico was previously a 404 HTML fallback — the Search Console
+        // "no favicon" cause. Files live in public/ (scripts/generate-favicons.mjs).
+        { rel: "icon", href: "/favicon.ico", sizes: "any" },
+        { rel: "shortcut icon", href: "/favicon.ico" },
+        { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" },
+        { rel: "icon", type: "image/png", sizes: "32x32", href: "/favicon-32x32.png" },
+        { rel: "icon", type: "image/png", sizes: "16x16", href: "/favicon-16x16.png" },
+        { rel: "apple-touch-icon", sizes: "180x180", href: "/apple-touch-icon.png" },
         { rel: "stylesheet", href: appCss },
         { rel: "manifest", href: "/manifest.webmanifest" },
-        { rel: "apple-touch-icon", href: "/__grok/icon-180.png" },
         { rel: "alternate", type: "application/rss+xml", title: `${current.title} feed`, href: "/feed.xml" },
       ],
     };
