@@ -36,9 +36,12 @@ step says so.
    outcome `skipped` and a one-line reason, then stop. Skipping is better than
    publishing low quality.
 7. Call `submit_article_draft` with: `idempotency_key` = `<YYYY-MM-DD>-<slug>` (reuse the
-   same key if you retry), title, slug, excerpt, body, category (id or slug), up to 5
-   existing tags, seo_title, seo_description, `source_urls` (all sources used) and
-   `uncertain: true` if any claim could not be fully verified.
+   same key if you retry), title, slug, excerpt, body, category (use the category **id**
+   returned by `get_blog_settings`, e.g. `ai`), up to 5 existing tags, seo_title,
+   seo_description, `source_urls` (all sources used) and `uncertain: true` if any claim
+   could not be fully verified. If you already uploaded an image in step 8a, also pass
+   its `cover_media_id`. The reply tells you `published` true/false and
+   `publish_reasons` — read them; they are the exact rules that kept it a draft.
 8. Featured image (expected for every article). The image must be a real photo or
    illustration, at least 400x200 px (placeholders, icons, 1-pixel or blank images are
    rejected). In order of preference:
@@ -55,11 +58,15 @@ step says so.
    c. Always pass `alt` (what the image shows), `credit` in the form
       `Photo: <author> / <site>, <license>` and `source_page` (the page showing the
       license). The credit line is added to the end of the draft automatically.
-   Call `upload_featured_image` with `article_id` plus the above. If it fails (for
-   example 403 or too small), try one other image; if that fails too, continue: the
-   draft keeps the `needs_featured_image` flag and the owner adds a cover image in the
-   admin panel.
-9. Call `publish_article_if_allowed` with the `article_id`. Do not try to work around
-   its answer: if it says the piece stays a draft, that is the correct outcome.
+   Call `upload_featured_image` with `article_id` plus the above. Images may be up to
+   10 MB (JPEG/PNG/WebP); if a generated PNG is very large, send the `url` form or a
+   JPEG instead. After a successful attach, the site re-checks the publishing rules
+   automatically and the reply includes `published` and `publish_reasons`. If it fails
+   (for example 403 or too small), try one other image; if that fails too, continue:
+   the draft keeps the `needs_featured_image` flag and the owner adds a cover image in
+   the admin panel.
+9. Call `publish_article_if_allowed` with the `article_id` (safe to call even if step 7
+   or 8 already published it). Do not try to work around its answer: if it says the
+   piece stays a draft, report the exact `reasons` in your run summary.
 10. Call `record_run_result` with outcome `completed`, the `article_id`, and a one-line
     summary (topic + whether it was published or left as a draft and why).

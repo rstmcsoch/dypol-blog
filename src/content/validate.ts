@@ -298,7 +298,7 @@ export const mediaWriteSchema = z.object({
   filename: z.string().trim().min(1).max(120),
   mime: z.enum(["image/jpeg", "image/png", "image/webp", "image/gif"]),
   alt: z.string().trim().max(200),
-  dataBase64: z.string().min(1).max(2_800_000),
+  dataBase64: z.string().min(1).max(14_000_000),
 });
 
 export const articleListSchema = z.object({
@@ -312,8 +312,8 @@ export const articleListSchema = z.object({
 export function decodeImage(dataBase64: string, mime: string): Buffer {
   const cleaned = dataBase64.replace(/^data:[^,]*,/, "");
   const bytes = Buffer.from(cleaned, "base64");
-  if (bytes.length === 0 || bytes.length > 1_500_000) {
-    throw new Error("Image must be under 1.5 MB.");
+  if (bytes.length === 0 || bytes.length > 10_000_000) {
+    throw new Error("Image must be under 10 MB.");
   }
   if (!matchesMime(bytes, mime)) throw new Error("That file is not the image type it claims.");
   return bytes;

@@ -22,7 +22,7 @@ function MediaDesk() {
       <h1 className="desk-title">Media</h1>
       <p className="desk-note">
         Images go in the existing dypol-blog-media bucket through the MEDIA binding. The file name, alt text, and
-        size are recorded in D1. JPEG, PNG, WebP, and GIF, up to 1.5 MB.
+        size are recorded in D1. JPEG, PNG, WebP, and GIF, up to 10 MB.
       </p>
       {data.notice ? (
         <p className="banner banner--bad" role="alert">
