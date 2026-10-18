@@ -44,7 +44,7 @@ This guide explains every part of the DYPOL Blog admin panel in plain language. 
 - **Homepage** (admin → Homepage): this is a builder. Add, remove, reorder and edit blocks. Block types: big featured article, latest articles, “You may also like”, a block for any one topic/category (you can add the same type several times for different topics), topics list, tags, the top strip, your own text, and a button/link block. For each block you can change its heading, how many items it shows, its layout where offered, and show/hide it. Changes are only on the homepage.
 - **Article sidebar** (same builder controls on the article settings): the column next to article text. Add/remove/reorder the same kinds of blocks there (tags, related articles, newest articles, share buttons, and more). Turn the sidebar off and articles use the full width. On phones the sidebar appears under the article.
 - **Top strip / Ticker** (admin → Top strip / Ticker): the thin strip under the header. Turn it on/off (it is on by default), change its label, choose what it shows — newest articles, articles you pick, most-read articles, or your own text items — choose how many items, and how it moves: one at a time, continuous scroll, or still. Set the speed for moving modes. If the source you picked has nothing to show, it automatically shows the newest articles so the strip does not disappear. “Most read” uses a simple anonymous count: one number per article, no visitor tracking, no cookies.
-- **Admin dark mode**: at the top of the admin panel choose Light, Dark, or System (follows your device). This only changes the admin panel, not the public website, and your choice is remembered on that device.
+- **Admin light/dark**: use the sun/moon button at the top-right of the admin panel. One click switches between light and dark. This only changes the admin panel, not the public website, and your choice is remembered on that device. On your first visit it follows your device setting.
 
 ## Site text
 
@@ -78,6 +78,8 @@ An AI app (Claude, ChatGPT, Grok, Cursor, Claude Code, …) can research and wri
 - Each profile can have its own connection key (token). Create it in the profile list: it is shown **once**, so copy it straight into that AI app. Only a scrambled copy is stored on the website, so it cannot be read back later. Revoke a profile's key at any time and that AI app loses access immediately, without affecting the others.
 - The main `MCP_TOKEN` secret still works and belongs to the profile called **Default**. Your existing settings became the Default profile, so nothing changed for automations you already had.
 - Every run in Recent runs shows which profile made it.
+- **Times:** this website has no scheduler and never starts a run by itself. In each profile, write the timezone, days and times you set in that profile's AI app (Grok Automation, a Claude scheduled task, or a cron job). The admin then shows the “next expected run” from those times — that is only an expectation, not a promise. Several profiles can be on at the same time; pausing one does not pause the others, and each profile's daily publishing limit is counted separately.
+- Could the website run profiles itself in future? Only with a Cloudflare Cron Trigger in server-api mode (the site calling an AI provider with your API key secret). That is not switched on, because it needs cost limits and a separate safety review.
 
 ### Tokens and secrets
 
