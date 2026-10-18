@@ -1,9 +1,10 @@
 import { NavLink } from "./nav-link";
-import { useSite } from "./use-site";
+import { usePages, useSite } from "./use-site";
 
 export function SiteFooter() {
   const site = useSite();
   const links = site.nav.filter((item) => item.visible);
+  const pages = usePages();
   return (
     <footer className="site-footer">
       <div className="container footer-grid">
@@ -22,6 +23,13 @@ export function SiteFooter() {
               {item.label}
             </a>
           ))}
+          {pages
+            .filter((page) => !(page.slug === "about" && links.some((item) => item.href === "/about")))
+            .map((page) => (
+              <a key={page.slug} href={`/${page.slug}`} className="footer-link">
+                {page.title}
+              </a>
+            ))}
         </nav>
         <p className="footer-sign">{site.footer.note}</p>
       </div>

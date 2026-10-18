@@ -17,6 +17,7 @@ export const Route = createFileRoute("/sitemap.xml")({
             { path: "/articles", lastmod: newestArticle },
             { path: "/topics", lastmod: newestTopic },
             { path: "/about", lastmod: null },
+            ...(entries.pages ?? []).filter((p) => p.slug !== "about").map((p) => ({ path: `/${p.slug}`, lastmod: null })),
             ...entries.articles.map((a) => ({ path: `/articles/${a.slug}`, lastmod: a.lastmod })),
             ...entries.topics.map((t) => ({ path: `/topics/${t.slug}`, lastmod: t.lastmod })),
           ],

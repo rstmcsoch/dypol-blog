@@ -110,7 +110,17 @@ An AI app (Claude, ChatGPT, Grok, Cursor, Claude Code, …) can research and wri
 - Secrets live in Cloudflare (Workers → your worker → Settings → Variables and Secrets, type **Secret**). They are never in the code or database. A secret added as plain text instead of **Secret** can be wiped by the next deploy.
 - Optional AI provider keys (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `XAI_API_KEY`, `OPENROUTER_API_KEY`, `AI_API_KEY`) are only for the future “server-api” mode. Nothing uses them yet, and the site never calls an AI service by itself.
 
-### Publishing rules
+### Pages (About, Privacy, Terms…)
+
+Admin → **Pages** manages the standard reader-facing pages: **About Us** (`/about`), **Privacy Policy** (`/privacy-policy`), **Terms and Conditions** (`/terms`), **DMCA / Copyright Policy** (`/dmca`), **Cookie Policy** (`/cookie-policy`), **Editorial Policy** (`/editorial-policy`), **Corrections Policy** (`/corrections-policy`), **Contact** (`/contact`) and **Disclaimer** (`/disclaimer`).
+
+- **Edit** any page: change its title, web address (slug), body and status, then save. The body uses light markdown (`##` headings, `-` lists, `**bold**`, `[text](/path)` links).
+- **Hide** a page (status → Hidden) to remove it from the site, footer and sitemap without deleting it; set it back to Published to restore it.
+- **Delete** removes a page permanently (you confirm first). Deleting `/about` removes the About page too — hide instead if you might bring it back.
+- **Add** a new page with the form at the top; it appears at `/its-slug`, in the footer and in the sitemap automatically. Slugs the site itself uses (`/articles`, `/topics`, `/admin`…) are refused.
+- The AI has **no access** to pages — only a signed-in admin can change them. Legal pages carry an effective date; update it when you change the text.
+
+## Publishing rules
 
 - **Enabled / Paused**: when off or paused, the AI can still read settings but cannot write.
 - **Allow automatic publishing**: off means every AI article stays a draft for you to review. On means an AI article is published only if ALL rules pass: its topic is allowed under “Topics automation may publish into” (no topic ticked there = **every** topic is allowed; an article with several topics passes if any one of them is ticked), it has enough words and sources, has a cover image if you require one, has no warning flags (too short, missing sources, placeholder text, duplicate title, the AI said it was unsure, missing cover image), and the daily limit is not reached.

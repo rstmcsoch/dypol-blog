@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, useRouter, useRouterState } from "@tanstack/react-router";
-import { Bot, FileText, HelpCircle, Image, LayoutDashboard, LayoutTemplate, LogOut, Megaphone, Moon, Palette, Settings, Sun, Tags, Type, ExternalLink, type LucideIcon } from "lucide-react";
+import { Bot, FileText, HelpCircle, Image, ScrollText, LayoutDashboard, LayoutTemplate, LogOut, Megaphone, Moon, Palette, Settings, Sun, Tags, Type, ExternalLink, type LucideIcon } from "lucide-react";
 import { adminSignOut } from "@/content/admin-api";
 
 type NavLinkDef = { to: string; label: string; exact?: boolean; icon: LucideIcon };
@@ -21,6 +21,7 @@ const groups: { label: string; links: NavLinkDef[] }[] = [
       { to: "/admin/homepage", label: "Homepage builder", icon: LayoutTemplate },
       { to: "/admin/ticker", label: "Top strip / Ticker", icon: Megaphone },
       { to: "/admin/site-text", label: "Site text", icon: Type },
+      { to: "/admin/pages", label: "Pages", icon: ScrollText },
       { to: "/admin/appearance", label: "Appearance", icon: Palette },
     ],
   },

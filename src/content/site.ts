@@ -8,13 +8,13 @@ export function block(id: string, type: BlockType, over: Partial<ContentBlock> =
 /**
  * Public site configuration.
  * Routine labels, navigation, trending, and footer copy live here
- * so a later admin can own them without a redesign.
+ * so the owner can edit them in the admin panel.
  */
 export const site = {
   name: "DYPOL Blog",
   title: "DYPOL Blog",
   description:
-    "The public journal of DYPOL Labs. Black and white carry the page. Color shows up only where it should be noticed.",
+    "Tech news, reviews and explainers from DYPOL Labs — AI, smartphones, cybersecurity, startups, gadgets and the business of technology.",
   publisher: "DYPOL Labs",
   labels: {
     featured: "Featured",
@@ -23,13 +23,13 @@ export const site = {
     topics: "Topics",
     read: "Read",
     fullIndex: "Full index",
-    indexKicker: "Journal",
+    indexKicker: "DYPOL Blog",
     indexTitle: "Index",
     indexLede: "Every published piece, newest first.",
     topicsKicker: "Filed under",
     topicsTitle: "Topics",
-    topicsLede: "Pieces are filed by subject. A topic with nothing published stays on the list.",
-    aboutKicker: "The journal",
+    topicsLede: "Browse every subject we cover — from AI and smartphones to startups, cybersecurity and electric vehicles.",
+    aboutKicker: "DYPOL Blog",
     aboutTitle: "About",
     related: "Continue",
     neighbors: "Along the index",
@@ -37,12 +37,12 @@ export const site = {
     older: "Older",
     minRead: "min",
     emptyTitle: "Nothing filed here yet",
-    emptyBody: "When a piece in this topic is published, it will show up in this list.",
+    emptyBody: "No stories here yet. New pieces are published regularly — browse the latest in the meantime.",
     emptyAction: "Browse the index",
     notFoundKicker: "404",
     notFoundTitle: "This page is not in the index.",
-    notFoundBody: "The address does not match a published page.",
-    backHome: "Back to the journal",
+    notFoundBody: "We could not find that page. It may have moved, or the address may be wrong.",
+    backHome: "Back to the homepage",
     menu: "Menu",
     close: "Close",
     day: "Day",
@@ -102,11 +102,11 @@ export const site = {
     links: [],
   },
   about: {
+    // Kept for settings compatibility — the public About page is managed
+    // in Admin → Pages (see src/content/pages-seed.ts).
     paragraphs: [
-      "DYPOL Blog is the public journal of DYPOL Labs.",
-      "The page is built as a publication: a white day, a black night, hard edges, and a single color used sparingly. Grain sits only on that color. It is there to give the accent a printed feel, not to cover the type.",
-      "The essays on the index are sample pieces. They show how a story is titled, filed, and read. They are not statements about the lab, and they are not a record of people, partners, or results.",
-      "The same article shape is what a later editor and an automated publishing flow will both write. Neither one needs its own format.",
+      "DYPOL Blog is a technology news and reviews publication, published by DYPOL Labs.",
+      "We cover artificial intelligence, smartphones, apps, cybersecurity, startups, gadgets and the business of technology — explained in plain language, without the hype.",
     ],
   },
   logoMediaId: null,

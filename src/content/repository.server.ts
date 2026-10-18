@@ -5,6 +5,7 @@ import { MediaBindingError, openMediaStore } from "./media-store.server";
 import { site } from "./site";
 import { categories as seedCategories, tags as seedTags } from "./taxonomy";
 import { tickerEntries } from "./ticker";
+import { STANDARD_PAGES, standardPage } from "./pages-seed";
 import { resolveBlocks } from "./blocks";
 import type { Article, ArticleBlock, Category, PublicationStatus, SiteConfig, Tag } from "./types";
 import {
@@ -289,7 +290,74 @@ export async function recordView(slug: string): Promise<boolean> {
 export async function readShell() {
   const data = await publicCatalog();
   const live = published(data.articles);
-  return { site: data.site, trending: tickerEntries(data.site, live, await viewCounts(data.site)) };
+  return { site: data.site, trending: tickerEntries(data.site, live, await viewCounts(data.site)), pages: await readPageLinks() };
+}
+
+// ---------- pages (t52: standard reader-facing pages, admin-only CMS) -----
+type PageRow = { slug: string; title: string; body: string; status: string; updated_at: string };
+
+async function dbPages(): Promise<(PageRow & { id: string })[] | null> {
+  try {
+    const sql = await getSql();
+    return await sql.query<PageRow & { id: string }>("select id,slug,title,body,status,updated_at from pages order by slug");
+  } catch {
+    return null; // pre-0008 database or no binding: built-in defaults below
+  }
+}
+
+/** Published page by slug. D1 when available; built-in defaults otherwise. */
+export async function readPage(slug: string): Promise<PageRow | null> {
+  const rows = await dbPages();
+  if (rows) {
+    const row = rows.find((r) => r.slug === slug);
+    return row && row.status === "published" ? row : null;
+  }
+  const seed = standardPage(slug);
+  return seed ? { slug: seed.slug, title: seed.title, body: seed.body, status: "published", updated_at: "2026-10-18T00:00:00.000Z" } : null;
+}
+
+/** Footer links: published pages, standard pages first in reading order. */
+export async function readPageLinks(): Promise<{ slug: string; title: string }[]> {
+  const rows = await dbPages();
+  const publishedRows = rows ? rows.filter((r) => r.status === "published") : STANDARD_PAGES.map((p) => ({ slug: p.slug, title: p.title }));
+  const order = new Map(STANDARD_PAGES.map((p, i) => [p.slug, i]));
+  return [...publishedRows]
+    .sort((a, b) => (order.get(a.slug) ?? 99) - (order.get(b.slug) ?? 99) || a.title.localeCompare(b.title))
+    .map((r) => ({ slug: r.slug, title: r.title }));
+}
+
+export async function adminListPages() {
+  const rows = await dbPages();
+  if (!rows) throw new Error("The pages table is missing. Apply migration 0008 first.");
+  return rows.map((row) => ({ ...row, standard: STANDARD_PAGES.some((p) => p.slug === row.slug) }));
+}
+
+export async function adminSavePage(input: import("@/lib/pages").PageWrite & { actor: string }) {
+  let sql;
+  try {
+    sql = await getSql();
+  } catch {
+    throw new Error("The pages store needs the database. Apply migration 0008 first.");
+  }
+  const now = new Date().toISOString();
+  const id = input.id && input.id.trim() ? input.id.trim() : input.slug;
+  try {
+    if (input.id) {
+      await sql.query("update pages set slug=$1, title=$2, body=$3, status=$4, updated_at=$5 where id=$6", [input.slug, input.title, input.body, input.status, now, input.id]);
+    } else {
+      await sql.query("insert into pages (id,slug,title,body,status,updated_at) values ($1,$2,$3,$4,$5,$6)", [id, input.slug, input.title, input.body, input.status, now]);
+    }
+  } catch (e) {
+    if (String(e).includes("UNIQUE")) throw new Error(`A page with slug "${input.slug}" already exists.`);
+    throw new Error("Could not save the page. If this is a fresh database, apply migration 0008 first.");
+  }
+  return { id, slug: input.slug, updatedAt: now };
+}
+
+export async function adminDeletePage(input: { id: string; actor: string }) {
+  const sql = await getSql();
+  await sql.query("delete from pages where id=$1", [input.id]);
+  return { ok: true as const };
 }
 
 export async function readHome(draftSite?: SiteConfig) {
@@ -379,6 +447,7 @@ export async function readSitemap() {
   const live = published(data.articles);
   const labelOf = new Map(data.categories.map((c) => [c.id, c.label]));
   return {
+    pages: (await readPageLinks()).map((p) => ({ slug: p.slug })),
     articles: live.map((article) => ({
       slug: article.slug,
       lastmod: article.updatedAt,
