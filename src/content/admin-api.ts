@@ -237,31 +237,88 @@ export const adminSignOut = createServerFn({ method: "POST" }).handler(async () 
   return { ok: true };
 });
 
-export const adminAutomation = createServerFn({ method: "GET" }).handler(async () => {
-  await guard();
-  const { readAutomationSettings, recentRuns } = await import("./automation.server");
-  const { adminList } = await import("./repository.server");
-  const { providerStatus } = await import("@/lib/automation/provider");
-  const { mcpConfigured } = await import("@/lib/mcp/auth");
-  const { workerEnv } = await import("@/lib/cf-env.server");
-  const env = await workerEnv();
-  const settings = await readAutomationSettings();
-  const list = await adminList({});
-  return {
-    settings,
-    runs: await recentRuns(25),
-    categories: list.categories.map((c) => ({ id: c.id, label: c.label })),
-    provider: providerStatus(settings, env),
-    // Only whether it is set; the value never leaves the server.
-    mcpTokenConfigured: mcpConfigured(env.MCP_TOKEN),
-  };
-});
+function profileIdOf(input: unknown): string {
+  const id = (input as { profileId?: unknown } | null)?.profileId;
+  if (id === undefined || id === null || id === "") return "default";
+  if (typeof id !== "string" || !/^(default|p[0-9a-f]{8})$/.test(id)) throw new Error("Unknown automation profile.");
+  return id;
+}
+
+export const adminAutomation = createServerFn({ method: "GET" })
+  .validator((input: unknown) => ({ profileId: profileIdOf(input) }))
+  .handler(async ({ data }) => {
+    await guard();
+    const { readProfileSettings, recentRuns, listProfiles } = await import("./automation.server");
+    const { adminList } = await import("./repository.server");
+    const { providerStatus } = await import("@/lib/automation/provider");
+    const { mcpConfigured } = await import("@/lib/mcp/auth");
+    const { workerEnv } = await import("@/lib/cf-env.server");
+    const env = await workerEnv();
+    const profiles = await listProfiles();
+    const profileId = profiles.some((p) => p.id === data.profileId) ? data.profileId : "default";
+    const settings = await readProfileSettings(profileId);
+    const list = await adminList({});
+    return {
+      profileId,
+      profiles,
+      settings,
+      runs: await recentRuns(25),
+      categories: list.categories.map((c) => ({ id: c.id, label: c.label })),
+      provider: providerStatus(settings, env),
+      // Only whether it is set; the value never leaves the server.
+      mcpTokenConfigured: mcpConfigured(env.MCP_TOKEN),
+    };
+  });
 
 export const adminSaveAutomation = createServerFn({ method: "POST" })
-  .validator((input: unknown) => input)
+  .validator((input: unknown) => {
+    const v = (input ?? {}) as { profileId?: unknown; settings?: unknown };
+    // Older callers posted the settings object directly (default profile).
+    return "settings" in v ? { profileId: profileIdOf(v), settings: v.settings } : { profileId: "default", settings: input };
+  })
   .handler(async ({ data }) => {
     await writeGuard();
-    const { saveAutomationSettings } = await import("./automation.server");
-    await saveAutomationSettings(data);
+    const { saveProfileSettings } = await import("./automation.server");
+    await saveProfileSettings(data.profileId, data.settings);
     return { ok: true };
+  });
+
+type ProfileAction = { action: "create"; name: string } | { action: "rename"; profileId: string; name: string } | { action: "delete" | "token" | "revoke"; profileId: string };
+
+/** Create / rename / delete profiles and issue / revoke their tokens. A new token is returned once. */
+export const adminProfileAction = createServerFn({ method: "POST" })
+  .validator((input: unknown): ProfileAction => {
+    const v = (input ?? {}) as Record<string, unknown>;
+    const name = typeof v.name === "string" ? v.name.slice(0, 200) : "";
+    if (v.action === "create") return { action: "create", name };
+    if (v.action === "rename") return { action: "rename", profileId: profileIdOf(v), name };
+    if (v.action === "delete" || v.action === "token" || v.action === "revoke") return { action: v.action, profileId: profileIdOf(v) };
+    throw new Error("Unknown action.");
+  })
+  .handler(async ({ data }) => {
+    await writeGuard();
+    const store = await import("./automation.server");
+    try {
+      if (data.action === "create") return { ok: true as const, profile: await store.createProfile(data.name) };
+      if (data.action === "rename") await store.renameProfile(data.profileId, data.name);
+      if (data.action === "delete") await store.deleteProfile(data.profileId);
+      if (data.action === "revoke") await store.revokeProfileToken(data.profileId);
+      if (data.action === "token") return { ok: true as const, ...(await store.issueProfileToken(data.profileId)) };
+      return { ok: true as const };
+    } catch (error) {
+      if (error instanceof store.ProfileError) throw new Error(error.message);
+      throw error;
+    }
+  });
+
+/** Data for the homepage builder's live preview (uses the unsaved draft settings). */
+export const adminHomePreview = createServerFn({ method: "POST" })
+  .validator((input: unknown) => input)
+  .handler(async ({ data }) => {
+    await guard();
+    const { readHome, readSettings } = await import("./repository.server");
+    const { normalizeSite } = await import("./validate");
+    const { site } = await readSettings();
+    const draft = normalizeSite({ ...site, ...((data ?? {}) as object) });
+    return { site: draft, ...(await readHome(draft)) };
   });

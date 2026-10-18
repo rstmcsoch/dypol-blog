@@ -12,6 +12,8 @@ import {
   refresh,
   registerClient,
   secretMatches,
+  DEFAULT_PROFILE,
+  type ProfileBinding,
 } from "./auth";
 import { extraClientHosts } from "./hosts.server";
 
@@ -151,7 +153,7 @@ ${message ? `<p class="bad" role="alert">${esc(message)}</p>` : ""}
 <form method="post" action="/oauth/authorize">
 ${hidden("response_type", "code")}${hidden("client_id", params.clientId)}${hidden("redirect_uri", params.redirectUri)}
 ${hidden("code_challenge", params.challenge)}${hidden("code_challenge_method", "S256")}${hidden("state", params.state)}${hidden("scope", params.scope)}
-<label>MCP token (the MCP_TOKEN secret)<br><input type="password" name="owner_secret" autocomplete="off" required></label>
+<label>MCP token (the MCP_TOKEN secret, or an automation profile token from the admin panel)<br><input type="password" name="owner_secret" autocomplete="off" required></label>
 <button type="submit">Allow</button></form></body></html>`;
   return new Response(html, {
     status,
@@ -185,10 +187,18 @@ export async function authorize(request: Request): Promise<Response> {
   if (typeof params === "string") return new Response(params, { status: 400, headers: noStore });
   if (await limited(env, request, "oauth-approve")) return page(params, "Too many attempts. Try again in a minute.", 429);
   const secret = form.get("owner_secret");
-  if (typeof secret !== "string" || !(await secretMatches(secret.slice(0, 512), env.MCP_TOKEN))) {
-    return page(params, "That token is not right.", 401);
+  // Either the master MCP_TOKEN (default profile) or one automation profile's token.
+  let profile: ProfileBinding | null = null;
+  if (typeof secret === "string") {
+    const presented = secret.slice(0, 512);
+    if (await secretMatches(presented, env.MCP_TOKEN)) profile = DEFAULT_PROFILE;
+    else if (presented.trim().startsWith("dyp_")) {
+      const { profileResolver } = await import("@/content/automation.server");
+      profile = await profileResolver.byToken(presented.trim());
+    }
   }
-  const code = await issueCode(env.MCP_TOKEN, { clientId: params.clientId, redirectUri: params.redirectUri, challenge: params.challenge });
+  if (!profile) return page(params, "That token is not right.", 401);
+  const code = await issueCode(env.MCP_TOKEN, { clientId: params.clientId, redirectUri: params.redirectUri, challenge: params.challenge, profile });
   const target = new URL(params.redirectUri);
   target.searchParams.set("code", code);
   if (params.state) target.searchParams.set("state", params.state);
@@ -223,7 +233,8 @@ export async function token(request: Request): Promise<Response> {
     return pair ? json(pair) : oauthError("invalid_grant", "The code is invalid, expired, or does not match.");
   }
   if (grant === "refresh_token") {
-    const pair = await refresh(env.MCP_TOKEN, { refreshToken: get("refresh_token"), clientId: get("client_id") });
+    const { profileResolver } = await import("@/content/automation.server");
+    const pair = await refresh(env.MCP_TOKEN, { refreshToken: get("refresh_token"), clientId: get("client_id") }, undefined, profileResolver);
     return pair ? json(pair) : oauthError("invalid_grant", "The refresh token is invalid or expired.");
   }
   return oauthError("unsupported_grant_type", "Use authorization_code or refresh_token.");

@@ -6,8 +6,8 @@ import { handleRpc, type ToolDefinition } from "./protocol.ts";
 const TOKEN = "t".repeat(40);
 
 test("bearer auth: exact MCP_TOKEN only; disabled when unset or short", async () => {
-  assert.deepEqual(await authenticate(`Bearer ${TOKEN}`, TOKEN), { ok: true, via: "bearer" });
-  assert.deepEqual(await authenticate(`bearer ${TOKEN}`, TOKEN), { ok: true, via: "bearer" });
+  assert.deepEqual(await authenticate(`Bearer ${TOKEN}`, TOKEN), { ok: true, via: "bearer", profile: { id: "default", version: "" } });
+  assert.deepEqual(await authenticate(`bearer ${TOKEN}`, TOKEN), { ok: true, via: "bearer", profile: { id: "default", version: "" } });
   assert.deepEqual(await authenticate(`Bearer ${TOKEN}x`, TOKEN), { ok: false, reason: "invalid" });
   assert.deepEqual(await authenticate(null, TOKEN), { ok: false, reason: "missing" });
   assert.deepEqual(await authenticate(`Basic ${TOKEN}`, TOKEN), { ok: false, reason: "missing" });
@@ -26,7 +26,7 @@ test("OAuth: PKCE code exchange, token use, refresh, rotation revokes", async ()
   assert.equal(await exchangeCode(TOKEN, { code, clientId: "c1", redirectUri: "https://grok.com/other", verifier }), null, "wrong redirect");
   const pair = await exchangeCode(TOKEN, { code, clientId: "c1", redirectUri, verifier });
   assert.ok(pair);
-  assert.deepEqual(await authenticate(`Bearer ${pair.access_token}`, TOKEN), { ok: true, via: "oauth" });
+  assert.deepEqual(await authenticate(`Bearer ${pair.access_token}`, TOKEN), { ok: true, via: "oauth", client: "legacy connector", profile: { id: "default", version: "" } });
   assert.deepEqual(await authenticate(`Bearer ${pair.access_token}`, "r".repeat(40)), { ok: false, reason: "invalid" }, "rotated MCP_TOKEN");
   const later = Math.floor(Date.now() / 1000) + 3601;
   assert.deepEqual(await authenticate(`Bearer ${pair.access_token}`, TOKEN, later), { ok: false, reason: "invalid" }, "expired");
@@ -89,7 +89,7 @@ test("DCR: signed client ids carry name + redirects; tampering and rotation void
   const code = await issueCode(TOKEN, { clientId: id, redirectUri, challenge: await pkceS256(verifier) });
   const pair = await exchangeCode(TOKEN, { code, clientId: id, redirectUri, verifier });
   assert.ok(pair);
-  assert.deepEqual(await authenticate(`Bearer ${pair.access_token}`, TOKEN), { ok: true, via: "oauth", client: "Claude script" });
+  assert.deepEqual(await authenticate(`Bearer ${pair.access_token}`, TOKEN), { ok: true, via: "oauth", client: "Claude script", profile: { id: "default", version: "" } });
   assert.ok(await refresh(TOKEN, { refreshToken: pair.refresh_token, clientId: id }));
 });
 
@@ -125,7 +125,7 @@ test("regression: stored secret with surrounding whitespace still matches the pa
   const stored = `${TOKEN}\n`;
   assert.equal(await secretMatches(TOKEN, stored), true);
   assert.equal(await secretMatches(` ${TOKEN} `, TOKEN), true);
-  assert.deepEqual(await authenticate(`Bearer ${TOKEN}`, stored), { ok: true, via: "bearer" });
+  assert.deepEqual(await authenticate(`Bearer ${TOKEN}`, stored), { ok: true, via: "bearer", profile: { id: "default", version: "" } });
   assert.equal(await secretMatches(TOKEN.slice(1), stored), false);
   assert.equal(await secretMatches(`${TOKEN}x`, stored), false);
   const verifier = "v".repeat(64);
@@ -149,4 +149,25 @@ test("CORS origin allow-list for browser-originated MCP requests", async () => {
   assert.equal(originAllowed("https://claude.ai", self), true);
   assert.equal(originAllowed("https://chatgpt.com", self), true);
   assert.equal(originAllowed("https://claude.ai.evil.com", self), false);
+});
+
+test("profile tokens: resolver binds profile; revoked/replaced profile voids its OAuth tokens", async () => {
+  const { authenticate: auth, issueCode, exchangeCode, refresh, pkceS256 } = await import("./auth.ts");
+  let version = "v1";
+  const resolver = {
+    byToken: async (t: string) => (t === "dyp_p0000abcd_" + "a".repeat(48) ? { id: "p0000abcd", version } : null),
+    stillValid: async (b: { id: string; version: string }) => b.id === "p0000abcd" && b.version === version,
+  };
+  const good = "dyp_p0000abcd_" + "a".repeat(48);
+  assert.deepEqual(await auth(`Bearer ${good}`, TOKEN, undefined, resolver), { ok: true, via: "profile-token", profile: { id: "p0000abcd", version: "v1" } });
+  assert.deepEqual(await auth(`Bearer dyp_p0000abcd_${"b".repeat(48)}`, TOKEN, undefined, resolver), { ok: false, reason: "invalid" });
+  const verifier = "v".repeat(50);
+  const code = await issueCode(TOKEN, { clientId: "dypol-mcp-client", redirectUri: "https://grok.com/cb", challenge: await pkceS256(verifier), profile: { id: "p0000abcd", version: "v1" } });
+  const pair = await exchangeCode(TOKEN, { code, clientId: "dypol-mcp-client", redirectUri: "https://grok.com/cb", verifier });
+  assert.ok(pair);
+  const a = await auth(`Bearer ${pair.access_token}`, TOKEN, undefined, resolver);
+  assert.equal(a.ok && a.profile.id, "p0000abcd");
+  version = "v2"; // token replaced or revoked
+  assert.deepEqual(await auth(`Bearer ${pair.access_token}`, TOKEN, undefined, resolver), { ok: false, reason: "invalid" });
+  assert.equal(await refresh(TOKEN, { refreshToken: pair.refresh_token, clientId: "dypol-mcp-client" }, undefined, resolver), null);
 });

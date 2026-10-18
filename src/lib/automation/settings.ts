@@ -103,11 +103,33 @@ export function normalizeAutomationSettings(input: unknown): AutomationSettings 
   };
   if (!serverApiSchema.safeParse(merged.serverApi).success) merged.serverApi = DEFAULT_AUTOMATION_SETTINGS.serverApi;
   const parsed = automationSettingsSchema.safeParse(merged);
-  return parsed.success ? parsed.data : DEFAULT_AUTOMATION_SETTINGS;
+  if (parsed.success) return parsed.data;
+  // One bad field must not silently reset (and disable) everything: fall back field by field.
+  const shape = automationSettingsSchema.shape as Record<string, z.ZodType>;
+  const out: Record<string, unknown> = { ...DEFAULT_AUTOMATION_SETTINGS };
+  for (const key of Object.keys(shape)) {
+    const value = (merged as Record<string, unknown>)[key];
+    if (key === "policy") {
+      const pol: Record<string, unknown> = { ...DEFAULT_AUTOMATION_SETTINGS.policy };
+      const polShape = publishingPolicySchema.shape as Record<string, z.ZodType>;
+      for (const k of Object.keys(polShape)) {
+        const v = (value as Record<string, unknown>)?.[k];
+        if (polShape[k].safeParse(v).success) pol[k] = v;
+      }
+      out.policy = pol;
+    } else if (shape[key].safeParse(value).success) {
+      out[key] = value;
+    } else if (Array.isArray(value) && shape[key] instanceof z.ZodArray) {
+      const element = (shape[key] as z.ZodArray<z.ZodType>).element;
+      const kept = value.filter((item) => element.safeParse(item).success);
+      if (shape[key].safeParse(kept).success) out[key] = kept;
+    }
+  }
+  return automationSettingsSchema.parse(out);
 }
 
 export function automationActive(settings: AutomationSettings): { active: boolean; reason: string | null } {
-  if (!settings.enabled) return { active: false, reason: "Automation is disabled in the desk." };
-  if (settings.paused) return { active: false, reason: "Automation is paused in the desk." };
+  if (!settings.enabled) return { active: false, reason: "Automation is turned off in the admin panel." };
+  if (settings.paused) return { active: false, reason: "Automation is paused in the admin panel." };
   return { active: true, reason: null };
 }

@@ -5,6 +5,7 @@ import { MediaBindingError, openMediaStore } from "./media-store.server";
 import { site } from "./site";
 import { categories as seedCategories, tags as seedTags } from "./taxonomy";
 import { tickerEntries } from "./ticker";
+import { resolveBlocks } from "./blocks";
 import type { Article, ArticleBlock, Category, PublicationStatus, SiteConfig, Tag } from "./types";
 import {
   articleWriteSchema,
@@ -206,35 +207,47 @@ export function metaFor(articles: Article[], publishedOrder: Article[], categori
   return meta;
 }
 
+function needsViews(site: SiteConfig): boolean {
+  const all = [...site.home.blocks, ...site.articleSidebar.blocks];
+  return site.trending.source === "popular" || all.some((b) => b.enabled && (b.type === "popular" || (b.type === "ticker" && site.trending.source === "popular")));
+}
+
+/** article id -> view count. Never throws (an older database without the table just has no counts). */
+async function viewCounts(site: SiteConfig): Promise<Record<string, number>> {
+  if (!needsViews(site)) return {};
+  try {
+    const sql = await getSql();
+    const rows = await sql<{ article_id: string; views: number }>`select article_id, views from article_views`;
+    return Object.fromEntries(rows.map((r) => [r.article_id, Number(r.views)]));
+  } catch {
+    return {};
+  }
+}
+
+/** Privacy-friendly counter: one integer per article, no IPs, cookies or user data stored. */
+export async function recordView(slug: string): Promise<boolean> {
+  const sql = await getSql();
+  const rows = await sql<{ id: string }>`select id from articles where slug = ${slug} and status = 'published' limit 1`;
+  const id = rows[0]?.id;
+  if (!id) return false;
+  const now = new Date().toISOString();
+  await sql`insert into article_views (article_id, views, updated_at) values (${id}, 1, ${now})
+    on conflict (article_id) do update set views = views + 1, updated_at = excluded.updated_at`;
+  return true;
+}
+
 export async function readShell() {
   const data = await publicCatalog();
   const live = published(data.articles);
-  return { site: data.site, trending: tickerEntries(data.site, live) };
+  return { site: data.site, trending: tickerEntries(data.site, live, await viewCounts(data.site)) };
 }
 
-export async function readHome() {
+export async function readHome(draftSite?: SiteConfig) {
   const data = await publicCatalog();
+  const site = draftSite ?? data.site;
   const live = published(data.articles);
-  const sections = data.site.home.sections;
-  const count = (id: string, fallback: number) => sections.find((x) => x.id === id)?.count ?? fallback;
-  const on = (id: string) => sections.find((x) => x.id === id)?.enabled ?? true;
-  const lead = on("featured") ? (live.find((article) => article.featured) ?? live[0] ?? null) : null;
-  const rest = live.filter((article) => article.id !== lead?.id);
-  const band = on("also") ? rest.slice(0, count("also", 3)) : [];
-  const index = on("latest") ? rest.slice(band.length, band.length + count("latest", 12)) : [];
-  const topics = on("topics")
-    ? data.categories
-        .map((category) => ({ category, count: live.filter((article) => article.categoryId === category.id).length }))
-        .slice(0, count("topics", 12))
-    : [];
-  return {
-    lead,
-    band,
-    index,
-    empty: live.length === 0,
-    meta: metaFor([...(lead ? [lead] : []), ...band, ...index], live, data.categories),
-    topics,
-  };
+  const blocks = resolveBlocks(site.home.blocks, { site, live, categories: data.categories, tags: data.tags, views: await viewCounts(site) }, "home");
+  return { blocks, empty: live.length === 0 };
 }
 
 export async function readIndex() {
@@ -279,7 +292,7 @@ export async function readPreview(id: string) {
   return articlePayload(data, article, live);
 }
 
-function articlePayload(
+async function articlePayload(
   data: Awaited<ReturnType<typeof catalog>>,
   article: Article,
   live: Article[],
@@ -288,9 +301,9 @@ function articlePayload(
   const same = live.filter((item) => item.categoryId === article.categoryId && item.id !== article.id);
   const rest = live.filter((item) => item.id !== article.id && !same.some((picked) => picked.id === item.id));
   const related = [...same, ...rest].slice(0, 3);
-  const sideCount = data.site.articleSidebar.count;
-  const alsoLike = [...same, ...rest].slice(0, sideCount);
-  const latest = live.filter((item) => item.id !== article.id).slice(0, sideCount);
+  const sidebar = data.site.articleSidebar.enabled
+    ? resolveBlocks(data.site.articleSidebar.blocks, { site: data.site, live, categories: data.categories, tags: data.tags, views: await viewCounts(data.site), current: article }, "sidebar")
+    : [];
   return {
     article,
     category: categoryOf(data.categories, article.categoryId) ?? null,
@@ -303,8 +316,7 @@ function articlePayload(
       older: index >= 0 ? live[index + 1] : undefined,
     },
     rank: index === -1 ? 0 : index + 1,
-    alsoLike: alsoLike.map(({ id, slug, title }) => ({ id, slug, title })),
-    latest: latest.map(({ id, slug, title, publishedAt }) => ({ id, slug, title, publishedAt })),
+    sidebar,
     meta: metaFor(related, live, data.categories),
   };
 }

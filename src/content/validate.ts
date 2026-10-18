@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { isSafeHref } from "./rules.ts";
 import { site } from "./site.ts";
-import { publicationStatuses, type SiteConfig } from "./types.ts";
+import { BLOCK_TYPES, publicationStatuses, type ContentBlock, type SiteConfig } from "./types.ts";
 
 export { isSafeHref, publishProblems, slugify } from "./rules.ts";
 
@@ -61,10 +61,41 @@ const hrefSchema = z
   .max(300)
   .refine((value) => isSafeHref(value), "Link must be a site path or an https URL.");
 
-export const HOME_SECTION_IDS = ["featured", "also", "latest", "topics"] as const;
-export const SIDEBAR_BLOCKS = ["tags", "related", "newStories", "share"] as const;
+export const HOME_BLOCK_TYPES = ["featured", "also", "latest", "related", "popular", "category", "tag", "topics", "ticker", "text", "cta"] as const;
+export const SIDEBAR_BLOCK_TYPES = ["tags", "related", "newStories", "popular", "share", "category", "tag", "text", "cta"] as const;
 
 const labelText = z.string().trim().min(1).max(80);
+
+const blockSchema2 = z.object({
+  id: z.string().trim().min(1).max(60).regex(/^[A-Za-z0-9_-]+$/),
+  type: z.enum(BLOCK_TYPES),
+  enabled: z.boolean(),
+  title: z.string().trim().max(120),
+  count: z.number().int().min(1).max(50),
+  layout: z.enum(["list", "grid", "cards"]),
+  categoryId: z.string().max(80),
+  tagId: z.string().max(80),
+  body: z.string().max(5000),
+  ctaLabel: z.string().trim().max(80),
+  ctaHref: z.union([z.literal(""), z.string().trim().max(500).refine((v) => isSafeHref(v), "Use /path or https://…")]),
+});
+
+function blockList(types: readonly string[], max: number) {
+  return z
+    .array(blockSchema2)
+    .max(max)
+    .superRefine((list, ctx) => {
+      const ids = new Set<string>();
+      list.forEach((b, i) => {
+        if (!types.includes(b.type)) ctx.addIssue({ code: "custom", path: [i, "type"], message: `“${b.type}” can't be used here.` });
+        if (ids.has(b.id)) ctx.addIssue({ code: "custom", path: [i, "id"], message: "Duplicate block id." });
+        ids.add(b.id);
+        if (b.type === "category" && !b.categoryId) ctx.addIssue({ code: "custom", path: [i, "categoryId"], message: "Pick a topic for this block." });
+        if (b.type === "tag" && !b.tagId) ctx.addIssue({ code: "custom", path: [i, "tagId"], message: "Pick a tag for this block." });
+        if (b.type === "cta" && (!b.ctaLabel || !b.ctaHref)) ctx.addIssue({ code: "custom", path: [i, "ctaHref"], message: "A button needs a label and a link." });
+      });
+    });
+}
 
 const siteSchema = z.object({
   name: z.string().trim().min(1).max(80),
@@ -117,6 +148,7 @@ const siteSchema = z.object({
     copyLink: labelText,
     linkCopied: labelText,
     tags: labelText,
+    popular: labelText,
   }),
   nav: z
     .array(
@@ -132,7 +164,9 @@ const siteSchema = z.object({
     enabled: z.boolean(),
     label: labelText,
     slugs: z.array(slugSchema).max(12),
-    source: z.enum(["latest", "pinned", "custom"]),
+    source: z.enum(["latest", "pinned", "custom", "popular"]),
+    mode: z.enum(["static", "scroll", "rotate"]),
+    interval: z.number().int().min(2).max(30),
     count: z.number().int().min(1).max(12),
     customItems: z
       .array(z.object({ id: z.string().min(1).max(40), text: z.string().trim().min(1).max(160), href: z.union([z.literal(""), hrefSchema]) }))
@@ -140,17 +174,8 @@ const siteSchema = z.object({
     animate: z.boolean(),
     speed: z.number().int().min(10).max(180),
   }),
-  home: z.object({
-    sections: z
-      .array(z.object({ id: z.enum(HOME_SECTION_IDS), enabled: z.boolean(), count: z.number().int().min(1).max(50) }))
-      .length(HOME_SECTION_IDS.length)
-      .refine((list) => new Set(list.map((x) => x.id)).size === list.length, "Each homepage section appears once."),
-  }),
-  articleSidebar: z.object({
-    enabled: z.boolean(),
-    blocks: z.array(z.enum(SIDEBAR_BLOCKS)).max(SIDEBAR_BLOCKS.length).refine((b) => new Set(b).size === b.length, "Each block appears once."),
-    count: z.number().int().min(1).max(10),
-  }),
+  home: z.object({ blocks: blockList(HOME_BLOCK_TYPES, 30) }),
+  articleSidebar: z.object({ enabled: z.boolean(), blocks: blockList(SIDEBAR_BLOCK_TYPES, 12) }),
   appearance: z.object({
     darkness: z.number().int().min(75).max(100),
     whiteness: z.number().int().min(85).max(100),
@@ -177,16 +202,39 @@ const siteSchema = z.object({
 });
 
 
-/** Keeps a stored section list valid: known ids once each, missing ones appended from defaults. */
-function mergeSections(raw: unknown): SiteConfig["home"]["sections"] {
-  const list = Array.isArray(raw) ? raw : [];
-  const out: SiteConfig["home"]["sections"] = [];
-  for (const item of list) {
-    const def = site.home.sections.find((d) => d.id === (item as { id?: string })?.id);
-    if (def && !out.some((o) => o.id === def.id)) out.push({ ...def, ...(item as object), id: def.id });
+const fill = (b: Partial<ContentBlock> & { id: string; type: ContentBlock["type"] }): ContentBlock => ({
+  enabled: true, title: "", count: 5, layout: "list", categoryId: "", tagId: "", body: "", ctaLabel: "", ctaHref: "", ...b,
+});
+
+/** Converts the PR #5 shapes (fixed sections / string sidebar blocks) to block lists. */
+export function upgradeHome(raw: unknown): unknown {
+  const r = (raw ?? {}) as { blocks?: unknown; sections?: { id: string; enabled?: boolean; count?: number }[] };
+  if (Array.isArray(r.blocks)) return { blocks: r.blocks.map((b) => fill(b as ContentBlock)) };
+  if (Array.isArray(r.sections)) {
+    const seen = new Set<string>();
+    const known = r.sections.filter((sec) => (HOME_BLOCK_TYPES as readonly string[]).includes(sec?.id) && !seen.has(sec.id) && seen.add(sec.id));
+    return { blocks: known.map((sec) => fill({ id: `home-${sec.id}`, type: sec.id as ContentBlock["type"], enabled: sec.enabled ?? true, count: sec.count ?? 5 })) };
   }
-  for (const def of site.home.sections) if (!out.some((o) => o.id === def.id)) out.push({ ...def });
-  return out;
+  return site.home;
+}
+
+export function upgradeSidebar(raw: unknown): unknown {
+  const r = (raw ?? {}) as { enabled?: boolean; blocks?: unknown[]; count?: number };
+  if (!Array.isArray(r.blocks)) return { ...site.articleSidebar, ...(typeof r.enabled === "boolean" ? { enabled: r.enabled } : {}) };
+  return {
+    enabled: r.enabled ?? true,
+    blocks: r.blocks.map((b) =>
+      typeof b === "string" ? fill({ id: `side-${b}`, type: b as ContentBlock["type"], count: r.count ?? 4 }) : fill(b as ContentBlock),
+    ),
+  };
+}
+
+function upgradeTrending(raw: unknown): unknown {
+  const r = { ...site.trending, ...((raw ?? {}) as object) } as SiteConfig["trending"] & { mode?: string };
+  // Before PR #5 the strip only showed picked articles.
+  if (raw && !(raw as { source?: string }).source && Array.isArray((raw as { slugs?: unknown }).slugs)) r.source = "pinned";
+  if (!raw || !(raw as { mode?: string }).mode) r.mode = (raw as { animate?: boolean })?.animate ? "scroll" : site.trending.mode;
+  return r;
 }
 
 /**
@@ -202,9 +250,9 @@ export function normalizeSite(input: unknown): SiteConfig {
   };
   return normalizeCore({
     ...raw,
-    trending: pick("trending", { ...site.trending, ...(raw.trending ?? {}) }),
-    home: pick("home", { sections: mergeSections(raw.home?.sections) }),
-    articleSidebar: pick("articleSidebar", { ...site.articleSidebar, ...(raw.articleSidebar ?? {}) }),
+    trending: pick("trending", upgradeTrending(raw.trending)),
+    home: pick("home", upgradeHome(raw.home)),
+    articleSidebar: pick("articleSidebar", upgradeSidebar(raw.articleSidebar)),
     appearance: pick("appearance", { ...site.appearance, ...(raw.appearance ?? {}) }),
   });
 }

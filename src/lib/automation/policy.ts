@@ -80,8 +80,10 @@ export function publishDecision(input: {
   if (!input.active.active) reasons.push(input.active.reason ?? "Automation is not active.");
   if (!input.policy.autoPublish) reasons.push("Auto-publish is off in the publishing policy (default).");
   if (input.status !== "draft") reasons.push(`The article is ${input.status}, not a draft.`);
-  if (!input.policy.allowedCategoryIds.includes(input.categoryId)) {
-    reasons.push("Its category is not on the policy's allowed list.");
+  if (input.policy.allowedCategoryIds.length === 0) {
+    reasons.push("No topics are allowed for automatic publishing yet (admin → Automation → Publishing rules → Allowed topics).");
+  } else if (!input.policy.allowedCategoryIds.includes(input.categoryId)) {
+    reasons.push("Its topic is not on the policy's allowed list.");
   }
   const blocking = input.flags.filter(
     (flag) => !ADVISORY.includes(flag) && !(flag === "needs_featured_image" && !input.policy.requireFeaturedImage),

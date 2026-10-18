@@ -88,11 +88,11 @@ function invalid(error: z.ZodError): ToolResult {
   };
 }
 
-type Ctx = { auth: string };
+type Ctx = { auth: string; profileId?: string };
 
-async function loadSettings() {
-  const { readAutomationSettings } = await import("@/content/automation.server");
-  return readAutomationSettings();
+async function loadSettings(profileId: string) {
+  const { readProfileSettings } = await import("@/content/automation.server");
+  return readProfileSettings(profileId);
 }
 
 async function writeGate(settings: AutomationSettings): Promise<string | null> {
@@ -121,6 +121,7 @@ function sourcesBlocks(urls: string[]): ArticleBlock[] {
 
 export function buildTools(ctx: Ctx): ToolDefinition[] {
   const { auth } = ctx;
+  const profileId = ctx.profileId ?? "default";
   return [
     {
       name: "get_blog_settings",
@@ -131,7 +132,7 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
       inputSchema: schemaOf(z.object({})),
       annotations: { readOnlyHint: true, openWorldHint: false },
       run: async () => {
-        const settings = await loadSettings();
+        const settings = await loadSettings(profileId);
         const { readSettings } = await import("@/content/repository.server");
         const { site } = await readSettings();
         const env = (await workerEnv()) as KeyEnv;
@@ -140,6 +141,7 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
           data: {
             site: { name: site.name, title: site.title, description: site.description, publisher: site.publisher },
             automation: {
+              profile: { id: profileId, name: (await (await import("@/content/automation.server")).listProfiles()).find((p) => p.id === profileId)?.name ?? profileId },
               ...automationActive(settings),
               enabled: settings.enabled,
               paused: settings.paused,
@@ -211,11 +213,11 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
         const parsed = submitSchema.safeParse(args ?? {});
         if (!parsed.success) return invalid(parsed.error);
         const input = parsed.data;
-        const settings = await loadSettings();
+        const settings = await loadSettings(profileId);
         const blocked = await writeGate(settings);
         const store = await import("@/content/automation.server");
         if (blocked) {
-          await store.recordRun({ tool: "submit_article_draft", outcome: "refused", reason: blocked, auth });
+          await store.recordRun({ profileId, tool: "submit_article_draft", outcome: "refused", reason: blocked, auth });
           return { ok: false, error: blocked };
         }
         const prior = await store.findSubmission({ key: input.idempotency_key });
@@ -278,7 +280,7 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
         } catch (error) {
           if (error instanceof ContentError || error instanceof z.ZodError) {
             const message = error instanceof z.ZodError ? "The article failed validation." : error.message;
-            await store.recordRun({ tool: "submit_article_draft", outcome: "rejected", reason: message, auth });
+            await store.recordRun({ profileId, tool: "submit_article_draft", outcome: "rejected", reason: message, auth });
             return { ok: false, error: message };
           }
           throw error;
@@ -289,14 +291,15 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
           articleId: saved.id,
           sourceUrls: sources,
           flags,
-          provider: "mcp-connector",
+          provider: auth,
+          profileId,
           createdAt: new Date().toISOString(),
         });
         if (winner.articleId !== saved.id) {
           await deleteDraft(saved.id); // lost a concurrent retry race: keep the first draft only
           return { ok: true, data: { duplicate: true, matchedBy: "idempotency_key", article_id: winner.articleId, flags: winner.flags, status: "unchanged" } };
         }
-        await store.recordRun({
+        await store.recordRun({ profileId,
           tool: "submit_article_draft",
           outcome: "drafted",
           reason: flags.length ? `flags: ${flags.join(", ")}` : "",
@@ -330,9 +333,12 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
         const parsed = publishSchema.safeParse(args ?? {});
         if (!parsed.success) return invalid(parsed.error);
         const store = await import("@/content/automation.server");
-        const settings = await loadSettings();
+        const settings = await loadSettings(profileId);
         const submission = await store.findSubmission({ articleId: parsed.data.article_id });
         if (!submission) return { ok: false, error: "Only drafts created by automation can be published by automation." };
+        if ((submission.profileId ?? "default") !== profileId) {
+          return { ok: false, error: "That draft was created by a different automation profile; only that profile (or the owner) can publish it." };
+        }
         const sql = await getSql();
         const rows = await sql<{ status: string; category_id: string; slug: string }>`
           select status, category_id, slug from articles where id = ${parsed.data.article_id}`;
@@ -343,19 +349,19 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
           status: rows[0].status,
           categoryId: rows[0].category_id,
           flags: submission.flags as DraftFlag[],
-          publishedToday: await store.automatedPublishesToday(),
+          publishedToday: await store.automatedPublishesToday(profileId),
         });
         if (decision.publish && !(await writesAllowed())) {
           return { ok: true, data: { published: false, status: rows[0].status, reasons: ["This deployment is read-only."] } };
         }
         if (!decision.publish) {
-          await store.recordRun({ tool: "publish_article_if_allowed", outcome: "kept_draft", reason: decision.reasons.join(" "), articleId: parsed.data.article_id, auth });
+          await store.recordRun({ profileId, tool: "publish_article_if_allowed", outcome: "kept_draft", reason: decision.reasons.join(" "), articleId: parsed.data.article_id, auth });
           return { ok: true, data: { published: false, status: rows[0].status, reasons: decision.reasons } };
         }
         const now = new Date().toISOString();
         await sql`update articles set status = 'published', published_at = ${now}, updated_at = ${now}
           where id = ${parsed.data.article_id} and status = 'draft'`;
-        await store.recordRun({ tool: "publish_article_if_allowed", outcome: "published", articleId: parsed.data.article_id, auth });
+        await store.recordRun({ profileId, tool: "publish_article_if_allowed", outcome: "published", articleId: parsed.data.article_id, auth });
         return { ok: true, data: { published: true, status: "published", path: `/articles/${rows[0].slug}` } };
       },
     },
@@ -373,11 +379,11 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
         const parsed = imageSchema.safeParse(args ?? {});
         if (!parsed.success) return invalid(parsed.error);
         const input = parsed.data;
-        const settings = await loadSettings();
+        const settings = await loadSettings(profileId);
         const store = await import("@/content/automation.server");
         const blocked = await writeGate(settings);
         if (blocked) {
-          await store.recordRun({ tool: "upload_featured_image", outcome: "refused", reason: blocked, auth });
+          await store.recordRun({ profileId, tool: "upload_featured_image", outcome: "refused", reason: blocked, auth });
           return { ok: false, error: blocked };
         }
         let submission = null;
@@ -391,7 +397,7 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
           assertUsableCover(image.bytes, image.mime as ImageMime);
         } catch (error) {
           const message = error instanceof ImageIntakeError ? error.message : "Image could not be read.";
-          await store.recordRun({ tool: "upload_featured_image", outcome: "rejected", reason: message, articleId: input.article_id, auth });
+          await store.recordRun({ profileId, tool: "upload_featured_image", outcome: "rejected", reason: message, articleId: input.article_id, auth });
           return { ok: false, error: message };
         }
         let bin = "";
@@ -413,12 +419,19 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
             const blocks = JSON.parse(rows[0]?.blocks ?? "[]") as { type: string; text?: string }[];
             const line = `Cover image: ${input.credit}${input.source_page ? ` (${input.source_page})` : ""}`;
             const kept = blocks.filter((b) => !(b.type === "paragraph" && typeof b.text === "string" && b.text.startsWith("Cover image: ")));
-            kept.push({ type: "paragraph", text: line });
+            // Credit goes before the "Sources" section, not inside it.
+            const sources = kept.findIndex((b) => b.type === "heading" && b.text === "Sources");
+            kept.splice(sources === -1 ? kept.length : sources, 0, { type: "paragraph", text: line });
             await sql`update articles set blocks = ${JSON.stringify(kept)} where id = ${input.article_id} and status = 'draft'`;
           }
         }
-        await store.recordRun({ tool: "upload_featured_image", outcome: "stored", articleId: input.article_id ?? null, auth, details: { mediaId, bytes: image.bytes.length, mime: image.mime, attached, credit: input.credit ?? null, sourcePage: input.source_page ?? null } });
-        return { ok: true, data: { media_id: mediaId, mime: image.mime, bytes: image.bytes.length, attached, path: `/media/${mediaId}` } };
+        await store.recordRun({ profileId, tool: "upload_featured_image", outcome: "stored", articleId: input.article_id ?? null, auth, details: { mediaId, bytes: image.bytes.length, mime: image.mime, attached, credit: input.credit ?? null, sourcePage: input.source_page ?? null } });
+        const note = input.article_id && !attached
+          ? submission
+            ? "Stored in the media library but not attached: the article is no longer a draft (the owner may have published it). Attach it in the admin panel."
+            : "Stored in the media library but not attached: only drafts created by automation can get a cover this way."
+          : undefined;
+        return { ok: true, data: { media_id: mediaId, mime: image.mime, bytes: image.bytes.length, attached, path: `/media/${mediaId}`, ...(note ? { note } : {}) } };
       },
     },
     {
@@ -433,7 +446,7 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
         const parsed = runSchema.safeParse(args ?? {});
         if (!parsed.success) return invalid(parsed.error);
         const store = await import("@/content/automation.server");
-        const id = await store.recordRun({
+        const id = await store.recordRun({ profileId,
           tool: "record_run_result",
           outcome: parsed.data.outcome,
           reason: parsed.data.reason,
