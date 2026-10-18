@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useNavigate, useRouter } from "@tanstack/react-router";
 import { DeleteArticleButton } from "@/components/admin/delete-article";
-import { adminArticles } from "@/content/admin-api";
+import { adminArticles, adminSetAiEditAllowed } from "@/content/admin-api";
 import { publicationStatuses } from "@/content/types";
 import { formatDate } from "@/lib/format";
 
@@ -141,6 +141,7 @@ function ArticleIndex() {
                       {article.status}
                       {article.featured ? " · featured" : ""}
                     </span>
+                    {article.aiEditAllowed ? <span className="desk-status" title="An AI connected over MCP may edit this published article (never delete or unpublish it)"> · AI edit allowed</span> : null}
                   </td>
                   <td>{article.categoryLabel}</td>
                   <td>{article.hasCover ? "✓ Image" : "No image"}</td>
@@ -154,6 +155,18 @@ function ArticleIndex() {
                         <a href={`/articles/${article.slug}`} target="_blank" rel="noreferrer" className="btn btn--ghost">
                           View
                         </a>
+                      ) : null}
+                      {article.status === "published" ? (
+                        <button
+                          type="button"
+                          className="btn btn--ghost"
+                          title="Let an AI connected over MCP edit this one published article (it still cannot delete it or change its status)"
+                          onClick={() => {
+                            void adminSetAiEditAllowed({ data: { id: article.id, allowed: !article.aiEditAllowed } }).then(() => router.invalidate());
+                          }}
+                        >
+                          {article.aiEditAllowed ? "Revoke AI edit" : "Allow AI edit"}
+                        </button>
                       ) : null}
                       <DeleteArticleButton
                         id={article.id}

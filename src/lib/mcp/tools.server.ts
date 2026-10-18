@@ -9,11 +9,13 @@ import { draftFlags, publishDecision, sourceProblems, type DraftFlag } from "@/l
 import { assertUsableCover, decodeBase64Image, fetchImage, ImageIntakeError, MAX_IMAGE_BYTES, type ImageMime } from "@/lib/automation/image-fetch";
 import { providerStatus } from "@/lib/automation/provider";
 import { advanceCursor, computeTopicSelection } from "@/lib/automation/topic-selection";
+import { blocksToBody } from "@/lib/automation/body";
+import type { AiActor } from "@/lib/automation/ai-edit";
 import type { ToolDefinition, ToolResult } from "./protocol";
 import type { ArticleBlock, CoverMotif } from "@/content/types";
 
 /**
- * The six automation tools. Each one authorises against the owner's automation
+ * The twelve automation tools. Each one authorises against the owner's automation
  * settings; writes also require a writable deployment. They reuse the existing
  * content services (saveArticle, uploadMedia) and validation. There is no SQL
  * passthrough and no access to the admin session.
@@ -53,6 +55,37 @@ const listSchema = z.object({
 });
 
 const publishSchema = z.object({ article_id: articleIdSchema });
+
+const getArticleSchema = z.object({ article_id: articleIdSchema });
+
+const listEditableSchema = z.object({ limit: z.number().int().min(1).max(50).optional() });
+
+const refList = z.array(z.string().trim().min(1).max(80)).max(24);
+const updateDraftSchema = z
+  .object({
+    article_id: articleIdSchema,
+    title: z.string().trim().min(5).max(200).optional(),
+    slug: z.string().trim().max(80).regex(/^[a-z0-9-]*$/, "lowercase letters, digits, hyphens").optional(),
+    excerpt: z.string().trim().min(20).max(500).optional(),
+    body: z.string().min(1).max(MAX_BODY_CHARS).optional().describe("Full replacement body, same format as submit_article_draft. The Sources section is rebuilt from source_urls."),
+    category: z.string().trim().min(1).max(80).optional().describe("Existing category id, slug or label."),
+    tags: refList.optional().describe("Replace the full tag set (existing tag ids/slugs/labels)."),
+    add_tags: refList.optional(),
+    remove_tags: refList.optional(),
+    seo_title: z.string().trim().max(200).optional(),
+    seo_description: z.string().trim().max(300).optional(),
+    source_urls: z.array(z.string().trim().max(500)).max(20).optional().describe("Replace the source list; the Sources section of the body is rebuilt."),
+  })
+  .refine((v) => Object.keys(v).length > 1, "Provide at least one field to change.");
+
+const setCoverSchema = z.object({ article_id: articleIdSchema, media_id: z.string().trim().min(1).max(80).describe("Existing media id (from upload_featured_image without article_id, or the media library).") });
+const removeCoverSchema = z.object({ article_id: articleIdSchema });
+const deleteDraftSchema = z.object({
+  article_id: articleIdSchema,
+  confirm: z.literal(true).describe("Must be true — deletion is permanent."),
+  slug: z.string().trim().min(1).max(80).describe("Echo the article's current slug to prove you are deleting the right draft."),
+  delete_cover_if_unused: z.boolean().optional().describe("Also delete the cover image file if nothing else uses it (same rule as the admin panel). Default false: the file is kept."),
+});
 
 const imageSchema = z
   .object({
@@ -153,9 +186,51 @@ function sourcesBlocks(urls: string[]): ArticleBlock[] {
   return urls.length ? [{ type: "heading", level: 2, text: "Sources" }, { type: "list", items: urls }] : [];
 }
 
+function stripSourcesSection(blocks: ArticleBlock[]): ArticleBlock[] {
+  const idx = blocks.findIndex((b) => b.type === "heading" && b.text === "Sources");
+  return idx === -1 ? blocks : blocks.slice(0, idx);
+}
+
 export function buildTools(ctx: Ctx): ToolDefinition[] {
   const { auth } = ctx;
   const profileId = ctx.profileId ?? "default";
+
+  const actorFor = (settings: AutomationSettings): AiActor => ({ profileId, isMaster: profileId === "default", editAllDrafts: settings.aiMayEditAllDrafts });
+
+  /** Recomputes quality flags after an edit and stores them on the submission (if any). Never publishes. */
+  async function refreshFlags(articleId: string, settings: AutomationSettings, droppedTags = 0): Promise<{ flags: DraftFlag[]; wouldPublish: boolean; publishReasons: string[] }> {
+    const store = await import("@/content/automation.server");
+    const submission = await store.findSubmission({ articleId });
+    const sql = await getSql();
+    const rows = await sql<{ title: string; status: string; category_id: string; cover_media_id: string | null; blocks: string }>`select title, status, category_id, cover_media_id, blocks from articles where id = ${articleId}`;
+    const row = rows[0];
+    if (!row) return { flags: [], wouldPublish: false, publishReasons: ["That article no longer exists."] };
+    const blocks = JSON.parse(row.blocks ?? "[]") as ArticleBlock[];
+    const dup = await sql<{ id: string }>`select id from articles where lower(title) = lower(${row.title}) and id <> ${articleId} limit 1`;
+    const sourceUrls = submission?.sourceUrls ?? [];
+    const flags = draftFlags({
+      words: wordCount(stripSourcesSection(blocks)),
+      sourceUrls,
+      text: `${row.title}\n${JSON.stringify(blocks).slice(0, 20000)}`,
+      policy: settings.policy,
+      duplicateTitle: dup.length > 0,
+      uncertain: (submission?.flags ?? []).includes("self_reported_uncertain"),
+      hasImage: Boolean(row.cover_media_id),
+      droppedTags,
+    });
+    if (submission) await store.setSubmissionFlags(articleId, flags);
+    if (row.status !== "draft") return { flags, wouldPublish: false, publishReasons: [`The article is ${row.status}; editing never changes its status.`] };
+    const decision = publishDecision({ active: automationActive(settings), policy: settings.policy, status: row.status, categoryId: row.category_id, flags, publishedToday: await store.automatedPublishesToday(profileId) });
+    return { flags, wouldPublish: decision.publish, publishReasons: decision.publish ? [] : decision.reasons };
+  }
+
+  async function refuse(tool: string, error: unknown, articleId?: string): Promise<ToolResult> {
+    const message = error instanceof Error ? error.message : "That article is locked for AI editing.";
+    const store = await import("@/content/automation.server");
+    await store.recordRun({ profileId, tool, outcome: "refused", reason: message, articleId: articleId ?? null, auth });
+    return { ok: false, error: message };
+  }
+
   return [
     {
       name: "get_blog_settings",
@@ -188,6 +263,13 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
               topicSources: settings.topicSources,
               publishingPolicy: settings.policy,
               imageTransfer: settings.imageTransfer,
+              draftEditing: {
+                mayEditAllDrafts: settings.aiMayEditAllDrafts,
+                rules:
+                  "AI may fully edit draft/unpublished articles it created (list_editable_articles). The master token may edit any draft. " +
+                  "Published articles are locked unless the owner enables 'Allow AI to edit this article' for that article in the admin panel; " +
+                  "even then AI can never delete it or change its status. Editing never publishes — use publish_article_if_allowed afterwards.",
+              },
             },
             ...(await taxonomy()),
             limits: { maxBodyChars: MAX_BODY_CHARS, maxImageBytes: MAX_IMAGE_BYTES, imageTypes: ["image/jpeg", "image/png", "image/webp"] },
@@ -424,6 +506,9 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
         if (input.article_id) {
           submission = await store.findSubmission({ articleId: input.article_id });
           if (!submission) return { ok: false, error: "Images can only be attached to drafts created by automation." };
+          if ((submission.profileId ?? "default") !== profileId && profileId !== "default" && !settings.aiMayEditAllDrafts) {
+            return { ok: false, error: "That draft was created by a different automation profile; only that profile (or the owner) can change its cover. Use set_article_cover on your own drafts." };
+          }
         }
         let image: { bytes: Uint8Array; mime: string };
         try {
@@ -467,6 +552,268 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
             : "Stored in the media library but not attached: only drafts created by automation can get a cover this way."
           : undefined;
         return { ok: true, data: { media_id: mediaId, mime: image.mime, bytes: image.bytes.length, attached, path: `/media/${mediaId}`, ...(auto ? { published: auto.published, publish_reasons: auto.reasons, status: auto.status } : {}), ...(note ? { note } : {}) } };
+      },
+    },
+    {
+      name: "list_editable_articles",
+      title: "List articles AI may edit",
+      description:
+        "List drafts/unpublished articles YOUR profile may edit (your own drafts; the master token sees all drafts; " +
+        "other profiles' drafts appear only if the owner enabled 'AI may edit drafts created by other automations'). " +
+        "Published articles are never listed — they are locked unless the owner grants one article in the admin panel.",
+      inputSchema: schemaOf(listEditableSchema),
+      annotations: { readOnlyHint: true, openWorldHint: false },
+      run: async (args) => {
+        const parsed = listEditableSchema.safeParse(args ?? {});
+        if (!parsed.success) return invalid(parsed.error);
+        const settings = await loadSettings(profileId);
+        const actor = actorFor(settings);
+        const sql = await getSql();
+        const rows = await sql<{ id: string; slug: string; title: string; status: string; updated_at: string; category: string | null; cover: string | null; owner: string | null; has_sub: number; flags: string | null }>`
+          select a.id, a.slug, a.title, a.status, a.updated_at, c.label as category, a.cover_media_id as cover,
+            s.profile_id as owner, (s.article_id is not null) as has_sub, s.flags as flags
+          from articles a left join categories c on c.id = a.category_id
+          left join automation_submissions s on s.article_id = a.id
+          where a.status in ('draft', 'unpublished') order by a.updated_at desc limit 200`;
+        const { assertAiCanAccess } = await import("@/lib/automation/ai-edit");
+        const editable = rows
+          .filter((r) => {
+            try {
+              assertAiCanAccess({ status: r.status as "draft" | "unpublished", slug: r.slug }, r.has_sub ? (r.owner ?? "default") : null, actor, "read");
+              return true;
+            } catch {
+              return false;
+            }
+          })
+          .slice(0, parsed.data.limit ?? 20);
+        return {
+          ok: true,
+          data: {
+            articles: editable.map((r) => ({
+              article_id: r.id, slug: r.slug, title: r.title, status: r.status, updatedAt: r.updated_at,
+              category: r.category, hasCover: Boolean(r.cover), createdBy: r.has_sub ? (r.owner ?? "default") : "owner",
+              flags: r.flags ? (JSON.parse(r.flags) as string[]) : [],
+            })),
+            rules: "Drafts/unpublished only. Published articles are locked unless the owner enables 'Allow AI to edit this article' for that one article in the admin panel.",
+          },
+        };
+      },
+    },
+    {
+      name: "get_article",
+      title: "Get an editable article in full",
+      description:
+        "Full content of a draft/unpublished article you may edit: body (markdown + structured blocks), category, tags, " +
+        "cover media id, SEO, source URLs and quality flags. Published articles return a locked error unless the owner " +
+        "enabled 'Allow AI to edit this article' for that article in the admin panel.",
+      inputSchema: schemaOf(getArticleSchema),
+      annotations: { readOnlyHint: true, openWorldHint: false },
+      run: async (args) => {
+        const parsed = getArticleSchema.safeParse(args ?? {});
+        if (!parsed.success) return invalid(parsed.error);
+        const settings = await loadSettings(profileId);
+        try {
+          const repo = await import("@/content/repository.server");
+          const { article, ownerProfileId, viaGrant } = await repo.getArticleForAi(parsed.data.article_id, actorFor(settings), "read");
+          const { categories, tags } = await taxonomy();
+          const store = await import("@/content/automation.server");
+          const submission = await store.findSubmission({ articleId: article.id });
+          await store.recordRun({ profileId, tool: "get_article", outcome: "read", articleId: article.id, auth });
+          return {
+            ok: true,
+            data: {
+              article_id: article.id, slug: article.slug, title: article.title, excerpt: article.excerpt,
+              status: article.status, publishedAt: article.publishedAt, updatedAt: article.updatedAt,
+              category: pick(categories, article.categoryId) ?? { id: article.categoryId },
+              tags: article.tagIds.map((id) => tags.find((t) => t.id === id) ?? { id }),
+              coverMediaId: article.coverMediaId ?? null,
+              seoTitle: article.seoTitle ?? "", seoDescription: article.seoDescription ?? "",
+              body: blocksToBody(stripSourcesSection(article.blocks)),
+              blocks: article.blocks,
+              sourceUrls: submission?.sourceUrls ?? [],
+              flags: submission?.flags ?? [],
+              createdBy: ownerProfileId ?? "owner",
+              aiEditGrant: viaGrant,
+            },
+          };
+        } catch (error) {
+          return refuse("get_article", error, parsed.data.article_id);
+        }
+      },
+    },
+    {
+      name: "update_article_draft",
+      title: "Edit a draft article",
+      description:
+        "Partially edit a draft/unpublished article (title, slug, excerpt, body, category, tags set/add/remove, SEO, " +
+        "source URLs). Only fields you pass change; id and status are always preserved and editing NEVER publishes — " +
+        "after editing, call publish_article_if_allowed if the refreshed flags and policy allow it. Published articles " +
+        "are locked unless the owner enabled 'Allow AI to edit this article' (then status/slug changes stay forbidden).",
+      inputSchema: schemaOf(updateDraftSchema),
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+      run: async (args) => {
+        const parsed = updateDraftSchema.safeParse(args ?? {});
+        if (!parsed.success) return invalid(parsed.error);
+        const input = parsed.data;
+        const settings = await loadSettings(profileId);
+        const store = await import("@/content/automation.server");
+        const blocked = await writeGate(settings);
+        if (blocked) {
+          await store.recordRun({ profileId, tool: "update_article_draft", outcome: "refused", reason: blocked, articleId: input.article_id, auth });
+          return { ok: false, error: blocked };
+        }
+        try {
+          const repo = await import("@/content/repository.server");
+          const actor = actorFor(settings);
+          const { article: current } = await repo.getArticleForAi(input.article_id, actor, "edit");
+          const { categories, tags } = await taxonomy();
+          const patch: import("@/content/repository.server").AiArticlePatch = {};
+          if (input.title !== undefined) patch.title = input.title;
+          if (input.slug !== undefined) patch.slug = input.slug;
+          if (input.excerpt !== undefined) patch.excerpt = input.excerpt;
+          if (input.seo_title !== undefined) patch.seoTitle = input.seo_title;
+          if (input.seo_description !== undefined) patch.seoDescription = input.seo_description;
+          if (input.category !== undefined) {
+            const category = pick(categories, input.category);
+            if (!category) return { ok: false, error: "Unknown category. Use one of the existing categories.", data: categories.map((c) => c.slug) };
+            patch.categoryId = category.id;
+          }
+          let droppedTags = 0;
+          const resolveRefs = (refs: string[]): string[] => {
+            const ids: string[] = [];
+            for (const ref of refs) {
+              const tag = pick(tags, ref);
+              if (tag) { if (!ids.includes(tag.id)) ids.push(tag.id); } else droppedTags += 1;
+            }
+            return ids;
+          };
+          if (input.tags !== undefined || input.add_tags !== undefined || input.remove_tags !== undefined) {
+            let next = input.tags !== undefined ? resolveRefs(input.tags) : [...current.tagIds];
+            if (input.add_tags) for (const id of resolveRefs(input.add_tags)) if (!next.includes(id)) next.push(id);
+            if (input.remove_tags) { const drop = new Set(resolveRefs(input.remove_tags)); next = next.filter((id) => !drop.has(id)); }
+            patch.tagIds = next.slice(0, 24);
+          }
+          const submission = await store.findSubmission({ articleId: input.article_id });
+          const effectiveSources = input.source_urls ?? submission?.sourceUrls ?? [];
+          const { valid: validSources } = sourceProblems(effectiveSources);
+          if (input.body !== undefined) {
+            const bodyBlocks = bodyToBlocks(input.body);
+            if (bodyBlocks.length === 0) return { ok: false, error: "The body is empty." };
+            const blocks = [...bodyBlocks, ...sourcesBlocks(validSources)];
+            if (blocks.length > 80) return { ok: false, error: "The body has too many blocks (max 78 plus sources)." };
+            patch.blocks = blocks;
+          } else if (input.source_urls !== undefined) {
+            patch.blocks = [...stripSourcesSection(current.blocks), ...sourcesBlocks(validSources)];
+          }
+          const { updated, viaGrant } = await repo.updateArticleForAi(input.article_id, patch, actor);
+          if (submission && input.source_urls !== undefined) await store.updateSubmissionSources(input.article_id, validSources);
+          const { flags, wouldPublish, publishReasons } = await refreshFlags(input.article_id, settings, droppedTags);
+          const changed = Object.keys(input).filter((k) => k !== "article_id");
+          await store.recordRun({ profileId, tool: "update_article_draft", outcome: "updated", articleId: input.article_id, auth, details: { changed, flags, viaGrant } });
+          return {
+            ok: true,
+            data: {
+              article_id: updated.id, slug: updated.slug, status: updated.status, updatedAt: updated.updatedAt,
+              changed, flags, would_publish: updated.status === "draft" ? wouldPublish : false, publish_reasons: publishReasons, aiEditGrant: viaGrant,
+              note: updated.status === "draft" ? "Still a draft. Editing never publishes — call publish_article_if_allowed to publish when policy allows." : "Published article edited under the owner's grant; its status did not change.",
+            },
+          };
+        } catch (error) {
+          return refuse("update_article_draft", error, input.article_id);
+        }
+      },
+    },
+    {
+      name: "set_article_cover",
+      title: "Set a draft's cover image",
+      description:
+        "Attach an existing media-library image as the cover of a draft/unpublished article you may edit (or a published " +
+        "article the owner granted you). To upload a NEW image instead, use upload_featured_image, then set_article_cover " +
+        "with the returned media_id. Setting a cover never publishes the article.",
+      inputSchema: schemaOf(setCoverSchema),
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+      run: async (args) => {
+        const parsed = setCoverSchema.safeParse(args ?? {});
+        if (!parsed.success) return invalid(parsed.error);
+        const settings = await loadSettings(profileId);
+        const store = await import("@/content/automation.server");
+        const blocked = await writeGate(settings);
+        if (blocked) {
+          await store.recordRun({ profileId, tool: "set_article_cover", outcome: "refused", reason: blocked, articleId: parsed.data.article_id, auth });
+          return { ok: false, error: blocked };
+        }
+        try {
+          const repo = await import("@/content/repository.server");
+          const { updated } = await repo.updateArticleForAi(parsed.data.article_id, { coverMediaId: parsed.data.media_id }, actorFor(settings));
+          const { flags, publishReasons } = await refreshFlags(parsed.data.article_id, settings);
+          await store.recordRun({ profileId, tool: "set_article_cover", outcome: "cover_set", articleId: parsed.data.article_id, auth, details: { mediaId: parsed.data.media_id } });
+          return { ok: true, data: { article_id: updated.id, slug: updated.slug, status: updated.status, coverMediaId: parsed.data.media_id, flags, publish_reasons: publishReasons, note: "Cover set. The article was not published." } };
+        } catch (error) {
+          return refuse("set_article_cover", error, parsed.data.article_id);
+        }
+      },
+    },
+    {
+      name: "remove_article_cover",
+      title: "Remove a draft's cover image",
+      description: "Clear the cover of an article you may edit. The image file stays in the media library; only the cover link is removed. Never publishes.",
+      inputSchema: schemaOf(removeCoverSchema),
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+      run: async (args) => {
+        const parsed = removeCoverSchema.safeParse(args ?? {});
+        if (!parsed.success) return invalid(parsed.error);
+        const settings = await loadSettings(profileId);
+        const store = await import("@/content/automation.server");
+        const blocked = await writeGate(settings);
+        if (blocked) {
+          await store.recordRun({ profileId, tool: "remove_article_cover", outcome: "refused", reason: blocked, articleId: parsed.data.article_id, auth });
+          return { ok: false, error: blocked };
+        }
+        try {
+          const repo = await import("@/content/repository.server");
+          const { updated } = await repo.updateArticleForAi(parsed.data.article_id, { coverMediaId: null }, actorFor(settings));
+          const { flags, publishReasons } = await refreshFlags(parsed.data.article_id, settings);
+          await store.recordRun({ profileId, tool: "remove_article_cover", outcome: "cover_removed", articleId: parsed.data.article_id, auth });
+          return { ok: true, data: { article_id: updated.id, slug: updated.slug, status: updated.status, coverMediaId: null, flags, publish_reasons: publishReasons } };
+        } catch (error) {
+          return refuse("remove_article_cover", error, parsed.data.article_id);
+        }
+      },
+    },
+    {
+      name: "delete_article_draft",
+      title: "Delete a draft article permanently",
+      description:
+        "Hard-delete a draft/unpublished article you may edit. Permanent: requires confirm:true AND the article's exact " +
+        "current slug echoed back. Tag links are removed; the cover image file is kept unless delete_cover_if_unused is " +
+        "true (same rule as the admin panel). Published articles can NEVER be deleted by AI, even with an edit grant.",
+      inputSchema: schemaOf(deleteDraftSchema),
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
+      run: async (args) => {
+        const parsed = deleteDraftSchema.safeParse(args ?? {});
+        if (!parsed.success) return invalid(parsed.error);
+        const input = parsed.data;
+        const settings = await loadSettings(profileId);
+        const store = await import("@/content/automation.server");
+        const blocked = await writeGate(settings);
+        if (blocked) {
+          await store.recordRun({ profileId, tool: "delete_article_draft", outcome: "refused", reason: blocked, articleId: input.article_id, auth });
+          return { ok: false, error: blocked };
+        }
+        try {
+          const repo = await import("@/content/repository.server");
+          const actor = actorFor(settings);
+          const { article } = await repo.getArticleForAi(input.article_id, actor, "delete");
+          if (input.slug !== article.slug) {
+            await store.recordRun({ profileId, tool: "delete_article_draft", outcome: "refused", reason: "slug echo mismatch", articleId: input.article_id, auth });
+            return { ok: false, error: `Confirmation slug does not match. The article's current slug is “${article.slug}”. Nothing was deleted.` };
+          }
+          const result = await repo.deleteArticleForAi(input.article_id, actor, { deleteCoverIfUnused: input.delete_cover_if_unused ?? false });
+          await store.recordRun({ profileId, tool: "delete_article_draft", outcome: "deleted", articleId: input.article_id, auth, details: { slug: result.slug, coverDeleted: result.coverDeleted } });
+          return { ok: true, data: { deleted: true, article_id: input.article_id, slug: result.slug, cover_deleted: result.coverDeleted } };
+        } catch (error) {
+          return refuse("delete_article_draft", error, input.article_id);
+        }
       },
     },
     {

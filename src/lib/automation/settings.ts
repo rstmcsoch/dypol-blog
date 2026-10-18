@@ -82,6 +82,8 @@ export const automationSettingsSchema = z.object({
   extraClientHosts: z
     .array(z.string().trim().toLowerCase().regex(/^(\*\.)?[a-z0-9-]+(\.[a-z0-9-]+)+$/, "Use a host name such as connectors.example.com"))
     .max(20),
+  /** When true, any automation profile may edit drafts created by other profiles (or by the owner). Off = own drafts only; the master token can always edit all drafts. */
+  aiMayEditAllDrafts: z.boolean().default(false),
   topicIdeas: z.array(z.string().trim().min(1).max(300)).max(MAX_TOPIC_IDEAS),
   topicSources: z.array(z.string().trim().url().max(500)).max(30),
   policy: publishingPolicySchema,
@@ -97,6 +99,7 @@ export const DEFAULT_AUTOMATION_SETTINGS: AutomationSettings = {
   mode: "mcp-connector",
   serverApi: { provider: "openai", model: "", baseUrl: "" },
   extraClientHosts: [],
+  aiMayEditAllDrafts: false,
   topicIdeas: [],
   topicSources: [],
   policy: {

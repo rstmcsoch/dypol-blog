@@ -172,7 +172,7 @@ await check("full OAuth discovery from just the URL (SDK auth provider, Grok's r
   await c2.connect(new StreamableHTTPClientTransport(new URL(`${BASE}/mcp`), { authProvider: provider }));
   await pace();
   const { tools } = await c2.listTools();
-  assert.equal(tools.length, 6);
+  assert.equal(tools.length, 12);
   await c2.close();
 });
 
@@ -195,11 +195,12 @@ const client = await connect(TOKEN);
 let good;
 let flagged;
 
-await check("tools/list exposes exactly the six automation tools", async () => {
+await check("tools/list exposes exactly the twelve automation tools", async () => {
   await pace();
   const { tools } = await client.listTools();
   assert.deepEqual(tools.map((t) => t.name).sort(), [
-    "get_blog_settings", "list_recent_articles", "publish_article_if_allowed", "record_run_result", "submit_article_draft", "upload_featured_image",
+    "delete_article_draft", "get_article", "get_blog_settings", "list_editable_articles", "list_recent_articles", "publish_article_if_allowed",
+    "record_run_result", "remove_article_cover", "set_article_cover", "submit_article_draft", "update_article_draft", "upload_featured_image",
   ]);
   for (const t of tools) assert.equal(t.inputSchema.type, "object");
 });

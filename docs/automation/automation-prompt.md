@@ -85,3 +85,31 @@ step says so.
    piece stays a draft, report the exact `reasons` in your run summary.
 10. Call `record_run_result` with outcome `completed`, the `article_id`, and a one-line
     summary (topic + whether it was published or left as a draft and why).
+
+## Revising an existing draft (only when the owner asks you to edit)
+
+You can fully edit **draft / unpublished** articles over MCP — never published ones.
+
+1. Call `list_editable_articles` to see the drafts your profile may edit (your own
+   drafts; the master token sees all drafts). Published articles are never listed.
+2. Call `get_article` with the `article_id` to read the full body, tags, cover,
+   sources and flags before changing anything.
+3. Edit with `update_article_draft` — pass only the fields that change (title,
+   slug, excerpt, `body` as a full replacement in the same markdown-ish format,
+   `category`, `tags` to set the whole set or `add_tags`/`remove_tags`, `seo_title`,
+   `seo_description`, `source_urls`). The reply returns refreshed `flags` and
+   `publish_reasons`. Editing NEVER publishes and never changes the status; when
+   the piece is ready and the flags allow it, call `publish_article_if_allowed`.
+4. Covers: `set_article_cover` attaches an existing media id (upload a new image
+   first with `upload_featured_image` without `article_id`); `remove_article_cover`
+   clears the cover (the file stays in the library).
+5. `delete_article_draft` permanently deletes a draft — only when the owner
+   explicitly asked for that article to be deleted. It requires `confirm: true`
+   and the article's exact current `slug` echoed back.
+6. **Published articles are locked.** If a tool answers that an article is
+   published and locked, do not retry or try another tool on it: report the lock
+   reason to the owner. The owner can allow editing of that one article in the
+   admin panel (article editor → "Allow AI to edit this article"). Even with that
+   grant you must never delete a published article, change its status, or change
+   its slug — those stay owner-only, and the tools refuse them.
+7. Record what you changed with `record_run_result`.

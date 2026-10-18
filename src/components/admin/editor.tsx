@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useBlocker, useNavigate, useRouter } from "@tanstack/react-router";
-import { adminSaveArticle } from "@/content/admin-api";
+import { adminSaveArticle, adminSetAiEditAllowed } from "@/content/admin-api";
 import { DeleteArticleButton } from "./delete-article";
 import { readingMinutes } from "@/content/present";
 import type { Article, ArticleBlock, Category, CoverMotif, PublicationStatus, Tag } from "@/content/types";
@@ -96,6 +96,8 @@ export function ArticleEditor({
   const [draft, setDraft] = useState<Draft>(() => (article ? fromArticle(article) : blank(categories[0]?.id ?? "")));
   const [baseline, setBaseline] = useState(() => JSON.stringify(article ? fromArticle(article) : blank(categories[0]?.id ?? "")));
   const [slugTouched, setSlugTouched] = useState(Boolean(article));
+  const [aiEdit, setAiEdit] = useState(Boolean(article?.aiEditAllowed));
+  const [aiEditBusy, setAiEditBusy] = useState(false);
   const [pending, setPending] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -190,7 +192,7 @@ export function ArticleEditor({
         void commit("save");
       }}
     >
-      <p className="desk-kicker">{draft.status}</p>
+      <p className="desk-kicker">{draft.status}{aiEdit && draft.status === "published" ? " · AI edit allowed" : ""}</p>
       <h1 className="desk-title">{draft.title || "New article"}</h1>
       <p className="desk-note">
         {readingMinutes({ blocks: draft.blocks })} min · the public page uses this same article shape.
@@ -349,6 +351,42 @@ export function ArticleEditor({
             />
             Featured on the homepage
           </label>
+          {draft.id ? (
+            <fieldset className="block-card">
+              <legend>AI editing (MCP)</legend>
+              {draft.status === "published" ? (
+                <>
+                  <label className="check-row">
+                    <input
+                      type="checkbox"
+                      checked={aiEdit}
+                      disabled={aiEditBusy}
+                      onChange={(event) => {
+                        const next = event.target.checked;
+                        setAiEdit(next);
+                        setAiEditBusy(true);
+                        void adminSetAiEditAllowed({ data: { id: draft.id as string, allowed: next } })
+                          .then(() => { setMessage(next ? "AI may now edit this published article (it still cannot delete it or change its status)." : "AI edit grant removed."); })
+                          .catch((caught: unknown) => { setAiEdit(!next); setError(errorText(caught)); })
+                          .finally(() => setAiEditBusy(false));
+                      }}
+                    />
+                    Allow AI to edit this article
+                  </label>
+                  <p className="desk-note">
+                    Off by default: published articles are locked for AI. While on, an AI connected over MCP can revise this
+                    one article's text, tags and cover — but it can never delete it, unpublish it, or change its slug or status.
+                    Turn it off again when the revision is done.
+                  </p>
+                </>
+              ) : (
+                <p className="desk-note">
+                  Drafts can be edited by the automation profile that created them (the master MCP token can edit any draft).
+                  Published articles stay locked unless the grant above is switched on after publishing.
+                </p>
+              )}
+            </fieldset>
+          ) : null}
           <label className="field">
             <span>Publication date</span>
             <input

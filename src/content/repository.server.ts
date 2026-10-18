@@ -20,6 +20,7 @@ import {
   type ArticleWrite,
 } from "./validate";
 import { getSql, withTransaction, type Sql } from "@/lib/db";
+import { assertAiCanAccess, assertAiPatchAllowed, type AiActor, type AiEditAction } from "@/lib/automation/ai-edit";
 
 export class ContentError extends Error {
   readonly status: number;
@@ -351,6 +352,7 @@ export type ArticleSummary = {
   tagIds: string[];
   featured: boolean;
   hasCover: boolean;
+  aiEditAllowed: boolean;
 };
 
 export async function adminOverview() {
@@ -384,7 +386,7 @@ export async function adminOverview() {
   };
 }
 
-function summarize(article: Article, categories: Category[]): ArticleSummary {
+function summarize(article: Article, categories: Category[], grants: Set<string> = new Set()): ArticleSummary {
   return {
     id: article.id,
     slug: article.slug,
@@ -398,6 +400,7 @@ function summarize(article: Article, categories: Category[]): ArticleSummary {
     tagIds: article.tagIds,
     featured: article.featured,
     hasCover: Boolean(article.coverMediaId),
+    aiEditAllowed: grants.has(article.id),
   };
 }
 
@@ -422,8 +425,9 @@ export async function adminList(input: {
     if (input.sort === "published") return Date.parse(b.publishedAt ?? "") - Date.parse(a.publishedAt ?? "");
     return Date.parse(b.updatedAt) - Date.parse(a.updatedAt);
   });
+  const grants = await aiEditGrantIds();
   return {
-    articles: rows.map((article) => summarize(article, data.categories)),
+    articles: rows.map((article) => summarize(article, data.categories, grants)),
     categories: data.categories,
     tags: data.tags,
   };
@@ -439,6 +443,7 @@ export async function adminEditor(id: string | null) {
     ? (await library.list()).map((item) => ({ id: item.id, filename: item.filename, alt: item.alt }))
     : [];
   const article = id ? (data.articles.find((item) => item.id === id) ?? null) : null;
+  if (article) article.aiEditAllowed = (await aiEditGrantIds()).has(article.id);
   return {
     article,
     categories: data.categories,
@@ -576,6 +581,133 @@ export async function deleteArticle(id: string, options: { deleteCover?: boolean
     }
   }
   return { coverDeleted };
+}
+
+// ---- AI (MCP) article editing ---------------------------------------------------
+// Server-side guard shared by every AI editing tool. Ownership = the profile
+// that created the automation submission (null = owner-created in admin).
+
+export type { AiActor };
+
+async function aiOwnerProfileId(sql: Sql, articleId: string): Promise<string | null> {
+  try {
+    const rows = await sql<{ profile_id: string | null }>`select profile_id from automation_submissions where article_id = ${articleId} limit 1`;
+    return rows.length ? (rows[0].profile_id ?? "default") : null;
+  } catch {
+    return null; // no submissions table: treat as owner-created
+  }
+}
+
+/** Ids of articles with the admin AI-edit grant. Empty until migration 0006 is applied. */
+export async function aiEditGrantIds(): Promise<Set<string>> {
+  try {
+    const sql = await getSql();
+    const rows = await sql<{ id: string }>`select id from articles where ai_edit_allowed = 1`;
+    return new Set(rows.map((r) => r.id));
+  } catch {
+    return new Set();
+  }
+}
+
+export async function setAiEditAllowed(id: string, allowed: boolean): Promise<void> {
+  await ensureContent();
+  const sql = await getSql();
+  const rows = await sql<{ id: string }>`select id from articles where id = ${id}`;
+  if (rows.length === 0) throw new ContentError("That article no longer exists.", 404);
+  try {
+    await sql`update articles set ai_edit_allowed = ${allowed ? 1 : 0} where id = ${id}`;
+  } catch {
+    throw new ContentError("AI edit grants need database migration 0006 (articles.ai_edit_allowed). Apply it to this database first.");
+  }
+}
+
+export type AiArticleAccess = { article: Article; ownerProfileId: string | null; viaGrant: boolean };
+
+async function loadAiArticle(articleId: string): Promise<{ article: Article; ownerProfileId: string | null }> {
+  const data = await catalog();
+  const article = data.articles.find((a) => a.id === articleId);
+  if (!article) throw new ContentError("That article no longer exists.", 404);
+  const grants = await aiEditGrantIds();
+  article.aiEditAllowed = grants.has(article.id);
+  const sql = await getSql();
+  return { article, ownerProfileId: await aiOwnerProfileId(sql, articleId) };
+}
+
+function guardOrThrow(article: Article, ownerProfileId: string | null, actor: AiActor, action: AiEditAction): { viaGrant: boolean } {
+  try {
+    return assertAiCanAccess(article, ownerProfileId, actor, action);
+  } catch (error) {
+    throw new ContentError(error instanceof Error ? error.message : "That article is locked for AI editing.", 403);
+  }
+}
+
+/** Loads an article and enforces the AI access rules for the given action. */
+export async function getArticleForAi(articleId: string, actor: AiActor, action: AiEditAction): Promise<AiArticleAccess> {
+  const { article, ownerProfileId } = await loadAiArticle(articleId);
+  const { viaGrant } = guardOrThrow(article, ownerProfileId, actor, action);
+  return { article, ownerProfileId, viaGrant };
+}
+
+export type AiArticlePatch = {
+  title?: string;
+  slug?: string;
+  excerpt?: string;
+  categoryId?: string;
+  tagIds?: string[];
+  seoTitle?: string;
+  seoDescription?: string;
+  coverMediaId?: string | null;
+  blocks?: ArticleBlock[];
+};
+
+/**
+ * Applies a partial patch to an AI-editable article. Id, status, published_at,
+ * motif and featured are always preserved — editing never publishes,
+ * unpublishes or deletes. Reuses saveArticle validation ("save" intent).
+ */
+export async function updateArticleForAi(articleId: string, patch: AiArticlePatch, actor: AiActor): Promise<AiArticleAccess & { updated: Article }> {
+  const { article, ownerProfileId } = await loadAiArticle(articleId);
+  const { viaGrant } = guardOrThrow(article, ownerProfileId, actor, patch.coverMediaId !== undefined ? "cover" : "edit");
+  try {
+    assertAiPatchAllowed(article, patch, viaGrant);
+  } catch (error) {
+    throw new ContentError(error instanceof Error ? error.message : "That change is not allowed.", 403);
+  }
+  if (patch.slug && patch.slug !== article.slug) {
+    const sql = await getSql();
+    const clash = await sql<{ id: string }>`select id from articles where slug = ${patch.slug} and id <> ${articleId} limit 1`;
+    if (clash.length) throw new ContentError(`The slug “${patch.slug}” is already used by another article. Choose a different slug.`);
+  }
+  const saved = await saveArticle({
+    id: article.id,
+    title: patch.title ?? article.title,
+    slug: patch.slug ?? article.slug,
+    excerpt: patch.excerpt ?? article.excerpt,
+    categoryId: patch.categoryId ?? article.categoryId,
+    tagIds: patch.tagIds ?? article.tagIds,
+    motif: article.motif,
+    featured: article.featured,
+    seoTitle: patch.seoTitle ?? article.seoTitle ?? "",
+    seoDescription: patch.seoDescription ?? article.seoDescription ?? "",
+    coverMediaId: patch.coverMediaId !== undefined ? patch.coverMediaId : (article.coverMediaId ?? null),
+    publishedAt: article.publishedAt,
+    blocks: patch.blocks ?? article.blocks,
+    intent: "save",
+  });
+  const data = await catalog();
+  const updated = data.articles.find((a) => a.id === saved.id) ?? article;
+  updated.aiEditAllowed = article.aiEditAllowed;
+  return { article, ownerProfileId, viaGrant, updated };
+}
+
+/** Hard-deletes a draft/unpublished article for AI. Published is always refused, grant or not. Cover media mirrors admin deleteArticle. */
+export async function deleteArticleForAi(articleId: string, actor: AiActor, options: { deleteCoverIfUnused?: boolean } = {}): Promise<{ slug: string; coverDeleted: boolean }> {
+  const { article } = await loadAiArticle(articleId);
+  const sql = await getSql();
+  const ownerProfileId = await aiOwnerProfileId(sql, articleId);
+  guardOrThrow(article, ownerProfileId, actor, "delete");
+  const { coverDeleted } = await deleteArticle(articleId, { deleteCover: options.deleteCoverIfUnused ?? false });
+  return { slug: article.slug, coverDeleted };
 }
 
 export async function saveCategory(raw: unknown): Promise<{ id: string }> {

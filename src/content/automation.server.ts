@@ -160,6 +160,11 @@ export async function claimSubmission(s: Submission): Promise<Submission> {
   return (await findSubmission({ key: s.idempotencyKey })) ?? s;
 }
 
+export async function updateSubmissionSources(articleId: string, sourceUrls: string[]): Promise<void> {
+  const sql = await getSql();
+  await sql`update automation_submissions set source_urls = ${JSON.stringify(sourceUrls)} where article_id = ${articleId}`;
+}
+
 export async function setSubmissionFlags(articleId: string, flags: string[]): Promise<void> {
   const sql = await getSql();
   await sql`update automation_submissions set flags = ${JSON.stringify(flags)} where article_id = ${articleId}`;

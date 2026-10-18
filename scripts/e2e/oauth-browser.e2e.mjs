@@ -83,7 +83,7 @@ await check("code -> token (PKCE) -> MCP tools/list", async () => {
   const client = new Client({ name: "oauth-browser-e2e", version: "1" });
   await client.connect(new StreamableHTTPClientTransport(new URL(`${BASE}/mcp`), { requestInit: { headers: { authorization: `Bearer ${access_token}` } } }));
   const { tools } = await client.listTools();
-  assert.equal(tools.length, 6);
+  assert.equal(tools.length, 12);
   await client.close();
 });
 
