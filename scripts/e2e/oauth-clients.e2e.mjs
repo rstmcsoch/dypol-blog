@@ -68,7 +68,7 @@ async function exchangeAndList(clientId, redirectUri, code, verifier) {
   const client = new Client({ name: "oauth-clients-e2e", version: "1" });
   await client.connect(new StreamableHTTPClientTransport(new URL(`${BASE}/mcp`), { requestInit: { headers: { authorization: `Bearer ${pair.access_token}` } } }));
   const { tools } = await client.listTools();
-  assert.equal(tools.length, 6);
+  assert.equal(tools.length, 12);
   await client.close();
   const r = await fetch(`${BASE}/oauth/token`, { method: "POST", body: new URLSearchParams({ grant_type: "refresh_token", refresh_token: pair.refresh_token, client_id: clientId }) });
   assert.equal(r.status, 200, "refresh");

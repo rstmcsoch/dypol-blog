@@ -67,31 +67,41 @@ export type RunRow = {
   articleId: string | null;
   auth: string;
   profileId: string;
+  /** "explicit" for a deliberate MCP publish/edit instruction, "automatic" for policy-driven flows. */
+  mode: string | null;
 };
 
 export async function recentRuns(limit = 20, profileId?: string): Promise<RunRow[]> {
   try {
     const sql = await getSql();
-    type Row = { id: string; created_at: string; tool: string; outcome: string; reason: string; article_id: string | null; auth: string; profile_id?: string | null };
+    type Row = { id: string; created_at: string; tool: string; outcome: string; reason: string; article_id: string | null; auth: string; profile_id?: string | null; details?: string | null };
     let rows: Row[];
     try {
       rows = profileId
-        ? await sql<Row>`select id, created_at, tool, outcome, reason, article_id, auth, profile_id from automation_runs
+        ? await sql<Row>`select id, created_at, tool, outcome, reason, article_id, auth, profile_id, details from automation_runs
             where coalesce(profile_id, 'default') = ${profileId} order by created_at desc limit ${limit}`
-        : await sql<Row>`select id, created_at, tool, outcome, reason, article_id, auth, profile_id from automation_runs order by created_at desc limit ${limit}`;
+        : await sql<Row>`select id, created_at, tool, outcome, reason, article_id, auth, profile_id, details from automation_runs order by created_at desc limit ${limit}`;
     } catch {
       rows = await sql<Row>`select id, created_at, tool, outcome, reason, article_id, auth from automation_runs order by created_at desc limit ${limit}`;
     }
-    return rows.map((r) => ({
-      profileId: r.profile_id ?? "default",
-      id: r.id,
-      createdAt: r.created_at,
-      tool: r.tool,
-      outcome: r.outcome,
-      reason: r.reason,
-      articleId: r.article_id,
-      auth: r.auth,
-    }));
+    return rows.map((r) => {
+      let mode: string | null = r.outcome === "published_explicit" ? "explicit" : null;
+      try {
+        const d = JSON.parse(r.details ?? "{}") as { mode?: unknown };
+        if (typeof d.mode === "string") mode = d.mode;
+      } catch { /* details are best-effort */ }
+      return {
+        profileId: r.profile_id ?? "default",
+        id: r.id,
+        createdAt: r.created_at,
+        tool: r.tool,
+        outcome: r.outcome,
+        reason: r.reason,
+        articleId: r.article_id,
+        auth: r.auth,
+        mode,
+      };
+    });
   } catch {
     return [];
   }
@@ -158,6 +168,11 @@ export async function claimSubmission(s: Submission): Promise<Submission> {
     );
   }
   return (await findSubmission({ key: s.idempotencyKey })) ?? s;
+}
+
+export async function updateSubmissionSources(articleId: string, sourceUrls: string[]): Promise<void> {
+  const sql = await getSql();
+  await sql`update automation_submissions set source_urls = ${JSON.stringify(sourceUrls)} where article_id = ${articleId}`;
 }
 
 export async function setSubmissionFlags(articleId: string, flags: string[]): Promise<void> {

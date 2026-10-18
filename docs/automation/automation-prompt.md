@@ -80,8 +80,49 @@ step says so.
    (for example 403 or too small), try one other image; if that fails too, continue:
    the draft keeps the `needs_featured_image` flag and the owner adds a cover image in
    the admin panel.
-9. Call `publish_article_if_allowed` with the `article_id` (safe to call even if step 7
-   or 8 already published it). Do not try to work around its answer: if it says the
-   piece stays a draft, report the exact `reasons` in your run summary.
+9. Publishing: during this automated flow, publication is governed by the owner's
+   publishing policy (allowed topics, flags, daily cap, featured-image rule). The
+   submit and cover steps already try to publish automatically when the policy
+   passes; `publish_article_if_allowed` is an **explicit** publish — it always
+   publishes a draft (see “Revising an existing draft” below), so in this
+   automated flow only call it when the owner has told you to publish that piece
+   deliberately. Report the `publish_reasons` / `warnings` exactly in your summary.
 10. Call `record_run_result` with outcome `completed`, the `article_id`, and a one-line
     summary (topic + whether it was published or left as a draft and why).
+
+## Revising an existing draft (only when the owner asks you to edit)
+
+You can fully edit **draft / unpublished** articles over MCP — never published ones.
+
+1. Call `list_editable_articles` to see the drafts your profile may edit (your own
+   drafts; the master token sees all drafts). Published articles are never listed.
+2. Call `get_article` with the `article_id` to read the full body, tags, cover,
+   sources and flags before changing anything.
+3. Edit with `update_article_draft` — pass only the fields that change (title,
+   slug, excerpt, `body` as a full replacement in the same markdown-ish format,
+   `category`, `tags` to set the whole set or `add_tags`/`remove_tags`, `seo_title`,
+   `seo_description`, `source_urls`). The reply returns refreshed `flags` and
+   `publish_reasons`. Editing NEVER publishes and never changes the status.
+   **Explicit publish:** when the owner tells you to publish a draft, call
+   `publish_article_if_allowed` — a deliberate publish always works on drafts you
+   may edit (your own; master token: any draft). The publishing policy (daily cap,
+   allowed topics, flags including self-reported uncertainty, auto-publish on/off)
+   does **not** block an explicit publish; anything that would have failed is
+   returned as `warnings` — report them, then publish as instructed. Once an
+   article is published you cannot unpublish it (there is no AI unpublish),
+   re-publish it, delete it, or change its status: only the owner controls a
+   published article in the admin panel, apart from edits under the per-article
+   grant below.
+4. Covers: `set_article_cover` attaches an existing media id (upload a new image
+   first with `upload_featured_image` without `article_id`); `remove_article_cover`
+   clears the cover (the file stays in the library).
+5. `delete_article_draft` permanently deletes a draft — only when the owner
+   explicitly asked for that article to be deleted. It requires `confirm: true`
+   and the article's exact current `slug` echoed back.
+6. **Published articles are locked.** If a tool answers that an article is
+   published and locked, do not retry or try another tool on it: report the lock
+   reason to the owner. The owner can allow editing of that one article in the
+   admin panel (article editor → "Allow AI to edit this article"). Even with that
+   grant you must never delete a published article, change its status, or change
+   its slug — those stay owner-only, and the tools refuse them.
+7. Record what you changed with `record_run_result`.

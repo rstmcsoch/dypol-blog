@@ -71,6 +71,19 @@ export const adminDeleteArticle = createServerFn({ method: "POST" })
     return deleteArticle(data.id, { deleteCover: data.deleteCover });
   });
 
+export const adminSetAiEditAllowed = createServerFn({ method: "POST" })
+  .validator((input: unknown) => {
+    const v = (input ?? {}) as { id?: unknown; allowed?: unknown };
+    if (typeof v.id !== "string" || v.id.length === 0 || v.id.length > 80) throw new Error("A valid article id is required.");
+    return { id: v.id, allowed: v.allowed === true };
+  })
+  .handler(async ({ data }) => {
+    await writeGuard();
+    const { setAiEditAllowed } = await import("./repository.server");
+    await setAiEditAllowed(data.id, data.allowed);
+    return { ok: true, aiEditAllowed: data.allowed };
+  });
+
 export const adminPreview = createServerFn({ method: "GET" })
   .validator((input: { id: string }) => input)
   .handler(async ({ data }) => {

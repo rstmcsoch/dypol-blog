@@ -76,3 +76,16 @@ export async function contentHash(title: string, body: string): Promise<string> 
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(norm));
   return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("");
 }
+
+/** Inverse of bodyToBlocks: renders article blocks back to the markdown-ish body format the MCP tools accept. */
+export function blocksToBody(blocks: ArticleBlock[]): string {
+  const parts: string[] = [];
+  for (const block of blocks) {
+    if (block.type === "paragraph") parts.push(block.text);
+    else if (block.type === "heading") parts.push(`${block.level === 3 ? "###" : "##"} ${block.text}`);
+    else if (block.type === "list") parts.push(block.items.map((item, i) => (block.ordered ? `${i + 1}. ${item}` : `- ${item}`)).join("\n"));
+    else if (block.type === "quote") parts.push(`> ${block.text}${block.attribution ? `\n> — ${block.attribution}` : ""}`);
+    else if (block.type === "code") parts.push("```" + (block.language ?? "") + "\n" + block.code + "\n```");
+  }
+  return parts.join("\n\n");
+}

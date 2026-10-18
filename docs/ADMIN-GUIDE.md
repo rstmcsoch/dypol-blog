@@ -17,6 +17,7 @@ This guide explains every part of the DYPOL Blog admin panel in plain language. 
 - **Publish** makes an article public. **Unpublish** removes it from the site without deleting it.
 - **Delete** removes an article permanently, in any status (a published article disappears from the site at once). Its tag links are removed too. Its cover image file stays in Media unless you tick “also delete the cover image file” (it is only deleted if no other article, logo or icon uses it). Deleting cannot be undone.
 - **Featured**: the one article shown big at the top of the homepage. If none is marked, the newest is used.
+- **Allow AI to edit this article** (in the editor of a *published* article, or the button in the Articles list): published articles are locked for AI over MCP by default. Turning this on lets an AI revise that one article's text, tags and cover — it still can never delete it, unpublish it, or change its slug or status. The list shows an “AI edit allowed” badge while it is on. Turn it off when the revision is done. Needs D1 migration `0006_ai_edit.sql` applied to the database.
 
 ## Cover images
 
@@ -67,9 +68,18 @@ An AI app (Claude, ChatGPT, Grok, Cursor, Claude Code, …) can research and wri
 ### The MCP connector
 
 - **MCP** (Model Context Protocol) is a standard way for AI apps to use tools on other websites. Your site offers a small set of tools at `https://<your site>/mcp`: read the settings, list recent articles, submit a draft, try to publish, upload a cover image, and record the result of a run.
-- The AI cannot do anything else: no deleting, no editing other articles, no access to your admin session.
+- The AI cannot do anything else with your site: no access to your admin session, no settings changes. It can edit and delete **drafts** (see “Editing drafts” below), but published articles are locked unless you grant one article (see Articles).
 - You connect an AI app once (see `docs/automation/README.md` for each app). Apps that support it open an approval page where you paste your **MCP token**; command-line apps send the token in a header.
 - The **schedule** (for example “every morning at 8”) is set in the AI app, not here. The instructions to give the AI are in `docs/automation/automation-prompt.md`.
+
+### Editing drafts
+
+- An AI can fully revise **drafts it created** over MCP (`list_editable_articles`, `get_article`, `update_article_draft`, `set_article_cover`, `remove_article_cover`, `delete_article_draft`). Editing never publishes by itself.
+- **Publishing has two paths.** *Automatic* publishing (during submit / cover attach) obeys your Publishing policy below: allowed topics, quality flags, daily cap, featured-image rule. *Explicit* publishing — the AI deliberately calling `publish_article_if_allowed` on a draft — always works for drafts that profile may edit (master token: any draft); the policy does not block it, and the tool reports what the policy would have said as warnings. The Recent runs list marks these “published (explicit)” versus “published (automatic)”. Once published, only you control the article: the AI cannot unpublish, delete, re-publish or change its status (edits only with the per-article grant above).
+- The **master MCP token** can edit any draft. A profile can edit other profiles' (or your own admin-written) drafts only if you tick **“AI may edit drafts created by other automations”** in that profile's Publishing policy (off by default).
+- **Published articles are locked** for AI. To let the AI revise one, open it in the editor and tick **“Allow AI to edit this article”** (or use the button in the Articles list). Even then the AI cannot delete it, unpublish it, or change its slug/status. Revoke the grant when done.
+- Deleting a draft through MCP needs an explicit confirm plus the draft's slug echoed back, so an AI cannot delete the wrong piece by accident. Cover files follow the same keep/delete-if-unused rule as admin deletes.
+- Every edit, cover change, delete and refusal is written to the profile's run log below.
 
 ### How topics are chosen (per profile)
 

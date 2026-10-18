@@ -28,6 +28,8 @@ export type Article = {
   seoDescription?: string;
   /** Set when a stored image should stand in for the geometric plate. */
   coverMediaId?: string | null;
+  /** Admin grant: AI (via MCP) may edit this specific published article. Migration 0006; absent = false. */
+  aiEditAllowed?: boolean;
   blocks: ArticleBlock[];
 };
 

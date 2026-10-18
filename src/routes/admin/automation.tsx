@@ -340,6 +340,16 @@ function AutomationDesk() {
             <label className="field"><span>Minimum sources</span><input type="number" min={0} max={20} value={policy.minSources} onChange={(e) => setPolicy({ minSources: Number(e.target.value) })} /></label>
             <label className="field"><span>Max auto-published per day</span><input type="number" min={0} max={20} value={policy.maxPublishedPerDay} onChange={(e) => setPolicy({ maxPublishedPerDay: Number(e.target.value) })} /></label>
           </div>
+          <Check
+            checked={s.aiMayEditAllDrafts}
+            onChange={(e) => setS((c) => ({ ...c, aiMayEditAllDrafts: e.target.checked }))}
+            label="AI may edit drafts created by other automations"
+          />
+          <p className="desk-note">
+            Off (default): each automation profile can only edit its own drafts over MCP; the master token can edit any draft.
+            On: any profile may also edit drafts created by other profiles or by you. Published articles are never editable
+            unless you grant one article in its editor (“Allow AI to edit this article”), and AI can never delete a published article.
+          </p>
           <Check checked={policy.requireSources} onChange={(e) => setPolicy({ requireSources: e.target.checked })} label="Require sources" />
           <Check checked={policy.requireFeaturedImage} onChange={(e) => setPolicy({ requireFeaturedImage: e.target.checked })} label="Require a featured image" />
         </fieldset>
@@ -356,7 +366,7 @@ function AutomationDesk() {
               <tr key={r.id}>
                 <td>{r.createdAt.replace("T", " ").slice(0, 16)}</td>
                 <td>{r.tool}</td>
-                <td>{r.outcome}</td>
+                <td>{r.outcome === "published_explicit" ? "published (explicit)" : r.outcome}{r.mode === "automatic" && r.outcome === "published" ? " (automatic)" : ""}</td>
                 <td>{r.reason}</td>
                 <td>{data.profiles.find((p) => p.id === r.profileId)?.name ?? r.profileId}</td>
                 <td>{r.auth}</td>
