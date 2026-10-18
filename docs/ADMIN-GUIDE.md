@@ -31,10 +31,12 @@ This guide explains every part of the DYPOL Blog admin panel in plain language. 
 
 ## Topics & tags
 
-- **Topics** are the main sections of the blog (for example Design, Systems). Every article belongs to exactly one topic. Topics appear in the menu page “Topics” and on the homepage.
-- **Tags** are optional extra labels. An article can have several.
+- **Topics** are the main sections of the blog. The blog ships with a fixed list of 25 (Artificial Intelligence & AI Tools, Smartphones/Android/iPhone & Wearables, Product Reviews, Tech News, Leaks, …). Topics appear in the menu page “Topics” and on the homepage.
+- An article can be filed under **several topics at once** (up to 4): pick the **Main topic** in the article editor, then tick “Also file under these topics”. The article is listed on every one of its topic pages; the main topic is the one shown first on cards.
+- The AI files its own articles the same way: it reads the 25 topics and picks the 1–4 that fit each article's content, so you don't need to sort AI drafts into topics yourself. It can only use topics from this list — anything else is rejected with the valid list so it can retry.
+- **Tags** are optional extra labels. An article can have several. There are no built-in tags any more; create your own here if you want them.
 - Rename a topic or tag any time: articles stay attached. A topic or tag still used by an article cannot be deleted; move those articles first.
-- The four original topics are also built into the code as a backup (see “When the database is down”).
+- The 25 topics are also built into the code as a backup (see “When the database is down”). Needs D1 migration `0007_canonical_topics.sql` applied to the database; it files every existing article under the closest new topic (anything unmatched lands in Tech News) and removes the old default topics and tags — no article is deleted or changed.
 
 ## Media
 
@@ -111,7 +113,7 @@ An AI app (Claude, ChatGPT, Grok, Cursor, Claude Code, …) can research and wri
 ### Publishing rules
 
 - **Enabled / Paused**: when off or paused, the AI can still read settings but cannot write.
-- **Allow automatic publishing**: off means every AI article stays a draft for you to review. On means an AI article is published only if ALL rules pass: its topic is ticked under “Topics automation may publish into”, it has enough words and sources, has a cover image if you require one, has no warning flags (too short, missing sources, placeholder text, duplicate title, the AI said it was unsure, missing cover image), and the daily limit is not reached.
+- **Allow automatic publishing**: off means every AI article stays a draft for you to review. On means an AI article is published only if ALL rules pass: its topic is allowed under “Topics automation may publish into” (no topic ticked there = **every** topic is allowed; an article with several topics passes if any one of them is ticked), it has enough words and sources, has a cover image if you require one, has no warning flags (too short, missing sources, placeholder text, duplicate title, the AI said it was unsure, missing cover image), and the daily limit is not reached.
 - If a rule fails, the article stays a draft and the reason appears under **Recent runs**.
 - “Featured image transfer from your AI app” is only a note for yourself; it does not change behaviour.
 

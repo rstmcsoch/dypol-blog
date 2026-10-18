@@ -41,7 +41,7 @@ export const IMAGE_TRANSFER_STATES = ["untested", "verified", "unsupported"] as 
 export const publishingPolicySchema = z.object({
   /** Master switch for automatic publishing. Off = everything stays a draft. */
   autoPublish: z.boolean(),
-  /** Category ids automation may publish into. Empty = none. */
+  /** Topic (category) ids automation may auto-publish into. Empty = all topics (t44). */
   allowedCategoryIds: z.array(z.string().min(1).max(80)).max(50),
   minWords: z.number().int().min(100).max(10000),
   requireSources: z.boolean(),

@@ -1,37 +1,17 @@
+import { CANONICAL_TOPICS } from "@/lib/topics";
 import type { Category, Tag } from "./types";
 
-export const categories: Category[] = [
-  {
-    id: "systems",
-    slug: "systems",
-    label: "Systems",
-    description: "How a publication is structured, stored, and handed from one step to the next.",
-  },
-  {
-    id: "design",
-    slug: "design",
-    label: "Design",
-    description: "Type, edges, images, and the decisions that keep a long page readable.",
-  },
-  {
-    id: "publishing",
-    slug: "publishing",
-    label: "Publishing",
-    description: "How a piece moves from a draft to something a reader can find.",
-  },
-  {
-    id: "notes",
-    slug: "notes",
-    label: "Notes",
-    description: "Short filings. This topic is empty until something here is published.",
-  },
-];
+/**
+ * Seed taxonomy for a fresh database. The canonical topics (t44) ARE the
+ * categories; production rows arrive via migration 0007. There are no
+ * default tags any more — the owner can still create tags in the admin
+ * panel, and articles keep whatever tags they already have.
+ */
+export const categories: Category[] = CANONICAL_TOPICS.map((t) => ({
+  id: t.slug,
+  slug: t.slug,
+  label: t.label,
+  description: t.description,
+}));
 
-export const tags: Tag[] = [
-  { id: "structure", slug: "structure", label: "Structure" },
-  { id: "type", slug: "type", label: "Type" },
-  { id: "layout", slug: "layout", label: "Layout" },
-  { id: "media", slug: "media", label: "Media" },
-  { id: "workflow", slug: "workflow", label: "Workflow" },
-  { id: "index", slug: "index", label: "Index" },
-];
+export const tags: Tag[] = [];

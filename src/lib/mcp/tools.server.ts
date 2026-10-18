@@ -9,6 +9,7 @@ import { draftFlags, publishDecision, sourceProblems, type DraftFlag } from "@/l
 import { assertUsableCover, decodeBase64Image, fetchImage, ImageIntakeError, MAX_IMAGE_BYTES, type ImageMime } from "@/lib/automation/image-fetch";
 import { providerStatus } from "@/lib/automation/provider";
 import { advanceCursor, computeTopicSelection } from "@/lib/automation/topic-selection";
+import { MAX_TOPICS_PER_ARTICLE, effectiveAllowedTopics, mergeTopicRefs, resolveTopicRefs, unknownTopicsError } from "@/lib/topics";
 import { blocksToBody } from "@/lib/automation/body";
 import type { AiActor } from "@/lib/automation/ai-edit";
 import type { ToolDefinition, ToolResult } from "./protocol";
@@ -37,7 +38,17 @@ const submitSchema = z.object({
     .min(1)
     .max(MAX_BODY_CHARS)
     .describe("Article body. Paragraphs separated by blank lines; '## ' / '### ' headings; '- ' lists; '> ' quotes; ``` code. No HTML."),
-  category: z.string().trim().min(1).max(80).describe("Existing category id, slug or label (see get_blog_settings)."),
+  topics: z
+    .array(z.string().trim().min(1).max(120))
+    .min(1)
+    .max(MAX_TOPICS_PER_ARTICLE)
+    .optional()
+    .describe(
+      "The blog's topics this article belongs under, picked by its actual content: 1 to " +
+        MAX_TOPICS_PER_ARTICLE +
+        " entries, each a topic slug or exact topic name from get_blog_settings (field `topics`). The first is the main topic. An article can belong to several topics. Unknown topics are rejected with the valid list, so you can retry.",
+    ),
+  category: z.string().trim().min(1).max(80).optional().describe("Legacy single topic (id, slug or label). Prefer `topics`; when both are sent they are merged, topics first."),
   tags: z.array(z.string().trim().min(1).max(80)).max(8).optional().describe("Existing tag ids/slugs/labels. Unknown tags are dropped."),
   seo_title: z.string().trim().max(200).optional(),
   seo_description: z.string().trim().max(300).optional(),
@@ -47,7 +58,7 @@ const submitSchema = z.object({
   cover_media_id: z.string().trim().min(1).max(80).optional().describe("Media id returned by an earlier upload_featured_image call (without article_id). Attached as the cover; lets the draft be auto-published in this same call if policy passes."),
   uncertain: z.boolean().optional().describe("Set true if any claim could not be verified; the piece will stay a draft."),
   notes: z.string().trim().max(1000).optional().describe("Notes for the editor (not published)."),
-});
+}).refine((v) => (v.topics?.length ?? 0) > 0 || Boolean(v.category), "Provide `topics` (1-" + MAX_TOPICS_PER_ARTICLE + " of the blog's topics) — or the legacy `category`.");
 
 const listSchema = z.object({
   limit: z.number().int().min(1).max(50).optional(),
@@ -68,7 +79,10 @@ const updateDraftSchema = z
     slug: z.string().trim().max(80).regex(/^[a-z0-9-]*$/, "lowercase letters, digits, hyphens").optional(),
     excerpt: z.string().trim().min(20).max(500).optional(),
     body: z.string().min(1).max(MAX_BODY_CHARS).optional().describe("Full replacement body, same format as submit_article_draft. The Sources section is rebuilt from source_urls."),
-    category: z.string().trim().min(1).max(80).optional().describe("Existing category id, slug or label."),
+    category: z.string().trim().min(1).max(80).optional().describe("Legacy: set the single main topic. Prefer `topics`."),
+    topics: z.array(z.string().trim().min(1).max(120)).min(1).max(MAX_TOPICS_PER_ARTICLE).optional().describe("Replace the full topic set (1-" + MAX_TOPICS_PER_ARTICLE + " topic slugs or exact names from get_blog_settings). The first is the main topic."),
+    add_topics: refList.optional().describe("Add topics (slugs or exact names). Unknown topics are rejected with the valid list."),
+    remove_topics: refList.optional().describe("Remove topics (slugs or exact names). At least one topic must remain."),
     tags: refList.optional().describe("Replace the full tag set (existing tag ids/slugs/labels)."),
     add_tags: refList.optional(),
     remove_tags: refList.optional(),
@@ -165,7 +179,7 @@ async function attemptAutoPublish(articleId: string, profileId: string, auth: st
   const sql = await getSql();
   const rows = await sql<{ status: string; category_id: string; slug: string }>`select status, category_id, slug from articles where id = ${articleId}`;
   if (!rows[0]) return { published: false, status: "missing", reasons: ["That article no longer exists."] };
-  const decision = publishDecision({ active: automationActive(settings), policy: settings.policy, status: rows[0].status, categoryId: rows[0].category_id, flags: submission.flags as DraftFlag[], publishedToday: await store.automatedPublishesToday(profileId) });
+  const decision = publishDecision({ active: automationActive(settings), policy: await decisionPolicy(settings), status: rows[0].status, categoryIds: await topicIdsOf(articleId, rows[0].category_id), flags: submission.flags as DraftFlag[], publishedToday: await store.automatedPublishesToday(profileId) });
   if (!decision.publish) {
     await store.recordRun({ profileId, tool: "publish_article_if_allowed", outcome: "kept_draft", reason: decision.reasons.join(" "), articleId, auth, details: { mode: "automatic" } });
     return { published: false, status: rows[0].status, reasons: decision.reasons };
@@ -226,9 +240,9 @@ async function explicitPublish(
   const submission = await store.findSubmission({ articleId });
   const decision = publishDecision({
     active: automationActive(settings),
-    policy: settings.policy,
+    policy: await decisionPolicy(settings),
     status: "draft",
-    categoryId: rows[0].category_id,
+    categoryIds: await topicIdsOf(articleId, rows[0].category_id),
     flags: (submission?.flags ?? []) as DraftFlag[],
     publishedToday: await store.automatedPublishesToday(profileId),
   });
@@ -238,6 +252,56 @@ async function explicitPublish(
     where id = ${articleId} and status in ('draft', 'unpublished')`;
   await store.recordRun({ profileId, tool: "publish_article_if_allowed", outcome: "published_explicit", articleId, auth, details: { mode: "explicit", warnings } });
   return { published: true, status: "published", reasons: [], warnings, slug: rows[0].slug };
+}
+
+/** All topic ids of an article, primary first. Falls back to [category_id] before migration 0007. */
+async function topicIdsOf(articleId: string, primaryCategoryId: string): Promise<string[]> {
+  try {
+    const sql = await getSql();
+    const rows = await sql<{ category_id: string }>`select category_id from article_topics where article_id = ${articleId} order by rowid`;
+    const ids = rows.map((r) => r.category_id);
+    return ids.length ? [primaryCategoryId, ...ids.filter((id) => id !== primaryCategoryId)] : [primaryCategoryId];
+  } catch {
+    return [primaryCategoryId];
+  }
+}
+
+/** Topic labels per article id, for list tools. */
+async function topicLabelsOf(articleIds: string[]): Promise<Map<string, string[]>> {
+  const out = new Map<string, string[]>();
+  if (articleIds.length === 0) return out;
+  try {
+    const { categories } = await taxonomy();
+    const labelOf = new Map(categories.map((c) => [c.id, c.label]));
+    const sql = await getSql();
+    for (let start = 0; start < articleIds.length; start += 50) {
+      const chunk = articleIds.slice(start, start + 50);
+      const placeholders = chunk.map((_, i) => `$${i + 1}`).join(", ");
+      const links = await sql.query<{ article_id: string; category_id: string }>(
+        `select article_id, category_id from article_topics where article_id in (${placeholders}) order by rowid`,
+        chunk,
+      );
+      for (const link of links) {
+        const list = out.get(link.article_id) ?? [];
+        const label = labelOf.get(link.category_id);
+        if (label && !list.includes(label)) list.push(label);
+        out.set(link.article_id, list);
+      }
+    }
+  } catch {
+    /* pre-migration database: lists just omit extra topics */
+  }
+  return out;
+}
+
+/**
+ * The publishing policy with a migration-safe topic allowlist: empty means
+ * all topics allowed, and a stored list naming only topics that no longer
+ * exist (pre-migration ids in profile settings) also means all topics.
+ */
+async function decisionPolicy(settings: AutomationSettings): Promise<AutomationSettings["policy"]> {
+  const { categories } = await taxonomy();
+  return { ...settings.policy, allowedCategoryIds: effectiveAllowedTopics(settings.policy.allowedCategoryIds, categories.map((c) => c.id)) };
 }
 
 function pick<T extends { id: string; slug: string; label: string }>(items: T[], ref: string): T | undefined {
@@ -283,7 +347,7 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
     });
     if (submission) await store.setSubmissionFlags(articleId, flags);
     if (row.status !== "draft") return { flags, wouldPublish: false, publishReasons: [`The article is ${row.status}; editing never changes its status.`] };
-    const decision = publishDecision({ active: automationActive(settings), policy: settings.policy, status: row.status, categoryId: row.category_id, flags, publishedToday: await store.automatedPublishesToday(profileId) });
+    const decision = publishDecision({ active: automationActive(settings), policy: await decisionPolicy(settings), status: row.status, categoryIds: await topicIdsOf(articleId, row.category_id), flags, publishedToday: await store.automatedPublishesToday(profileId) });
     return { flags, wouldPublish: decision.publish, publishReasons: decision.publish ? [] : decision.reasons };
   }
 
@@ -307,6 +371,7 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
         const settings = await loadSettings(profileId);
         const { readSettings } = await import("@/content/repository.server");
         const { site } = await readSettings();
+        const tax = await taxonomy();
         const env = (await workerEnv()) as KeyEnv;
         return {
           ok: true,
@@ -337,7 +402,14 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
                   "there is no AI unpublish.",
               },
             },
-            ...(await taxonomy()),
+            ...tax,
+            topics: tax.categories.map((c) => ({ slug: c.slug, label: c.label, description: c.description })),
+            topicInstructions:
+              "Every article must be filed under the blog's topics by its actual content. In submit_article_draft pass `topics`: " +
+              `1 to ${MAX_TOPICS_PER_ARTICLE} entries from the ` + "`topics`" + " list below (slug or exact name), best fit first — the first is the main topic. " +
+              "An article can belong to several topics (for example a phone review can be `product-reviews`, `smartphones-android-iphone-wearables` and `buying-guides`). " +
+              "Do not invent topics: unknown ones are rejected with the valid list. The legacy single `category` field still works and is merged into `topics`. " +
+              "To change topics later use update_article_draft with `topics`, `add_topics` or `remove_topics`.",
             limits: { maxBodyChars: MAX_BODY_CHARS, maxImageBytes: MAX_IMAGE_BYTES, imageTypes: ["image/jpeg", "image/png", "image/webp"] },
           },
         };
@@ -367,6 +439,7 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
               c.label as category, s.source_urls from articles a left join categories c on c.id = a.category_id
               left join automation_submissions s on s.article_id = a.id
               order by a.updated_at desc limit ${limit}`;
+        const topicLabels = await topicLabelsOf(rows.map((r) => r.id));
         return {
           ok: true,
           data: {
@@ -379,6 +452,7 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
               publishedAt: r.published_at,
               updatedAt: r.updated_at,
               category: r.category,
+              topics: topicLabels.get(r.id) ?? (r.category ? [r.category] : []),
               path: r.status === "published" ? `/articles/${r.slug}` : null,
               automated: r.source_urls != null,
               sourceUrls: r.source_urls ? JSON.parse(r.source_urls) : [],
@@ -416,10 +490,18 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
           };
         }
         const { categories, tags } = await taxonomy();
-        const category = pick(categories, input.category);
-        if (!category) {
-          return { ok: false, error: "Unknown category. Use one of the existing categories.", data: categories.map((c) => c.slug) };
+        const merged = mergeTopicRefs({ topics: input.topics, category: input.category }, categories);
+        if (merged.unknown.length > 0) {
+          return { ok: false, error: unknownTopicsError(merged.unknown, categories), data: { valid_topics: categories.map((c) => c.slug) } };
         }
+        if (merged.ids.length === 0) {
+          return { ok: false, error: "No topic given. " + unknownTopicsError(["(none)"], categories), data: { valid_topics: categories.map((c) => c.slug) } };
+        }
+        if (merged.ids.length > MAX_TOPICS_PER_ARTICLE) {
+          return { ok: false, error: `Too many topics (${merged.ids.length}). Pick at most ${MAX_TOPICS_PER_ARTICLE} that fit the article's actual content.`, data: { valid_topics: categories.map((c) => c.slug) } };
+        }
+        const topicIds = merged.ids;
+        const category = categories.find((c) => c.id === topicIds[0]) ?? categories[0];
         const tagIds: string[] = [];
         let dropped = 0;
         for (const ref of input.tags ?? []) {
@@ -453,6 +535,7 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
             slug: input.slug ?? "",
             excerpt: input.excerpt,
             categoryId: category.id,
+            topicIds,
             tagIds,
             motif: MOTIFS[parseInt(hash.slice(0, 2), 16) % MOTIFS.length],
             featured: false,
@@ -513,6 +596,8 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
             duplicate: false,
             article_id: saved.id,
             slug: saved.slug,
+            topics: topicIds.map((id) => categories.find((c) => c.id === id)?.slug ?? id),
+            category: category.slug,
             status: auto.published ? "published" : "draft",
             published: auto.published,
             publish_reasons: auto.reasons,
@@ -661,12 +746,13 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
             }
           })
           .slice(0, parsed.data.limit ?? 20);
+        const topicLabels = await topicLabelsOf(editable.map((r) => r.id));
         return {
           ok: true,
           data: {
             articles: editable.map((r) => ({
               article_id: r.id, slug: r.slug, title: r.title, status: r.status, updatedAt: r.updated_at,
-              category: r.category, hasCover: Boolean(r.cover), createdBy: r.has_sub ? (r.owner ?? "default") : "owner",
+              category: r.category, topics: topicLabels.get(r.id) ?? (r.category ? [r.category] : []), hasCover: Boolean(r.cover), createdBy: r.has_sub ? (r.owner ?? "default") : "owner",
               flags: r.flags ? (JSON.parse(r.flags) as string[]) : [],
             })),
             rules: "Drafts/unpublished only. Published articles are locked unless the owner enables 'Allow AI to edit this article' for that one article in the admin panel.",
@@ -700,6 +786,7 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
               article_id: article.id, slug: article.slug, title: article.title, excerpt: article.excerpt,
               status: article.status, publishedAt: article.publishedAt, updatedAt: article.updatedAt,
               category: pick(categories, article.categoryId) ?? { id: article.categoryId },
+              topics: article.topicIds.map((id) => pick(categories, id) ?? { id }),
               tags: article.tagIds.map((id) => tags.find((t) => t.id === id) ?? { id }),
               coverMediaId: article.coverMediaId ?? null,
               seoTitle: article.seoTitle ?? "", seoDescription: article.seoDescription ?? "",
@@ -748,10 +835,33 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
           if (input.excerpt !== undefined) patch.excerpt = input.excerpt;
           if (input.seo_title !== undefined) patch.seoTitle = input.seo_title;
           if (input.seo_description !== undefined) patch.seoDescription = input.seo_description;
-          if (input.category !== undefined) {
+          if (input.category !== undefined && input.topics === undefined && input.add_topics === undefined && input.remove_topics === undefined) {
             const category = pick(categories, input.category);
-            if (!category) return { ok: false, error: "Unknown category. Use one of the existing categories.", data: categories.map((c) => c.slug) };
-            patch.categoryId = category.id;
+            if (!category) return { ok: false, error: unknownTopicsError([input.category], categories), data: { valid_topics: categories.map((c) => c.slug) } };
+            patch.topicIds = [category.id];
+          }
+          if (input.topics !== undefined || input.add_topics !== undefined || input.remove_topics !== undefined || (input.category !== undefined && input.topics !== undefined)) {
+            let next: string[];
+            if (input.topics !== undefined) {
+              const resolved = resolveTopicRefs(input.topics, categories);
+              if (resolved.unknown.length > 0) return { ok: false, error: unknownTopicsError(resolved.unknown, categories), data: { valid_topics: categories.map((c) => c.slug) } };
+              next = resolved.ids;
+            } else {
+              next = [...current.topicIds];
+            }
+            if (input.add_topics) {
+              const resolved = resolveTopicRefs(input.add_topics, categories);
+              if (resolved.unknown.length > 0) return { ok: false, error: unknownTopicsError(resolved.unknown, categories), data: { valid_topics: categories.map((c) => c.slug) } };
+              for (const id of resolved.ids) if (!next.includes(id)) next.push(id);
+            }
+            if (input.remove_topics) {
+              const resolved = resolveTopicRefs(input.remove_topics, categories);
+              if (resolved.unknown.length > 0) return { ok: false, error: unknownTopicsError(resolved.unknown, categories), data: { valid_topics: categories.map((c) => c.slug) } };
+              next = next.filter((id) => !resolved.ids.includes(id));
+            }
+            if (next.length === 0) return { ok: false, error: "An article must keep at least one topic. Add another topic before removing the last one." };
+            if (next.length > MAX_TOPICS_PER_ARTICLE) return { ok: false, error: `Too many topics (${next.length}). An article can have at most ${MAX_TOPICS_PER_ARTICLE}; remove one first.`, data: { valid_topics: categories.map((c) => c.slug) } };
+            patch.topicIds = next;
           }
           let droppedTags = 0;
           const resolveRefs = (refs: string[]): string[] => {
@@ -789,6 +899,7 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
             ok: true,
             data: {
               article_id: updated.id, slug: updated.slug, status: updated.status, updatedAt: updated.updatedAt,
+              topics: updated.topicIds.map((id) => categories.find((c) => c.id === id)?.slug ?? id),
               changed, flags, would_publish: updated.status === "draft" ? wouldPublish : false, publish_reasons: publishReasons, aiEditGrant: viaGrant,
               note: updated.status === "draft" ? "Still a draft. Editing never publishes — call publish_article_if_allowed to publish when policy allows." : "Published article edited under the owner's grant; its status did not change.",
             },

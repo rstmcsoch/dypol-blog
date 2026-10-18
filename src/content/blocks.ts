@@ -10,6 +10,8 @@ export type Card = {
   excerpt: string;
   publishedAt: string | null;
   categoryLabel: string;
+  /** Labels of every topic the article is filed under, primary first. */
+  topicLabels: string[];
   coverMediaId: string | null;
   motif: Article["motif"];
   minutes: number;
@@ -76,6 +78,7 @@ export function toCard(article: Article, live: Article[], categories: Category[]
     excerpt: article.excerpt,
     publishedAt: article.publishedAt,
     categoryLabel: categories.find((c) => c.id === article.categoryId)?.label ?? "",
+    topicLabels: article.topicIds.map((id) => categories.find((c) => c.id === id)?.label ?? "").filter(Boolean),
     coverMediaId: article.coverMediaId ?? null,
     motif: article.motif,
     minutes: readingMinutes(article),
@@ -92,7 +95,8 @@ function related(current: Article | null | undefined, live: Article[]): Article[
   if (!current) return [];
   const others = live.filter((a) => a.id !== current.id);
   const shared = (a: Article) => a.tagIds.filter((t) => current.tagIds.includes(t)).length;
-  const same = others.filter((a) => a.categoryId === current.categoryId || shared(a) > 0);
+  const sameTopic = (a: Article) => a.topicIds.some((id) => current.topicIds.includes(id));
+  const same = others.filter((a) => sameTopic(a) || shared(a) > 0);
   same.sort((a, b) => shared(b) - shared(a));
   return [...same, ...others.filter((a) => !same.includes(a))];
 }
@@ -135,7 +139,7 @@ export function resolveBlocks(blocks: ContentBlock[], ctx: BlockContext, where: 
         break;
       }
       case "category":
-        out.push({ ...base, cards: pool.filter((a) => a.categoryId === block.categoryId).slice(0, block.count).map(card) });
+        out.push({ ...base, cards: pool.filter((a) => a.topicIds.includes(block.categoryId)).slice(0, block.count).map(card) });
         break;
       case "tag":
         out.push({ ...base, cards: pool.filter((a) => a.tagIds.includes(block.tagId)).slice(0, block.count).map(card) });
@@ -143,7 +147,7 @@ export function resolveBlocks(blocks: ContentBlock[], ctx: BlockContext, where: 
       case "topics":
         out.push({
           ...base,
-          topics: categories.slice(0, block.count).map((category) => ({ category, count: live.filter((a) => a.categoryId === category.id).length })),
+          topics: categories.slice(0, block.count).map((category) => ({ category, count: live.filter((a) => a.topicIds.includes(category.id)).length })),
         });
         break;
       case "ticker":

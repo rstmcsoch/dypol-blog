@@ -30,7 +30,7 @@ export function IndexList({
                 <span className="index-row__excerpt">{article.excerpt}</span>
               </span>
               <span className="index-row__meta">
-                {row?.categoryLabel ? <span>{row.categoryLabel}</span> : null}
+                {row?.topicLabels?.length ? <span>{row.topicLabels.slice(0, 2).join(" · ")}{row.topicLabels.length > 2 ? ` +${row.topicLabels.length - 2}` : ""}</span> : null}
                 {article.publishedAt ? <span>{formatDate(article.publishedAt)}</span> : null}
                 <span>
                   {row?.minutes ?? 1} {minRead}

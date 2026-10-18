@@ -311,9 +311,9 @@ function AutomationDesk() {
           <p className="desk-note">Off by default: every AI article stays a draft. Turn on only with explicit rules.</p>
           <Check checked={policy.autoPublish} onChange={(e) => setPolicy({ autoPublish: e.target.checked })} label="Allow automatic publishing" />
           {policy.autoPublish && policy.allowedCategoryIds.length === 0 ? (
-            <p className="banner banner--bad" role="alert" data-testid="no-topics-warning">
-              Automatic publishing is on, but no topic is ticked below, so nothing can be published automatically. Tick the topics
-              this automation may publish into.
+            <p className="desk-note" data-testid="no-topics-warning">
+              No topic is ticked below, so this automation may publish into <strong>any</strong> topic. Tick topics only if you
+              want to limit it. (An article with several topics may be published if any one of them is ticked.)
             </p>
           ) : null}
           <div className="field">

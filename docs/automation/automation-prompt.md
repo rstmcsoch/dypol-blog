@@ -31,10 +31,17 @@ step says so.
    - `ai-choice`: pick freely from `topicIdeas` and your own research.
 2. Call `list_recent_articles` (limit 30). Note every recent title, topic and source URL.
    Do not write about a topic, angle or source already covered there.
-3. Pick ONE topic following step 1. It must fit one of the existing categories
-   returned by `get_blog_settings` — never invent a category. When you submit,
+3. Pick ONE subject following step 1. When you submit,
    pass `topic_idea_used` and `used_topic_index` for the idea you used (sequence
    mode advances only when a draft is submitted).
+3b. File the article under the blog's topics. `get_blog_settings` returns the
+   canonical topic list in `topics` (25 topics, slug + name). By the article's
+   actual content, choose 1–4 that genuinely fit — an article can belong to
+   several topics (a phone review can be `product-reviews`,
+   `smartphones-android-iphone-wearables` and `buying-guides`). Best fit first:
+   the first topic is the main one shown on cards. Never invent a topic and
+   never pad with topics that don't fit; an unknown topic is rejected with the
+   valid list, so fix it and resubmit if that happens.
 4. Research it now on the web. Read the primary sources yourself. Keep the exact URL of
    every source you actually used. Prefer primary, dated, reputable sources; confirm
    facts that matter (numbers, dates, names, quotes) in at least two sources.
@@ -51,8 +58,8 @@ step says so.
    outcome `skipped` and a one-line reason, then stop. Skipping is better than
    publishing low quality.
 7. Call `submit_article_draft` with: `idempotency_key` = `<YYYY-MM-DD>-<slug>` (reuse the
-   same key if you retry), title, slug, excerpt, body, category (use the category **id**
-   returned by `get_blog_settings`, e.g. `ai`), up to 5 existing tags, seo_title,
+   same key if you retry), title, slug, excerpt, body, `topics` (the 1–4 topic
+   slugs or exact names you picked in step 3b, best fit first), up to 5 existing tags, seo_title,
    seo_description, `source_urls` (all sources used) and `uncertain: true` if any claim
    could not be fully verified. If you already uploaded an image in step 8a, also pass
    its `cover_media_id`. The reply tells you `published` true/false and
@@ -100,13 +107,16 @@ You can fully edit **draft / unpublished** articles over MCP — never published
    sources and flags before changing anything.
 3. Edit with `update_article_draft` — pass only the fields that change (title,
    slug, excerpt, `body` as a full replacement in the same markdown-ish format,
-   `category`, `tags` to set the whole set or `add_tags`/`remove_tags`, `seo_title`,
+   `topics` to replace the whole topic set or `add_topics`/`remove_topics` (the
+   legacy `category` still sets a single main topic), `tags` to set the whole set or `add_tags`/`remove_tags`, `seo_title`,
    `seo_description`, `source_urls`). The reply returns refreshed `flags` and
    `publish_reasons`. Editing NEVER publishes and never changes the status.
    **Explicit publish:** when the owner tells you to publish a draft, call
    `publish_article_if_allowed` — a deliberate publish always works on drafts you
    may edit (your own; master token: any draft). The publishing policy (daily cap,
-   allowed topics, flags including self-reported uncertainty, auto-publish on/off)
+   allowed topics — an empty allowed list means every topic is allowed, and a
+   multi-topic article passes if any one of its topics is allowed — flags
+   including self-reported uncertainty, auto-publish on/off)
    does **not** block an explicit publish; anything that would have failed is
    returned as `warnings` — report them, then publish as instructed. Once an
    article is published you cannot unpublish it (there is no AI unpublish),
