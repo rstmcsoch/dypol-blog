@@ -33,6 +33,14 @@ test("PR #5 homepage sections become builder blocks (unknown/duplicate dropped, 
   assert.equal(out.home.blocks[0]?.count, 5);
 });
 
+test("homepage backfill: missing essential sections are added, disabled ones stay disabled", () => {
+  const out = normalizeSite({ home: { blocks: [{ id: "home-latest", type: "latest", enabled: false, title: "", count: 5, layout: "list", categoryId: "", tagId: "", body: "", ctaLabel: "", ctaHref: "" }] } });
+  const types = out.home.blocks.map((b) => b.type);
+  for (const need of ["featured", "latest", "related", "topics", "tags"]) assert.ok(types.includes(need), need);
+  assert.equal(out.home.blocks.find((b) => b.type === "latest")?.enabled, false);
+  assert.equal(out.home.blocks[0]?.type, "featured");
+});
+
 test("PR #5 sidebar string blocks are upgraded, count carried over", () => {
   const out = normalizeSite({ articleSidebar: { enabled: true, blocks: ["share", "related"], count: 6 } });
   assert.deepEqual(out.articleSidebar.blocks.map((b) => [b.type, b.count]), [["share", 6], ["related", 6]]);

@@ -162,6 +162,13 @@ export function HomeBlocks({ blocks, site }: { blocks: ResolvedBlock[]; site: Si
                     </div>
                   ) : null}
                   {t === "topics" && r.topics ? <TopicGrid topics={r.topics} /> : null}
+                  {t === "tags" && r.tags ? (
+                    <ul className="tag-list">
+                      {r.tags.map((tag) => (
+                        <li key={tag.id}>{tag.label}</li>
+                      ))}
+                    </ul>
+                  ) : null}
                   {t === "text" ? (
                     <div className="text-block">
                       <Markdown source={r.block.body} />

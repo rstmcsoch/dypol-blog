@@ -61,7 +61,7 @@ const hrefSchema = z
   .max(300)
   .refine((value) => isSafeHref(value), "Link must be a site path or an https URL.");
 
-export const HOME_BLOCK_TYPES = ["featured", "also", "latest", "related", "popular", "category", "tag", "topics", "ticker", "text", "cta"] as const;
+export const HOME_BLOCK_TYPES = ["featured", "also", "latest", "related", "popular", "category", "tag", "topics", "ticker", "text", "cta", "tags"] as const;
 export const SIDEBAR_BLOCK_TYPES = ["tags", "related", "newStories", "popular", "share", "category", "tag", "text", "cta"] as const;
 
 const labelText = z.string().trim().min(1).max(80);
@@ -207,9 +207,25 @@ const fill = (b: Partial<ContentBlock> & { id: string; type: ContentBlock["type"
 });
 
 /** Converts the PR #5 shapes (fixed sections / string sidebar blocks) to block lists. */
+/** Rich homepage defaults: if a saved block list lacks an essential section, add it (enabled). Blocks the owner disabled stay disabled — only missing types are backfilled. */
+export const ESSENTIAL_HOME_BLOCKS: ContentBlock[] = [
+  fill({ id: "home-featured", type: "featured", count: 1 }),
+  fill({ id: "home-latest", type: "latest", count: 6, layout: "cards", title: "Our new articles" }),
+  fill({ id: "home-related", type: "related", count: 3, layout: "cards", title: "You may also like" }),
+  fill({ id: "home-topics", type: "topics", count: 12, title: "Browse by topics" }),
+  fill({ id: "home-tags", type: "tags", count: 12, title: "Tags" }),
+];
+
 export function upgradeHome(raw: unknown): unknown {
   const r = (raw ?? {}) as { blocks?: unknown; sections?: { id: string; enabled?: boolean; count?: number }[] };
-  if (Array.isArray(r.blocks)) return { blocks: r.blocks.map((b) => fill(b as ContentBlock)) };
+  if (Array.isArray(r.blocks)) {
+    const blocks = r.blocks.map((b) => fill(b as ContentBlock));
+    const have = new Set(blocks.map((b) => b.type));
+    const missing = ESSENTIAL_HOME_BLOCKS.filter((b) => !have.has(b.type));
+    // Featured belongs first; the rest append in default order, respecting the owner's existing order/visibility.
+    const featured = missing.filter((b) => b.type === "featured");
+    return { blocks: [...featured, ...blocks, ...missing.filter((b) => b.type !== "featured")] };
+  }
   if (Array.isArray(r.sections)) {
     const seen = new Set<string>();
     const known = r.sections.filter((sec) => (HOME_BLOCK_TYPES as readonly string[]).includes(sec?.id) && !seen.has(sec.id) && seen.add(sec.id));

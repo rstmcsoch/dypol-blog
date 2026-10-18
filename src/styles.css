@@ -219,11 +219,13 @@
 }
 
 .page-title {
-  font-size: clamp(2.2rem, 1rem + 4vw, 4.2rem);
+  font-size: clamp(1.85rem, 1.1rem + 2.4vw, 2.75rem);
+  line-height: 1.02;
 }
 
 .display {
-  font-size: clamp(2.45rem, 0.7rem + 6.4vw, 5.4rem);
+  font-size: clamp(1.95rem, 1.15rem + 2.8vw, 3rem);
+  line-height: 1.02;
 }
 
 .display a,
@@ -624,7 +626,7 @@ html[data-theme="dark"] .theme-switch__btn[data-value="dark"] .theme-switch__mar
 }
 
 .lead-section {
-  padding-block: clamp(1.5rem, 4vw, 3.25rem) clamp(1.75rem, 4vw, 3rem);
+  padding-block: clamp(1rem, 2.5vw, 1.75rem) clamp(1.1rem, 2.5vw, 1.75rem);
 }
 
 .lead-grid {
@@ -818,10 +820,10 @@ html[data-theme="dark"] .theme-switch__btn[data-value="dark"] .theme-switch__mar
 }
 
 .band-link__title {
-  font-size: clamp(1.25rem, 1rem + 1vw, 1.7rem);
+  font-size: clamp(1.05rem, 0.95rem + 0.6vw, 1.35rem);
   font-weight: 700;
-  letter-spacing: -0.04em;
-  line-height: 1.05;
+  letter-spacing: -0.025em;
+  line-height: 1.12;
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -839,7 +841,7 @@ html[data-theme="dark"] .theme-switch__btn[data-value="dark"] .theme-switch__mar
 }
 
 .section {
-  padding-block: clamp(1.75rem, 4vw, 3.25rem);
+  padding-block: clamp(1.25rem, 3vw, 2.25rem);
 }
 
 .section--flush {
@@ -858,7 +860,7 @@ html[data-theme="dark"] .theme-switch__btn[data-value="dark"] .theme-switch__mar
 .section-head h2,
 .section h2 {
   margin: 0;
-  font-size: clamp(1.7rem, 1.2rem + 1.5vw, 2.4rem);
+  font-size: clamp(1.35rem, 1.1rem + 1vw, 1.8rem);
   letter-spacing: -0.045em;
   line-height: 1;
 }
@@ -1040,10 +1042,11 @@ html[data-theme="dark"] .theme-switch__btn[data-value="dark"] .theme-switch__mar
 
 .article-title {
   margin: 0;
-  font-size: clamp(2.2rem, 0.9rem + 4.8vw, 4.6rem);
+  font-size: clamp(1.8rem, 1.1rem + 2.3vw, 2.65rem);
   font-weight: 700;
-  letter-spacing: -0.048em;
-  line-height: 0.95;
+  letter-spacing: -0.032em;
+  line-height: 1.04;
+  overflow-wrap: break-word;
 }
 
 .article-plate {
@@ -1476,7 +1479,7 @@ html[data-theme="dark"] .theme-switch__btn[data-value="dark"] .theme-switch__mar
 .media-card img { width: 100%; aspect-ratio: 1; object-fit: cover; border-bottom: 1px solid var(--a-line); background: var(--a-bg); }
 .media-card div { display: grid; gap: 0.45rem; padding: 0.6rem; }
 .media-card p { margin: 0; overflow-wrap: anywhere; font-size: 0.85rem; }
-.adm-dialog { max-width: 28rem; border: 1px solid var(--a-line); border-radius: 12px; padding: 1.25rem; color: var(--a-text); background: var(--a-surface); box-shadow: 0 20px 50px rgba(16, 24, 40, 0.25); font-family: ui-sans-serif, system-ui, sans-serif; }
+.adm-dialog { position: fixed; inset: 0; margin: auto; width: min(28rem, calc(100vw - 2rem)); max-height: calc(100dvh - 2rem); overflow-y: auto; border: 1px solid var(--a-line); border-radius: 12px; padding: 1.25rem; color: var(--a-text); background: var(--a-surface); box-shadow: 0 20px 50px rgba(16, 24, 40, 0.25); font-family: ui-sans-serif, system-ui, sans-serif; }
 .adm-dialog::backdrop { background: rgba(16, 24, 40, 0.45); }
 .adm-dialog h2 { margin: 0 0 0.5rem; font-size: 1.1rem; }
 .adm-dialog p { margin: 0 0 1rem; color: var(--a-muted); }
@@ -1787,7 +1790,7 @@ html[data-theme="dark"] .theme-switch__btn[data-value="dark"] .theme-switch__mar
 }
 
 .story-card__title {
-  font-size: 1.2rem;
+  font-size: 1.05rem;
   font-weight: 700;
   letter-spacing: -0.02em;
   line-height: 1.15;

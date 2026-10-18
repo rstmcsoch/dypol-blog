@@ -86,8 +86,10 @@ export const site = {
     blocks: [
       block("home-featured", "featured", { count: 1 }),
       block("home-also", "also", { count: 3 }),
-      block("home-latest", "latest", { count: 12 }),
-      block("home-topics", "topics", { count: 12 }),
+      block("home-latest", "latest", { count: 6, layout: "cards", title: "Our new articles" }),
+      block("home-related", "related", { count: 3, layout: "cards", title: "You may also like" }),
+      block("home-topics", "topics", { count: 12, title: "Browse by topics" }),
+      block("home-tags", "tags", { count: 12, title: "Tags" }),
     ],
   },
   articleSidebar: {
