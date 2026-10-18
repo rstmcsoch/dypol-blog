@@ -21,7 +21,7 @@ export function Cover({
   category: string;
   title: string;
 }) {
-  if (mediaId) return <img className="article-cover" src={`/media/${mediaId}`} alt="" loading="lazy" />;
+  if (mediaId) return <img className="article-cover" src={`/media/${mediaId}`} alt={title} loading="lazy" />;
   if (fallback === "none") return null;
   if (fallback === "plate") return <CoverPlate motif={motif} index={index} category={category} />;
   return (

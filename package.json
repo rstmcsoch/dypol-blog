@@ -23,7 +23,7 @@
     "deploy": "npm run build && wrangler deploy",
     "test:e2e:security": "node scripts/e2e/admin-security.e2e.mjs",
     "test:scripts": "node --test 'scripts/**/*.test.mjs'",
-    "test:src": "node --experimental-strip-types --test src/lib/app-data/app-data.test.ts src/lib/app-data/readiness-schedule.test.ts src/lib/auth/gate-identity.test.ts src/lib/auth/sign-in-gate.test.ts src/content/validate.test.ts src/content/media-store.test.ts src/lib/write-policy.test.ts src/lib/auth/session-token.test.ts src/lib/automation/automation.test.ts src/lib/mcp/mcp.test.ts src/lib/appearance.test.ts src/content/site-settings.test.ts src/content/blocks.test.ts src/lib/automation/profile-token.test.ts src/lib/automation/schedule.test.ts src/lib/automation/topic-selection.test.ts src/lib/automation/ai-edit.test.ts src/lib/old-articles.test.ts src/lib/topics.test.ts",
+    "test:src": "node --experimental-strip-types --test src/lib/app-data/app-data.test.ts src/lib/app-data/readiness-schedule.test.ts src/lib/auth/gate-identity.test.ts src/lib/auth/sign-in-gate.test.ts src/content/validate.test.ts src/content/media-store.test.ts src/lib/write-policy.test.ts src/lib/auth/session-token.test.ts src/lib/automation/automation.test.ts src/lib/mcp/mcp.test.ts src/lib/appearance.test.ts src/content/site-settings.test.ts src/content/blocks.test.ts src/lib/automation/profile-token.test.ts src/lib/automation/schedule.test.ts src/lib/automation/topic-selection.test.ts src/lib/automation/ai-edit.test.ts src/lib/old-articles.test.ts src/lib/topics.test.ts src/lib/seo.test.ts",
     "test:e2e:rotation": "node scripts/e2e/session-rotation.e2e.mjs",
     "test:e2e:mcp": "node scripts/e2e/mcp.e2e.mjs",
     "test:e2e:oauth-browser": "node scripts/e2e/oauth-browser.e2e.mjs",
@@ -33,7 +33,8 @@
     "test:e2e:topics": "node scripts/e2e/topic-selection.e2e.mjs",
     "test:e2e:ai-edit": "node scripts/e2e/ai-edit.e2e.mjs",
     "test:e2e:cleanup": "node scripts/e2e/admin-cleanup.e2e.mjs",
-    "test:e2e:multi-topics": "node scripts/e2e/topics-multi.e2e.mjs"
+    "test:e2e:multi-topics": "node scripts/e2e/topics-multi.e2e.mjs",
+    "test:e2e:seo": "node scripts/e2e/seo.e2e.mjs"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.4",

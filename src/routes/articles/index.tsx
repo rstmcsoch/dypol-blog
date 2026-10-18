@@ -3,16 +3,31 @@ import { IndexList } from "@/components/site/index-list";
 import { PagePending } from "@/components/site/states";
 import { useSite } from "@/components/site/use-site";
 import { getIndex } from "@/content/public-api";
+import { absoluteUrl, itemListJsonLd, socialMeta } from "@/lib/seo";
 
 export const Route = createFileRoute("/articles/")({
   loader: () => getIndex(),
-  head: () => ({
-    meta: [
-      { title: "Index — DYPOL Blog" },
-      { name: "description", content: "Every published piece, newest first." },
-    ],
-    links: [{ rel: "canonical", href: "/articles" }],
-  }),
+  head: ({ loaderData }) => {
+    const origin = loaderData?.origin ?? "";
+    const title = "Index — DYPOL Blog";
+    const description = "Every published piece, newest first.";
+    return {
+      meta: [
+        { title },
+        { name: "description", content: description },
+        ...socialMeta({ title, description, url: absoluteUrl(origin, "/articles"), type: "website", siteName: "DYPOL Blog", image: absoluteUrl(origin, "/og.jpg") }),
+      ],
+      links: [{ rel: "canonical", href: absoluteUrl(origin, "/articles") }],
+      scripts: [
+        {
+          type: "application/ld+json",
+          children: JSON.stringify(
+            itemListJsonLd({ origin, items: (loaderData?.articles ?? []).map((a) => ({ name: a.title, path: `/articles/${a.slug}` })) }),
+          ),
+        },
+      ],
+    };
+  },
   pendingComponent: PagePending,
   component: ArticlesPage,
 });

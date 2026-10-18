@@ -25,7 +25,7 @@ export const Route = createRootRoute({
         { title: current.title },
         { name: "description", content: current.description },
         { name: "theme-color", content: "#111111" },
-        { name: "robots", content: "index, follow" },
+        { name: "robots", content: "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" },
       ],
       links: [
         {
@@ -34,8 +34,9 @@ export const Route = createRootRoute({
           href: current.faviconMediaId ? `/media/${current.faviconMediaId}` : "/favicon.svg",
         },
         { rel: "stylesheet", href: appCss },
-        { rel: "manifest", href: "/__grok/manifest.webmanifest" },
+        { rel: "manifest", href: "/manifest.webmanifest" },
         { rel: "apple-touch-icon", href: "/__grok/icon-180.png" },
+        { rel: "alternate", type: "application/rss+xml", title: `${current.title} feed`, href: "/feed.xml" },
       ],
     };
   },

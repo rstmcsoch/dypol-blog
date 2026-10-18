@@ -1,15 +1,21 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { socialMeta } from "@/lib/seo";
 import { PagePending } from "@/components/site/states";
 import { useSite } from "@/components/site/use-site";
 
 export const Route = createFileRoute("/about")({
-  head: () => ({
-    meta: [
-      { title: "About — DYPOL Blog" },
-      { name: "description", content: "DYPOL Blog is the public journal of DYPOL Labs." },
-    ],
-    links: [{ rel: "canonical", href: "/about" }],
-  }),
+  head: () => {
+    const title = "About — DYPOL Blog";
+    const description = "DYPOL Blog is the public journal of DYPOL Labs.";
+    return {
+      meta: [
+        { title },
+        { name: "description", content: description },
+        ...socialMeta({ title, description, url: "/about", type: "website", siteName: "DYPOL Blog", image: "/og.jpg" }),
+      ],
+      links: [{ rel: "canonical", href: "/about" }],
+    };
+  },
   pendingComponent: PagePending,
   component: AboutPage,
 });

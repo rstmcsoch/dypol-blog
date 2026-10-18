@@ -1,5 +1,15 @@
 import { createServerFn } from "@tanstack/react-start";
 
+async function requestOrigin(): Promise<string> {
+  try {
+    const { getRequest } = await import("@tanstack/react-start/server");
+    const request = getRequest();
+    return request ? new URL(request.url).origin : "";
+  } catch {
+    return "";
+  }
+}
+
 export const getShell = createServerFn({ method: "GET" }).handler(async () => {
   try {
     const { readShell } = await import("./repository.server");
@@ -14,31 +24,33 @@ export const getShell = createServerFn({ method: "GET" }).handler(async () => {
 
 export const getHome = createServerFn({ method: "GET" }).handler(async () => {
   const { readHome } = await import("./repository.server");
-  return readHome();
+  return { ...(await readHome()), origin: await requestOrigin() };
 });
 
 export const getIndex = createServerFn({ method: "GET" }).handler(async () => {
   const { readIndex } = await import("./repository.server");
-  return readIndex();
+  return { ...(await readIndex()), origin: await requestOrigin() };
 });
 
 export const getTopics = createServerFn({ method: "GET" }).handler(async () => {
   const { readTopics } = await import("./repository.server");
-  return readTopics();
+  return { ...(await readTopics()), origin: await requestOrigin() };
 });
 
 export const getTopic = createServerFn({ method: "GET" })
   .validator((input: { slug: string }) => input)
   .handler(async ({ data }) => {
     const { readTopic } = await import("./repository.server");
-    return readTopic(data.slug);
+    const result = await readTopic(data.slug);
+    return result ? { ...result, origin: await requestOrigin() } : result;
   });
 
 export const getArticle = createServerFn({ method: "GET" })
   .validator((input: { slug: string }) => input)
   .handler(async ({ data }) => {
     const { readArticle } = await import("./repository.server");
-    return readArticle(data.slug);
+    const result = await readArticle(data.slug);
+    return result ? { ...result, origin: await requestOrigin() } : result;
   });
 
 export const getSitemapEntries = createServerFn({ method: "GET" }).handler(async () => {
