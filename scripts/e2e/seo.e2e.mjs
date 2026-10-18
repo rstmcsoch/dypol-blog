@@ -130,3 +130,39 @@ await check("login stays noindex; media files are immutable-cached", async () =>
 
 console.log(failures === 0 ? "ALL PASS" : `${failures} FAILURES`);
 process.exit(failures === 0 ? 0 : 1);
+
+// t74 favicon set: stable root paths, real files, correct types (Google fetches /favicon.ico directly).
+{
+  const icons = [
+    ["/favicon.ico", /icon/],
+    ["/favicon.svg", /svg/],
+    ["/favicon-16x16.png", /png/],
+    ["/favicon-32x32.png", /png/],
+    ["/apple-touch-icon.png", /png/],
+    ["/android-chrome-192x192.png", /png/],
+    ["/android-chrome-512x512.png", /png/],
+    ["/logo.png", /png/],
+    ["/logo.svg", /svg/],
+  ];
+  for (const [path, type] of icons) {
+    const r = await fetch(BASE + path);
+    assert.equal(r.status, 200, `${path} status`);
+    assert.match(r.headers.get("content-type") ?? "", type, `${path} content-type`);
+    const buf = Buffer.from(await r.arrayBuffer());
+    assert.ok(buf.length > 100, `${path} non-trivial bytes`);
+    if (path.endsWith(".ico")) assert.ok(buf.readUInt32LE(0) === 0x00010000 || (buf[0] === 0 && buf[1] === 0), "ico header");
+    if (path.endsWith(".png")) assert.equal(buf.subarray(1, 4).toString(), "PNG", `${path} png magic`);
+  }
+  const html = await (await fetch(BASE + "/")).text();
+  for (const tag of ['href="/favicon.ico"', 'href="/favicon.svg"', 'href="/favicon-32x32.png"', 'href="/favicon-16x16.png"', 'href="/apple-touch-icon.png"', 'rel="manifest"']) {
+    assert.ok(html.includes(tag), `home head includes ${tag}`);
+  }
+  const loginHtml = await (await fetch(BASE + "/login")).text();
+  assert.ok(loginHtml.includes('href="/favicon.ico"'), "login head includes favicon.ico");
+  const nf = await (await fetch(BASE + "/no-such-page-favicon")).text();
+  assert.ok(nf.includes('href="/favicon.ico"'), "404 head includes favicon.ico");
+  const manifest = await (await fetch(BASE + "/manifest.webmanifest")).json();
+  assert.ok(manifest.icons.some((i) => i.sizes === "512x512"), "manifest has 512 icon");
+  assert.ok(manifest.icons.some((i) => i.sizes === "192x192"), "manifest has 192 icon");
+  console.log("ok - favicon set: ico/svg/png sizes + apple-touch + manifest + head tags (t74)");
+}
