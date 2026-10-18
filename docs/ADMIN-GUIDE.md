@@ -41,9 +41,10 @@ This guide explains every part of the DYPOL Blog admin panel in plain language. 
 
 ## Homepage & layout
 
-- **Homepage sections**: turn the featured article, the “Also filed” band, the latest list and the topics grid on or off, change their order with the arrows, rename their headings and choose how many items each shows.
-- **Top news strip (ticker)**: the thin strip under the header. Choose its label, whether it shows the newest articles, articles you pick, or your own text items (each can link anywhere), how many items, and whether it scrolls continuously and how fast. Scrolling pauses when a visitor hovers over it and is switched off for visitors who ask their device for reduced motion.
-- **Article sidebar**: the column next to the article text. Turn it off and articles use the full width. Or choose its blocks (tags, related articles, newest articles, share buttons), their order and headings, and how many articles each list shows. On phones the sidebar appears under the article.
+- **Homepage** (admin → Homepage): this is a builder. Add, remove, reorder and edit blocks. Block types: big featured article, latest articles, “You may also like”, a block for any one topic/category (you can add the same type several times for different topics), topics list, tags, the top strip, your own text, and a button/link block. For each block you can change its heading, how many items it shows, its layout where offered, and show/hide it. Changes are only on the homepage.
+- **Article sidebar** (same builder controls on the article settings): the column next to article text. Add/remove/reorder the same kinds of blocks there (tags, related articles, newest articles, share buttons, and more). Turn the sidebar off and articles use the full width. On phones the sidebar appears under the article.
+- **Top strip / Ticker** (admin → Top strip / Ticker): the thin strip under the header. Turn it on/off (it is on by default), change its label, choose what it shows — newest articles, articles you pick, most-read articles, or your own text items — choose how many items, and how it moves: one at a time, continuous scroll, or still. Set the speed for moving modes. If the source you picked has nothing to show, it automatically shows the newest articles so the strip does not disappear. “Most read” uses a simple anonymous count: one number per article, no visitor tracking, no cookies.
+- **Admin dark mode**: at the top of the admin panel choose Light, Dark, or System (follows your device). This only changes the admin panel, not the public website, and your choice is remembered on that device.
 
 ## Site text
 
@@ -69,6 +70,14 @@ An AI app (Claude, ChatGPT, Grok, Cursor, Claude Code, …) can research and wri
 - The AI cannot do anything else: no deleting, no editing other articles, no access to your admin session.
 - You connect an AI app once (see `docs/automation/README.md` for each app). Apps that support it open an approval page where you paste your **MCP token**; command-line apps send the token in a header.
 - The **schedule** (for example “every morning at 8”) is set in the AI app, not here. The instructions to give the AI are in `docs/automation/automation-prompt.md`.
+
+### Multiple automations (profiles)
+
+- You can run several automations on the same website at the same time. Each one is a named **profile** (for example “Daily tech” and “Weekly design”).
+- Each profile has its own on/off and pause switch, its own topic ideas and sources, its own allowed topics, publishing rules and daily limit.
+- Each profile can have its own connection key (token). Create it in the profile list: it is shown **once**, so copy it straight into that AI app. Only a scrambled copy is stored on the website, so it cannot be read back later. Revoke a profile's key at any time and that AI app loses access immediately, without affecting the others.
+- The main `MCP_TOKEN` secret still works and belongs to the profile called **Default**. Your existing settings became the Default profile, so nothing changed for automations you already had.
+- Every run in Recent runs shows which profile made it.
 
 ### Tokens and secrets
 
