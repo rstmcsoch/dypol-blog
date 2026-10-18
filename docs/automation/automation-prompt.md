@@ -14,12 +14,27 @@ to read and write the blog. Work through these steps in order and stop early whe
 step says so.
 
 1. Call `get_blog_settings`. If `automation.active` is false, call `record_run_result`
-   with outcome `skipped` and the reason it gives, then stop.
+   with outcome `skipped` and the reason it gives, then stop. Note
+   `automation.selection` — it tells you how to pick today's topic:
+   - `sequence`: use `selection.suggestedTopic` (at `suggestedIndex`). Only if it
+     duplicates a recent article, take the next idea by the same step pattern and
+     say so in your run summary.
+   - `random`: use `selection.suggestedTopic`, the random pick the site made for
+     this call. If it duplicates a recent article, say so and pick another idea.
+   - `trend-first`: FIRST research current trends on the listed
+     `selection.trendSources` (Google News, web/news, X, social as listed). Pick
+     the hottest trend that fits this blog's categories. Only use trends you
+     actually found in live sources — never invent a trend, a headline, or
+     engagement numbers. If no trend fits, follow `selection.fallback`
+     (`use-ideas` = pick from `topicIdeas`, `ai-choice` = choose freely,
+     `skip` = record a skipped run and stop).
+   - `ai-choice`: pick freely from `topicIdeas` and your own research.
 2. Call `list_recent_articles` (limit 30). Note every recent title, topic and source URL.
    Do not write about a topic, angle or source already covered there.
-3. Pick ONE topic: prefer the owner's `topicIdeas`; otherwise find a current, relevant
-   development on the owner's `topicSources` or through web search. It must fit one of
-   the existing categories returned by `get_blog_settings` — never invent a category.
+3. Pick ONE topic following step 1. It must fit one of the existing categories
+   returned by `get_blog_settings` — never invent a category. When you submit,
+   pass `topic_idea_used` and `used_topic_index` for the idea you used (sequence
+   mode advances only when a draft is submitted).
 4. Research it now on the web. Read the primary sources yourself. Keep the exact URL of
    every source you actually used. Prefer primary, dated, reputable sources; confirm
    facts that matter (numbers, dates, names, quotes) in at least two sources.
