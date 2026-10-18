@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { createFileRoute, notFound } from "@tanstack/react-router";
 import { ArticleView } from "@/components/site/article-view";
-import { NotFoundState, PagePending } from "@/components/site/states";
+import { ArticlePagePending, NotFoundState } from "@/components/site/states";
 import { useSite } from "@/components/site/use-site";
 import { getArticle } from "@/content/public-api";
 import { absoluteUrl, articleJsonLd, breadcrumbJsonLd, socialMeta } from "@/lib/seo";
@@ -56,7 +56,11 @@ export const Route = createFileRoute("/articles/$slug")({
       ],
     };
   },
-  pendingComponent: PagePending,
+  // Show the article-shaped skeleton promptly on an uncached client-side
+  // navigation (prefetch on intent usually makes this unnecessary).
+  pendingComponent: ArticlePagePending,
+  pendingMs: 200,
+  pendingMinMs: 400,
   notFoundComponent: NotFoundState,
   component: ArticlePage,
 });

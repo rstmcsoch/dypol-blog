@@ -30,6 +30,7 @@
     "test:e2e:oauth-clients": "node scripts/e2e/oauth-clients.e2e.mjs",
     "test:e2e:admin-features": "node scripts/e2e/admin-features.e2e.mjs",
     "test:e2e:pages": "node scripts/e2e/pages.e2e.mjs",
+    "test:e2e:article-loading": "node scripts/e2e/article-loading.e2e.mjs",
     "test:e2e:profiles": "node scripts/e2e/profiles-concurrent.e2e.mjs",
     "test:e2e:topics": "node scripts/e2e/topic-selection.e2e.mjs",
     "test:e2e:ai-edit": "node scripts/e2e/ai-edit.e2e.mjs",
