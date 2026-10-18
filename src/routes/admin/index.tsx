@@ -24,14 +24,69 @@ function DeskHome() {
           <span>Drafts</span>
         </p>
         <p className="stat">
-          <strong>{data.counts.unpublished}</strong>
-          <span>Unpublished</span>
+          <strong>{data.totalViews.toLocaleString()}</strong>
+          <span>Total article views</span>
+        </p>
+        <p className="stat">
+          <strong>{data.publishedThisWeek}</strong>
+          <span>Published this week</span>
+        </p>
+        <p className="stat">
+          <strong>{data.counts.scheduled}</strong>
+          <span>Scheduled</span>
         </p>
         <p className="stat">
           <strong>{data.media.files}</strong>
           <span>{formatBytes(data.media.bytes)} in the library</span>
         </p>
       </div>
+      <p className="adm-row-actions" style={{ marginTop: "1rem" }}>
+        <Link to="/admin/articles/new" className="btn">New article</Link>
+        <Link to="/admin/media" className="btn btn--ghost">Media library</Link>
+        <Link to="/admin/automation" className="btn btn--ghost">AI automation</Link>
+        <Link to="/admin/health" className="btn btn--ghost">Site health</Link>
+      </p>
+      <section className="desk-section">
+        <h2>Top articles by views</h2>
+        {data.topArticles.length === 0 ? (
+          <p className="desk-note">No published articles yet.</p>
+        ) : (
+          <div className="desk-table-wrap">
+            <table className="desk-table">
+              <thead><tr><th>Title</th><th>Views</th><th>Words</th></tr></thead>
+              <tbody>
+                {data.topArticles.map((row) => (
+                  <tr key={row.id}>
+                    <td><Link to="/admin/articles/$id" params={{ id: row.id }}>{row.title}</Link></td>
+                    <td>{row.views.toLocaleString()}</td>
+                    <td>{row.words.toLocaleString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+      {data.recentRuns.length > 0 ? (
+        <section className="desk-section">
+          <h2>Recent automation runs</h2>
+          <div className="desk-table-wrap">
+            <table className="desk-table">
+              <thead><tr><th>When</th><th>Tool</th><th>Outcome</th><th>Profile</th></tr></thead>
+              <tbody>
+                {data.recentRuns.map((run) => (
+                  <tr key={run.id}>
+                    <td>{formatDate(run.createdAt)}</td>
+                    <td>{run.tool}</td>
+                    <td>{run.outcome}</td>
+                    <td>{run.profileId}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      ) : null}
       <section className="desk-section">
         <h2>Needs attention</h2>
         {data.attention.length === 0 ? (

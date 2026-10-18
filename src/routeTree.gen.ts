@@ -26,6 +26,7 @@ import { Route as DotwellKnownOauthProtectedResourceRouteImport } from './routes
 import { Route as AdminIndexRouteImport } from './routes/admin/index'
 import { Route as AdminAppearanceRouteImport } from './routes/admin/appearance'
 import { Route as AdminAutomationRouteImport } from './routes/admin/automation'
+import { Route as AdminHealthRouteImport } from './routes/admin/health'
 import { Route as AdminHelpRouteImport } from './routes/admin/help'
 import { Route as AdminHomepageRouteImport } from './routes/admin/homepage'
 import { Route as AdminMediaRouteImport } from './routes/admin/media'
@@ -135,6 +136,11 @@ const AdminAppearanceRoute = AdminAppearanceRouteImport.update({
 const AdminAutomationRoute = AdminAutomationRouteImport.update({
   id: '/automation',
   path: '/automation',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminHealthRoute = AdminHealthRouteImport.update({
+  id: '/health',
+  path: '/health',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminHelpRoute = AdminHelpRouteImport.update({
@@ -271,6 +277,7 @@ export interface FileRoutesByFullPath {
   '/.well-known/oauth-protected-resource': typeof DotwellKnownOauthProtectedResourceRouteWithChildren
   '/admin/appearance': typeof AdminAppearanceRoute
   '/admin/automation': typeof AdminAutomationRoute
+  '/admin/health': typeof AdminHealthRoute
   '/admin/help': typeof AdminHelpRoute
   '/admin/homepage': typeof AdminHomepageRoute
   '/admin/media': typeof AdminMediaRoute
@@ -312,6 +319,7 @@ export interface FileRoutesByTo {
   '/.well-known/oauth-protected-resource': typeof DotwellKnownOauthProtectedResourceRouteWithChildren
   '/admin/appearance': typeof AdminAppearanceRoute
   '/admin/automation': typeof AdminAutomationRoute
+  '/admin/health': typeof AdminHealthRoute
   '/admin/help': typeof AdminHelpRoute
   '/admin/homepage': typeof AdminHomepageRoute
   '/admin/media': typeof AdminMediaRoute
@@ -355,6 +363,7 @@ export interface FileRoutesById {
   '/.well-known/oauth-protected-resource': typeof DotwellKnownOauthProtectedResourceRouteWithChildren
   '/admin/appearance': typeof AdminAppearanceRoute
   '/admin/automation': typeof AdminAutomationRoute
+  '/admin/health': typeof AdminHealthRoute
   '/admin/help': typeof AdminHelpRoute
   '/admin/homepage': typeof AdminHomepageRoute
   '/admin/media': typeof AdminMediaRoute
@@ -399,6 +408,7 @@ export interface FileRouteTypes {
     | '/.well-known/oauth-protected-resource'
     | '/admin/appearance'
     | '/admin/automation'
+    | '/admin/health'
     | '/admin/help'
     | '/admin/homepage'
     | '/admin/media'
@@ -440,6 +450,7 @@ export interface FileRouteTypes {
     | '/.well-known/oauth-protected-resource'
     | '/admin/appearance'
     | '/admin/automation'
+    | '/admin/health'
     | '/admin/help'
     | '/admin/homepage'
     | '/admin/media'
@@ -482,6 +493,7 @@ export interface FileRouteTypes {
     | '/.well-known/oauth-protected-resource'
     | '/admin/appearance'
     | '/admin/automation'
+    | '/admin/health'
     | '/admin/help'
     | '/admin/homepage'
     | '/admin/media'
@@ -657,6 +669,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminAutomationRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/health': {
+      id: '/admin/health'
+      path: '/health'
+      fullPath: '/admin/health'
+      preLoaderRoute: typeof AdminHealthRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/help': {
       id: '/admin/help'
       path: '/help'
@@ -824,6 +843,7 @@ declare module '@tanstack/react-router' {
 interface AdminRouteChildren {
   AdminAppearanceRoute: typeof AdminAppearanceRoute
   AdminAutomationRoute: typeof AdminAutomationRoute
+  AdminHealthRoute: typeof AdminHealthRoute
   AdminHelpRoute: typeof AdminHelpRoute
   AdminHomepageRoute: typeof AdminHomepageRoute
   AdminMediaRoute: typeof AdminMediaRoute
@@ -841,6 +861,7 @@ interface AdminRouteChildren {
 const AdminRouteChildren: AdminRouteChildren = {
   AdminAppearanceRoute: AdminAppearanceRoute,
   AdminAutomationRoute: AdminAutomationRoute,
+  AdminHealthRoute: AdminHealthRoute,
   AdminHelpRoute: AdminHelpRoute,
   AdminHomepageRoute: AdminHomepageRoute,
   AdminMediaRoute: AdminMediaRoute,

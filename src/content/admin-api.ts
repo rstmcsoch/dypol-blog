@@ -218,6 +218,40 @@ export const adminBackfillMedia = createServerFn({ method: "POST" })
     return backfillMediaVariants({ apply: data.apply === true, limit: data.limit });
   });
 
+export const adminDuplicateArticle = createServerFn({ method: "POST" })
+  .validator((input: { id: string }) => input)
+  .handler(async ({ data }) => {
+    await writeGuard();
+    const { duplicateArticle } = await import("./repository.server");
+    return duplicateArticle(data.id);
+  });
+
+export const adminHealth = createServerFn({ method: "GET" }).handler(async () => {
+  await guard();
+  const { siteHealth } = await import("./repository.server");
+  return siteHealth();
+});
+
+export const adminImportSettings = createServerFn({ method: "POST" })
+  .validator((input: unknown) => input)
+  .handler(async ({ data }) => {
+    await writeGuard();
+    const payload = (data ?? {}) as { site?: unknown; automation?: unknown };
+    if (!payload.site && !payload.automation) throw new Error("That backup has no site or automation settings.");
+    const result: { site: boolean; automation: boolean } = { site: false, automation: false };
+    if (payload.site) {
+      const { saveSettings } = await import("./repository.server");
+      await saveSettings(payload.site);
+      result.site = true;
+    }
+    if (payload.automation) {
+      const { saveAutomationSettings } = await import("./automation.server");
+      await saveAutomationSettings(payload.automation);
+      result.automation = true;
+    }
+    return result;
+  });
+
 export const adminDeleteMedia = createServerFn({ method: "POST" })
   .validator((input: { id: string }) => input)
   .handler(async ({ data }) => {

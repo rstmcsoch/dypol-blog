@@ -47,6 +47,7 @@ type ArticleRow = {
   seo_title: string | null;
   seo_description: string | null;
   cover_media_id: string | null;
+  scheduled_at?: string | null;
   blocks: ArticleBlock[] | string;
 };
 
@@ -124,6 +125,7 @@ function mapArticle(row: ArticleRow, tagIds: string[], topicIds: string[], cover
     seoTitle: row.seo_title ?? undefined,
     seoDescription: row.seo_description ?? undefined,
     coverMediaId: row.cover_media_id,
+    scheduledAt: iso(row.scheduled_at ?? null),
     coverAlt,
     blocks,
   };
@@ -184,13 +186,44 @@ async function topicMap(sql: Sql, ids: string[]): Promise<Map<string, string[]>>
   return map;
 }
 
+export async function sweepDueScheduled(sql: Sql): Promise<number> {
+  // t68: Workers have no cron here, so due drafts are published by a
+  // request-time sweep (throttled per isolate). Documented in the editor:
+  // an article goes live on the first site/admin request after its time.
+  const nowMs = Date.now();
+  if (nowMs - lastScheduleSweep < 30_000) return 0;
+  lastScheduleSweep = nowMs;
+  try {
+    const due = await sql<{ id: string }>`select id from articles where status = 'draft' and scheduled_at is not null and scheduled_at <= ${new Date(nowMs).toISOString()} limit 20`;
+    for (const row of due) {
+      await sql`update articles set status = 'published', published_at = scheduled_at, scheduled_at = null, updated_at = ${new Date(nowMs).toISOString()} where id = ${row.id} and status = 'draft'`;
+    }
+    return due.length;
+  } catch {
+    return 0; // pre-0010 database: scheduling simply inactive
+  }
+}
+
+let lastScheduleSweep = 0;
+
 async function loadArticles(sql: Sql, where = "", params: unknown[] = []): Promise<Article[]> {
-  const rows = await sql.query<ArticleRow>(
-    `select id, slug, title, excerpt, status, published_at, updated_at, category_id, motif, featured,
-            seo_title, seo_description, cover_media_id, blocks
-     from articles ${where}`,
-    params,
-  );
+  await sweepDueScheduled(sql);
+  let rows: ArticleRow[];
+  try {
+    rows = await sql.query<ArticleRow>(
+      `select id, slug, title, excerpt, status, published_at, updated_at, category_id, motif, featured,
+              seo_title, seo_description, cover_media_id, scheduled_at, blocks
+       from articles ${where}`,
+      params,
+    );
+  } catch {
+    rows = await sql.query<ArticleRow>(
+      `select id, slug, title, excerpt, status, published_at, updated_at, category_id, motif, featured,
+              seo_title, seo_description, cover_media_id, blocks
+       from articles ${where}`,
+      params,
+    );
+  }
   const ids = rows.map((row) => row.id);
   // Independent lookups run together: each D1 round-trip is a network hop,
   // so serial awaits were the article page's main server-side cost (t56).
@@ -525,6 +558,9 @@ export type ArticleSummary = {
   featured: boolean;
   hasCover: boolean;
   aiEditAllowed: boolean;
+  views: number;
+  words: number;
+  scheduledAt: string | null;
 };
 
 export async function adminOverview() {
@@ -533,6 +569,7 @@ export async function adminOverview() {
     published: data.articles.filter((article) => article.status === "published").length,
     draft: data.articles.filter((article) => article.status === "draft").length,
     unpublished: data.articles.filter((article) => article.status === "unpublished").length,
+    scheduled: data.articles.filter((article) => article.status === "draft" && article.scheduledAt).length,
     topics: data.categories.length,
     tags: data.tags.length,
   };
@@ -541,24 +578,90 @@ export async function adminOverview() {
     throw error;
   });
   const media = library ? await library.stats() : { files: 0, bytes: 0 };
+  const views = await viewCounts(data.site).catch(() => ({}) as Record<string, number>);
+  const totalViews = Object.values(views).reduce((sum, n) => sum + n, 0);
+  const weekAgo = Date.now() - 7 * 24 * 3600 * 1000;
+  const publishedThisWeek = data.articles.filter((a) => a.status === "published" && a.publishedAt && Date.parse(a.publishedAt) >= weekAgo).length;
+  const topArticles = data.articles
+    .filter((a) => a.status === "published")
+    .map((article) => summarize(article, data.categories, new Set(), views[article.id] ?? 0))
+    .sort((a, b) => b.views - a.views)
+    .slice(0, 5);
   const recent = [...data.articles]
     .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))
     .slice(0, 6)
-    .map((article) => summarize(article, data.categories));
+    .map((article) => summarize(article, data.categories, new Set(), views[article.id] ?? 0));
   const attention = data.articles
     .filter((article) => article.status !== "published")
     .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))
     .slice(0, 6)
-    .map((article) => summarize(article, data.categories));
+    .map((article) => summarize(article, data.categories, new Set(), views[article.id] ?? 0));
+  let recentRuns: { id: string; tool: string; outcome: string; createdAt: string; profileId: string }[] = [];
+  try {
+    const { recentRuns: loadRuns } = await import("./automation.server");
+    recentRuns = (await loadRuns(6)).map((r) => ({ id: r.id, tool: r.tool, outcome: r.outcome, createdAt: r.createdAt, profileId: r.profileId }));
+  } catch {
+    recentRuns = [];
+  }
   return {
     counts,
     media: { files: media.files, bytes: media.bytes },
+    totalViews,
+    publishedThisWeek,
+    topArticles,
     recent,
     attention,
+    recentRuns,
   };
 }
 
-function summarize(article: Article, categories: Category[], grants: Set<string> = new Set()): ArticleSummary {
+/** Site health snapshot + settings backup payload (t68). */
+export async function siteHealth() {
+  const data = await catalog();
+  const library = await openMediaStore().catch((error: unknown) => {
+    if (error instanceof MediaBindingError) return null;
+    throw error;
+  });
+  const storage = library ? await library.storageStats() : { files: 0, storedBytes: 0, originalBytes: 0, variantBytes: 0 };
+  const mediaItems = library ? await library.list() : [];
+  const usedMedia = new Set<string>();
+  for (const a of data.articles) if (a.coverMediaId) usedMedia.add(a.coverMediaId);
+  if (data.site.logoMediaId) usedMedia.add(data.site.logoMediaId);
+  if (data.site.faviconMediaId) usedMedia.add(data.site.faviconMediaId);
+  const orphanMedia = mediaItems.filter((m) => !usedMedia.has(m.id)).length;
+  const views = await viewCounts(data.site).catch(() => ({}) as Record<string, number>);
+  let lastAutomationRun: string | null = null;
+  try {
+    const { recentRuns } = await import("./automation.server");
+    lastAutomationRun = (await recentRuns(1))[0]?.createdAt ?? null;
+  } catch {
+    lastAutomationRun = null;
+  }
+  const { readAutomationSettings } = await import("./automation.server");
+  return {
+    counts: {
+      published: data.articles.filter((a) => a.status === "published").length,
+      draft: data.articles.filter((a) => a.status === "draft").length,
+      unpublished: data.articles.filter((a) => a.status === "unpublished").length,
+      scheduled: data.articles.filter((a) => a.status === "draft" && a.scheduledAt).length,
+      topics: data.categories.length,
+      tags: data.tags.length,
+      mediaFiles: storage.files,
+      orphanMedia,
+    },
+    storage,
+    totalViews: Object.values(views).reduce((sum, n) => sum + n, 0),
+    lastAutomationRun,
+    backup: { site: data.site, automation: await readAutomationSettings().catch(() => null) },
+  };
+}
+
+export function articleWordCount(article: Article): number {
+  const text = article.blocks.map((b) => (b.type === "list" ? b.items.join(" ") : b.type === "code" ? "" : b.text)).join(" ");
+  return text.split(/\s+/).filter(Boolean).length;
+}
+
+function summarize(article: Article, categories: Category[], grants: Set<string> = new Set(), views = 0): ArticleSummary {
   return {
     id: article.id,
     slug: article.slug,
@@ -574,6 +677,9 @@ function summarize(article: Article, categories: Category[], grants: Set<string>
     featured: article.featured,
     hasCover: Boolean(article.coverMediaId),
     aiEditAllowed: grants.has(article.id),
+    views,
+    words: articleWordCount(article),
+    scheduledAt: article.scheduledAt ?? null,
   };
 }
 
@@ -599,11 +705,37 @@ export async function adminList(input: {
     return Date.parse(b.updatedAt) - Date.parse(a.updatedAt);
   });
   const grants = await aiEditGrantIds();
+  const views = await viewCounts(data.site).catch(() => ({}) as Record<string, number>);
   return {
-    articles: rows.map((article) => summarize(article, data.categories, grants)),
+    articles: rows.map((article) => summarize(article, data.categories, grants, views[article.id] ?? 0)),
     categories: data.categories,
     tags: data.tags,
   };
+}
+
+/** Clone an article as a fresh draft (t68). Views, featured flag and schedule do not carry over. */
+export async function duplicateArticle(id: string): Promise<{ id: string; slug: string }> {
+  const data = await catalog();
+  const source = data.articles.find((a) => a.id === id);
+  if (!source) throw new ContentError("That article no longer exists.", 404);
+  return saveArticle({
+    id: null,
+    title: source.title,
+    slug: "",
+    excerpt: source.excerpt,
+    categoryId: source.categoryId,
+    topicIds: source.topicIds,
+    tagIds: source.tagIds,
+    motif: source.motif,
+    featured: false,
+    seoTitle: source.seoTitle ?? "",
+    seoDescription: source.seoDescription ?? "",
+    coverMediaId: source.coverMediaId ?? null,
+    publishedAt: null,
+    scheduledAt: null,
+    blocks: source.blocks,
+    intent: "save",
+  });
 }
 
 export async function adminEditor(id: string | null) {
@@ -686,6 +818,7 @@ export async function saveArticle(raw: unknown): Promise<{ id: string; slug: str
     }
     const seoTitle = input.seoTitle || null;
     const seoDescription = input.seoDescription || null;
+    const scheduledAt = status === "draft" ? (input.scheduledAt ?? null) : null;
     const blocks = JSON.stringify(input.blocks);
     const now = new Date().toISOString();
 
@@ -703,16 +836,17 @@ export async function saveArticle(raw: unknown): Promise<{ id: string; slug: str
         seo_title = ${seoTitle},
         seo_description = ${seoDescription},
         cover_media_id = ${input.coverMediaId},
+        scheduled_at = ${scheduledAt},
         blocks = ${blocks}::jsonb
         where id = ${id}`;
     } else {
       await sql`insert into articles (
         id, slug, title, excerpt, status, published_at, updated_at, category_id, motif, featured,
-        seo_title, seo_description, cover_media_id, blocks
+        seo_title, seo_description, cover_media_id, blocks, scheduled_at
       ) values (
         ${id}, ${slug}, ${input.title}, ${input.excerpt}, ${status}, ${publishedAt}, ${now},
         ${categoryId}, ${input.motif}, ${input.featured}, ${seoTitle}, ${seoDescription},
-        ${input.coverMediaId}, ${blocks}::jsonb
+        ${input.coverMediaId}, ${blocks}::jsonb, ${scheduledAt}
       )`;
     }
     if (input.featured) {

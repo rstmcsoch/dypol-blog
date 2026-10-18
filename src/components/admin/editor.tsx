@@ -6,6 +6,7 @@ import { readingMinutes } from "@/content/present";
 import type { Article, ArticleBlock, Category, CoverMotif, PublicationStatus, Tag } from "@/content/types";
 import { slugify } from "@/content/validate";
 import { errorText } from "./gate";
+import { checklistScore, seoChecklist } from "@/lib/seo-checklist";
 
 type MediaOption = { id: string; filename: string; alt: string };
 
@@ -24,6 +25,7 @@ type Draft = {
   seoDescription: string;
   coverMediaId: string | null;
   publishedAt: string;
+  scheduledAt: string;
   blocks: ArticleBlock[];
   status: PublicationStatus;
 };
@@ -59,6 +61,7 @@ function fromArticle(article: Article): Draft {
     seoDescription: article.seoDescription ?? "",
     coverMediaId: article.coverMediaId ?? null,
     publishedAt: toLocal(article.publishedAt),
+    scheduledAt: toLocal(article.scheduledAt),
     blocks: article.blocks,
     status: article.status,
   };
@@ -79,6 +82,7 @@ function blank(categoryId: string): Draft {
     seoDescription: "",
     coverMediaId: null,
     publishedAt: "",
+    scheduledAt: "",
     blocks: [{ type: "paragraph", text: "" }],
     status: "draft",
   };
@@ -164,6 +168,7 @@ export function ArticleEditor({
           seoDescription: draft.seoDescription,
           coverMediaId: draft.coverMediaId,
           publishedAt: fromLocal(draft.publishedAt),
+          scheduledAt: fromLocal(draft.scheduledAt),
           blocks: draft.blocks,
           intent,
         },
@@ -429,11 +434,28 @@ export function ArticleEditor({
           <label className="field">
             <span>SEO title</span>
             <input value={draft.seoTitle} onChange={(event) => update({ seoTitle: event.target.value })} />
+            <span className="field-help">{draft.seoTitle.trim().length}/60 characters</span>
           </label>
           <label className="field">
             <span>SEO description</span>
             <textarea value={draft.seoDescription} onChange={(event) => update({ seoDescription: event.target.value })} />
+            <span className="field-help">{draft.seoDescription.trim().length}/160 characters</span>
           </label>
+          {draft.status !== "published" ? (
+            <label className="field">
+              <span>Schedule publish (optional)</span>
+              <input
+                type="datetime-local"
+                value={draft.scheduledAt}
+                onChange={(event) => update({ scheduledAt: event.target.value })}
+              />
+              <span className="field-help">
+                For drafts: the article goes live on the first site or admin visit after this time (there is no
+                background timer). Clear the field to cancel the schedule.
+              </span>
+            </label>
+          ) : null}
+          <SeoChecklist draft={draft} />
           <div className="inline-actions">
             <button className="btn" type="submit" disabled={Boolean(pending)}>
               {pending === "save" ? "Saving…" : "Save"}
@@ -590,5 +612,38 @@ function BlockFields({ block, onChange }: { block: ArticleBlock; onChange: (bloc
       <span>Paragraph</span>
       <textarea value={block.text} onChange={(event) => onChange({ ...block, text: event.target.value })} />
     </label>
+  );
+}
+
+function SeoChecklist({ draft }: { draft: Draft }) {
+  const words = draft.blocks
+    .map((b) => (b.type === "list" ? b.items.join(" ") : b.type === "code" ? "" : b.text))
+    .join(" ")
+    .split(/\s+/)
+    .filter(Boolean).length;
+  const items = seoChecklist({
+    title: draft.title,
+    seoTitle: draft.seoTitle,
+    seoDescription: draft.seoDescription,
+    excerpt: draft.excerpt,
+    slug: draft.slug,
+    coverMediaId: draft.coverMediaId,
+    topicCount: 1 + draft.topicIds.filter((id) => id !== draft.categoryId).length,
+    words,
+    hasHeading: draft.blocks.some((b) => b.type === "heading"),
+  });
+  const score = checklistScore(items);
+  return (
+    <fieldset className="block-card">
+      <legend>Before you publish ({score.passed}/{score.total})</legend>
+      <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: "0.35rem" }}>
+        {items.map((item) => (
+          <li key={item.label}>
+            <span aria-hidden="true">{item.ok ? "✓" : "○"}</span> {item.label}{" "}
+            <span className="desk-note">— {item.hint}</span>
+          </li>
+        ))}
+      </ul>
+    </fieldset>
   );
 }
