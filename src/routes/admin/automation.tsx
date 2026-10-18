@@ -366,7 +366,7 @@ function AutomationDesk() {
               <tr key={r.id}>
                 <td>{r.createdAt.replace("T", " ").slice(0, 16)}</td>
                 <td>{r.tool}</td>
-                <td>{r.outcome}</td>
+                <td>{r.outcome === "published_explicit" ? "published (explicit)" : r.outcome}{r.mode === "automatic" && r.outcome === "published" ? " (automatic)" : ""}</td>
                 <td>{r.reason}</td>
                 <td>{data.profiles.find((p) => p.id === r.profileId)?.name ?? r.profileId}</td>
                 <td>{r.auth}</td>

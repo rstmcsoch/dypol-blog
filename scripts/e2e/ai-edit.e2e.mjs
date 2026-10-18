@@ -23,14 +23,15 @@ const run = Math.random().toString(16).slice(2, 8);
 let failures = 0;
 async function check(name, fn) { try { await fn(); console.log(`ok - ${name}`); } catch (e) { failures++; console.log(`not ok - ${name}\n  ${e instanceof Error ? e.message.split("\n")[0] : e}`); } }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const lastCall = new Map();
-async function pace(token) {
-  const wait = 2100 - (Date.now() - (lastCall.get(token) ?? 0));
+let lastCallAt = 0;
+async function pace() {
+  // The local MCP limiter counts 30 requests/minute across tokens: pace globally.
+  const wait = 2150 - (Date.now() - lastCallAt);
   if (wait > 0) await sleep(wait);
-  lastCall.set(token, Date.now());
+  lastCallAt = Date.now();
 }
 async function call(token, name, args = {}) {
-  await pace(token);
+  await pace();
   const r = await fetch(`${BASE}/mcp`, { method: "POST", headers: { authorization: `Bearer ${token}`, "content-type": "application/json", accept: "application/json, text/event-stream" }, body: JSON.stringify({ jsonrpc: "2.0", id: Date.now(), method: "tools/call", params: { name, arguments: args } }) });
   const text = await r.text();
   let payload; try { payload = JSON.parse(text); } catch { payload = JSON.parse(text.split("\n").find((l) => l.startsWith("data:"))?.slice(5) ?? "{}"); }
@@ -225,6 +226,38 @@ await check("delete draft: slug echo guard, then hard delete; cover file kept", 
   }
 });
 
+await check("explicit publish: flags + wrong category + reached cap do not block; warnings returned; then locked", async () => {
+  // Profile A's policy allows CAT only and (from today's earlier suites) its
+  // daily cap may be reached; an uncertain draft in OTHER is blocked three ways
+  // for AUTOMATIC publishing. Explicit publish must still work, with warnings.
+  const r = await call(A, "submit_article_draft", mk("explicit", OTHER, { uncertain: true }));
+  assert.equal(r.ok, true, JSON.stringify(r));
+  assert.equal(r.data.published, false, "automatic path must stay blocked");
+  const crossPub = await call(B, "publish_article_if_allowed", { article_id: r.data.article_id });
+  assert.equal(crossPub.ok, false, "cross-profile explicit publish refused");
+  const p = await call(A, "publish_article_if_allowed", { article_id: r.data.article_id });
+  assert.equal(p.ok, true, JSON.stringify(p));
+  assert.equal(p.data.published, true, JSON.stringify(p.data));
+  assert.equal(p.data.mode, "explicit");
+  const warnings = (p.data.warnings ?? []).join(" ");
+  assert.match(warnings, /self_reported_uncertain|allowed list/, warnings);
+  // Now published: locked for AI writes, re-publish answers already_published.
+  const upd = await call(A, "update_article_draft", { article_id: r.data.article_id, title: "Locked after explicit publish" });
+  assert.equal(upd.ok, false); assert.match(upd.error, /published articles are locked/);
+  const again = await call(A, "publish_article_if_allowed", { article_id: r.data.article_id });
+  assert.equal(again.data.published, false);
+  assert.equal(again.data.already_published, true);
+  const page = await fetch(`${BASE}/articles/${p.data.path.split("/").pop()}`);
+  assert.equal(page.status, 200);
+});
+
+await check("explicit publish: master may publish another profile's draft", async () => {
+  const r = await call(A, "submit_article_draft", mk("explicit-master", CAT, { uncertain: true }));
+  assert.equal(r.data.published, false);
+  const p = await call(MASTER, "publish_article_if_allowed", { article_id: r.data.article_id });
+  assert.equal(p.data.published, true, JSON.stringify(p.data));
+});
+
 await check("audit rows: admin automation page shows the editing runs for profile A", async () => {
   if (!browser) browser = await chromium.launch();
   const page = await browser.newPage();
@@ -236,6 +269,7 @@ await check("audit rows: admin automation page shows the editing runs for profil
   const text = await page.textContent("body");
   assert.match(text, /update_article_draft/);
   assert.match(text, /delete_article_draft/);
+  assert.match(text, /published \(explicit\)/);
   await page.close();
 });
 

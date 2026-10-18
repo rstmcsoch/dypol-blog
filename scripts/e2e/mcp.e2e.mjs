@@ -248,28 +248,37 @@ await check("duplicate submissions: same key and same content never duplicate", 
   assert.equal(same.data.article_id, good.article_id);
 });
 
-await check("policy: flagged draft (short, unsourced, uncertain) stays a draft with reasons", async () => {
+await check("policy: flagged draft (short, unsourced, uncertain) stays a draft AUTOMATICALLY, with reasons", async () => {
   const { data } = await call(client, "submit_article_draft", article({ k: "flagged", body: "Too short to publish.", sources: [], extra: { uncertain: true } }));
   assert.ok(data.flags.includes("too_short") && data.flags.includes("missing_sources") && data.flags.includes("self_reported_uncertain"));
   flagged = data;
-  const p = await call(client, "publish_article_if_allowed", { article_id: flagged.article_id });
-  assert.equal(p.data.published, false);
-  assert.match(p.data.reasons.join(" "), /too_short/);
+  // Automatic path kept it a draft (above). An EXPLICIT publish is the owner's
+  // deliberate instruction: policy must not block it, only warn. (Uses a twin
+  // draft: `flagged` itself is reused by the cover test below, as a draft.)
+  const twin = await call(client, "submit_article_draft", article({ k: "flagged2", body: "Also too short.", sources: [], extra: { uncertain: true } }));
+  const p = await call(client, "publish_article_if_allowed", { article_id: twin.data.article_id });
+  assert.equal(p.data.published, true, JSON.stringify(p.data));
+  assert.equal(p.data.mode, "explicit");
+  assert.match(p.data.warnings.join(" "), /too_short/);
 });
 
-await check("policy: category outside the allow-list stays a draft", async () => {
+await check("policy: category outside the allow-list blocks AUTOMATIC publish only; explicit publish warns and publishes", async () => {
   const { data } = await call(client, "submit_article_draft", article({ k: "othercat", category: OTHER }));
+  assert.equal(data.published, false, "submit must not auto-publish outside the allow-list");
   const p = await call(client, "publish_article_if_allowed", { article_id: data.article_id });
-  assert.equal(p.data.published, false);
-  assert.match(p.data.reasons.join(" "), /allowed list/);
+  assert.equal(p.data.published, true, JSON.stringify(p.data));
+  assert.match(p.data.warnings.join(" "), /allowed list/);
 });
 
-await check("policy: non-automation articles can never be published by automation", async () => {
+await check("explicit publish: the master token may publish an owner-written draft; published ones answer already_published", async () => {
   const list = await call(client, "list_recent_articles", { limit: 50 });
-  const manual = list.data.articles.find((a) => !a.automated);
-  assert.ok(manual, "a manual article exists");
-  const p = await call(client, "publish_article_if_allowed", { article_id: manual.id });
-  assert.equal(p.isError, true);
+  const manualDraft = list.data.articles.find((a) => !a.automated && a.status !== "published");
+  assert.ok(manualDraft, "a manual draft exists");
+  const p = await call(client, "publish_article_if_allowed", { article_id: manualDraft.id });
+  assert.equal(p.data.published, true, JSON.stringify(p.data));
+  const again = await call(client, "publish_article_if_allowed", { article_id: manualDraft.id });
+  assert.equal(again.data.published, false);
+  assert.equal(again.data.already_published, true);
 });
 
 let mediaId;

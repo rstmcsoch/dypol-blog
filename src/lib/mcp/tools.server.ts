@@ -167,14 +167,77 @@ async function attemptAutoPublish(articleId: string, profileId: string, auth: st
   if (!rows[0]) return { published: false, status: "missing", reasons: ["That article no longer exists."] };
   const decision = publishDecision({ active: automationActive(settings), policy: settings.policy, status: rows[0].status, categoryId: rows[0].category_id, flags: submission.flags as DraftFlag[], publishedToday: await store.automatedPublishesToday(profileId) });
   if (!decision.publish) {
-    await store.recordRun({ profileId, tool: "publish_article_if_allowed", outcome: "kept_draft", reason: decision.reasons.join(" "), articleId, auth });
+    await store.recordRun({ profileId, tool: "publish_article_if_allowed", outcome: "kept_draft", reason: decision.reasons.join(" "), articleId, auth, details: { mode: "automatic" } });
     return { published: false, status: rows[0].status, reasons: decision.reasons };
   }
   if (!(await writesAllowed())) return { published: false, status: rows[0].status, reasons: ["This deployment is read-only."] };
   const now = new Date().toISOString();
   await sql`update articles set status = 'published', published_at = ${now}, updated_at = ${now} where id = ${articleId} and status = 'draft'`;
-  await store.recordRun({ profileId, tool: "publish_article_if_allowed", outcome: "published", articleId, auth });
+  await store.recordRun({ profileId, tool: "publish_article_if_allowed", outcome: "published", articleId, auth, details: { mode: "automatic" } });
   return { published: true, status: "published", reasons: [] };
+}
+
+/**
+ * Explicit, deliberate publish via MCP (the publish tool). Rustam's rule:
+ * AI has full control over drafts — an explicit publish call is the owner's
+ * instruction, so publishing POLICY (daily cap, category allow-list, flags,
+ * autoPublish on/off, featured-image requirement) must not block it. Those
+ * rules only govern the AUTOMATIC path (submit / cover attach). Ownership
+ * still applies exactly as for editing, the caller's automation kill switch
+ * (enabled/paused) and read-only deployments still apply, and policy items
+ * that would have failed are returned as warnings for transparency.
+ */
+async function explicitPublish(
+  articleId: string,
+  profileId: string,
+  auth: string,
+): Promise<{ published: boolean; status: string; alreadyPublished?: boolean; reasons: string[]; warnings: string[]; slug?: string }> {
+  const store = await import("@/content/automation.server");
+  const settings = await loadSettings(profileId);
+  const blocked = await writeGate(settings);
+  if (blocked) {
+    await store.recordRun({ profileId, tool: "publish_article_if_allowed", outcome: "refused", reason: blocked, articleId, auth, details: { mode: "explicit" } });
+    return { published: false, status: "blocked", reasons: [blocked], warnings: [] };
+  }
+  const sql = await getSql();
+  const rows = await sql<{ status: string; slug: string; category_id: string; published_at: string | null }>`select status, slug, category_id, published_at from articles where id = ${articleId}`;
+  if (!rows[0]) return { published: false, status: "missing", reasons: ["That article no longer exists."], warnings: [] };
+  if (rows[0].status === "published") {
+    return {
+      published: false,
+      status: "published",
+      alreadyPublished: true,
+      reasons: ["That article is already published. AI cannot re-publish or change its status — only the owner can do that, in the admin panel."],
+      warnings: [],
+      slug: rows[0].slug,
+    };
+  }
+  // Ownership guard (repository layer): own profile, master, or edit-others setting.
+  const repo = await import("@/content/repository.server");
+  const actor: AiActor = { profileId, isMaster: profileId === "default", editAllDrafts: settings.aiMayEditAllDrafts };
+  try {
+    await repo.getArticleForAi(articleId, actor, "publish");
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "That draft cannot be published by your profile.";
+    await store.recordRun({ profileId, tool: "publish_article_if_allowed", outcome: "refused", reason: message, articleId, auth, details: { mode: "explicit" } });
+    return { published: false, status: rows[0].status, reasons: [message], warnings: [] };
+  }
+  // Warnings only: what the AUTOMATIC policy would have said. Never blocks.
+  const submission = await store.findSubmission({ articleId });
+  const decision = publishDecision({
+    active: automationActive(settings),
+    policy: settings.policy,
+    status: "draft",
+    categoryId: rows[0].category_id,
+    flags: (submission?.flags ?? []) as DraftFlag[],
+    publishedToday: await store.automatedPublishesToday(profileId),
+  });
+  const warnings = decision.publish ? [] : decision.reasons;
+  const now = new Date().toISOString();
+  await sql`update articles set status = 'published', published_at = ${rows[0].published_at ?? now}, updated_at = ${now}
+    where id = ${articleId} and status in ('draft', 'unpublished')`;
+  await store.recordRun({ profileId, tool: "publish_article_if_allowed", outcome: "published_explicit", articleId, auth, details: { mode: "explicit", warnings } });
+  return { published: true, status: "published", reasons: [], warnings, slug: rows[0].slug };
 }
 
 function pick<T extends { id: string; slug: string; label: string }>(items: T[], ref: string): T | undefined {
@@ -267,8 +330,11 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
                 mayEditAllDrafts: settings.aiMayEditAllDrafts,
                 rules:
                   "AI may fully edit draft/unpublished articles it created (list_editable_articles). The master token may edit any draft. " +
-                  "Published articles are locked unless the owner enables 'Allow AI to edit this article' for that article in the admin panel; " +
-                  "even then AI can never delete it or change its status. Editing never publishes — use publish_article_if_allowed afterwards.",
+                  "publish_article_if_allowed is an EXPLICIT publish: it always publishes a draft you may edit, ignoring the publishing " +
+                  "policy (cap, topics, flags, auto-publish off) and returning those as warnings — policy only governs AUTOMATIC " +
+                  "publishing during submit/cover flows. Published articles are locked unless the owner enables 'Allow AI to edit " +
+                  "this article' for that article in the admin panel; even then AI can never delete it or change its status, and " +
+                  "there is no AI unpublish.",
               },
             },
             ...(await taxonomy()),
@@ -460,25 +526,34 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
     },
     {
       name: "publish_article_if_allowed",
-      title: "Publish article if policy allows",
+      title: "Publish a draft now (explicit)",
       description:
-        "Publish an automation-created draft ONLY if the owner's publishing policy explicitly allows it (auto-publish " +
-        "on, allowed category, no blocking flags, daily cap). Otherwise it stays a draft and the reasons are returned.",
+        "EXPLICIT publish: publish a draft/unpublished article NOW, on your deliberate instruction. This always works " +
+        "for drafts your profile may edit (your own drafts; the master token: any draft) — the publishing POLICY (daily " +
+        "cap, allowed topics, quality flags, auto-publish on/off, featured-image rule) does NOT block an explicit " +
+        "publish; it only governs AUTOMATIC publishing during submit_article_draft / cover attach. Policy items that " +
+        "would have failed are returned as `warnings` for transparency. Once published, the article is locked: AI " +
+        "cannot edit (without the owner's per-article grant), unpublish, delete or re-publish it — only the owner " +
+        "controls it in the admin panel. There is deliberately no AI unpublish.",
       inputSchema: schemaOf(publishSchema),
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
       run: async (args) => {
         const parsed = publishSchema.safeParse(args ?? {});
         if (!parsed.success) return invalid(parsed.error);
-        const submission = await (await import("@/content/automation.server")).findSubmission({ articleId: parsed.data.article_id });
-        if (!submission) return { ok: false, error: "Only drafts created by automation can be published by automation." };
-        if ((submission.profileId ?? "default") !== profileId) {
-          return { ok: false, error: "That draft was created by a different automation profile; only that profile (or the owner) can publish it." };
-        }
-        const auto = await attemptAutoPublish(parsed.data.article_id, profileId, auth);
-        if (auto.status === "missing") return { ok: false, error: "That article no longer exists." };
-        const sql2 = await getSql();
-        const rows2 = await sql2<{ slug: string }>`select slug from articles where id = ${parsed.data.article_id}`;
-        return { ok: true, data: { published: auto.published, status: auto.status, reasons: auto.reasons, ...(auto.published ? { path: `/articles/${rows2[0]?.slug ?? ""}` } : {}) } };
+        const result = await explicitPublish(parsed.data.article_id, profileId, auth);
+        if (result.status === "missing") return { ok: false, error: "That article no longer exists." };
+        if (result.status === "blocked") return { ok: false, error: result.reasons[0] };
+        if (!result.published && !result.alreadyPublished) return { ok: false, error: result.reasons[0] ?? "Your profile cannot publish that draft." };
+        return {
+          ok: true,
+          data: {
+            published: result.published,
+            status: result.status,
+            mode: "explicit",
+            ...(result.alreadyPublished ? { already_published: true, reasons: result.reasons } : {}),
+            ...(result.published ? { warnings: result.warnings, path: `/articles/${result.slug ?? ""}` } : {}),
+          },
+        };
       },
     },
     {

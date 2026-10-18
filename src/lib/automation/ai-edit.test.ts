@@ -40,6 +40,14 @@ test("published with grant: edit/cover/read allowed, delete and slug change refu
   assertAiPatchAllowed(draft, { slug: "renamed" }, false);
 });
 
+test("publish action: drafts follow ownership; published always refused, grant or not", () => {
+  assert.deepEqual(assertAiCanAccess(draft, "pa", profA, "publish"), { viaGrant: false });
+  assert.deepEqual(assertAiCanAccess({ status: "unpublished", slug: "u1" }, "pb", master, "publish"), { viaGrant: false });
+  assert.throws(() => assertAiCanAccess(draft, "pb", profA, "publish"), /different automation profile/);
+  assert.throws(() => assertAiCanAccess(publishedLocked, "pa", profA, "publish"), /already published/);
+  assert.throws(() => assertAiCanAccess(publishedGrant, "pa", profA, "publish"), /already published/);
+});
+
 test("unpublished behaves like draft", () => {
   assert.deepEqual(assertAiCanAccess({ status: "unpublished", slug: "u1" }, "pa", profA, "delete"), { viaGrant: false });
 });

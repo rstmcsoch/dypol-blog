@@ -16,7 +16,7 @@ import type { PublicationStatus } from "../../content/types.ts";
  *    change its status (the editing tools have no status field at all, and
  *    slug changes are refused on published articles to protect links).
  */
-export type AiEditAction = "read" | "edit" | "cover" | "delete";
+export type AiEditAction = "read" | "edit" | "cover" | "delete" | "publish";
 export type AiActor = { profileId: string; isMaster: boolean; editAllDrafts: boolean };
 export type AiGuardResult = { viaGrant: boolean };
 
@@ -30,6 +30,9 @@ export function assertAiCanAccess(
   action: AiEditAction,
 ): AiGuardResult {
   if (article.status === "published") {
+    if (action === "publish") {
+      throw new Error("That article is already published. AI cannot publish it again or change its status — only the owner can do that, in the admin panel.");
+    }
     if (!article.aiEditAllowed) throw new Error(AI_LOCKED_PUBLISHED);
     if (action === "delete") {
       throw new Error("That article is published. Even with an AI-edit grant, AI cannot delete a published article — the owner must do that in the admin panel.");
