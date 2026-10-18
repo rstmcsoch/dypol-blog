@@ -2,6 +2,7 @@ import { z } from "zod";
 import { isSafeHref } from "./rules.ts";
 import { site } from "./site.ts";
 import { BLOCK_TYPES, publicationStatuses, type ContentBlock, type SiteConfig } from "./types.ts";
+import { SOCIAL_PLATFORMS, normalizeSocials, validSocialUrl } from "../lib/social-links.ts";
 
 export { isSafeHref, publishProblems, slugify } from "./rules.ts";
 
@@ -201,6 +202,25 @@ const siteSchema = z.object({
   }),
   logoMediaId: z.string().min(1).max(80).nullable(),
   faviconMediaId: z.string().min(1).max(80).nullable(),
+  socials: z
+    .array(
+      z
+        .object({
+          platform: z.enum(SOCIAL_PLATFORMS),
+          url: z.string().trim().max(500),
+          visible: z.boolean(),
+        })
+        .superRefine((entry, ctx) => {
+          if (!validSocialUrl(entry.platform, entry.url)) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: ["url"],
+              message: entry.platform === "email" ? "Use a mailto: address." : "Use a full https:// URL.",
+            });
+          }
+        }),
+    )
+    .max(7),
 });
 
 
@@ -301,6 +321,7 @@ function normalizeCore(input: unknown): SiteConfig {
     },
     logoMediaId: raw.logoMediaId ?? null,
     faviconMediaId: raw.faviconMediaId ?? null,
+    socials: normalizeSocials(raw.socials),
   });
 }
 

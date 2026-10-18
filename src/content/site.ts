@@ -111,4 +111,5 @@ export const site = {
   },
   logoMediaId: null,
   faviconMediaId: null,
+  socials: [],
 } satisfies SiteConfig;

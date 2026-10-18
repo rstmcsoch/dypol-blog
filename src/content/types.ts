@@ -205,4 +205,6 @@ export type SiteConfig = {
   };
   logoMediaId: string | null;
   faviconMediaId: string | null;
+  /** Footer social links (t65); only entries with a URL + visible render. */
+  socials: import("../lib/social-links.ts").SocialLink[];
 };
