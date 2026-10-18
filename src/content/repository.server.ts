@@ -134,17 +134,18 @@ async function tagMap(sql: Sql, ids: string[]): Promise<Map<string, string[]>> {
   // D1/SQLite accepts at most 100 bound variables per statement, so a
   // growing archive must be read in chunks (this broke get_blog_settings
   // and article lists once the article count passed 100).
-  const links: { article_id: string; tag_id: string }[] = [];
-  for (let start = 0; start < ids.length; start += 50) {
-    const chunk = ids.slice(start, start + 50);
-    const placeholders = chunk.map((_, index) => `$${index + 1}`).join(", ");
-    links.push(
-      ...(await sql.query<{ article_id: string; tag_id: string }>(
+  const chunks: string[][] = [];
+  for (let start = 0; start < ids.length; start += 50) chunks.push(ids.slice(start, start + 50));
+  const perChunk = await Promise.all(
+    chunks.map((chunk) => {
+      const placeholders = chunk.map((_, index) => `$${index + 1}`).join(", ");
+      return sql.query<{ article_id: string; tag_id: string }>(
         `select article_id, tag_id from article_tags where article_id in (${placeholders})`,
         chunk,
-      )),
-    );
-  }
+      );
+    }),
+  );
+  const links = perChunk.flat();
   for (const link of links) {
     const list = map.get(link.article_id) ?? [];
     list.push(link.tag_id);
@@ -159,17 +160,18 @@ async function topicMap(sql: Sql, ids: string[]): Promise<Map<string, string[]>>
   const map = new Map<string, string[]>();
   if (ids.length === 0) return map;
   try {
-    const links: { article_id: string; category_id: string }[] = [];
-    for (let start = 0; start < ids.length; start += 50) {
-      const chunk = ids.slice(start, start + 50);
-      const placeholders = chunk.map((_, index) => `$${index + 1}`).join(", ");
-      links.push(
-        ...(await sql.query<{ article_id: string; category_id: string }>(
+    const chunks: string[][] = [];
+    for (let start = 0; start < ids.length; start += 50) chunks.push(ids.slice(start, start + 50));
+    const perChunk = await Promise.all(
+      chunks.map((chunk) => {
+        const placeholders = chunk.map((_, index) => `$${index + 1}`).join(", ");
+        return sql.query<{ article_id: string; category_id: string }>(
           `select article_id, category_id from article_topics where article_id in (${placeholders}) order by rowid`,
           chunk,
-        )),
-      );
-    }
+        );
+      }),
+    );
+    const links = perChunk.flat();
     for (const link of links) {
       const list = map.get(link.article_id) ?? [];
       list.push(link.category_id);
@@ -189,8 +191,9 @@ async function loadArticles(sql: Sql, where = "", params: unknown[] = []): Promi
     params,
   );
   const ids = rows.map((row) => row.id);
-  const tags = await tagMap(sql, ids);
-  const topics = await topicMap(sql, ids);
+  // Independent lookups run together: each D1 round-trip is a network hop,
+  // so serial awaits were the article page's main server-side cost (t56).
+  const [tags, topics] = await Promise.all([tagMap(sql, ids), topicMap(sql, ids)]);
   return rows.map((row) => {
     const article = mapArticle(row, tags.get(row.id) ?? [], topics.get(row.id) ?? []);
     // The primary topic always leads, even if the join table is stale.
@@ -208,10 +211,13 @@ function byNewest(a: Article, b: Article): number {
 async function catalog(): Promise<{ articles: Article[]; categories: Category[]; tags: Tag[]; site: SiteConfig }> {
   await ensureContent();
   const sql = await getSql();
-  const articles = await loadArticles(sql, "order by updated_at desc");
-  const categories = await sql<Category>`select id, slug, label, description from categories order by label asc`;
-  const tags = await sql<Tag>`select id, slug, label from tags order by label asc`;
-  const settings = await sql<{ data: SiteConfig | string }>`select data from site_settings where id = 'site'`;
+  // Run the independent catalog reads concurrently (see loadArticles note).
+  const [articles, categories, tags, settings] = await Promise.all([
+    loadArticles(sql, "order by updated_at desc"),
+    sql<Category>`select id, slug, label, description from categories order by label asc`,
+    sql<Tag>`select id, slug, label from tags order by label asc`,
+    sql<{ data: SiteConfig | string }>`select data from site_settings where id = 'site'`,
+  ]);
   const raw = settings[0]?.data;
   const siteConfig = normalizeSite(typeof raw === "string" ? JSON.parse(raw) : raw);
   return { articles, categories, tags, site: siteConfig };
@@ -288,9 +294,9 @@ export async function recordView(slug: string): Promise<boolean> {
 }
 
 export async function readShell() {
-  const data = await publicCatalog();
+  const [data, pages] = await Promise.all([publicCatalog(), readPageLinks()]);
   const live = published(data.articles);
-  return { site: data.site, trending: tickerEntries(data.site, live, await viewCounts(data.site)), pages: await readPageLinks() };
+  return { site: data.site, trending: tickerEntries(data.site, live, await viewCounts(data.site)), pages };
 }
 
 // ---------- pages (t52: standard reader-facing pages, admin-only CMS) -----
@@ -446,8 +452,9 @@ export async function readSitemap() {
   const data = await publicCatalog();
   const live = published(data.articles);
   const labelOf = new Map(data.categories.map((c) => [c.id, c.label]));
+  const pageLinks = await readPageLinks();
   return {
-    pages: (await readPageLinks()).map((p) => ({ slug: p.slug })),
+    pages: pageLinks.map((p) => ({ slug: p.slug })),
     articles: live.map((article) => ({
       slug: article.slug,
       lastmod: article.updatedAt,

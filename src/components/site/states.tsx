@@ -37,11 +37,54 @@ export function NotFoundState() {
 export function PagePending() {
   return (
     <div className="page" aria-busy="true" aria-live="polite">
-      <div className="container">
-        <p className="kicker">{fallback.labels.loading}</p>
+      <span className="sr-only" role="status">{fallback.labels.loading}…</span>
+      <div className="container" aria-hidden="true">
         <div className="skeleton skeleton--title" />
         <div className="skeleton" />
         <div className="skeleton skeleton--short" />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Article-shaped skeleton (t56): mirrors the real article layout —
+ * kicker/title/lede/meta, hero plate, body column + narrower sidebar —
+ * so content swaps in with minimal layout shift. Shown only while the
+ * article loader is in flight (client navigation); direct loads are SSR.
+ */
+export function ArticlePagePending() {
+  return (
+    <div className="article article-skeleton" aria-busy="true">
+      <span className="sr-only" role="status">{fallback.labels.loading}…</span>
+      <div className="container" aria-hidden="true">
+        <div className="article-top">
+          <div className="skeleton skeleton--kicker" />
+          <div className="skeleton skeleton--headline" />
+          <div className="skeleton skeleton--headline skeleton--headline-2" />
+          <div className="skeleton skeleton--lede" />
+          <div className="skeleton skeleton--meta" />
+        </div>
+        <div className="skeleton skeleton--hero" />
+        <div className="article-layout">
+          <div className="article-body">
+            <div className="skeleton" />
+            <div className="skeleton" />
+            <div className="skeleton skeleton--w92" />
+            <div className="skeleton" />
+            <div className="skeleton skeleton--w84" />
+            <div className="skeleton" />
+            <div className="skeleton skeleton--short" />
+          </div>
+          <aside className="article-aside">
+            <div className="skeleton skeleton--aside-head" />
+            <div className="skeleton-row"><div className="skeleton skeleton--thumb" /><div className="skeleton skeleton--row-title" /></div>
+            <div className="skeleton-row"><div className="skeleton skeleton--thumb" /><div className="skeleton skeleton--row-title" /></div>
+            <div className="skeleton-row"><div className="skeleton skeleton--thumb" /><div className="skeleton skeleton--row-title" /></div>
+            <div className="skeleton skeleton--aside-head" />
+            <div className="skeleton-row"><div className="skeleton skeleton--chip" /><div className="skeleton skeleton--chip" /></div>
+          </aside>
+        </div>
       </div>
     </div>
   );
