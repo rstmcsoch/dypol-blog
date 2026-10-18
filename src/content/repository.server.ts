@@ -21,6 +21,7 @@ import {
 } from "./validate";
 import { getSql, withTransaction, type Sql } from "@/lib/db";
 import { assertAiCanAccess, assertAiPatchAllowed, type AiActor, type AiEditAction } from "@/lib/automation/ai-edit";
+import { cutoffFor, filterOldArticles, type OldArticleQuery } from "@/lib/old-articles";
 
 export class ContentError extends Error {
   readonly status: number;
@@ -708,6 +709,31 @@ export async function deleteArticleForAi(articleId: string, actor: AiActor, opti
   guardOrThrow(article, ownerProfileId, actor, "delete");
   const { coverDeleted } = await deleteArticle(articleId, { deleteCover: options.deleteCoverIfUnused ?? false });
   return { slug: article.slug, coverDeleted };
+}
+
+// ---- Admin: delete old articles -------------------------------------------------
+// Admin-panel only (never exposed to MCP/AI). Preview and delete share the
+// same pure matcher, and deletion re-runs the matcher server-side at delete
+// time, then deletes through the same deleteArticle used by single delete
+// (tag links + bookkeeping removed; cover files stay in Media unless the
+// single-delete cover option is used — bulk delete always keeps them).
+
+export async function previewOldArticles(query: OldArticleQuery) {
+  const data = await catalog();
+  const now = new Date();
+  const matches = filterOldArticles(data.articles, query, now);
+  return { cutoff: cutoffFor(query, now).toISOString(), total: matches.length, articles: matches.slice(0, 100) };
+}
+
+export async function deleteOldArticles(query: OldArticleQuery): Promise<{ deleted: { id: string; slug: string; title: string; status: string }[]; total: number }> {
+  const data = await catalog();
+  const matches = filterOldArticles(data.articles, query, new Date());
+  const deleted: { id: string; slug: string; title: string; status: string }[] = [];
+  for (const match of matches) {
+    await deleteArticle(match.id);
+    deleted.push({ id: match.id, slug: match.slug, title: match.title, status: match.status });
+  }
+  return { deleted, total: deleted.length };
 }
 
 export async function saveCategory(raw: unknown): Promise<{ id: string }> {
