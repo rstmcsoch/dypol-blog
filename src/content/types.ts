@@ -205,4 +205,6 @@ export type SiteConfig = {
   };
   logoMediaId: string | null;
   faviconMediaId: string | null;
+  /** t64: whole-website daily cap on AI/MCP publishes (auto + explicit, all profiles). 0 = no limit. Admin manual publishing is never counted. */
+  aiDailyPublishLimit: number;
 };

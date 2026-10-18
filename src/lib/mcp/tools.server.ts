@@ -6,6 +6,7 @@ import { writesAllowed } from "@/lib/write-guard.server";
 import { automationActive, type AutomationSettings } from "@/lib/automation/settings";
 import { bodyToBlocks, contentHash, wordCount } from "@/lib/automation/body";
 import { draftFlags, publishDecision, sourceProblems, type DraftFlag } from "@/lib/automation/policy";
+import { effectiveRun, limitVerdict, type EffectiveRun } from "@/lib/automation/publish-limits";
 import { assertUsableCover, decodeBase64Image, fetchImage, ImageIntakeError, MAX_IMAGE_BYTES, type ImageMime } from "@/lib/automation/image-fetch";
 import { providerStatus } from "@/lib/automation/provider";
 import { advanceCursor, computeTopicSelection } from "@/lib/automation/topic-selection";
@@ -58,6 +59,8 @@ const submitSchema = z.object({
   cover_media_id: z.string().trim().min(1).max(80).optional().describe("Media id returned by an earlier upload_featured_image call (without article_id). Attached as the cover; lets the draft be auto-published in this same call if policy passes."),
   uncertain: z.boolean().optional().describe("Set true if any claim could not be verified; the piece will stay a draft."),
   notes: z.string().trim().max(1000).optional().describe("Notes for the editor (not published)."),
+  run_id: z.string().trim().max(80).optional().describe("One ID per automation execution (e.g. 'morning-2026-10-18'). Reuse the same run_id for every submit/publish call in one run: the per-run publish limit counts publishes per run_id. Omit it and publishes are grouped by a 30-minute burst instead."),
+
 }).refine((v) => (v.topics?.length ?? 0) > 0 || Boolean(v.category), "Provide `topics` (1-" + MAX_TOPICS_PER_ARTICLE + " of the blog's topics) — or the legacy `category`.");
 
 const listSchema = z.object({
@@ -65,7 +68,10 @@ const listSchema = z.object({
   status: z.enum(["draft", "published", "unpublished"]).optional(),
 });
 
-const publishSchema = z.object({ article_id: articleIdSchema });
+const publishSchema = z.object({
+  article_id: articleIdSchema,
+  run_id: z.string().trim().max(80).optional().describe("One ID per automation execution (e.g. 'morning-2026-10-18'). Reuse the same run_id for every submit/publish call in one run: the per-run publish limit counts publishes per run_id. Omit it and publishes are grouped by a 30-minute burst instead."),
+});
 
 const getArticleSchema = z.object({ article_id: articleIdSchema });
 
@@ -115,6 +121,7 @@ const imageSchema = z
       .optional()
       .describe('Required for images you did not create: "Photo: <author> / <source>, <license>" (e.g. "Photo: Jane Doe / Wikimedia Commons, CC BY-SA 4.0").'),
     source_page: z.string().trim().url().max(500).optional().describe("Page where the image and its license are shown (for attribution)."),
+    run_id: z.string().trim().max(80).optional().describe("One ID per automation execution; reuse it on every submit/publish call in the run (per-run publish limit)."),
   })
   .refine((v) => Boolean(v.image_base64) !== Boolean(v.url), "Provide exactly one of image_base64 or url.");
 
@@ -164,13 +171,62 @@ async function taxonomy() {
 }
 
 /**
+ * t64 two-tier publish limits. Website cap (Settings, whole site per
+ * UTC day, auto + explicit, all profiles) and per-run cap (Automation
+ * tab, per profile). Counting includes in-flight claims, and a claim
+ * row is written before the status flip (see automation.server), so
+ * concurrent automations cannot both slip under a cap unnoticed; the
+ * claim is settled to the final outcome or released on abort.
+ */
+async function publishLimitContext(profileId: string, policy: AutomationSettings["policy"], runId?: string | null) {
+  const store = await import("@/content/automation.server");
+  const [all, mine, websiteCap] = await Promise.all([
+    store.aiPublishUsageToday(),
+    store.aiPublishUsageToday(profileId),
+    store.readWebsiteAiDailyLimit(),
+  ]);
+  const run = effectiveRun(profileId, runId, mine);
+  const verdict = limitVerdict({ websiteUsed: all.length, websiteCap, runUsed: run.used, runCap: policy.maxPublishedPerRun });
+  return { store, run, websiteCap, websiteUsed: all.length, verdict };
+}
+
+type PublishClaim = { claimId: string | null; run: EffectiveRun };
+
+async function claimPublish(
+  ctx: Awaited<ReturnType<typeof publishLimitContext>>,
+  profileId: string,
+  policy: AutomationSettings["policy"],
+  input: { articleId: string; auth: string; mode: "automatic" | "explicit"; runId?: string | null },
+): Promise<{ ok: true; claim: PublishClaim } | { ok: false; reason: string }> {
+  if (ctx.verdict.blocked) {
+    return { ok: false, reason: ctx.verdict.websiteReason ?? ctx.verdict.runReason ?? "Publish limit reached." };
+  }
+  const claimId = await ctx.store.claimAiPublish({ profileId, runKey: ctx.run.runKey, mode: input.mode, articleId: input.articleId, auth: input.auth });
+  // Recount including other in-flight claims; abort if a concurrent
+  // publish pushed usage over a cap in the meantime. Our own claim is
+  // excluded from the recount (it is the publish being attempted).
+  const recount = await publishLimitContext(profileId, policy, input.runId);
+  const othersBlocked = limitVerdict({
+    websiteUsed: Math.max(0, recount.websiteUsed - 1),
+    websiteCap: recount.websiteCap,
+    runUsed: Math.max(0, recount.run.used - 1),
+    runCap: policy.maxPublishedPerRun,
+  }).blocked;
+  if (othersBlocked) {
+    await ctx.store.releaseAiPublishClaim(claimId);
+    return { ok: false, reason: "Publish limit reached." };
+  }
+  return { ok: true, claim: { claimId, run: ctx.run } };
+}
+
+/**
  * Evaluates the publishing policy for an automation draft and publishes it
  * in the same call when every rule passes. Used by submit (with a cover),
  * by upload_featured_image (after attaching), and by the publish tool, so
  * an AI that forgets the separate publish step no longer strands a
  * publishable draft. Returns clear reasons when it stays a draft.
  */
-async function attemptAutoPublish(articleId: string, profileId: string, auth: string): Promise<{ published: boolean; status: string; reasons: string[] }> {
+async function attemptAutoPublish(articleId: string, profileId: string, auth: string, runId?: string | null): Promise<{ published: boolean; status: string; reasons: string[] }> {
   const store = await import("@/content/automation.server");
   const settings = await loadSettings(profileId);
   const submission = await store.findSubmission({ articleId });
@@ -179,24 +235,39 @@ async function attemptAutoPublish(articleId: string, profileId: string, auth: st
   const sql = await getSql();
   const rows = await sql<{ status: string; category_id: string; slug: string }>`select status, category_id, slug from articles where id = ${articleId}`;
   if (!rows[0]) return { published: false, status: "missing", reasons: ["That article no longer exists."] };
-  const decision = publishDecision({ active: automationActive(settings), policy: await decisionPolicy(settings), status: rows[0].status, categoryIds: await topicIdsOf(articleId, rows[0].category_id), flags: submission.flags as DraftFlag[], publishedToday: await store.automatedPublishesToday(profileId) });
+  const policy = await decisionPolicy(settings);
+  const ctx = await publishLimitContext(profileId, policy, runId);
+  const decision = publishDecision({ active: automationActive(settings), policy, status: rows[0].status, categoryIds: await topicIdsOf(articleId, rows[0].category_id), flags: submission.flags as DraftFlag[], publishedThisRun: ctx.run.used });
   if (!decision.publish) {
-    await store.recordRun({ profileId, tool: "publish_article_if_allowed", outcome: "kept_draft", reason: decision.reasons.join(" "), articleId, auth, details: { mode: "automatic" } });
+    await store.recordRun({ profileId, tool: "publish_article_if_allowed", outcome: "kept_draft", reason: decision.reasons.join(" "), articleId, auth, details: { mode: "automatic", runKey: ctx.run.runKey } });
     return { published: false, status: rows[0].status, reasons: decision.reasons };
   }
+  if (ctx.verdict.blocked) {
+    const reason = ctx.verdict.websiteReason ?? ctx.verdict.runReason ?? "Publish limit reached.";
+    await store.recordRun({ profileId, tool: "publish_article_if_allowed", outcome: "kept_draft", reason, articleId, auth, details: { mode: "automatic", runKey: ctx.run.runKey } });
+    return { published: false, status: rows[0].status, reasons: [reason] };
+  }
   if (!(await writesAllowed())) return { published: false, status: rows[0].status, reasons: ["This deployment is read-only."] };
+  const claimed = await claimPublish(ctx, profileId, policy, { articleId, auth, mode: "automatic", runId });
+  if (!claimed.ok) {
+    await store.recordRun({ profileId, tool: "publish_article_if_allowed", outcome: "kept_draft", reason: claimed.reason, articleId, auth, details: { mode: "automatic", runKey: ctx.run.runKey } });
+    return { published: false, status: rows[0].status, reasons: [claimed.reason] };
+  }
   const now = new Date().toISOString();
   await sql`update articles set status = 'published', published_at = ${now}, updated_at = ${now} where id = ${articleId} and status = 'draft'`;
-  await store.recordRun({ profileId, tool: "publish_article_if_allowed", outcome: "published", articleId, auth, details: { mode: "automatic" } });
+  await store.settleAiPublishClaim(claimed.claim.claimId, "published", { mode: "automatic", runKey: claimed.claim.run.runKey });
   return { published: true, status: "published", reasons: [] };
 }
 
 /**
  * Explicit, deliberate publish via MCP (the publish tool). Rustam's rule:
  * AI has full control over drafts — an explicit publish call is the owner's
- * instruction, so publishing POLICY (daily cap, category allow-list, flags,
+ * instruction, so publishing POLICY (category allow-list, flags,
  * autoPublish on/off, featured-image requirement) must not block it. Those
- * rules only govern the AUTOMATIC path (submit / cover attach). Ownership
+ * rules only govern the AUTOMATIC path (submit / cover attach). The
+ * owner's HARD limits do block it (t64): the whole-website daily cap
+ * (Settings) and the per-run cap (Automation tab) count every AI
+ * publish, automatic or explicit. Ownership
  * still applies exactly as for editing, the caller's automation kill switch
  * (enabled/paused) and read-only deployments still apply, and policy items
  * that would have failed are returned as warnings for transparency.
@@ -205,6 +276,7 @@ async function explicitPublish(
   articleId: string,
   profileId: string,
   auth: string,
+  runId?: string | null,
 ): Promise<{ published: boolean; status: string; alreadyPublished?: boolean; reasons: string[]; warnings: string[]; slug?: string }> {
   const store = await import("@/content/automation.server");
   const settings = await loadSettings(profileId);
@@ -238,19 +310,33 @@ async function explicitPublish(
   }
   // Warnings only: what the AUTOMATIC policy would have said. Never blocks.
   const submission = await store.findSubmission({ articleId });
+  const policy = await decisionPolicy(settings);
+  const ctx = await publishLimitContext(profileId, policy, runId);
   const decision = publishDecision({
     active: automationActive(settings),
-    policy: await decisionPolicy(settings),
+    policy,
     status: "draft",
     categoryIds: await topicIdsOf(articleId, rows[0].category_id),
     flags: (submission?.flags ?? []) as DraftFlag[],
-    publishedToday: await store.automatedPublishesToday(profileId),
+    publishedThisRun: ctx.run.used,
   });
   const warnings = decision.publish ? [] : decision.reasons;
+  // The owner's hard limits DO block explicit publishes (t64): the
+  // whole-website daily cap and the per-run cap count every AI publish.
+  if (ctx.verdict.blocked) {
+    const reason = ctx.verdict.websiteReason ?? ctx.verdict.runReason ?? "Publish limit reached.";
+    await store.recordRun({ profileId, tool: "publish_article_if_allowed", outcome: "refused", reason, articleId, auth, details: { mode: "explicit", runKey: ctx.run.runKey } });
+    return { published: false, status: rows[0].status, reasons: [reason], warnings };
+  }
+  const claimed = await claimPublish(ctx, profileId, policy, { articleId, auth, mode: "explicit", runId });
+  if (!claimed.ok) {
+    await store.recordRun({ profileId, tool: "publish_article_if_allowed", outcome: "refused", reason: claimed.reason, articleId, auth, details: { mode: "explicit", runKey: ctx.run.runKey } });
+    return { published: false, status: rows[0].status, reasons: [claimed.reason], warnings };
+  }
   const now = new Date().toISOString();
   await sql`update articles set status = 'published', published_at = ${rows[0].published_at ?? now}, updated_at = ${now}
     where id = ${articleId} and status in ('draft', 'unpublished')`;
-  await store.recordRun({ profileId, tool: "publish_article_if_allowed", outcome: "published_explicit", articleId, auth, details: { mode: "explicit", warnings } });
+  await store.settleAiPublishClaim(claimed.claim.claimId, "published_explicit", { mode: "explicit", warnings, runKey: claimed.claim.run.runKey });
   return { published: true, status: "published", reasons: [], warnings, slug: rows[0].slug };
 }
 
@@ -347,7 +433,8 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
     });
     if (submission) await store.setSubmissionFlags(articleId, flags);
     if (row.status !== "draft") return { flags, wouldPublish: false, publishReasons: [`The article is ${row.status}; editing never changes its status.`] };
-    const decision = publishDecision({ active: automationActive(settings), policy: await decisionPolicy(settings), status: row.status, categoryIds: await topicIdsOf(articleId, row.category_id), flags, publishedToday: await store.automatedPublishesToday(profileId) });
+    const runUsage = effectiveRun(profileId, null, await store.aiPublishUsageToday(profileId));
+    const decision = publishDecision({ active: automationActive(settings), policy: await decisionPolicy(settings), status: row.status, categoryIds: await topicIdsOf(articleId, row.category_id), flags, publishedThisRun: runUsage.used });
     return { flags, wouldPublish: decision.publish, publishReasons: decision.publish ? [] : decision.reasons };
   }
 
@@ -589,7 +676,7 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
               : sel.suggestedIndex;
           if (usedIndex !== null) await store2.writeTopicCursor(profileId, advanceCursor(usedIndex, settings.topicSelection.step, settings.topicIdeas.length));
         }
-        const auto = await attemptAutoPublish(saved.id, profileId, auth);
+        const auto = await attemptAutoPublish(saved.id, profileId, auth, input.run_id);
         return {
           ok: true,
           data: {
@@ -613,10 +700,12 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
       name: "publish_article_if_allowed",
       title: "Publish a draft now (explicit)",
       description:
-        "EXPLICIT publish: publish a draft/unpublished article NOW, on your deliberate instruction. This always works " +
-        "for drafts your profile may edit (your own drafts; the master token: any draft) — the publishing POLICY (daily " +
-        "cap, allowed topics, quality flags, auto-publish on/off, featured-image rule) does NOT block an explicit " +
-        "publish; it only governs AUTOMATIC publishing during submit_article_draft / cover attach. Policy items that " +
+        "EXPLICIT publish: publish a draft/unpublished article NOW, on your deliberate instruction. This works " +
+        "for drafts your profile may edit (your own drafts; the master token: any draft) — the publishing POLICY " +
+        "(allowed topics, quality flags, auto-publish on/off, featured-image rule) does NOT block an explicit " +
+        "publish; it only governs AUTOMATIC publishing during submit_article_draft / cover attach. The owner's " +
+        "HARD limits DO block it: the whole-website daily AI publish cap (Settings) and the per-run cap " +
+        "(Automation tab) count every AI publish, automatic or explicit. Policy items that " +
         "would have failed are returned as `warnings` for transparency. Once published, the article is locked: AI " +
         "cannot edit (without the owner's per-article grant), unpublish, delete or re-publish it — only the owner " +
         "controls it in the admin panel. There is deliberately no AI unpublish.",
@@ -625,7 +714,7 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
       run: async (args) => {
         const parsed = publishSchema.safeParse(args ?? {});
         if (!parsed.success) return invalid(parsed.error);
-        const result = await explicitPublish(parsed.data.article_id, profileId, auth);
+        const result = await explicitPublish(parsed.data.article_id, profileId, auth, parsed.data.run_id);
         if (result.status === "missing") return { ok: false, error: "That article no longer exists." };
         if (result.status === "blocked") return { ok: false, error: result.reasons[0] };
         if (!result.published && !result.alreadyPublished) return { ok: false, error: result.reasons[0] ?? "Your profile cannot publish that draft." };
@@ -713,7 +802,7 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
           }
         }
         await store.recordRun({ profileId, tool: "upload_featured_image", outcome: "stored", articleId: input.article_id ?? null, auth, details: { mediaId, bytes: image.bytes.length, mime: image.mime, attached, credit: input.credit ?? null, sourcePage: input.source_page ?? null } });
-        const auto = attached && input.article_id ? await attemptAutoPublish(input.article_id, profileId, auth) : null;
+        const auto = attached && input.article_id ? await attemptAutoPublish(input.article_id, profileId, auth, input.run_id) : null;
         const note = input.article_id && !attached
           ? submission
             ? "Stored in the media library but not attached: the article is no longer a draft (the owner may have published it). Attach it in the admin panel."

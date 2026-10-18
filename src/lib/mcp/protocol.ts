@@ -43,8 +43,10 @@ function isRequest(value: unknown): value is JsonRpcRequest {
 export const SERVER_INSTRUCTIONS =
   "Tools for drafting DYPOL Blog articles. Call get_blog_settings first, then list_recent_articles to avoid " +
   "repeating topics. Submit with submit_article_draft (always include source_urls you actually read and a stable " +
-  "idempotency_key). Publishing only happens through publish_article_if_allowed when the owner's policy allows it; " +
-  "otherwise the piece stays a draft. If nothing is good enough, call record_run_result with outcome 'skipped'.";
+  "idempotency_key). Pick one run_id per execution and pass it on submit/publish calls: the owner's per-run " +
+  "and whole-website daily publish caps count every publish (automatic or explicit). Publishing only happens " +
+  "through publish_article_if_allowed when the owner's policy allows it; otherwise the piece stays a draft. " +
+  "If nothing is good enough, call record_run_result with outcome 'skipped'.";
 
 async function handleOne(message: unknown, tools: ToolDefinition[]): Promise<object | null> {
   if (!isRequest(message)) return error(null, RPC.INVALID_REQUEST, "Invalid JSON-RPC request.");

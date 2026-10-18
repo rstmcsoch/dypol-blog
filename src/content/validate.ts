@@ -201,6 +201,7 @@ const siteSchema = z.object({
   }),
   logoMediaId: z.string().min(1).max(80).nullable(),
   faviconMediaId: z.string().min(1).max(80).nullable(),
+  aiDailyPublishLimit: z.number().int().min(0).max(100),
 });
 
 
@@ -301,6 +302,7 @@ function normalizeCore(input: unknown): SiteConfig {
     },
     logoMediaId: raw.logoMediaId ?? null,
     faviconMediaId: raw.faviconMediaId ?? null,
+    aiDailyPublishLimit: typeof raw.aiDailyPublishLimit === "number" ? raw.aiDailyPublishLimit : 0,
   });
 }
 
