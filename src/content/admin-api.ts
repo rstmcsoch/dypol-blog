@@ -313,7 +313,7 @@ export const adminSignIn = createServerFn({ method: "POST" })
 
 export const adminSignOut = createServerFn({ method: "POST" }).handler(async () => {
   const { signOutDesk } = await import("@/lib/auth/admin.server");
-  signOutDesk();
+  await signOutDesk();
   return { ok: true };
 });
 

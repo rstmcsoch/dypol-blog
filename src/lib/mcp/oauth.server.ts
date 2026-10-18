@@ -22,7 +22,8 @@ import { extraClientHosts } from "./hosts.server";
  * registration) for any MCP connector client (Claude, ChatGPT, Grok, Cursor, ...). Stateless: codes and tokens are HMACs keyed by MCP_TOKEN. The owner
  * approves a connection by entering MCP_TOKEN on /oauth/authorize.
  */
-type Env = { MCP_TOKEN?: string; MCP_LIMITER?: { limit(o: { key: string }): Promise<{ success: boolean }> }; MCP_OAUTH_REDIRECT_HOSTS?: string };
+type Env = { MCP_TOKEN?: string; MCP_LIMITER?: Limiter; SIGNIN_LIMITER?: Limiter; MCP_OAUTH_REDIRECT_HOSTS?: string };
+type Limiter = { limit(o: { key: string }): Promise<{ success: boolean }> };
 
 const SCOPE = "blog:automation";
 const noStore = { "cache-control": "no-store" };
@@ -65,6 +66,25 @@ async function limited(env: Env, request: Request, bucket: string): Promise<bool
   if (!env.MCP_LIMITER) return true;
   const ip = request.headers.get("cf-connecting-ip") ?? "unknown";
   return !(await env.MCP_LIMITER.limit({ key: `${bucket}:${ip}` })).success;
+}
+
+/**
+ * t79 (SEC-002): failed-token throttle for /oauth/authorize, mirroring the
+ * /login budget (5 failures / 60s per IP) without punishing successful
+ * approvals. Per-isolate memory (best effort) layered over the 30/60s
+ * edge bucket above — together they cap online guessing at login levels.
+ */
+const approveFailures = new Map<string, { count: number; resetAt: number }>();
+function approveThrottled(ip: string): boolean {
+  const entry = approveFailures.get(ip);
+  return Boolean(entry && entry.resetAt > Date.now() && entry.count >= 5);
+}
+function noteApproveFailure(ip: string): void {
+  const now = Date.now();
+  const entry = approveFailures.get(ip);
+  if (!entry || entry.resetAt <= now) approveFailures.set(ip, { count: 1, resetAt: now + 60_000 });
+  else entry.count += 1;
+  if (approveFailures.size > 500) approveFailures.clear();
 }
 
 /** Dynamic client registration (RFC 7591), public clients only, redirect URIs allow-listed. */
@@ -140,7 +160,7 @@ function page(params: AuthorizeParams, message: string | null, status = 200): Re
   const target = new URL(params.redirectUri);
   const host = esc(target.host || target.protocol);
   const loopback = target.protocol === "http:";
-  const who = params.clientName ? `<strong>${esc(params.clientName)}</strong> (returning to <strong>${host}</strong>)` : `<strong>${host}</strong>`;
+  const who = params.clientName ? `<strong>${esc(params.clientName)}</strong> <em>(self-registered client name — unverified)</em> (returning to <strong>${host}</strong>)` : `<strong>${host}</strong>`;
   const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex"><title>Connect to DYPOL Blog</title>
 <style>body{font:16px/1.5 system-ui,sans-serif;max-width:28rem;margin:3rem auto;padding:0 1rem;color:#111}
@@ -148,6 +168,7 @@ input[type=password]{width:100%;padding:.55rem;border:2px solid #111;font:inheri
 .bad{border:2px solid #ff4d00;padding:.5rem}</style></head><body>
 <h1>Connect an MCP client</h1>
 <p>${who} asks to draft articles on DYPOL Blog through the automation tools (scope <code>${esc(params.scope)}</code>). It cannot sign in to the desk.</p>
+<p class="bad">After you allow, the authorization code goes to this exact address:<br><code>${esc(params.redirectUri)}</code><br>Only continue if you started this connection yourself and recognise that address.</p>
 ${loopback ? `<p class="bad">This returns to a program on this computer (${host}). Only allow it if you just started the connection from a desktop app or CLI.</p>` : ""}
 ${message ? `<p class="bad" role="alert">${esc(message)}</p>` : ""}
 <form method="post" action="/oauth/authorize">
@@ -179,6 +200,29 @@ export async function authorize(request: Request): Promise<Response> {
     if (typeof params === "string") return new Response(params, { status: 400, headers: noStore });
     return page(params, null);
   }
+  // t79 (SEC-002): a browser form POST always carries Origin; reject
+  // cross-origin submissions so a third-party page cannot drive this form.
+  const reqOrigin = request.headers.get("origin");
+  const fetchSite = request.headers.get("sec-fetch-site");
+  // CSRF guard: the consent form posts from this same origin. Reject a
+  // cross-site form post from a browser — signalled by a real Origin that
+  // disagrees with the request URL, or by Sec-Fetch-Site: cross-site.
+  // (Some browsers send "Origin: null" for same-origin form posts, and
+  // non-browser clients may send neither header; both still need the token.)
+  const originsMatch = (a: string, b: string): boolean => {
+    if (a === b) return true;
+    try {
+      const ua = new URL(a), ub = new URL(b);
+      const loop = (h: string) => h === "localhost" || h === "127.0.0.1" || h === "[::1]" || h === "::1";
+      return loop(ua.hostname) && loop(ub.hostname) && ua.port === ub.port;
+    } catch { return false; }
+  };
+  const crossOrigin =
+    fetchSite === "cross-site" ||
+    (reqOrigin !== null && reqOrigin !== "null" && !originsMatch(reqOrigin, new URL(request.url).origin));
+  if (crossOrigin) {
+    return new Response("Cross-origin authorization submissions are not accepted.", { status: 403, headers: noStore });
+  }
   const form = await request.formData();
   const params = await readParams((k) => {
     const v = form.get(k);
@@ -186,6 +230,8 @@ export async function authorize(request: Request): Promise<Response> {
   }, env);
   if (typeof params === "string") return new Response(params, { status: 400, headers: noStore });
   if (await limited(env, request, "oauth-approve")) return page(params, "Too many attempts. Try again in a minute.", 429);
+  const approveIp = request.headers.get("cf-connecting-ip") ?? "unknown";
+  if (approveThrottled(approveIp)) return page(params, "Too many failed attempts. Try again in a minute.", 429);
   const secret = form.get("owner_secret");
   // Either the master MCP_TOKEN (default profile) or one automation profile's token.
   let profile: ProfileBinding | null = null;
@@ -197,7 +243,11 @@ export async function authorize(request: Request): Promise<Response> {
       profile = await profileResolver.byToken(presented.trim());
     }
   }
-  if (!profile) return page(params, "That token is not right.", 401);
+  if (!profile) {
+    noteApproveFailure(approveIp);
+    return page(params, "That token is not right.", 401);
+  }
+  approveFailures.delete(approveIp);
   const code = await issueCode(env.MCP_TOKEN, { clientId: params.clientId, redirectUri: params.redirectUri, challenge: params.challenge, profile });
   const target = new URL(params.redirectUri);
   target.searchParams.set("code", code);
@@ -224,17 +274,19 @@ export async function token(request: Request): Promise<Response> {
   }
   const grant = get("grant_type");
   if (grant === "authorization_code") {
+    const { claimOAuthNonce } = await import("./consumed.server");
     const pair = await exchangeCode(env.MCP_TOKEN, {
       code: get("code"),
       clientId: get("client_id"),
       redirectUri: get("redirect_uri"),
       verifier: get("code_verifier"),
-    });
-    return pair ? json(pair) : oauthError("invalid_grant", "The code is invalid, expired, or does not match.");
+    }, undefined, claimOAuthNonce);
+    return pair ? json(pair) : oauthError("invalid_grant", "The code is invalid, expired, already used, or does not match.");
   }
   if (grant === "refresh_token") {
     const { profileResolver } = await import("@/content/automation.server");
-    const pair = await refresh(env.MCP_TOKEN, { refreshToken: get("refresh_token"), clientId: get("client_id") }, undefined, profileResolver);
+    const { claimOAuthNonce } = await import("./consumed.server");
+    const pair = await refresh(env.MCP_TOKEN, { refreshToken: get("refresh_token"), clientId: get("client_id") }, undefined, profileResolver, claimOAuthNonce);
     return pair ? json(pair) : oauthError("invalid_grant", "The refresh token is invalid or expired.");
   }
   return oauthError("unsupported_grant_type", "Use authorization_code or refresh_token.");

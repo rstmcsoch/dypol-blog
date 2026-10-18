@@ -72,6 +72,10 @@ async function mint(kind: Kind, mcpToken: string, ttl: number, payload: object, 
 }
 
 async function open<T>(kind: Kind, mcpToken: string, value: string, now: number): Promise<T | null> {
+  return (await openWithNonce<T>(kind, mcpToken, value, now))?.payload ?? null;
+}
+
+async function openWithNonce<T>(kind: Kind, mcpToken: string, value: string, now: number): Promise<{ payload: T; nonce: string; exp: number } | null> {
   const parts = value.split(".");
   if (parts.length !== 6 || parts[0] !== kind || parts[1] !== "v1") return null;
   const [, , expText, nonce, payload, mac] = parts;
@@ -80,11 +84,19 @@ async function open<T>(kind: Kind, mcpToken: string, value: string, now: number)
   if (!constantTimeEqual(mac, expected)) return null;
   if (Number(expText) <= now) return null;
   try {
-    return JSON.parse(fromB64url(payload)) as T;
+    return { payload: JSON.parse(fromB64url(payload)) as T, nonce, exp: Number(expText) };
   } catch {
     return null;
   }
 }
+
+/**
+ * t79 (SEC-001): single-use consumption. The HTTP layer passes a D1-backed
+ * `consume(kind, nonce)` that atomically claims the nonce; returning false
+ * means the code/refresh token was already used and must be rejected.
+ * Pure callers (unit tests) may omit it; the token endpoint never does.
+ */
+export type NonceConsumer = (kind: "code" | "refresh", nonce: string) => Promise<boolean>;
 
 const nowSec = () => Math.floor(Date.now() / 1000);
 
@@ -272,12 +284,17 @@ export async function exchangeCode(
   mcpToken: string,
   input: { code: string; clientId: string; redirectUri: string; verifier: string },
   now = nowSec(),
+  consume?: NonceConsumer,
 ): Promise<TokenResponse | null> {
-  const payload = await open<CodePayload>("mcpac", mcpToken, input.code, now);
-  if (!payload) return null;
+  const opened = await openWithNonce<CodePayload>("mcpac", mcpToken, input.code, now);
+  if (!opened) return null;
+  const payload = opened.payload;
   if (!constantTimeEqual(payload.c, input.clientId) || !constantTimeEqual(payload.r, input.redirectUri)) return null;
   if (!/^[A-Za-z0-9._~-]{43,128}$/.test(input.verifier)) return null;
   if (!constantTimeEqual(await pkceS256(input.verifier), payload.ch)) return null;
+  // Authorization codes are single-use (RFC 6749 §4.1.2): claim the nonce
+  // after all other checks pass, immediately before minting the pair.
+  if (consume && !(await consume("code", opened.nonce))) return null;
   return tokenPair(mcpToken, input.clientId, now, payload);
 }
 
@@ -286,10 +303,16 @@ export async function refresh(
   input: { refreshToken: string; clientId: string },
   now = nowSec(),
   profiles?: ProfileResolver,
+  consume?: NonceConsumer,
 ): Promise<TokenResponse | null> {
-  const payload = await open<{ c: string; p?: string; v?: string }>("mcprt", mcpToken, input.refreshToken, now);
-  if (!payload || !constantTimeEqual(payload.c, input.clientId)) return null;
+  const opened = await openWithNonce<{ c: string; p?: string; v?: string }>("mcprt", mcpToken, input.refreshToken, now);
+  if (!opened) return null;
+  const payload = opened.payload;
+  if (!constantTimeEqual(payload.c, input.clientId)) return null;
   // A revoked/replaced profile token also ends its OAuth sessions.
   if (payload.p && !(profiles && (await profiles.stillValid({ id: payload.p, version: payload.v ?? "" })))) return null;
+  // Refresh-token rotation (t79, SEC-001): the presented refresh token is
+  // consumed; only the newly issued one works next time.
+  if (consume && !(await consume("refresh", opened.nonce))) return null;
   return tokenPair(mcpToken, input.clientId, now, payload);
 }

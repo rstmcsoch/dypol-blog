@@ -46,11 +46,28 @@ export async function deskConfigured(): Promise<boolean> {
   return (await secrets()) !== null;
 }
 
+/** t79 (SEC-005): server-side logout revocation (hashed nonces in D1). */
+async function sessionRevoked(nonce: string): Promise<boolean> {
+  try {
+    const { getSql } = await import("@/lib/db");
+    const sql = await getSql();
+    await sql`create table if not exists revoked_sessions (nonce_hash text primary key, expires_at integer not null)`;
+    const { sha256Hex } = await import("@/lib/mcp/consumed.server");
+    const hash = await sha256Hex(`desk:${nonce}`);
+    const rows = await sql<{ n: number }>`select count(*)::int as n from revoked_sessions where nonce_hash = ${hash}`;
+    return Number(rows[0]?.n ?? 0) > 0;
+  } catch {
+    return false; // revocation store unavailable: session HMAC+expiry still gate access
+  }
+}
+
 export async function requireAdmin(): Promise<AdminIdentity> {
   const s = await secrets();
   if (!s) throw new ForbiddenError();
   const cookie = getCookie(COOKIE) ?? "";
-  if (!cookie || !(await verifySession(s.key, cookie)).ok) throw new UnauthorizedError();
+  const check = cookie ? await verifySession(s.key, cookie) : null;
+  if (!check?.ok) throw new UnauthorizedError();
+  if (await sessionRevoked(check.nonce)) throw new UnauthorizedError();
   return { id: "editor", email: null, mode: "account" };
 }
 
@@ -83,7 +100,22 @@ export async function signInDesk(token: string): Promise<boolean> {
   return true;
 }
 
-export function signOutDesk(): void {
+export async function signOutDesk(): Promise<void> {
+  // Revoke the presented session server-side first (SEC-005): a copied
+  // cookie stops working immediately, not at its 12-hour expiry.
+  try {
+    const s = await secrets();
+    const cookie = getCookie(COOKIE) ?? "";
+    const check = s && cookie ? await verifySession(s.key, cookie) : null;
+    if (s && check?.ok) {
+      const { getSql } = await import("@/lib/db");
+      const sql = await getSql();
+      await sql`create table if not exists revoked_sessions (nonce_hash text primary key, expires_at integer not null)`;
+      const { sha256Hex } = await import("@/lib/mcp/consumed.server");
+      await sql`insert or ignore into revoked_sessions (nonce_hash, expires_at) values (${await sha256Hex(`desk:${check.nonce}`)}, ${check.expiresAt})`;
+      await sql`delete from revoked_sessions where expires_at < ${Math.floor(Date.now() / 1000)}`.catch(() => undefined);
+    }
+  } catch { /* still clear the browser cookie below */ }
   deleteCookie(COOKIE, { path: "/" });
 }
 

@@ -11,7 +11,12 @@ test("a fresh session verifies and carries issued-at, expiry and a nonce", async
   const value = await issueSession(key, now);
   assert.match(value, /^v1\.\d+\.\d+\.[0-9a-f]{32}\.[0-9a-f]{64}$/);
   const check = await verifySession(key, value, now + 10);
-  assert.deepEqual(check, { ok: true, issuedAt: now, expiresAt: now + SESSION_TTL_SECONDS });
+  assert.equal(check.ok, true);
+  if (check.ok) {
+    assert.equal(check.issuedAt, now);
+    assert.equal(check.expiresAt, now + SESSION_TTL_SECONDS);
+    assert.match(check.nonce, /^[0-9a-f]{32}$/); // t79: exposed for logout revocation
+  }
   assert.notEqual(value, await issueSession(key, now), "nonce makes each session unique");
 });
 

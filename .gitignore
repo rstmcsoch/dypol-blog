@@ -46,3 +46,7 @@ next-env.d.ts
 # wrangler
 .wrangler/
 .dev.vars*
+
+# t79 hygiene (SEC-012)
+*.zip
+.grok/*.log

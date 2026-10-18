@@ -42,7 +42,7 @@ export async function issueSession(key: string, now = Math.floor(Date.now() / 10
   return `${body}.${await hmac(key, body)}`;
 }
 
-export type SessionCheck = { ok: true; issuedAt: number; expiresAt: number } | { ok: false; reason: "malformed" | "signature" | "expired" | "future" };
+export type SessionCheck = { ok: true; issuedAt: number; expiresAt: number; nonce: string } | { ok: false; reason: "malformed" | "signature" | "expired" | "future" };
 
 export async function verifySession(key: string, value: string, now = Math.floor(Date.now() / 1000)): Promise<SessionCheck> {
   const parts = value.split(".");
@@ -57,7 +57,7 @@ export async function verifySession(key: string, value: string, now = Math.floor
   const exp = Number(expText);
   if (iat > now + CLOCK_SKEW_SECONDS) return { ok: false, reason: "future" };
   if (exp <= now || exp - iat > SESSION_TTL_SECONDS) return { ok: false, reason: "expired" };
-  return { ok: true, issuedAt: iat, expiresAt: exp };
+  return { ok: true, issuedAt: iat, expiresAt: exp, nonce };
 }
 
 /** Compares a submitted token without leaking length or content through timing. */
