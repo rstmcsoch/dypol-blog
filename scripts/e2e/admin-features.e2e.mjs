@@ -37,9 +37,10 @@ page.on("request", (req) => {
 });
 
 await page.goto(BASE + "/login");
+await page.waitForLoadState("networkidle");
 await page.fill('input[type="password"]', TOKEN);
 await page.click('button[type="submit"]');
-await page.waitForURL(/\/admin\/?$/);
+await page.waitForURL(/\/admin\/?$/, { waitUntil: "commit" }).catch(async () => { throw new Error("login failed at " + page.url() + ": " + (await page.textContent("main"))?.slice(0, 200)); });
 
 async function saveForm() {
   await page.click('button[type="submit"]:has-text("Save changes")');
@@ -57,7 +58,7 @@ async function firstPublishedSlug() {
 await check("sidebar groups and plain-language labels (no desk/pieces/plate)", async () => {
   const nav = await page.textContent(".adm-nav");
   for (const label of ["Dashboard", "Articles", "Topics & tags", "Media", "Homepage", "Site text", "Appearance", "AI automation", "Settings", "Help"]) assert.ok(nav.includes(label), label);
-  for (const path of ["/admin", "/admin/articles", "/admin/topics", "/admin/media", "/admin/settings", "/admin/automation", "/admin/homepage", "/admin/site-text", "/admin/appearance"]) {
+  for (const path of ["/admin", "/admin/articles", "/admin/topics", "/admin/media", "/admin/settings", "/admin/automation", "/admin/homepage", "/admin/site-text", "/admin/appearance", "/admin/ticker"]) {
     await page.goto(BASE + path);
     await page.waitForSelector(".desk-title");
     // Interface text only: article titles/slugs/excerpts in tables are owner content.
@@ -126,39 +127,80 @@ await check("site text: renaming 'New stories' shows on the article sidebar", as
   await saveForm();
 });
 
-await check("ticker: custom text items, count and animation", async () => {
-  await page.goto(BASE + "/admin/homepage");
+await check("ticker: own admin page in nav; rotate (default), scroll, custom items, pinned fallback", async () => {
+  await page.goto(BASE + "/admin");
+  await page.click('.adm-nav a:has-text("Top strip / Ticker")');
+  await page.waitForURL(/\/admin\/ticker$/);
+  await page.waitForLoadState("networkidle");
+  await page.goto(BASE + "/");
+  assert.ok(await page.$('.trend[data-mode="rotate"] .trend__rotor a'), "default strip rotates newest articles");
+  const first = await page.textContent(".trend__rotor a");
+  await page.waitForFunction((t) => document.querySelector(".trend__rotor a")?.textContent !== t, first, { timeout: 15000 });
+  await page.goto(BASE + "/admin/ticker");
+  await page.waitForLoadState("networkidle");
   await page.selectOption('label:has-text("What it shows") select', "custom");
   await page.click("text=Add text item");
-  await page.fill('#ticker label:has-text("Text") input >> nth=0', "E2E ticker item");
-  await page.check("text=Scroll continuously");
+  await page.fill('label:has-text("Text") input >> nth=0', "E2E ticker item");
+  await page.check("text=Continuous scroll");
   await saveForm();
   await page.goto(BASE + "/");
   assert.ok((await page.textContent(".trend")).includes("E2E ticker item"));
-  assert.ok(await page.$(".trend--animate"));
-  await page.goto(BASE + "/admin/homepage");
-  await page.selectOption('label:has-text("What it shows") select', "latest");
-  await page.uncheck("text=Scroll continuously");
+  assert.ok(await page.$(".trend--scroll"));
+  await page.click(".trend__pause");
+  assert.ok(await page.$(".trend.is-paused"));
+  await page.goto(BASE + "/admin/ticker");
+  await page.waitForLoadState("networkidle");
+  await page.selectOption('label:has-text("What it shows") select', "pinned"); // nothing picked -> falls back to newest
+  await page.check("text=One at a time");
   await saveForm();
   await page.goto(BASE + "/");
-  assert.equal(await page.$(".trend--animate"), null);
+  assert.ok(await page.$('.trend[data-mode="rotate"] .trend__rotor a'), "pinned with no picks still shows newest");
 });
-
-await check("homepage: hide + reorder sections", async () => {
+await check("homepage builder: add topic/text/CTA blocks, hide, reorder, layout, live preview", async () => {
   await page.goto(BASE + "/admin/homepage");
-  await page.uncheck('[data-section="also"] input[type="checkbox"]');
-  await page.click('[aria-label^="Move Topics grid"][aria-label$="up"]');
+  await page.waitForLoadState("networkidle");
+  const frame = page.frameLocator('iframe[title="Homepage preview"]');
+  await frame.locator('[data-block="featured"]').waitFor();
+  for (const type of ["category", "text", "cta"]) {
+    await page.selectOption('[data-testid="home-add-type"]', type);
+    await page.click('[data-testid="home-add"]');
+  }
+  const blocks = page.locator('[data-testid="home-blocks"] > .adm-block');
+  const n = await blocks.count();
+  await blocks.nth(n - 2).locator("textarea").fill("Hello from the **builder**.");
+  await blocks.nth(n - 3).locator('input[placeholder]').first().fill("E2E topic block");
+  await blocks.nth(n - 3).locator('label:has-text("Layout") select').selectOption("cards");
+  await page.uncheck('[data-testid="home-blocks"] [data-block="also"] input[type="checkbox"]');
+  await page.click('[aria-label="Move Topics grid up"]');
+  await frame.locator("text=E2E topic block").waitFor({ timeout: 15000 }); // live, before saving
   await saveForm();
   await page.goto(BASE + "/");
-  assert.equal(await page.$("#also-filed"), null);
-  const order = await page.$$eval("main section", (els) => els.map((e) => e.getAttribute("aria-labelledby") ?? "lead"));
+  assert.equal(await page.$('[data-block="also"]'), null);
+  assert.ok((await page.textContent("main")).includes("Hello from the builder."));
+  assert.ok(await page.$('[data-block="category"] .card-grid--cards'));
+  assert.ok(await page.$('[data-block="cta"] a.btn'));
+  const order = await page.$$eval("main [data-block]", (els) => els.map((e) => e.getAttribute("data-block")));
   assert.ok(order.indexOf("topics") < order.indexOf("latest"), order.join(","));
+  // restore
   await page.goto(BASE + "/admin/homepage");
-  await page.check('[data-section="also"] input[type="checkbox"]');
-  await page.click('[aria-label^="Move Topics grid"][aria-label$="down"]');
+  await page.waitForLoadState("networkidle");
+  for (let i = 0; i < 3; i += 1) await page.locator('[data-testid="home-blocks"] > .adm-block').last().locator('button:has-text("Remove")').click();
+  await page.check('[data-testid="home-blocks"] [data-block="also"] input[type="checkbox"]');
+  await page.click('[aria-label="Move Topics grid down"]');
   await saveForm();
 });
-
+await check("admin dark mode: toggle persists and does not touch the public site", async () => {
+  await page.goto(BASE + "/admin");
+  await page.waitForLoadState("networkidle");
+  await page.selectOption('[data-testid="admin-theme"]', "dark");
+  const bg = await page.$eval(".desk", (e) => getComputedStyle(e).backgroundColor);
+  assert.equal(bg, "rgb(18, 20, 23)");
+  await page.reload();
+  await page.waitForLoadState("networkidle");
+  assert.equal(await page.$eval(".desk", (e) => e.getAttribute("data-theme")), "dark");
+  await page.selectOption('[data-testid="admin-theme"]', "light");
+  assert.equal(await page.$eval(".desk", (e) => getComputedStyle(e).backgroundColor), "rgb(246, 247, 249)");
+});
 await check("invalid settings are refused with a readable message", async () => {
   await page.goto(BASE + "/admin/appearance");
   await page.fill('input[aria-label="Accent colour hex code"]', "orange");

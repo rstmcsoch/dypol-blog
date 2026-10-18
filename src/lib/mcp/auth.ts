@@ -88,19 +88,48 @@ async function open<T>(kind: Kind, mcpToken: string, value: string, now: number)
 
 const nowSec = () => Math.floor(Date.now() / 1000);
 
-export type AuthResult = { ok: true; via: "bearer" | "oauth"; client?: string } | { ok: false; reason: "missing" | "invalid" | "disabled" };
+/** The profile an MCP credential acts as. "default" = the master MCP_TOKEN. */
+export type ProfileBinding = { id: string; version: string };
+export const DEFAULT_PROFILE: ProfileBinding = { id: "default", version: "" };
 
-export async function authenticate(authorization: string | null, mcpToken: string | undefined, now = nowSec()): Promise<AuthResult> {
+/**
+ * Looks up a per-profile token (`dyp_<profile>_<secret>`) and confirms a
+ * profile binding is still current (its token was not revoked or replaced).
+ */
+export type ProfileResolver = {
+  byToken(token: string): Promise<ProfileBinding | null>;
+  stillValid(binding: ProfileBinding): Promise<boolean>;
+};
+
+export type AuthResult =
+  | { ok: true; via: "bearer" | "oauth" | "profile-token"; client?: string; profile: ProfileBinding }
+  | { ok: false; reason: "missing" | "invalid" | "disabled" };
+
+/** Label for OAuth clients that registered before signed client ids (e.g. Grok before PR #4). */
+export const LEGACY_CLIENT_LABEL = "legacy connector";
+
+export async function authenticate(
+  authorization: string | null,
+  mcpToken: string | undefined,
+  now = nowSec(),
+  profiles?: ProfileResolver,
+): Promise<AuthResult> {
   if (!mcpConfigured(mcpToken)) return { ok: false, reason: "disabled" };
   const match = /^Bearer\s+(\S{1,2048})$/i.exec(authorization?.trim() ?? "");
   if (!match) return { ok: false, reason: "missing" };
   const presented = match[1];
   if (presented.startsWith("mcpat.")) {
-    const payload = await open<{ c: string; n?: string }>("mcpat", mcpToken, presented, now);
+    const payload = await open<{ c: string; n?: string; p?: string; v?: string }>("mcpat", mcpToken, presented, now);
     if (!payload) return { ok: false, reason: "invalid" };
-    return payload.n ? { ok: true, via: "oauth", client: payload.n } : { ok: true, via: "oauth" };
+    const profile = payload.p && payload.p !== "default" ? { id: payload.p, version: payload.v ?? "" } : DEFAULT_PROFILE;
+    if (profile.id !== "default" && !(profiles && (await profiles.stillValid(profile)))) return { ok: false, reason: "invalid" };
+    return { ok: true, via: "oauth", client: payload.n ?? (payload.c === "signed" ? undefined : LEGACY_CLIENT_LABEL), profile };
   }
-  return (await secretMatches(presented, mcpToken)) ? { ok: true, via: "bearer" } : { ok: false, reason: "invalid" };
+  if (presented.startsWith("dyp_") && profiles) {
+    const profile = await profiles.byToken(presented);
+    return profile ? { ok: true, via: "profile-token", profile } : { ok: false, reason: "invalid" };
+  }
+  return (await secretMatches(presented, mcpToken)) ? { ok: true, via: "bearer", profile: DEFAULT_PROFILE } : { ok: false, reason: "invalid" };
 }
 
 // ---- OAuth 2.1 helpers -------------------------------------------------------
@@ -214,21 +243,27 @@ export async function pkceS256(verifier: string): Promise<string> {
   return b64url(new Uint8Array(digest));
 }
 
-type CodePayload = { c: string; r: string; ch: string };
+type CodePayload = { c: string; r: string; ch: string; p?: string; v?: string };
 
-export async function issueCode(mcpToken: string, input: { clientId: string; redirectUri: string; challenge: string }, now = nowSec()) {
-  return mint("mcpac", mcpToken, CODE_TTL, { c: input.clientId, r: input.redirectUri, ch: input.challenge } satisfies CodePayload, now);
+export async function issueCode(
+  mcpToken: string,
+  input: { clientId: string; redirectUri: string; challenge: string; profile?: ProfileBinding },
+  now = nowSec(),
+) {
+  const p = input.profile && input.profile.id !== "default" ? { p: input.profile.id, v: input.profile.version } : {};
+  return mint("mcpac", mcpToken, CODE_TTL, { c: input.clientId, r: input.redirectUri, ch: input.challenge, ...p } satisfies CodePayload, now);
 }
 
 export type TokenResponse = { access_token: string; token_type: "Bearer"; expires_in: number; refresh_token: string; scope: string };
 
-async function tokenPair(mcpToken: string, clientId: string, now: number): Promise<TokenResponse> {
+async function tokenPair(mcpToken: string, clientId: string, now: number, profile?: { p?: string; v?: string }): Promise<TokenResponse> {
   const client = await readClient(mcpToken, clientId, now);
+  const p = profile?.p ? { p: profile.p, v: profile.v ?? "" } : {};
   return {
-    access_token: await mint("mcpat", mcpToken, ACCESS_TTL, client ? { c: "signed", n: client.name } : { c: clientId }, now),
+    access_token: await mint("mcpat", mcpToken, ACCESS_TTL, client ? { c: "signed", n: client.name, ...p } : { c: clientId, ...p }, now),
     token_type: "Bearer",
     expires_in: ACCESS_TTL,
-    refresh_token: await mint("mcprt", mcpToken, REFRESH_TTL, { c: clientId }, now),
+    refresh_token: await mint("mcprt", mcpToken, REFRESH_TTL, { c: clientId, ...p }, now),
     scope: "blog:automation",
   };
 }
@@ -243,11 +278,18 @@ export async function exchangeCode(
   if (!constantTimeEqual(payload.c, input.clientId) || !constantTimeEqual(payload.r, input.redirectUri)) return null;
   if (!/^[A-Za-z0-9._~-]{43,128}$/.test(input.verifier)) return null;
   if (!constantTimeEqual(await pkceS256(input.verifier), payload.ch)) return null;
-  return tokenPair(mcpToken, input.clientId, now);
+  return tokenPair(mcpToken, input.clientId, now, payload);
 }
 
-export async function refresh(mcpToken: string, input: { refreshToken: string; clientId: string }, now = nowSec()): Promise<TokenResponse | null> {
-  const payload = await open<{ c: string }>("mcprt", mcpToken, input.refreshToken, now);
+export async function refresh(
+  mcpToken: string,
+  input: { refreshToken: string; clientId: string },
+  now = nowSec(),
+  profiles?: ProfileResolver,
+): Promise<TokenResponse | null> {
+  const payload = await open<{ c: string; p?: string; v?: string }>("mcprt", mcpToken, input.refreshToken, now);
   if (!payload || !constantTimeEqual(payload.c, input.clientId)) return null;
-  return tokenPair(mcpToken, input.clientId, now);
+  // A revoked/replaced profile token also ends its OAuth sessions.
+  if (payload.p && !(profiles && (await profiles.stillValid({ id: payload.p, version: payload.v ?? "" })))) return null;
+  return tokenPair(mcpToken, input.clientId, now, payload);
 }

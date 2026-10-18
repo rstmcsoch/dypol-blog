@@ -1,4 +1,9 @@
-import type { NavItem, SiteConfig } from "./types";
+import type { BlockType, ContentBlock, NavItem, SiteConfig } from "./types";
+
+/** A block with every field filled. */
+export function block(id: string, type: BlockType, over: Partial<ContentBlock> = {}): ContentBlock {
+  return { id, type, enabled: true, title: "", count: 5, layout: "list", categoryId: "", tagId: "", body: "", ctaLabel: "", ctaHref: "", ...over };
+}
 
 /**
  * Public site configuration.
@@ -57,6 +62,7 @@ export const site = {
     copyLink: "Copy link",
     linkCopied: "Link copied",
     tags: "Tags",
+    popular: "Most read",
   },
   nav: [
     { id: "home", label: "Home", href: "/", visible: true },
@@ -68,21 +74,26 @@ export const site = {
     enabled: true,
     label: "Now",
     slugs: ["hard-edge-returns", "what-a-machine-should-send", "an-index-not-a-feed"],
-    source: "pinned",
+    source: "latest",
+    mode: "rotate",
+    interval: 5,
     count: 5,
     customItems: [],
     animate: false,
     speed: 40,
   },
   home: {
-    sections: [
-      { id: "featured", enabled: true, count: 1 },
-      { id: "also", enabled: true, count: 3 },
-      { id: "latest", enabled: true, count: 12 },
-      { id: "topics", enabled: true, count: 12 },
+    blocks: [
+      block("home-featured", "featured", { count: 1 }),
+      block("home-also", "also", { count: 3 }),
+      block("home-latest", "latest", { count: 12 }),
+      block("home-topics", "topics", { count: 12 }),
     ],
   },
-  articleSidebar: { enabled: true, blocks: ["tags", "newStories", "share"], count: 4 },
+  articleSidebar: {
+    enabled: true,
+    blocks: [block("side-tags", "tags"), block("side-new", "newStories", { count: 4 }), block("side-share", "share")],
+  },
   appearance: { darkness: 92, whiteness: 100, accent: "#ff4d00", coverFallback: "minimal" },
   footer: {
     note: "DYPOL Blog · DYPOL Labs",

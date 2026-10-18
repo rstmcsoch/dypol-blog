@@ -26,11 +26,30 @@ test("one invalid new group falls back alone, the rest is kept", () => {
   assert.equal(out.articleSidebar.enabled, false);
 });
 
-test("homepage sections: unknown ids dropped, duplicates removed, missing appended, order kept", () => {
+test("PR #5 homepage sections become builder blocks (unknown/duplicate dropped, order kept)", () => {
   const out = normalizeSite({ home: { sections: [{ id: "latest", enabled: false, count: 5 }, { id: "bogus", enabled: true, count: 1 }, { id: "latest", enabled: true, count: 9 }, { id: "featured", enabled: true, count: 1 }] } });
-  assert.deepEqual(out.home.sections.map((s) => s.id), ["latest", "featured", "also", "topics"]);
-  assert.equal(out.home.sections[0]?.enabled, false);
-  assert.equal(out.home.sections[0]?.count, 5);
+  assert.deepEqual(out.home.blocks.map((b) => b.type), ["latest", "featured"]);
+  assert.equal(out.home.blocks[0]?.enabled, false);
+  assert.equal(out.home.blocks[0]?.count, 5);
+});
+
+test("PR #5 sidebar string blocks are upgraded, count carried over", () => {
+  const out = normalizeSite({ articleSidebar: { enabled: true, blocks: ["share", "related"], count: 6 } });
+  assert.deepEqual(out.articleSidebar.blocks.map((b) => [b.type, b.count]), [["share", 6], ["related", 6]]);
+});
+
+test("ticker: stored PR #5 value without mode becomes rotate; animate=true becomes scroll", () => {
+  assert.equal(normalizeSite({ trending: { enabled: true, label: "Now", slugs: [], source: "pinned", count: 5, customItems: [], animate: false, speed: 40 } }).trending.mode, "rotate");
+  assert.equal(normalizeSite({ trending: { ...site.trending, animate: true, mode: undefined } }).trending.mode, "scroll");
+});
+
+test("builder blocks validate category/tag/cta requirements", () => {
+  const base = normalizeSite({});
+  const blk = (o: object) => ({ ...base.home.blocks[0], id: "x1", ...o });
+  assert.throws(() => parseSite({ ...base, home: { blocks: [blk({ type: "category", categoryId: "" })] } }));
+  assert.throws(() => parseSite({ ...base, home: { blocks: [blk({ type: "cta", ctaLabel: "Go", ctaHref: "javascript:alert(1)" })] } }));
+  assert.throws(() => parseSite({ ...base, home: { blocks: [blk({ type: "share" })] } }));
+  assert.doesNotThrow(() => parseSite({ ...base, home: { blocks: [blk({ type: "cta", ctaLabel: "Subscribe", ctaHref: "https://example.com" }), blk({ id: "x2", type: "text", body: "Hi" })] } }));
 });
 
 test("saving rejects bad values with clear paths", () => {

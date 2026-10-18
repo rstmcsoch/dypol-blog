@@ -27,6 +27,7 @@ import { Route as AdminHomepageRouteImport } from './routes/admin/homepage'
 import { Route as AdminMediaRouteImport } from './routes/admin/media'
 import { Route as AdminSettingsRouteImport } from './routes/admin/settings'
 import { Route as AdminSiteTextRouteImport } from './routes/admin/site-text'
+import { Route as AdminTickerRouteImport } from './routes/admin/ticker'
 import { Route as AdminTopicsRouteImport } from './routes/admin/topics'
 import { Route as ArticlesIndexRouteImport } from './routes/articles/index'
 import { Route as ArticlesSlugRouteImport } from './routes/articles/$slug'
@@ -35,12 +36,14 @@ import { Route as OauthAuthorizeRouteImport } from './routes/oauth/authorize'
 import { Route as OauthRegisterRouteImport } from './routes/oauth/register'
 import { Route as OauthTokenRouteImport } from './routes/oauth/token'
 import { Route as PreviewIdRouteImport } from './routes/preview/$id'
+import { Route as PreviewHomeRouteImport } from './routes/preview/home'
 import { Route as TopicsIndexRouteImport } from './routes/topics/index'
 import { Route as TopicsSlugRouteImport } from './routes/topics/$slug'
 import { Route as DotwellKnownOauthProtectedResourceMcpRouteImport } from './routes/[.]well-known/oauth-protected-resource.mcp'
 import { Route as AdminArticlesIndexRouteImport } from './routes/admin/articles/index'
 import { Route as AdminArticlesIdRouteImport } from './routes/admin/articles/$id'
 import { Route as AdminArticlesNewRouteImport } from './routes/admin/articles/new'
+import { Route as ApiViewsSlugRouteImport } from './routes/api/views/$slug'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -134,6 +137,11 @@ const AdminSiteTextRoute = AdminSiteTextRouteImport.update({
   path: '/site-text',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminTickerRoute = AdminTickerRouteImport.update({
+  id: '/ticker',
+  path: '/ticker',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminTopicsRoute = AdminTopicsRouteImport.update({
   id: '/topics',
   path: '/topics',
@@ -174,6 +182,11 @@ const PreviewIdRoute = PreviewIdRouteImport.update({
   path: '/preview/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PreviewHomeRoute = PreviewHomeRouteImport.update({
+  id: '/preview/home',
+  path: '/preview/home',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const TopicsIndexRoute = TopicsIndexRouteImport.update({
   id: '/topics/',
   path: '/topics/',
@@ -205,6 +218,11 @@ const AdminArticlesNewRoute = AdminArticlesNewRouteImport.update({
   path: '/articles/new',
   getParentRoute: () => AdminRoute,
 } as any)
+const ApiViewsSlugRoute = ApiViewsSlugRouteImport.update({
+  id: '/api/views/$slug',
+  path: '/api/views/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -224,6 +242,7 @@ export interface FileRoutesByFullPath {
   '/admin/media': typeof AdminMediaRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/site-text': typeof AdminSiteTextRoute
+  '/admin/ticker': typeof AdminTickerRoute
   '/admin/topics': typeof AdminTopicsRoute
   '/articles/$slug': typeof ArticlesSlugRoute
   '/media/$id': typeof MediaIdRoute
@@ -231,6 +250,7 @@ export interface FileRoutesByFullPath {
   '/oauth/register': typeof OauthRegisterRoute
   '/oauth/token': typeof OauthTokenRoute
   '/preview/$id': typeof PreviewIdRoute
+  '/preview/home': typeof PreviewHomeRoute
   '/topics/$slug': typeof TopicsSlugRoute
   '/admin/': typeof AdminIndexRoute
   '/articles/': typeof ArticlesIndexRoute
@@ -238,6 +258,7 @@ export interface FileRoutesByFullPath {
   '/.well-known/oauth-protected-resource/mcp': typeof DotwellKnownOauthProtectedResourceMcpRoute
   '/admin/articles/$id': typeof AdminArticlesIdRoute
   '/admin/articles/new': typeof AdminArticlesNewRoute
+  '/api/views/$slug': typeof ApiViewsSlugRoute
   '/admin/articles/': typeof AdminArticlesIndexRoute
 }
 export interface FileRoutesByTo {
@@ -257,6 +278,7 @@ export interface FileRoutesByTo {
   '/admin/media': typeof AdminMediaRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/site-text': typeof AdminSiteTextRoute
+  '/admin/ticker': typeof AdminTickerRoute
   '/admin/topics': typeof AdminTopicsRoute
   '/articles/$slug': typeof ArticlesSlugRoute
   '/media/$id': typeof MediaIdRoute
@@ -264,6 +286,7 @@ export interface FileRoutesByTo {
   '/oauth/register': typeof OauthRegisterRoute
   '/oauth/token': typeof OauthTokenRoute
   '/preview/$id': typeof PreviewIdRoute
+  '/preview/home': typeof PreviewHomeRoute
   '/topics/$slug': typeof TopicsSlugRoute
   '/admin': typeof AdminIndexRoute
   '/articles': typeof ArticlesIndexRoute
@@ -271,6 +294,7 @@ export interface FileRoutesByTo {
   '/.well-known/oauth-protected-resource/mcp': typeof DotwellKnownOauthProtectedResourceMcpRoute
   '/admin/articles/$id': typeof AdminArticlesIdRoute
   '/admin/articles/new': typeof AdminArticlesNewRoute
+  '/api/views/$slug': typeof ApiViewsSlugRoute
   '/admin/articles': typeof AdminArticlesIndexRoute
 }
 export interface FileRoutesById {
@@ -292,6 +316,7 @@ export interface FileRoutesById {
   '/admin/media': typeof AdminMediaRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/site-text': typeof AdminSiteTextRoute
+  '/admin/ticker': typeof AdminTickerRoute
   '/admin/topics': typeof AdminTopicsRoute
   '/articles/$slug': typeof ArticlesSlugRoute
   '/media/$id': typeof MediaIdRoute
@@ -299,6 +324,7 @@ export interface FileRoutesById {
   '/oauth/register': typeof OauthRegisterRoute
   '/oauth/token': typeof OauthTokenRoute
   '/preview/$id': typeof PreviewIdRoute
+  '/preview/home': typeof PreviewHomeRoute
   '/topics/$slug': typeof TopicsSlugRoute
   '/admin/': typeof AdminIndexRoute
   '/articles/': typeof ArticlesIndexRoute
@@ -306,6 +332,7 @@ export interface FileRoutesById {
   '/.well-known/oauth-protected-resource/mcp': typeof DotwellKnownOauthProtectedResourceMcpRoute
   '/admin/articles/$id': typeof AdminArticlesIdRoute
   '/admin/articles/new': typeof AdminArticlesNewRoute
+  '/api/views/$slug': typeof ApiViewsSlugRoute
   '/admin/articles/': typeof AdminArticlesIndexRoute
 }
 export interface FileRouteTypes {
@@ -328,6 +355,7 @@ export interface FileRouteTypes {
     | '/admin/media'
     | '/admin/settings'
     | '/admin/site-text'
+    | '/admin/ticker'
     | '/admin/topics'
     | '/articles/$slug'
     | '/media/$id'
@@ -335,6 +363,7 @@ export interface FileRouteTypes {
     | '/oauth/register'
     | '/oauth/token'
     | '/preview/$id'
+    | '/preview/home'
     | '/topics/$slug'
     | '/admin/'
     | '/articles/'
@@ -342,6 +371,7 @@ export interface FileRouteTypes {
     | '/.well-known/oauth-protected-resource/mcp'
     | '/admin/articles/$id'
     | '/admin/articles/new'
+    | '/api/views/$slug'
     | '/admin/articles/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -361,6 +391,7 @@ export interface FileRouteTypes {
     | '/admin/media'
     | '/admin/settings'
     | '/admin/site-text'
+    | '/admin/ticker'
     | '/admin/topics'
     | '/articles/$slug'
     | '/media/$id'
@@ -368,6 +399,7 @@ export interface FileRouteTypes {
     | '/oauth/register'
     | '/oauth/token'
     | '/preview/$id'
+    | '/preview/home'
     | '/topics/$slug'
     | '/admin'
     | '/articles'
@@ -375,6 +407,7 @@ export interface FileRouteTypes {
     | '/.well-known/oauth-protected-resource/mcp'
     | '/admin/articles/$id'
     | '/admin/articles/new'
+    | '/api/views/$slug'
     | '/admin/articles'
   id:
     | '__root__'
@@ -395,6 +428,7 @@ export interface FileRouteTypes {
     | '/admin/media'
     | '/admin/settings'
     | '/admin/site-text'
+    | '/admin/ticker'
     | '/admin/topics'
     | '/articles/$slug'
     | '/media/$id'
@@ -402,6 +436,7 @@ export interface FileRouteTypes {
     | '/oauth/register'
     | '/oauth/token'
     | '/preview/$id'
+    | '/preview/home'
     | '/topics/$slug'
     | '/admin/'
     | '/articles/'
@@ -409,6 +444,7 @@ export interface FileRouteTypes {
     | '/.well-known/oauth-protected-resource/mcp'
     | '/admin/articles/$id'
     | '/admin/articles/new'
+    | '/api/views/$slug'
     | '/admin/articles/'
   fileRoutesById: FileRoutesById
 }
@@ -429,9 +465,11 @@ export interface RootRouteChildren {
   OauthRegisterRoute: typeof OauthRegisterRoute
   OauthTokenRoute: typeof OauthTokenRoute
   PreviewIdRoute: typeof PreviewIdRoute
+  PreviewHomeRoute: typeof PreviewHomeRoute
   TopicsSlugRoute: typeof TopicsSlugRoute
   ArticlesIndexRoute: typeof ArticlesIndexRoute
   TopicsIndexRoute: typeof TopicsIndexRoute
+  ApiViewsSlugRoute: typeof ApiViewsSlugRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -562,6 +600,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminSiteTextRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/ticker': {
+      id: '/admin/ticker'
+      path: '/ticker'
+      fullPath: '/admin/ticker'
+      preLoaderRoute: typeof AdminTickerRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/topics': {
       id: '/admin/topics'
       path: '/topics'
@@ -618,6 +663,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PreviewIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/preview/home': {
+      id: '/preview/home'
+      path: '/preview/home'
+      fullPath: '/preview/home'
+      preLoaderRoute: typeof PreviewHomeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/topics/': {
       id: '/topics/'
       path: '/topics'
@@ -660,6 +712,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminArticlesNewRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/api/views/$slug': {
+      id: '/api/views/$slug'
+      path: '/api/views/$slug'
+      fullPath: '/api/views/$slug'
+      preLoaderRoute: typeof ApiViewsSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -671,6 +730,7 @@ interface AdminRouteChildren {
   AdminMediaRoute: typeof AdminMediaRoute
   AdminSettingsRoute: typeof AdminSettingsRoute
   AdminSiteTextRoute: typeof AdminSiteTextRoute
+  AdminTickerRoute: typeof AdminTickerRoute
   AdminTopicsRoute: typeof AdminTopicsRoute
   AdminIndexRoute: typeof AdminIndexRoute
   AdminArticlesIdRoute: typeof AdminArticlesIdRoute
@@ -686,6 +746,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminMediaRoute: AdminMediaRoute,
   AdminSettingsRoute: AdminSettingsRoute,
   AdminSiteTextRoute: AdminSiteTextRoute,
+  AdminTickerRoute: AdminTickerRoute,
   AdminTopicsRoute: AdminTopicsRoute,
   AdminIndexRoute: AdminIndexRoute,
   AdminArticlesIdRoute: AdminArticlesIdRoute,
@@ -729,9 +790,11 @@ const rootRouteChildren: RootRouteChildren = {
   OauthRegisterRoute: OauthRegisterRoute,
   OauthTokenRoute: OauthTokenRoute,
   PreviewIdRoute: PreviewIdRoute,
+  PreviewHomeRoute: PreviewHomeRoute,
   TopicsSlugRoute: TopicsSlugRoute,
   ArticlesIndexRoute: ArticlesIndexRoute,
   TopicsIndexRoute: TopicsIndexRoute,
+  ApiViewsSlugRoute: ApiViewsSlugRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

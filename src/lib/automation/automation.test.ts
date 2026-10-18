@@ -16,7 +16,7 @@ test("defaults are safe: automation off, auto-publish off", () => {
   assert.equal(DEFAULT_AUTOMATION_SETTINGS.mode, "mcp-connector");
   assert.deepEqual(normalizeAutomationSettings({ enabled: "yes" }), DEFAULT_AUTOMATION_SETTINGS);
   assert.equal(normalizeAutomationSettings({ enabled: true, policy: { minWords: 300 } }).policy.minWords, 300);
-  assert.deepEqual(automationActive({ ...DEFAULT_AUTOMATION_SETTINGS, enabled: true, paused: true }), { active: false, reason: "Automation is paused in the desk." });
+  assert.deepEqual(automationActive({ ...DEFAULT_AUTOMATION_SETTINGS, enabled: true, paused: true }), { active: false, reason: "Automation is paused in the admin panel." });
 });
 
 test("body converts to blocks and counts words", async () => {
@@ -230,4 +230,13 @@ test("image fetch sends a descriptive User-Agent (Wikimedia and CDNs 403 without
   }) as unknown as typeof fetch;
   await fetchImage("https://example.org/a.png", fake);
   assert.match(ua, /DYPOL-Blog/);
+});
+
+test("bug fix: one invalid stored field no longer resets (and disables) all automation settings", () => {
+  const out = normalizeAutomationSettings({ enabled: true, topicIdeas: ["ok"], topicSources: ["https://a.example", "not a url"], policy: { autoPublish: true, maxPublishedPerDay: 50 } });
+  assert.equal(out.enabled, true);
+  assert.deepEqual(out.topicIdeas, ["ok"]);
+  assert.deepEqual(out.topicSources, ["https://a.example"]);
+  assert.equal(out.policy.autoPublish, true);
+  assert.equal(out.policy.maxPublishedPerDay, DEFAULT_AUTOMATION_SETTINGS.policy.maxPublishedPerDay);
 });

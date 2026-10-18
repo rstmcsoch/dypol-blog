@@ -105,12 +105,47 @@ export type SiteLabels = {
   copyLink: string;
   linkCopied: string;
   tags: string;
+  popular: string;
 };
 
-export type HomeSectionId = "featured" | "also" | "latest" | "topics";
-export type HomeSection = { id: HomeSectionId; enabled: boolean; count: number };
+export const BLOCK_TYPES = [
+  "featured",
+  "also",
+  "latest",
+  "related",
+  "popular",
+  "category",
+  "tag",
+  "topics",
+  "ticker",
+  "text",
+  "cta",
+  "tags",
+  "newStories",
+  "share",
+] as const;
+export type BlockType = (typeof BLOCK_TYPES)[number];
+export type BlockLayout = "list" | "grid" | "cards";
 
-export type SidebarBlock = "tags" | "related" | "newStories" | "share";
+/**
+ * One configurable block, used by the homepage builder and the article sidebar.
+ * Empty `title` means "use the default heading from Site text".
+ */
+export type ContentBlock = {
+  id: string;
+  type: BlockType;
+  enabled: boolean;
+  title: string;
+  count: number;
+  layout: BlockLayout;
+  /** category / tag blocks */
+  categoryId: string;
+  tagId: string;
+  /** text block (safe markdown) and cta block */
+  body: string;
+  ctaLabel: string;
+  ctaHref: string;
+};
 
 export type TickerItem = { id: string; text: string; href: string };
 
@@ -140,16 +175,20 @@ export type SiteConfig = {
     label: string;
     /** Pinned article slugs (source "pinned"). */
     slugs: string[];
-    source: "latest" | "pinned" | "custom";
+    source: "latest" | "pinned" | "custom" | "popular";
+    /** static row, continuous scroll, or one item at a time */
+    mode: "static" | "scroll" | "rotate";
+    /** Seconds each item stays when rotating. */
+    interval: number;
     count: number;
     customItems: TickerItem[];
-    /** Scroll the strip continuously. */
+    /** Legacy flag (PR #5); `mode` wins. */
     animate: boolean;
     /** Seconds per full loop when animated. */
     speed: number;
   };
-  home: { sections: HomeSection[] };
-  articleSidebar: { enabled: boolean; blocks: SidebarBlock[]; count: number };
+  home: { blocks: ContentBlock[] };
+  articleSidebar: { enabled: boolean; blocks: ContentBlock[] };
   appearance: Appearance;
   footer: {
     note: string;
