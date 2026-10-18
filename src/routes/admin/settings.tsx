@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { FormShell, useSiteForm } from "@/components/admin/site-form";
 import { adminSettings } from "@/content/admin-api";
+import { SOCIAL_LABELS, SOCIAL_PLATFORMS, type SocialLink } from "@/lib/social-links";
 
 export const Route = createFileRoute("/admin/settings")({
   loader: () => adminSettings(),
@@ -37,6 +38,36 @@ function SettingsAdmin() {
             <span>Publisher name</span>
             <input value={site.publisher} onChange={(e) => patch({ publisher: e.target.value })} required />
           </label>
+        </fieldset>
+        <fieldset className="block-card">
+          <legend>Social links</legend>
+          <p className="field-help">
+            Shown as icons under the logo and description in the footer. Leave a URL empty (or untick Show) and
+            that icon stays hidden. Use full https:// addresses; Email takes a mailto: address, RSS takes /feed.xml.
+          </p>
+          {SOCIAL_PLATFORMS.map((platform) => {
+            const current: SocialLink = site.socials.find((s) => s.platform === platform) ?? { platform, url: "", visible: true };
+            const update = (next: Partial<SocialLink>) => {
+              const others = site.socials.filter((s) => s.platform !== platform);
+              patch({ socials: [...others, { ...current, ...next }] });
+            };
+            return (
+              <div key={platform} className="filters">
+                <label className="field" style={{ flex: 1 }}>
+                  <span>{SOCIAL_LABELS[platform]}</span>
+                  <input
+                    value={current.url}
+                    placeholder={platform === "email" ? "mailto:hello@example.com" : platform === "rss" ? "/feed.xml" : "https://…"}
+                    onChange={(e) => update({ url: e.target.value })}
+                  />
+                </label>
+                <label className="field">
+                  <span>Show</span>
+                  <input type="checkbox" checked={current.visible} onChange={(e) => update({ visible: e.target.checked })} />
+                </label>
+              </div>
+            );
+          })}
         </fieldset>
         <fieldset className="block-card">
           <legend>AI publishing limit</legend>
