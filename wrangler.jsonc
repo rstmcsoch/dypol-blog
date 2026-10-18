@@ -9,6 +9,7 @@
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true },
   "vars": { "DYPOL_ENV": "production" },
+  "images": { "binding": "IMAGES" },
   "d1_databases": [
     {
       "binding": "DB",
@@ -33,6 +34,7 @@
   // instead, so previews can never read or write production content.
   "previews": {
     "vars": { "DYPOL_ENV": "preview" },
+    "images": { "binding": "IMAGES" },
     "d1_databases": [
       {
         "binding": "DB",

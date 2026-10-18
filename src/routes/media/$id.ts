@@ -3,11 +3,15 @@ import { createFileRoute } from "@tanstack/react-router";
 export const Route = createFileRoute("/media/$id")({
   server: {
     handlers: {
-      GET: async ({ params }) => {
+      GET: async ({ params, request }) => {
         const { readMediaFile } = await import("@/content/repository.server");
         const { MediaBindingError } = await import("@/content/media-store.server");
         try {
-          const file = await readMediaFile(params.id);
+          // /media/<id> serves the hero variant; ?variant=thumb the
+          // thumbnail. Legacy media without variants fall back to the
+          // original object inside the store. Unknown values = hero.
+          const variant = new URL(request.url).searchParams.get("variant") === "thumb" ? "thumb" : "hero";
+          const file = await readMediaFile(params.id, variant);
           if (!file) return new Response("Not found", { status: 404 });
           const body = new Uint8Array(file.bytes.byteLength);
           body.set(file.bytes);

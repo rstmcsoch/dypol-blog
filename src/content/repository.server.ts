@@ -1018,6 +1018,12 @@ export type MediaItem = {
   alt: string;
   bytes: number;
   createdAt: string;
+  heroBytes: number;
+  thumbBytes: number;
+  width: number;
+  height: number;
+  processing: string;
+  hasVariants: boolean;
 };
 
 export async function listMedia(): Promise<MediaItem[]> {
@@ -1025,21 +1031,144 @@ export async function listMedia(): Promise<MediaItem[]> {
   return library.list();
 }
 
-export async function uploadMedia(raw: unknown): Promise<{ id: string }> {
+export type UploadMediaResult = {
+  id: string;
+  image: {
+    width: number;
+    height: number;
+    heroBytes: number;
+    thumbBytes: number;
+    processing: string;
+    warnings: string[];
+  };
+};
+
+/**
+ * The single upload path (t60): admin manual uploads and the MCP
+ * upload_featured_image tool (base64 and URL-fetch) all land here.
+ * Bytes are validated (10 MB cap + magic-byte match in decodeImage,
+ * dimension/pixel guards in the pipeline), optimized once via the
+ * IMAGES binding, and stored as hero+thumb variants. Any pipeline
+ * failure throws before anything is stored — no partial media.
+ */
+export async function uploadMedia(raw: unknown): Promise<UploadMediaResult> {
   const input = mediaWriteSchema.parse(raw);
   const bytes = decodeImage(input.dataBase64, input.mime);
+  return uploadMediaBytes({ filename: input.filename, mime: input.mime, alt: input.alt, bytes });
+}
+
+export async function uploadMediaBytes(input: {
+  filename: string;
+  mime: string;
+  alt: string;
+  bytes: Uint8Array;
+}): Promise<UploadMediaResult> {
+  const { processUploadImage } = await import("@/lib/image-pipeline.server");
+  const { ImagePipelineError } = await import("@/lib/image-pipeline");
+  let processed;
+  try {
+    processed = await processUploadImage(new Uint8Array(input.bytes));
+  } catch (error) {
+    if (error instanceof ImagePipelineError) {
+      throw new ContentError(error.message, error.code === "quota-exceeded" || error.code === "binding-missing" ? 503 : 400);
+    }
+    throw error;
+  }
   const library = await openMediaStore();
   const id = randomUUID();
   const filename = input.filename.replace(/[/\\]/g, "").slice(0, 120);
-  await library.put({
+  const reuseHeroAsThumb = processed.processing === "original-within-target";
+  await library.putProcessed({
     id,
     filename,
     mime: input.mime,
     alt: input.alt,
-    bytes,
+    originalByteSize: input.bytes.byteLength,
+    hero: {
+      bytes: processed.hero.bytes,
+      contentType: processed.hero.contentType,
+      width: processed.hero.width,
+      height: processed.hero.height,
+    },
+    thumb: reuseHeroAsThumb ? null : { bytes: processed.thumb.bytes, contentType: processed.thumb.contentType },
+    processing: processed.processing,
     createdAt: new Date().toISOString(),
   });
-  return { id };
+  return {
+    id,
+    image: {
+      width: processed.hero.width,
+      height: processed.hero.height,
+      heroBytes: processed.hero.bytes.byteLength,
+      thumbBytes: reuseHeroAsThumb ? 0 : processed.thumb.bytes.byteLength,
+      processing: processed.processing,
+      warnings: processed.warnings,
+    },
+  };
+}
+
+export type MediaBackfillReport = {
+  dryRun: boolean;
+  scanned: number;
+  processed: number;
+  skipped: number;
+  transformsUsed: number;
+  failures: { id: string; filename: string; error: string }[];
+};
+
+/**
+ * Legacy backfill (t60): generate hero+thumb variants for media rows
+ * uploaded before the pipeline existed. Dry-run by default; batches
+ * are bounded; rows that already have variants are skipped, so
+ * re-running is safe (idempotent). Failures are reported per item and
+ * never leave partial objects behind (recordVariants cleans up).
+ * Quota errors stop the batch early with the failures recorded.
+ */
+export async function backfillMediaVariants(raw: { apply?: boolean; limit?: number } = {}): Promise<MediaBackfillReport> {
+  const apply = raw.apply === true;
+  const limit = Math.max(1, Math.min(25, Math.floor(raw.limit ?? 10) || 10));
+  const library = await openMediaStore();
+  const legacy = await library.legacyBatch(limit);
+  const report: MediaBackfillReport = {
+    dryRun: !apply,
+    scanned: legacy.length,
+    processed: 0,
+    skipped: 0,
+    transformsUsed: 0,
+    failures: [],
+  };
+  if (!apply) return report;
+  const { processUploadImage } = await import("@/lib/image-pipeline.server");
+  for (const item of legacy) {
+    try {
+      const original = await library.read(item.id);
+      if (!original) {
+        report.failures.push({ id: item.id, filename: item.filename, error: "Original object is missing from R2." });
+        continue;
+      }
+      const processed = await processUploadImage(original.bytes);
+      const reuseHeroAsThumb = processed.processing === "original-within-target";
+      const done = await library.recordVariants({
+        id: item.id,
+        hero: {
+          bytes: processed.hero.bytes,
+          contentType: processed.hero.contentType,
+          width: processed.hero.width,
+          height: processed.hero.height,
+        },
+        thumb: reuseHeroAsThumb ? null : { bytes: processed.thumb.bytes, contentType: processed.thumb.contentType },
+        processing: processed.processing === "images-binding" ? "backfill-images-binding" : processed.processing,
+      });
+      report.transformsUsed += processed.transformCalls;
+      if (done) report.processed += 1;
+      else report.skipped += 1;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      report.failures.push({ id: item.id, filename: item.filename, error: message });
+      if (/quota/i.test(message)) break; // stop early: later items would fail the same way
+    }
+  }
+  return report;
 }
 
 export async function deleteMedia(id: string): Promise<void> {
@@ -1057,7 +1186,10 @@ export async function deleteMedia(id: string): Promise<void> {
   if (!removed) throw new ContentError("That file is gone.", 404);
 }
 
-export async function readMediaFile(id: string): Promise<{ mime: string; bytes: Uint8Array } | null> {
+export async function readMediaFile(
+  id: string,
+  variant: "hero" | "thumb" = "hero",
+): Promise<{ mime: string; bytes: Uint8Array } | null> {
   const library = await openMediaStore();
-  return library.read(id);
+  return library.read(id, variant);
 }

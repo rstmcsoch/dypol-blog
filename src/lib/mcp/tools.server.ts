@@ -679,12 +679,20 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
           await store.recordRun({ profileId, tool: "upload_featured_image", outcome: "rejected", reason: message, articleId: input.article_id, auth });
           return { ok: false, error: message };
         }
-        let bin = "";
-        for (const b of image.bytes) bin += String.fromCharCode(b);
         const ext = image.mime.split("/")[1];
         const filename = (input.filename || `featured.${ext}`).replace(/[^A-Za-z0-9._-]/g, "-").slice(0, 120);
-        const { uploadMedia } = await import("@/content/repository.server");
-        const { id: mediaId } = await uploadMedia({ filename, mime: image.mime, alt: input.alt, dataBase64: btoa(bin) });
+        // Same unified pipeline as admin uploads (t60): validated,
+        // optimized once via the IMAGES binding, stored as variants.
+        const { uploadMediaBytes } = await import("@/content/repository.server");
+        let uploaded: Awaited<ReturnType<typeof uploadMediaBytes>>;
+        try {
+          uploaded = await uploadMediaBytes({ filename, mime: image.mime, alt: input.alt, bytes: image.bytes });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "Image could not be stored.";
+          await store.recordRun({ profileId, tool: "upload_featured_image", outcome: "rejected", reason: message, articleId: input.article_id, auth });
+          return { ok: false, error: message };
+        }
+        const mediaId = uploaded.id;
         let attached = false;
         if (submission && input.article_id) {
           const sql = await getSql();
@@ -711,7 +719,7 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
             ? "Stored in the media library but not attached: the article is no longer a draft (the owner may have published it). Attach it in the admin panel."
             : "Stored in the media library but not attached: only drafts created by automation can get a cover this way."
           : undefined;
-        return { ok: true, data: { media_id: mediaId, mime: image.mime, bytes: image.bytes.length, attached, path: `/media/${mediaId}`, ...(auto ? { published: auto.published, publish_reasons: auto.reasons, status: auto.status } : {}), ...(note ? { note } : {}) } };
+        return { ok: true, data: { media_id: mediaId, mime: image.mime, bytes: image.bytes.length, attached, path: `/media/${mediaId}`, hero_bytes: uploaded.image.heroBytes, thumb_bytes: uploaded.image.thumbBytes, width: uploaded.image.width, height: uploaded.image.height, processing: uploaded.image.processing, ...(uploaded.image.warnings.length ? { warnings: uploaded.image.warnings } : {}), ...(auto ? { published: auto.published, publish_reasons: auto.reasons, status: auto.status } : {}), ...(note ? { note } : {}) } };
       },
     },
     {
