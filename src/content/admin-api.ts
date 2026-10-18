@@ -84,6 +84,24 @@ export const adminSetAiEditAllowed = createServerFn({ method: "POST" })
     return { ok: true, aiEditAllowed: data.allowed };
   });
 
+export const adminOldArticlesPreview = createServerFn({ method: "POST" })
+  .validator((input: unknown) => input)
+  .handler(async ({ data }) => {
+    await guard();
+    const { parseOldArticleQuery } = await import("@/lib/old-articles");
+    const { previewOldArticles } = await import("./repository.server");
+    return previewOldArticles(parseOldArticleQuery(data));
+  });
+
+export const adminDeleteOldArticles = createServerFn({ method: "POST" })
+  .validator((input: unknown) => input)
+  .handler(async ({ data }) => {
+    await writeGuard();
+    const { parseOldArticleQuery } = await import("@/lib/old-articles");
+    const { deleteOldArticles } = await import("./repository.server");
+    return deleteOldArticles(parseOldArticleQuery(data));
+  });
+
 export const adminPreview = createServerFn({ method: "GET" })
   .validator((input: { id: string }) => input)
   .handler(async ({ data }) => {

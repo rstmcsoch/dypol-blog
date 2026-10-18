@@ -1,5 +1,6 @@
 import { createFileRoute, Link, useNavigate, useRouter } from "@tanstack/react-router";
 import { DeleteArticleButton } from "@/components/admin/delete-article";
+import { DeleteOldArticles } from "@/components/admin/delete-old-articles";
 import { adminArticles, adminSetAiEditAllowed } from "@/content/admin-api";
 import { publicationStatuses } from "@/content/types";
 import { formatDate } from "@/lib/format";
@@ -183,6 +184,7 @@ function ArticleIndex() {
           </table>
         </div>
       )}
+      <DeleteOldArticles onDeleted={() => router.invalidate()} />
     </>
   );
 }
