@@ -101,7 +101,7 @@ function AutomationDesk() {
         </fieldset>
         <fieldset className="block-card">
           <legend>Topic sources</legend>
-          <label className="field"><span>Topic ideas (one per line, up to 200)</span><textarea value={ideas} onChange={(e) => setIdeas(e.target.value)} /></label>
+          <label className="field"><span>Topic ideas (one per line)</span><textarea value={ideas} onChange={(e) => setIdeas(e.target.value)} /></label>
           <label className="field"><span>Source sites to research (https URLs, one per line)</span><textarea value={sources} onChange={(e) => setSources(e.target.value)} /></label>
         </fieldset>
         <fieldset className="block-card">

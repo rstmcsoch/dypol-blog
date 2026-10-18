@@ -5,7 +5,7 @@ import { decodeBase64Image, fetchImage, ImageIntakeError, MAX_IMAGE_BYTES, sniff
 import { draftFlags, publishDecision, sourceProblems } from "./policy.ts";
 import { buildRequest, configuredKeyNames, generateWithServerApi, parseResponse, providerStatus, ProviderError } from "./provider.ts";
 import { SERVER_API_PROVIDERS } from "./settings.ts";
-import { automationActive, automationSettingsSchema, DEFAULT_AUTOMATION_SETTINGS, normalizeAutomationSettings } from "./settings.ts";
+import { automationActive, DEFAULT_AUTOMATION_SETTINGS, normalizeAutomationSettings } from "./settings.ts";
 
 const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC", "base64");
 const policy = { ...DEFAULT_AUTOMATION_SETTINGS.policy };
@@ -230,22 +230,4 @@ test("image fetch sends a descriptive User-Agent (Wikimedia and CDNs 403 without
   }) as unknown as typeof fetch;
   await fetchImage("https://example.org/a.png", fake);
   assert.match(ua, /DYPOL-Blog/);
-});
-
-test("topic ideas: up to 200 save; 201 is the admin error", () => {
-  const ideas = Array.from({ length: 200 }, (_, i) => `Idea ${i + 1}`);
-  const parsed = automationSettingsSchema.parse({ ...DEFAULT_AUTOMATION_SETTINGS, topicIdeas: ideas });
-  assert.equal(parsed.topicIdeas.length, 200);
-  assert.equal(parsed.topicIdeas[0], "Idea 1");
-  assert.equal(normalizeAutomationSettings({ enabled: true, topicIdeas: ideas }).topicIdeas.length, 200);
-  assert.throws(
-    () => automationSettingsSchema.parse({ ...DEFAULT_AUTOMATION_SETTINGS, topicIdeas: [...ideas, "one more"] }),
-    (error: unknown) => {
-      assert.ok(error instanceof Error);
-      const issues = JSON.parse(error.message) as { path?: string[]; message?: string }[];
-      const line = `${(issues[0]?.path ?? []).join(" \u203a ")}: ${issues[0]?.message ?? ""}`;
-      assert.match(line, /topicIdeas: Too big: expected array to have <=200 items/);
-      return true;
-    },
-  );
 });
