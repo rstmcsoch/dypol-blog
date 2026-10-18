@@ -4,6 +4,7 @@ import { errorText } from "@/components/admin/gate";
 import { adminAutomation, adminProfileAction, adminSaveAutomation } from "@/content/admin-api";
 import { SERVER_API_PROVIDERS, type AutomationSettings } from "@/lib/automation/settings";
 import { PROVIDER_KEY_SECRETS, PROVIDER_LABELS } from "@/lib/automation/provider";
+import { nextExpectedRun } from "@/lib/automation/schedule";
 
 export const Route = createFileRoute("/admin/automation")({
   validateSearch: (search: Record<string, unknown>): { profile?: string } =>
@@ -44,7 +45,7 @@ function Profiles() {
     <section className="block-card" aria-labelledby="profiles-h" style={{ marginBottom: "1.5rem" }}>
       <h2 id="profiles-h" className="desk-kicker">Automation profiles</h2>
       <p className="desk-note">
-        Each profile is one automation (for example &ldquo;Grok daily tech&rdquo; or &ldquo;Claude weekly design&rdquo;) with its own
+        Several profiles can be on at the same time, each run by its own AI app on that app&apos;s schedule. Each profile is one automation (for example &ldquo;Grok daily tech&rdquo; or &ldquo;Claude weekly design&rdquo;) with its own
         on/off switch, topics, publishing rules and daily limit. Give each AI app its own profile token; the master MCP_TOKEN
         secret keeps working and acts as the Default profile.
       </p>
@@ -150,6 +151,7 @@ function AutomationDesk() {
   const policy = s.policy;
   const setPolicy = (next: Partial<AutomationSettings["policy"]>) => setS((c) => ({ ...c, policy: { ...c.policy, ...next } }));
   const isDefault = data.profileId === "default";
+  const nextRun = nextExpectedRun(s.schedule);
   const profileName = data.profiles.find((p) => p.id === data.profileId)?.name ?? "";
 
   return (
@@ -239,6 +241,34 @@ function AutomationDesk() {
           </p>
           <label className="field"><span>Extra client hosts</span><textarea value={hosts} onChange={(e) => setHosts(e.target.value)} /></label>
         </fieldset> : null}
+        <fieldset className="block-card">
+          <legend>When this automation runs (set in your AI app)</legend>
+          <p className="desk-note">
+            This website does <strong>not</strong> run automations by itself and has no scheduler. Each profile is run by its own AI app
+            (Grok Automation, a Claude scheduled task, or a cron job with a CLI) using that profile&apos;s own token. Put the times below
+            into that AI app so they match. Several profiles can be switched on at the same time — each keeps its own settings, daily
+            limit and run log.
+          </p>
+          <div className="filters">
+            <label className="field"><span>Timezone (e.g. Asia/Kolkata)</span><input value={s.schedule.timezone} onChange={(e) => setS({ ...s, schedule: { ...s.schedule, timezone: e.target.value } })} /></label>
+            <label className="field"><span>Run times in your AI app (HH:MM, comma separated)</span><input value={s.schedule.times.join(", ")} placeholder="08:00" onChange={(e) => setS({ ...s, schedule: { ...s.schedule, times: e.target.value.split(",").map((x) => x.trim()).filter(Boolean) as AutomationSettings["schedule"]["times"] } })} /></label>
+          </div>
+          <div className="field">
+            <span>Days (none ticked = every day)</span>
+            {(["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const).map((d) => (
+              <label key={d} style={checkRow}>
+                <input style={{ width: "auto" }} type="checkbox" checked={s.schedule.days.includes(d)} onChange={(e) => setS({ ...s, schedule: { ...s.schedule, days: e.target.checked ? [...s.schedule.days, d] : s.schedule.days.filter((x) => x !== d) } })} /> {d}
+              </label>
+            ))}
+          </div>
+          <p className="desk-note" data-testid="next-expected-run">
+            {nextRun ? `Next expected run (from the times above, in ${s.schedule.timezone}): ${nextRun.toLocaleString("en-IN", { timeZone: s.schedule.timezone })} — this is when your AI app should connect; the website does not start it.` : "Add a run time above to see the next expected run. The website does not start runs itself."}
+          </p>
+          <p className="desk-note">
+            Could the website run profiles itself? Only in server-api mode with an AI key secret and a Cloudflare Cron Trigger. That is
+            not switched on: it would need cost limits and a separate review, so for now scheduling stays in your AI app.
+          </p>
+        </fieldset>
         <fieldset className="block-card">
           <legend>Publishing policy</legend>
           <p className="desk-note">Off by default: every AI article stays a draft. Turn on only with explicit rules.</p>

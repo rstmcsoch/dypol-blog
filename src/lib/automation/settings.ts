@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { unsafeUrlReason } from "./image-fetch.ts";
+import { DEFAULT_SCHEDULE, SCHEDULE_DAYS } from "./schedule.ts";
 
 /**
  * Owner-controlled automation settings (site_settings row id 'automation').
@@ -48,7 +49,18 @@ export const publishingPolicySchema = z.object({
   maxPublishedPerDay: z.number().int().min(0).max(20),
 });
 
+export const scheduleSchema = z.object({
+  /** IANA timezone name, e.g. Asia/Kolkata. Display/guidance only — see schedule.ts. */
+  timezone: z.string().trim().min(1).max(60).refine((tz) => { try { new Intl.DateTimeFormat("en-US", { timeZone: tz }); return true; } catch { return false; } }, "Use an IANA timezone such as Asia/Kolkata"),
+  /** Local times the owner set in their AI app, "HH:MM" 24-hour. */
+  times: z.array(z.string().regex(/^([01][0-9]|2[0-3]):[0-5][0-9]$/, "Use HH:MM")).max(4),
+  /** Days the AI app runs; empty = every day. */
+  days: z.array(z.enum(SCHEDULE_DAYS)).max(7),
+});
+export type AutomationScheduleInput = z.infer<typeof scheduleSchema>;
+
 export const automationSettingsSchema = z.object({
+  schedule: scheduleSchema,
   enabled: z.boolean(),
   paused: z.boolean(),
   mode: z.enum(AUTOMATION_MODES),
@@ -84,6 +96,7 @@ export const DEFAULT_AUTOMATION_SETTINGS: AutomationSettings = {
     maxPublishedPerDay: 1,
   },
   imageTransfer: "untested",
+  schedule: DEFAULT_SCHEDULE,
 };
 
 /** Merges stored data over defaults; anything invalid falls back to the default. */
@@ -100,6 +113,7 @@ export function normalizeAutomationSettings(input: unknown): AutomationSettings 
     ...raw,
     serverApi: { ...DEFAULT_AUTOMATION_SETTINGS.serverApi, ...((raw.serverApi as object | undefined) ?? {}) },
     policy: { ...DEFAULT_AUTOMATION_SETTINGS.policy, ...((raw.policy as object | undefined) ?? {}) },
+    schedule: { ...DEFAULT_SCHEDULE, ...((raw.schedule as object | undefined) ?? {}) },
   };
   if (!serverApiSchema.safeParse(merged.serverApi).success) merged.serverApi = DEFAULT_AUTOMATION_SETTINGS.serverApi;
   const parsed = automationSettingsSchema.safeParse(merged);
@@ -117,6 +131,14 @@ export function normalizeAutomationSettings(input: unknown): AutomationSettings 
         if (polShape[k].safeParse(v).success) pol[k] = v;
       }
       out.policy = pol;
+    } else if (key === "schedule") {
+      const sch: Record<string, unknown> = { ...DEFAULT_SCHEDULE };
+      const schShape = scheduleSchema.shape as Record<string, z.ZodType>;
+      for (const k of Object.keys(schShape)) {
+        const v = (value as Record<string, unknown>)?.[k];
+        if (schShape[k].safeParse(v).success) sch[k] = v;
+      }
+      out.schedule = sch;
     } else if (shape[key].safeParse(value).success) {
       out[key] = value;
     } else if (Array.isArray(value) && shape[key] instanceof z.ZodArray) {
