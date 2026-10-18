@@ -180,20 +180,92 @@ export async function setSubmissionFlags(articleId: string, flags: string[]): Pr
   await sql`update automation_submissions set flags = ${JSON.stringify(flags)} where article_id = ${articleId}`;
 }
 
-/** Automatic publishes since 00:00 UTC, for one profile (each profile has its own daily limit). */
-export async function automatedPublishesToday(profileId = "default"): Promise<number> {
+/** One AI publish (or in-flight claim) from the run log. */
+export type AiPublishUsageRow = { createdAt: string; runKey: string | null; profileId: string };
+
+function usageFromRows(rows: { created_at: string; details?: string | null; profile_id?: string | null }[]): AiPublishUsageRow[] {
+  return rows.map((r) => {
+    let runKey: string | null = null;
+    try {
+      const d = JSON.parse(r.details ?? "{}") as { runKey?: unknown };
+      if (typeof d.runKey === "string") runKey = d.runKey;
+    } catch { /* details are best-effort */ }
+    return { createdAt: r.created_at, runKey, profileId: r.profile_id ?? "default" };
+  });
+}
+
+/**
+ * Today's (UTC) AI publishes across ALL profiles or one profile,
+ * counting automatic + explicit + in-flight claims (t64). Admin
+ * manual publishing never appears here, so it is never capped.
+ */
+export async function aiPublishUsageToday(profileId?: string): Promise<AiPublishUsageRow[]> {
   const sql = await getSql();
   const since = new Date();
   since.setUTCHours(0, 0, 0, 0);
   try {
-    const rows = await sql<{ n: number }>`select count(*) as n from automation_runs
-      where tool = 'publish_article_if_allowed' and outcome = 'published' and created_at >= ${since.toISOString()}
-        and coalesce(profile_id, 'default') = ${profileId}`;
-    return Number(rows[0]?.n ?? 0);
+    const rows = profileId
+      ? await sql<{ created_at: string; details?: string | null; profile_id?: string | null }>`
+          select created_at, details, profile_id from automation_runs
+          where tool = 'publish_article_if_allowed' and outcome in ('published', 'published_explicit', 'publish_claim') and created_at >= ${since.toISOString()}
+            and coalesce(profile_id, 'default') = ${profileId} order by created_at asc`
+      : await sql<{ created_at: string; details?: string | null; profile_id?: string | null }>`
+          select created_at, details, profile_id from automation_runs
+          where tool = 'publish_article_if_allowed' and outcome in ('published', 'published_explicit', 'publish_claim') and created_at >= ${since.toISOString()}
+          order by created_at asc`;
+    return usageFromRows(rows as never);
   } catch {
-    const rows = await sql<{ n: number }>`select count(*) as n from automation_runs
-      where tool = 'publish_article_if_allowed' and outcome = 'published' and created_at >= ${since.toISOString()}`;
-    return Number(rows[0]?.n ?? 0);
+    return [];
+  }
+}
+
+/** Website-wide daily AI publish cap from site settings (0 = no limit). */
+export async function readWebsiteAiDailyLimit(): Promise<number> {
+  try {
+    const sql = await getSql();
+    const rows = await sql<{ data: string }>`select data from site_settings where id = 'site'`;
+    const raw = typeof rows[0]?.data === "string" ? JSON.parse(rows[0].data) : rows[0]?.data;
+    const value = (raw as { aiDailyPublishLimit?: unknown } | undefined)?.aiDailyPublishLimit;
+    return typeof value === "number" && Number.isFinite(value) ? Math.max(0, Math.min(100, Math.floor(value))) : 0;
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * Claim-first publish guard (t64): the claim row is written BEFORE the
+ * article status flips and counts toward both caps, so concurrent
+ * automations see each other's in-flight publishes. Settle it to the
+ * final outcome after the flip; delete it when the publish is aborted.
+ */
+export async function claimAiPublish(input: { profileId: string; runKey: string; mode: "automatic" | "explicit"; articleId: string; auth: string }): Promise<string | null> {
+  return recordRun({
+    profileId: input.profileId,
+    tool: "publish_article_if_allowed",
+    outcome: "publish_claim",
+    articleId: input.articleId,
+    auth: input.auth,
+    details: { runKey: input.runKey, mode: input.mode, claimed: true },
+  });
+}
+
+export async function settleAiPublishClaim(claimId: string | null, outcome: "published" | "published_explicit", details: Record<string, unknown>): Promise<void> {
+  if (!claimId) return;
+  try {
+    const sql = await getSql();
+    await sql`update automation_runs set outcome = ${outcome}, details = ${JSON.stringify(details).slice(0, 4000)} where id = ${claimId}`;
+  } catch {
+    // Best-effort audit; the article state is already correct.
+  }
+}
+
+export async function releaseAiPublishClaim(claimId: string | null): Promise<void> {
+  if (!claimId) return;
+  try {
+    const sql = await getSql();
+    await sql`delete from automation_runs where id = ${claimId} and outcome = 'publish_claim'`;
+  } catch {
+    // Best-effort audit cleanup.
   }
 }
 

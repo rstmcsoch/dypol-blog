@@ -90,8 +90,16 @@ step says so.
    (for example 403 or too small), try one other image; if that fails too, continue:
    the draft keeps the `needs_featured_image` flag and the owner adds a cover image in
    the admin panel.
-9. Publishing: during this automated flow, publication is governed by the owner's
-   publishing policy (allowed topics, flags, daily cap, featured-image rule). The
+9. Publishing: at the very start of this execution, pick ONE run id for this
+   run, e.g. `morning-2026-10-18`, and pass it as `run_id` on EVERY
+   `submit_article_draft`, `upload_featured_image` and
+   `publish_article_if_allowed` call in this run. The owner sets hard publish
+   limits: a per-run cap (Automation tab) and a whole-website daily cap
+   (Settings) count every publish, automatic or explicit; when one is
+   reached, further publishes in that run/day are refused or stay drafts —
+   report the limit reason exactly. During this automated flow, publication
+   is also governed by the owner's publishing policy (allowed topics, flags,
+   featured-image rule). The
    submit and cover steps already try to publish automatically when the policy
    passes; `publish_article_if_allowed` is an **explicit** publish — it always
    publishes a draft (see “Revising an existing draft” below), so in this
@@ -115,9 +123,10 @@ You can fully edit **draft / unpublished** articles over MCP — never published
    `seo_description`, `source_urls`). The reply returns refreshed `flags` and
    `publish_reasons`. Editing NEVER publishes and never changes the status.
    **Explicit publish:** when the owner tells you to publish a draft, call
-   `publish_article_if_allowed` — a deliberate publish always works on drafts you
-   may edit (your own; master token: any draft). The publishing policy (daily cap,
-   allowed topics — an empty allowed list means every topic is allowed, and a
+   `publish_article_if_allowed` — a deliberate publish works on drafts you
+   may edit (your own; master token: any draft), subject to the owner's hard
+   limits (per-run cap and whole-website daily cap, which count explicit
+   publishes too). The publishing policy (allowed topics — an empty allowed list means every topic is allowed, and a
    multi-topic article passes if any one of its topics is allowed — flags
    including self-reported uncertainty, auto-publish on/off)
    does **not** block an explicit publish; anything that would have failed is
