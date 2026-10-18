@@ -71,6 +71,15 @@ An AI app (Claude, ChatGPT, Grok, Cursor, Claude Code, …) can research and wri
 - You connect an AI app once (see `docs/automation/README.md` for each app). Apps that support it open an approval page where you paste your **MCP token**; command-line apps send the token in a header.
 - The **schedule** (for example “every morning at 8”) is set in the AI app, not here. The instructions to give the AI are in `docs/automation/automation-prompt.md`.
 
+### How topics are chosen (per profile)
+
+- In **AI automation**, under “How topics are chosen”, each profile picks one way:
+  - **Trend first**: the AI first looks at what is hot now on the sources you tick (Google News, Web, X, other social), then writes about the best-fitting trend. If nothing fits, it does what your fallback says.
+  - **Random**: the site suggests one random idea from your list each time the AI connects.
+  - **In order (loop)**: the AI works through your list in order. “Step” means take every Nth idea (step 3 = every 3rd), looping back to the start. The admin shows the next topic; the position only moves when a draft is actually submitted.
+  - **Let AI choose**: the AI picks freely from your list and its own research (the old behaviour).
+- You can save up to **500 topic ideas** per profile (one per line).
+
 ### Multiple automations (profiles)
 
 - You can run several automations on the same website at the same time. Each one is a named **profile** (for example “Daily tech” and “Weekly design”).

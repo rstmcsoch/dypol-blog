@@ -248,7 +248,8 @@ export const adminAutomation = createServerFn({ method: "GET" })
   .validator((input: unknown) => ({ profileId: profileIdOf(input) }))
   .handler(async ({ data }) => {
     await guard();
-    const { readProfileSettings, recentRuns, listProfiles } = await import("./automation.server");
+    const { readProfileSettings, recentRuns, listProfiles, readTopicCursor } = await import("./automation.server");
+    const { computeTopicSelection } = await import("@/lib/automation/topic-selection");
     const { adminList } = await import("./repository.server");
     const { providerStatus } = await import("@/lib/automation/provider");
     const { mcpConfigured } = await import("@/lib/mcp/auth");
@@ -262,6 +263,8 @@ export const adminAutomation = createServerFn({ method: "GET" })
       profileId,
       profiles,
       settings,
+      selection: computeTopicSelection(settings.topicSelection, settings.topicIdeas, await readTopicCursor(profileId)),
+      topicCursor: await readTopicCursor(profileId),
       runs: await recentRuns(25),
       categories: list.categories.map((c) => ({ id: c.id, label: c.label })),
       provider: providerStatus(settings, env),

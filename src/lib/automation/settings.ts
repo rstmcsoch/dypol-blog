@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { unsafeUrlReason } from "./image-fetch.ts";
 import { DEFAULT_SCHEDULE, SCHEDULE_DAYS } from "./schedule.ts";
+import { DEFAULT_TOPIC_SELECTION, TOPIC_FALLBACKS, TOPIC_SELECTION_MODES, TREND_SOURCES } from "./topic-selection.ts";
 
 /**
  * Owner-controlled automation settings (site_settings row id 'automation').
@@ -59,7 +60,19 @@ export const scheduleSchema = z.object({
 });
 export type AutomationScheduleInput = z.infer<typeof scheduleSchema>;
 
+/** Max topic ideas per profile. 500 ideas x ~300 chars is ~150 KB of JSON — fine for one D1 row. */
+export const MAX_TOPIC_IDEAS = 500;
+
+export const topicSelectionSchema = z.object({
+  mode: z.enum(TOPIC_SELECTION_MODES),
+  step: z.number().int().min(1).max(20),
+  trendSources: z.array(z.enum(TREND_SOURCES)).max(4),
+  fallback: z.enum(TOPIC_FALLBACKS),
+});
+export type TopicSelectionInput = z.infer<typeof topicSelectionSchema>;
+
 export const automationSettingsSchema = z.object({
+  topicSelection: topicSelectionSchema,
   schedule: scheduleSchema,
   enabled: z.boolean(),
   paused: z.boolean(),
@@ -69,7 +82,7 @@ export const automationSettingsSchema = z.object({
   extraClientHosts: z
     .array(z.string().trim().toLowerCase().regex(/^(\*\.)?[a-z0-9-]+(\.[a-z0-9-]+)+$/, "Use a host name such as connectors.example.com"))
     .max(20),
-  topicIdeas: z.array(z.string().trim().min(1).max(300)).max(50),
+  topicIdeas: z.array(z.string().trim().min(1).max(300)).max(MAX_TOPIC_IDEAS),
   topicSources: z.array(z.string().trim().url().max(500)).max(30),
   policy: publishingPolicySchema,
   imageTransfer: z.enum(IMAGE_TRANSFER_STATES),
@@ -97,6 +110,7 @@ export const DEFAULT_AUTOMATION_SETTINGS: AutomationSettings = {
   },
   imageTransfer: "untested",
   schedule: DEFAULT_SCHEDULE,
+  topicSelection: DEFAULT_TOPIC_SELECTION,
 };
 
 /** Merges stored data over defaults; anything invalid falls back to the default. */
@@ -114,6 +128,7 @@ export function normalizeAutomationSettings(input: unknown): AutomationSettings 
     serverApi: { ...DEFAULT_AUTOMATION_SETTINGS.serverApi, ...((raw.serverApi as object | undefined) ?? {}) },
     policy: { ...DEFAULT_AUTOMATION_SETTINGS.policy, ...((raw.policy as object | undefined) ?? {}) },
     schedule: { ...DEFAULT_SCHEDULE, ...((raw.schedule as object | undefined) ?? {}) },
+    topicSelection: { ...DEFAULT_TOPIC_SELECTION, ...((raw.topicSelection as object | undefined) ?? {}) },
   };
   if (!serverApiSchema.safeParse(merged.serverApi).success) merged.serverApi = DEFAULT_AUTOMATION_SETTINGS.serverApi;
   const parsed = automationSettingsSchema.safeParse(merged);
@@ -131,6 +146,14 @@ export function normalizeAutomationSettings(input: unknown): AutomationSettings 
         if (polShape[k].safeParse(v).success) pol[k] = v;
       }
       out.policy = pol;
+    } else if (key === "topicSelection") {
+      const sel: Record<string, unknown> = { ...DEFAULT_TOPIC_SELECTION };
+      const selShape = topicSelectionSchema.shape as Record<string, z.ZodType>;
+      for (const k of Object.keys(selShape)) {
+        const v = (value as Record<string, unknown>)?.[k];
+        if (selShape[k].safeParse(v).success) sel[k] = v;
+      }
+      out.topicSelection = sel;
     } else if (key === "schedule") {
       const sch: Record<string, unknown> = { ...DEFAULT_SCHEDULE };
       const schShape = scheduleSchema.shape as Record<string, z.ZodType>;

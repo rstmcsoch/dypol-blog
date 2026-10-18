@@ -124,11 +124,20 @@ function mapArticle(row: ArticleRow, tagIds: string[]): Article {
 async function tagMap(sql: Sql, ids: string[]): Promise<Map<string, string[]>> {
   const map = new Map<string, string[]>();
   if (ids.length === 0) return map;
-  const placeholders = ids.map((_, index) => `$${index + 1}`).join(", ");
-  const links = await sql.query<{ article_id: string; tag_id: string }>(
-    `select article_id, tag_id from article_tags where article_id in (${placeholders})`,
-    ids,
-  );
+  // D1/SQLite accepts at most 100 bound variables per statement, so a
+  // growing archive must be read in chunks (this broke get_blog_settings
+  // and article lists once the article count passed 100).
+  const links: { article_id: string; tag_id: string }[] = [];
+  for (let start = 0; start < ids.length; start += 50) {
+    const chunk = ids.slice(start, start + 50);
+    const placeholders = chunk.map((_, index) => `$${index + 1}`).join(", ");
+    links.push(
+      ...(await sql.query<{ article_id: string; tag_id: string }>(
+        `select article_id, tag_id from article_tags where article_id in (${placeholders})`,
+        chunk,
+      )),
+    );
+  }
   for (const link of links) {
     const list = map.get(link.article_id) ?? [];
     list.push(link.tag_id);

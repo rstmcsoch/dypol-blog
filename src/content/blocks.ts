@@ -149,9 +149,12 @@ export function resolveBlocks(blocks: ContentBlock[], ctx: BlockContext, where: 
       case "ticker":
         out.push({ ...base, ticker: tickerEntries({ ...site, trending: { ...site.trending, enabled: true, count: block.count } }, live, views) });
         break;
-      case "tags":
-        out.push({ ...base, tags: (ctx.current?.tagIds ?? []).map((id) => tags.find((t) => t.id === id)).filter((t): t is Tag => Boolean(t)) });
+      case "tags": {
+        // On an article: that article's tags. On the homepage: every tag.
+        const list = ctx.current ? ctx.current.tagIds.map((id) => tags.find((t) => t.id === id)).filter((t): t is Tag => Boolean(t)) : tags.slice(0, block.count);
+        out.push({ ...base, tags: list });
         break;
+      }
       default:
         out.push(base); // text, cta, share render from the block itself
     }

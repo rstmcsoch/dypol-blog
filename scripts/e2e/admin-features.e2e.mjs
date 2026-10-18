@@ -189,6 +189,27 @@ await check("homepage builder: add topic/text/CTA blocks, hide, reorder, layout,
   await page.click('[aria-label="Move Topics grid down"]');
   await saveForm();
 });
+await check("automation: 200 topic ideas save (limit is 500, not 50)", async () => {
+  await page.goto(BASE + "/admin/automation");
+  await page.waitForLoadState("networkidle");
+  const ideas = Array.from({ length: 200 }, (_, i) => `E2E topic idea ${i + 1}`).join("\n");
+  await page.fill('label:has-text("Topic ideas") textarea', ideas);
+  await page.click('button[type="submit"]:has-text("Save automation")');
+  await page.waitForSelector('[role="status"]:has-text("saved"), [role="alert"]');
+  await page.reload();
+  await page.waitForLoadState("networkidle");
+  assert.match(await page.textContent('[data-testid="topic-idea-count"]'), /200 \/ 500/);
+});
+await check("topic selection: sequence mode shows step and next topic", async () => {
+  await page.goto(BASE + "/admin/automation");
+  await page.waitForLoadState("networkidle");
+  await page.selectOption('[data-testid="topic-mode"]', "sequence");
+  assert.ok(await page.$('[data-testid="topic-step"]'));
+  assert.match(await page.textContent('[data-testid="next-topic"]'), /Next topic in order/);
+  await page.selectOption('[data-testid="topic-mode"]', "ai-choice");
+  await page.click('button[type="submit"]:has-text("Save automation")');
+  await page.waitForSelector('[role="status"]:has-text("saved"), [role="alert"]');
+});
 await check("admin dark mode: toggle persists and does not touch the public site", async () => {
   await page.goto(BASE + "/admin");
   await page.waitForLoadState("networkidle");
