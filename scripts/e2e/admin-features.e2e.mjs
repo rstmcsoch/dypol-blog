@@ -205,6 +205,7 @@ await check("admin dark mode: toggle persists and does not touch the public site
   await page.locator('[data-testid="admin-theme-toggle"]').click();
   assert.equal(await page.$eval(".desk", (e) => getComputedStyle(e).backgroundColor), "rgb(246, 247, 249)");
   // Sidebar: every nav option is its own boxed item, current page highlighted.
+  await page.waitForTimeout(400); // let the 120ms hover/theme transition settle
   const activeBox = await page.$eval(".adm-nav__item.is-active", (e) => { const s = getComputedStyle(e); return { r: s.borderRadius, bg: s.backgroundColor }; });
   assert.notEqual(activeBox.r, "0px");
   assert.equal(activeBox.bg, "rgb(47, 91, 234)");
