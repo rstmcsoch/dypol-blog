@@ -21,6 +21,7 @@ import {
   type ArticleWrite,
 } from "./validate";
 import { getSql, withTransaction, type Sql } from "@/lib/db";
+import { REVISION_KEEP, buildRestoreInput, mergeActivityFeed, sanitizeNotFoundPath, type RevisionSnapshot } from "../lib/admin-followup.ts";
 import { assertAiCanAccess, assertAiPatchAllowed, type AiActor, type AiEditAction } from "@/lib/automation/ai-edit";
 import { cutoffFor, filterOldArticles, type OldArticleQuery } from "@/lib/old-articles";
 
@@ -769,6 +770,122 @@ async function uniqueSlug(sql: Sql, base: string, ignoreId: string | null): Prom
   }
 }
 
+
+/* t69 follow-up: revisions-lite, admin action log, aggregated 404 log.
+   Tables come from migration 0011; ensureFollowupTables also creates them
+   if missing so the app never breaks before the migration is applied. */
+let followupReady = false;
+export async function ensureFollowupTables(): Promise<void> {
+  if (followupReady) return;
+  const sql = await getSql();
+  await sql`create table if not exists article_revisions (id text primary key, article_id text not null, saved_at text not null, title text not null default '', status text not null default '', snapshot text not null)`;
+  await sql`create table if not exists admin_actions (id text primary key, created_at text not null, kind text not null, summary text not null)`;
+  await sql`create table if not exists not_found_log (path text primary key, referrer text not null default '', hits integer not null default 1, first_seen text not null, last_seen text not null)`;
+  followupReady = true;
+}
+
+type RevisionRow = { id: string; saved_at: string; title: string; status: string };
+
+export async function listRevisions(articleId: string): Promise<Array<{ id: string; savedAt: string; title: string; status: string }>> {
+  await ensureFollowupTables().catch(() => undefined);
+  const sql = await getSql();
+  const rows = await sql<RevisionRow>`select id, saved_at, title, status from article_revisions where article_id = ${articleId} order by saved_at desc limit ${REVISION_KEEP}`.catch(() => [] as RevisionRow[]);
+  return rows.map((r) => ({ id: r.id, savedAt: r.saved_at, title: r.title, status: r.status }));
+}
+
+async function archiveRevision(sql: Sql, articleId: string): Promise<void> {
+  const rows = await sql<Record<string, unknown>>`select slug, title, excerpt, status, category_id, motif, featured, seo_title, seo_description, cover_media_id, blocks, scheduled_at from articles where id = ${articleId}`;
+  const row = rows[0];
+  if (!row) return;
+  const tagRows = await sql<{ tag_id: string }>`select tag_id from article_tags where article_id = ${articleId}`.catch(() => [] as Array<{ tag_id: string }>);
+  let topicIds: string[] = [String(row.category_id ?? "")];
+  try {
+    const topicRows = await sql<{ category_id: string }>`select category_id from article_topics where article_id = ${articleId}`;
+    if (topicRows.length) topicIds = topicRows.map((t) => t.category_id);
+  } catch { /* pre-0007 db: single topic */ }
+  let blocks: unknown[] = [];
+  try { blocks = JSON.parse(String(row.blocks ?? "[]")) as unknown[]; } catch { blocks = []; }
+  const snapshot: RevisionSnapshot = {
+    v: 1,
+    title: String(row.title ?? ""),
+    excerpt: String(row.excerpt ?? ""),
+    categoryId: String(row.category_id ?? ""),
+    topicIds,
+    tagIds: tagRows.map((t) => t.tag_id),
+    motif: String(row.motif ?? "signal-grid"),
+    featured: Boolean(row.featured),
+    seoTitle: String(row.seo_title ?? ""),
+    seoDescription: String(row.seo_description ?? ""),
+    coverMediaId: String(row.cover_media_id ?? ""),
+    blocks,
+    scheduledAt: row.scheduled_at ? String(row.scheduled_at) : null,
+  };
+  const now = new Date().toISOString();
+  await sql`insert into article_revisions (id, article_id, saved_at, title, status, snapshot) values (${randomUUID()}, ${articleId}, ${now}, ${snapshot.title}, ${String(row.status ?? "")}, ${JSON.stringify(snapshot)})`;
+  await sql`delete from article_revisions where article_id = ${articleId} and id not in (select id from article_revisions where article_id = ${articleId} order by saved_at desc limit ${REVISION_KEEP})`;
+}
+
+/** Restore a revision's content into the article. Current content is archived
+ *  first (via saveArticle), so a restore is itself undoable. Publish status
+ *  and slug never change on restore. */
+export async function restoreRevision(revisionId: string): Promise<{ id: string; slug: string }> {
+  await ensureFollowupTables();
+  const sql = await getSql();
+  const rows = await sql<{ article_id: string; snapshot: string }>`select article_id, snapshot from article_revisions where id = ${revisionId}`;
+  const rev = rows[0];
+  if (!rev) throw new ContentError("That revision no longer exists.", 404);
+  const current = await sql<{ slug: string }>`select slug from articles where id = ${rev.article_id}`;
+  if (!current[0]) throw new ContentError("That article no longer exists.", 404);
+  const snapshot = JSON.parse(rev.snapshot) as RevisionSnapshot;
+  const saved = await saveArticle(buildRestoreInput(rev.article_id, current[0].slug, snapshot));
+  return { id: saved.id, slug: saved.slug };
+}
+
+export async function logAdminAction(kind: string, summary: string): Promise<void> {
+  try {
+    await ensureFollowupTables();
+    const sql = await getSql();
+    await sql`insert into admin_actions (id, created_at, kind, summary) values (${randomUUID()}, ${new Date().toISOString()}, ${kind.slice(0, 40)}, ${summary.slice(0, 200)})`;
+    await sql`delete from admin_actions where id not in (select id from admin_actions order by created_at desc limit 200)`;
+  } catch { /* logging must never break the action it describes */ }
+}
+
+export async function activityFeed(): Promise<Array<{ at: string; source: "You" | "Automation"; text: string }>> {
+  await ensureFollowupTables().catch(() => undefined);
+  const sql = await getSql();
+  const admin = await sql<{ created_at: string; summary: string }>`select created_at, summary from admin_actions order by created_at desc limit 40`.catch(() => [] as Array<{ created_at: string; summary: string }>);
+  let automation: Array<{ at: string; text: string }> = [];
+  try {
+    const { recentRuns } = await import("./automation.server");
+    const runs = await recentRuns(25);
+    automation = runs.map((r) => ({
+      at: r.createdAt,
+      text: `${r.profileId} · ${r.tool} — ${r.outcome}${r.reason ? `: ${r.reason}` : ""}`,
+    }));
+  } catch { /* automation table unavailable */ }
+  return mergeActivityFeed(admin.map((a) => ({ at: a.created_at, text: a.summary })), automation, 50);
+}
+
+export async function recordNotFound(rawPath: unknown, referrer = ""): Promise<void> {
+  const path = sanitizeNotFoundPath(rawPath);
+  if (!path) return;
+  try {
+    await ensureFollowupTables();
+    const sql = await getSql();
+    const now = new Date().toISOString();
+    const ref = referrer.slice(0, 300);
+    await sql`insert into not_found_log (path, referrer, hits, first_seen, last_seen) values (${path}, ${ref}, 1, ${now}, ${now}) on conflict(path) do update set hits = hits + 1, last_seen = ${now}, referrer = case when ${ref} <> '' then ${ref} else referrer end`;
+    await sql`delete from not_found_log where path not in (select path from not_found_log order by last_seen desc limit 5000)`;
+  } catch { /* 404 logging is best-effort */ }
+}
+
+export async function listNotFounds(limit = 12): Promise<Array<{ path: string; hits: number; lastSeen: string; referrer: string }>> {
+  await ensureFollowupTables().catch(() => undefined);
+  const sql = await getSql();
+  const rows = await sql<{ path: string; hits: number; last_seen: string; referrer: string }>`select path, hits, last_seen, referrer from not_found_log order by hits desc limit ${limit}`.catch(() => [] as Array<{ path: string; hits: number; last_seen: string; referrer: string }>);
+  return rows.map((r) => ({ path: r.path, hits: Number(r.hits), lastSeen: r.last_seen, referrer: r.referrer }));
+}
+
 export async function saveArticle(raw: unknown): Promise<{ id: string; slug: string; status: PublicationStatus }> {
   const input: ArticleWrite = articleWriteSchema.parse(raw);
   if (input.intent === "publish") {
@@ -776,6 +893,7 @@ export async function saveArticle(raw: unknown): Promise<{ id: string; slug: str
     if (problem) throw new ContentError(problem);
   }
   await ensureContent();
+  await ensureFollowupTables().catch(() => undefined);
   if (input.coverMediaId) {
     const library = await openMediaStore();
     if (!(await library.exists(input.coverMediaId))) throw new ContentError("That cover image is not in the library.");
@@ -823,6 +941,7 @@ export async function saveArticle(raw: unknown): Promise<{ id: string; slug: str
     const now = new Date().toISOString();
 
     if (previous) {
+      await archiveRevision(sql, id).catch(() => undefined);
       await sql`update articles set
         slug = ${slug},
         title = ${input.title},
@@ -1160,9 +1279,16 @@ export type MediaItem = {
   hasVariants: boolean;
 };
 
-export async function listMedia(): Promise<MediaItem[]> {
+export async function listMedia(): Promise<Array<MediaItem & { usedAsCover: boolean }>> {
   const library = await openMediaStore();
-  return library.list();
+  const items = await library.list();
+  let covers = new Set<string>();
+  try {
+    const sql = await getSql();
+    const rows = await sql<{ cover_media_id: string | null }>`select distinct cover_media_id from articles where cover_media_id is not null`;
+    covers = new Set(rows.map((r) => r.cover_media_id).filter((v): v is string => Boolean(v)));
+  } catch { /* articles table unavailable: everything reads unused */ }
+  return items.map((m) => ({ ...m, usedAsCover: covers.has(m.id) }));
 }
 
 export type UploadMediaResult = {

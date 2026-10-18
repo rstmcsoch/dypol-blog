@@ -46,16 +46,19 @@ export const adminSaveArticle = createServerFn({ method: "POST" })
   .validator((input: unknown) => input)
   .handler(async ({ data }) => {
     await writeGuard();
-    const { saveArticle } = await import("./repository.server");
-    return saveArticle(data);
+    const { saveArticle, logAdminAction } = await import("./repository.server");
+    const out = await saveArticle(data);
+    await logAdminAction("article.save", `Saved article ${out.slug} (${out.status})`);
+    return out;
   });
 
 export const adminDeleteDraft = createServerFn({ method: "POST" })
   .validator((input: { id: string }) => input)
   .handler(async ({ data }) => {
     await writeGuard();
-    const { deleteDraft } = await import("./repository.server");
+    const { deleteDraft, logAdminAction } = await import("./repository.server");
     await deleteDraft(data.id);
+    await logAdminAction("article.delete", `Deleted draft ${data.id}`);
     return { ok: true };
   });
 
@@ -222,8 +225,10 @@ export const adminDuplicateArticle = createServerFn({ method: "POST" })
   .validator((input: { id: string }) => input)
   .handler(async ({ data }) => {
     await writeGuard();
-    const { duplicateArticle } = await import("./repository.server");
-    return duplicateArticle(data.id);
+    const { duplicateArticle, logAdminAction } = await import("./repository.server");
+    const out = await duplicateArticle(data.id);
+    await logAdminAction("article.duplicate", `Duplicated article as ${out.slug} (draft)`);
+    return out;
   });
 
 export const adminHealth = createServerFn({ method: "GET" }).handler(async () => {
@@ -256,8 +261,9 @@ export const adminDeleteMedia = createServerFn({ method: "POST" })
   .validator((input: { id: string }) => input)
   .handler(async ({ data }) => {
     await writeGuard();
-    const { deleteMedia } = await import("./repository.server");
+    const { deleteMedia, logAdminAction } = await import("./repository.server");
     await deleteMedia(data.id);
+    await logAdminAction("media.delete", `Deleted media ${data.id}`);
     return { ok: true };
   });
 
@@ -426,3 +432,27 @@ export const adminDeletePageFn = createServerFn({ method: "POST" })
     const { adminDeletePage } = await import("./repository.server");
     return adminDeletePage({ id: data.id, actor: "admin" });
   });
+
+export const adminRevisions = createServerFn({ method: "GET" })
+  .validator((input: { articleId: string }) => input)
+  .handler(async ({ data }) => {
+    await guard();
+    const { listRevisions } = await import("./repository.server");
+    return listRevisions(data.articleId);
+  });
+
+export const adminRestoreRevision = createServerFn({ method: "POST" })
+  .validator((input: { revisionId: string }) => input)
+  .handler(async ({ data }) => {
+    await writeGuard();
+    const { restoreRevision, logAdminAction } = await import("./repository.server");
+    const out = await restoreRevision(data.revisionId);
+    await logAdminAction("article.restore", `Restored an older version of ${out.slug}`);
+    return out;
+  });
+
+export const adminActivity = createServerFn({ method: "GET" }).handler(async () => {
+  await guard();
+  const { activityFeed, listNotFounds } = await import("./repository.server");
+  return { entries: await activityFeed(), notFounds: await listNotFounds(15) };
+});

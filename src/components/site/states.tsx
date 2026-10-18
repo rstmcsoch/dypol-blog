@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Link } from "@tanstack/react-router";
 import { site as fallback } from "@/content/site";
 import { useSite } from "./use-site";
@@ -18,6 +19,17 @@ export function EmptyState() {
 
 export function NotFoundState() {
   const site = useSite();
+  useEffect(() => {
+    // t69: log the missed path for the admin 404 report (aggregated, no IP/UA stored).
+    try {
+      void fetch("/api/not-found", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ path: window.location.pathname, referrer: document.referrer || "" }),
+        keepalive: true,
+      }).catch(() => undefined);
+    } catch { /* never break the 404 page */ }
+  }, []);
   return (
     <div className="page">
       <div className="container">

@@ -24,6 +24,7 @@ import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as DotwellKnownOauthAuthorizationServerRouteImport } from './routes/[.]well-known/oauth-authorization-server'
 import { Route as DotwellKnownOauthProtectedResourceRouteImport } from './routes/[.]well-known/oauth-protected-resource'
 import { Route as AdminIndexRouteImport } from './routes/admin/index'
+import { Route as AdminActivityRouteImport } from './routes/admin/activity'
 import { Route as AdminAppearanceRouteImport } from './routes/admin/appearance'
 import { Route as AdminAutomationRouteImport } from './routes/admin/automation'
 import { Route as AdminHealthRouteImport } from './routes/admin/health'
@@ -35,6 +36,7 @@ import { Route as AdminSettingsRouteImport } from './routes/admin/settings'
 import { Route as AdminSiteTextRouteImport } from './routes/admin/site-text'
 import { Route as AdminTickerRouteImport } from './routes/admin/ticker'
 import { Route as AdminTopicsRouteImport } from './routes/admin/topics'
+import { Route as ApiNotFoundRouteImport } from './routes/api/not-found'
 import { Route as ArticlesIndexRouteImport } from './routes/articles/index'
 import { Route as ArticlesSlugRouteImport } from './routes/articles/$slug'
 import { Route as MediaIdRouteImport } from './routes/media/$id'
@@ -128,6 +130,11 @@ const AdminIndexRoute = AdminIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminActivityRoute = AdminActivityRouteImport.update({
+  id: '/activity',
+  path: '/activity',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminAppearanceRoute = AdminAppearanceRouteImport.update({
   id: '/appearance',
   path: '/appearance',
@@ -182,6 +189,11 @@ const AdminTopicsRoute = AdminTopicsRouteImport.update({
   id: '/topics',
   path: '/topics',
   getParentRoute: () => AdminRoute,
+} as any)
+const ApiNotFoundRoute = ApiNotFoundRouteImport.update({
+  id: '/api/not-found',
+  path: '/api/not-found',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const ArticlesIndexRoute = ArticlesIndexRouteImport.update({
   id: '/articles/',
@@ -275,6 +287,7 @@ export interface FileRoutesByFullPath {
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/.well-known/oauth-authorization-server': typeof DotwellKnownOauthAuthorizationServerRoute
   '/.well-known/oauth-protected-resource': typeof DotwellKnownOauthProtectedResourceRouteWithChildren
+  '/admin/activity': typeof AdminActivityRoute
   '/admin/appearance': typeof AdminAppearanceRoute
   '/admin/automation': typeof AdminAutomationRoute
   '/admin/health': typeof AdminHealthRoute
@@ -286,6 +299,7 @@ export interface FileRoutesByFullPath {
   '/admin/site-text': typeof AdminSiteTextRoute
   '/admin/ticker': typeof AdminTickerRoute
   '/admin/topics': typeof AdminTopicsRoute
+  '/api/not-found': typeof ApiNotFoundRoute
   '/articles/$slug': typeof ArticlesSlugRoute
   '/media/$id': typeof MediaIdRoute
   '/oauth/authorize': typeof OauthAuthorizeRoute
@@ -317,6 +331,7 @@ export interface FileRoutesByTo {
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/.well-known/oauth-authorization-server': typeof DotwellKnownOauthAuthorizationServerRoute
   '/.well-known/oauth-protected-resource': typeof DotwellKnownOauthProtectedResourceRouteWithChildren
+  '/admin/activity': typeof AdminActivityRoute
   '/admin/appearance': typeof AdminAppearanceRoute
   '/admin/automation': typeof AdminAutomationRoute
   '/admin/health': typeof AdminHealthRoute
@@ -328,6 +343,7 @@ export interface FileRoutesByTo {
   '/admin/site-text': typeof AdminSiteTextRoute
   '/admin/ticker': typeof AdminTickerRoute
   '/admin/topics': typeof AdminTopicsRoute
+  '/api/not-found': typeof ApiNotFoundRoute
   '/articles/$slug': typeof ArticlesSlugRoute
   '/media/$id': typeof MediaIdRoute
   '/oauth/authorize': typeof OauthAuthorizeRoute
@@ -361,6 +377,7 @@ export interface FileRoutesById {
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/.well-known/oauth-authorization-server': typeof DotwellKnownOauthAuthorizationServerRoute
   '/.well-known/oauth-protected-resource': typeof DotwellKnownOauthProtectedResourceRouteWithChildren
+  '/admin/activity': typeof AdminActivityRoute
   '/admin/appearance': typeof AdminAppearanceRoute
   '/admin/automation': typeof AdminAutomationRoute
   '/admin/health': typeof AdminHealthRoute
@@ -372,6 +389,7 @@ export interface FileRoutesById {
   '/admin/site-text': typeof AdminSiteTextRoute
   '/admin/ticker': typeof AdminTickerRoute
   '/admin/topics': typeof AdminTopicsRoute
+  '/api/not-found': typeof ApiNotFoundRoute
   '/articles/$slug': typeof ArticlesSlugRoute
   '/media/$id': typeof MediaIdRoute
   '/oauth/authorize': typeof OauthAuthorizeRoute
@@ -406,6 +424,7 @@ export interface FileRouteTypes {
     | '/sitemap.xml'
     | '/.well-known/oauth-authorization-server'
     | '/.well-known/oauth-protected-resource'
+    | '/admin/activity'
     | '/admin/appearance'
     | '/admin/automation'
     | '/admin/health'
@@ -417,6 +436,7 @@ export interface FileRouteTypes {
     | '/admin/site-text'
     | '/admin/ticker'
     | '/admin/topics'
+    | '/api/not-found'
     | '/articles/$slug'
     | '/media/$id'
     | '/oauth/authorize'
@@ -448,6 +468,7 @@ export interface FileRouteTypes {
     | '/sitemap.xml'
     | '/.well-known/oauth-authorization-server'
     | '/.well-known/oauth-protected-resource'
+    | '/admin/activity'
     | '/admin/appearance'
     | '/admin/automation'
     | '/admin/health'
@@ -459,6 +480,7 @@ export interface FileRouteTypes {
     | '/admin/site-text'
     | '/admin/ticker'
     | '/admin/topics'
+    | '/api/not-found'
     | '/articles/$slug'
     | '/media/$id'
     | '/oauth/authorize'
@@ -491,6 +513,7 @@ export interface FileRouteTypes {
     | '/sitemap.xml'
     | '/.well-known/oauth-authorization-server'
     | '/.well-known/oauth-protected-resource'
+    | '/admin/activity'
     | '/admin/appearance'
     | '/admin/automation'
     | '/admin/health'
@@ -502,6 +525,7 @@ export interface FileRouteTypes {
     | '/admin/site-text'
     | '/admin/ticker'
     | '/admin/topics'
+    | '/api/not-found'
     | '/articles/$slug'
     | '/media/$id'
     | '/oauth/authorize'
@@ -535,6 +559,7 @@ export interface RootRouteChildren {
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   DotwellKnownOauthAuthorizationServerRoute: typeof DotwellKnownOauthAuthorizationServerRoute
   DotwellKnownOauthProtectedResourceRoute: typeof DotwellKnownOauthProtectedResourceRouteWithChildren
+  ApiNotFoundRoute: typeof ApiNotFoundRoute
   ArticlesSlugRoute: typeof ArticlesSlugRoute
   MediaIdRoute: typeof MediaIdRoute
   OauthAuthorizeRoute: typeof OauthAuthorizeRoute
@@ -655,6 +680,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminIndexRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/activity': {
+      id: '/admin/activity'
+      path: '/activity'
+      fullPath: '/admin/activity'
+      preLoaderRoute: typeof AdminActivityRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/appearance': {
       id: '/admin/appearance'
       path: '/appearance'
@@ -731,6 +763,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/admin/topics'
       preLoaderRoute: typeof AdminTopicsRouteImport
       parentRoute: typeof AdminRoute
+    }
+    '/api/not-found': {
+      id: '/api/not-found'
+      path: '/api/not-found'
+      fullPath: '/api/not-found'
+      preLoaderRoute: typeof ApiNotFoundRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/articles/': {
       id: '/articles/'
@@ -841,6 +880,7 @@ declare module '@tanstack/react-router' {
 }
 
 interface AdminRouteChildren {
+  AdminActivityRoute: typeof AdminActivityRoute
   AdminAppearanceRoute: typeof AdminAppearanceRoute
   AdminAutomationRoute: typeof AdminAutomationRoute
   AdminHealthRoute: typeof AdminHealthRoute
@@ -859,6 +899,7 @@ interface AdminRouteChildren {
 }
 
 const AdminRouteChildren: AdminRouteChildren = {
+  AdminActivityRoute: AdminActivityRoute,
   AdminAppearanceRoute: AdminAppearanceRoute,
   AdminAutomationRoute: AdminAutomationRoute,
   AdminHealthRoute: AdminHealthRoute,
@@ -910,6 +951,7 @@ const rootRouteChildren: RootRouteChildren = {
     DotwellKnownOauthAuthorizationServerRoute,
   DotwellKnownOauthProtectedResourceRoute:
     DotwellKnownOauthProtectedResourceRouteWithChildren,
+  ApiNotFoundRoute: ApiNotFoundRoute,
   ArticlesSlugRoute: ArticlesSlugRoute,
   MediaIdRoute: MediaIdRoute,
   OauthAuthorizeRoute: OauthAuthorizeRoute,
