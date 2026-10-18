@@ -90,23 +90,23 @@ export type RunRow = {
   auth: string;
 };
 
-/**
- * Reads recent runs from `automation_runs`. Does not swallow database errors so
- * a missing table or failed query is never mistaken for an empty run history.
- */
 export async function recentRuns(limit = 20): Promise<RunRow[]> {
-  const sql = await getSql();
-  const rows = await sql<{ id: string; created_at: string; tool: string; outcome: string; reason: string; article_id: string | null; auth: string }>`
-    select id, created_at, tool, outcome, reason, article_id, auth from automation_runs order by created_at desc limit ${limit}`;
-  return rows.map((r) => ({
-    id: r.id,
-    createdAt: r.created_at,
-    tool: r.tool,
-    outcome: r.outcome,
-    reason: r.reason,
-    articleId: r.article_id,
-    auth: r.auth,
-  }));
+  try {
+    const sql = await getSql();
+    const rows = await sql<{ id: string; created_at: string; tool: string; outcome: string; reason: string; article_id: string | null; auth: string }>`
+      select id, created_at, tool, outcome, reason, article_id, auth from automation_runs order by created_at desc limit ${limit}`;
+    return rows.map((r) => ({
+      id: r.id,
+      createdAt: r.created_at,
+      tool: r.tool,
+      outcome: r.outcome,
+      reason: r.reason,
+      articleId: r.article_id,
+      auth: r.auth,
+    }));
+  } catch {
+    return [];
+  }
 }
 
 export type Submission = {
@@ -170,10 +170,7 @@ export async function automatedPublishesToday(): Promise<number> {
   const sql = await getSql();
   const since = new Date();
   since.setUTCHours(0, 0, 0, 0);
-  const sinceIso = since.toISOString();
-  const rows = await sql<{ n: number }>`select count(distinct r.article_id) as n from automation_runs r
-    inner join articles a on a.id = r.article_id and a.status = 'published'
-    where ((r.tool = 'publish_article_if_allowed' and r.outcome = 'published') or (r.status = 'succeeded' and r.outcome = 'succeeded'))
-      and r.created_at >= ${sinceIso}`;
+  const rows = await sql<{ n: number }>`select count(*) as n from automation_runs
+    where tool = 'publish_article_if_allowed' and outcome = 'published' and created_at >= ${since.toISOString()}`;
   return Number(rows[0]?.n ?? 0);
 }

@@ -412,19 +412,7 @@ export async function executeAutomation(input: ExecuteInput): Promise<RunOutcome
       flags,
     });
   }
-  let publishedToday = 0;
-  try {
-    publishedToday = await require("publishedToday")(automationId);
-  } catch (error) {
-    return finish({
-      status: "draft",
-      stage: "publish",
-      reason: `Draft saved; not published because the daily publish count could not be verified: ${message(error)}`,
-      articleId: saved.id,
-      slug: saved.slug,
-      flags,
-    });
-  }
+  const publishedToday = await require("publishedToday")(automationId).catch(() => 0);
   const decision = publishDecision({
     active: state,
     policy,

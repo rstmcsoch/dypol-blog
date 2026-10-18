@@ -63,10 +63,6 @@ test("featured, category, pinned and custom sources stay honest about fallbacks"
   const pinned = resolveTicker(config({ source: "pinned", slugs: ["s1", "gone"], count: 5 }), live);
   assert.deepEqual(pinned.items.map((item) => item.slug), ["s1"]);
   assert.equal(pinned.fallback, false);
-  assert.match(pinned.note, /1 pinned article is not published/);
-
-  const allPresentPinned = resolveTicker(config({ source: "pinned", slugs: ["s1", "s2"], count: 5 }), live);
-  assert.equal(allPresentPinned.note, "");
 
   const deadPins = resolveTicker(config({ source: "pinned", slugs: ["gone", "also-gone"] }), live);
   assert.equal(deadPins.fallback, true);

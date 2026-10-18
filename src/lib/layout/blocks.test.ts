@@ -4,9 +4,7 @@ import {
   AREA_TYPES,
   defaultLayout,
   duplicateBlock,
-  isLayoutAreaDirty,
   layoutDocSchema,
-  mergeLayoutArea,
   moveBlock,
   newBlock,
   parseLayout,
@@ -74,27 +72,4 @@ test("the default layout keeps today's homepage and sidebar order", () => {
   assert.equal(doc.sidebar.enabled, true);
   // Round-trips through storage unchanged.
   assert.deepEqual(parseLayout(JSON.parse(JSON.stringify(doc))), doc);
-});
-
-test("mergeLayoutArea and isLayoutAreaDirty keep homepage and sidebar edits strictly independent", () => {
-  const published = defaultLayout();
-  const homeEdited = {
-    ...published,
-    homepage: { blocks: [...published.homepage.blocks, newBlock("announcement", "homepage")] },
-  };
-  const sideEdited = {
-    ...published,
-    sidebar: { enabled: false, blocks: [newBlock("share", "sidebar")] },
-  };
-  assert.equal(isLayoutAreaDirty(homeEdited, published, "homepage"), true);
-  assert.equal(isLayoutAreaDirty(homeEdited, published, "sidebar"), false);
-
-  const mergedHome = mergeLayoutArea(sideEdited, homeEdited, "homepage");
-  assert.equal(mergedHome.homepage.blocks.length, published.homepage.blocks.length + 1);
-  assert.equal(mergedHome.sidebar.enabled, false, "saving homepage must not overwrite sidebar");
-  assert.equal(mergedHome.sidebar.blocks.length, 1);
-
-  const discardedHome = mergeLayoutArea(mergedHome, published, "homepage");
-  assert.equal(isLayoutAreaDirty(discardedHome, published, "homepage"), false);
-  assert.equal(isLayoutAreaDirty(discardedHome, published, "sidebar"), true, "discarding homepage must keep sidebar draft");
 });

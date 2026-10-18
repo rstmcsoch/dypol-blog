@@ -3,7 +3,7 @@ import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { errorText } from "@/components/admin/gate";
 import { AdminPageError } from "@/components/admin/page-error";
 import { AutomationSchemaNotice } from "@/components/admin/automation-schema-notice";
-import { adminAutomation, adminAutomationRuns, adminRunAutomation, type RunForClient } from "@/content/admin-api";
+import { adminAutomation, adminRunAutomation } from "@/content/admin-api";
 
 export const Route = createFileRoute("/admin/automation/history")({
   loader: () => adminAutomation(),
@@ -14,12 +14,7 @@ export const Route = createFileRoute("/admin/automation/history")({
 type AutomationData = Extract<Awaited<ReturnType<typeof adminAutomation>>, { ready: true }>;
 
 function StatusChip({ status }: { status: string }) {
-  const tone =
-    status === "succeeded" || status === "published"
-      ? "desk-status desk-status--published"
-      : status === "failed"
-        ? "desk-status desk-status--failed"
-        : "desk-status";
+  const tone = status === "succeeded" || status === "published" ? "desk-status desk-status--published" : status === "failed" ? "desk-status desk-status--failed" : "desk-status";
   return <span className={tone}>{status || "unknown"}</span>;
 }
 
@@ -35,20 +30,16 @@ function AutomationHistoryReady({ data }: { data: AutomationData }) {
   const [status, setStatus] = useState<string>("");
   const [pending, setPending] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [fetchedRuns, setFetchedRuns] = useState<RunForClient[] | null>(null);
   const [lastRun, setLastRun] = useState<{ id: string; dryRun: boolean; result: Awaited<ReturnType<typeof adminRunAutomation>>["outcome"] } | null>(null);
-
-  const sourceRuns = fetchedRuns ?? data.runs;
-  const isFiltered = Boolean(automationId || status);
 
   const runs = useMemo(
     () =>
-      sourceRuns.filter((run) => {
+      data.runs.filter((run) => {
         if (automationId && run.automationId !== automationId) return false;
         if (status && run.status !== status && run.outcome !== status) return false;
         return true;
       }),
-    [sourceRuns, automationId, status],
+    [data.runs, automationId, status],
   );
 
   const nameOf = (id: string | null) => (id ? (data.automations.find((item) => item.id === id)?.name ?? id) : "MCP / manual");
@@ -60,23 +51,6 @@ function AutomationHistoryReady({ data }: { data: AutomationData }) {
     try {
       const response = await adminRunAutomation({ data: { id, dryRun } });
       setLastRun({ id, dryRun, result: response.outcome });
-      setFetchedRuns(null);
-      await router.invalidate();
-    } catch (caught) {
-      setError(errorText(caught));
-    } finally {
-      setPending(null);
-    }
-  };
-
-  const refreshRuns = async (targetAutomationId = automationId) => {
-    setPending("refresh");
-    setError(null);
-    try {
-      const response = await adminAutomationRuns({
-        data: { automationId: targetAutomationId || undefined, limit: 50 },
-      });
-      setFetchedRuns(response.runs);
       await router.invalidate();
     } catch (caught) {
       setError(errorText(caught));
@@ -91,14 +65,7 @@ function AutomationHistoryReady({ data }: { data: AutomationData }) {
       <h1 className="desk-title">History &amp; diagnostics</h1>
       <p className="desk-note">Every run this site recorded, per automation, with the stage that failed and why. Credentials are never shown.</p>
 
-      {error ? (
-        <div className="banner banner--bad" role="alert">
-          <p>{error}</p>
-          <button type="button" className="btn btn--ghost" disabled={pending !== null} onClick={() => void refreshRuns()}>
-            {pending === "refresh" ? "Retrying…" : "Retry query"}
-          </button>
-        </div>
-      ) : null}
+      {error ? <p className="banner banner--bad" role="alert">{error}</p> : null}
       {lastRun ? (
         <p className={lastRun.result.status === "failed" ? "banner banner--bad" : "banner banner--ok"} role="status">
           {lastRun.dryRun ? "Dry run" : "Run"} for {nameOf(lastRun.id)}: <strong>{lastRun.result.status}</strong> at {lastRun.result.stage}. {lastRun.result.reason}
@@ -225,13 +192,7 @@ function AutomationHistoryReady({ data }: { data: AutomationData }) {
         <div className="filters">
           <label className="field">
             <span>Automation</span>
-            <select
-              value={automationId}
-              onChange={(event) => {
-                setAutomationId(event.target.value);
-                setFetchedRuns(null);
-              }}
-            >
+            <select value={automationId} onChange={(event) => setAutomationId(event.target.value)}>
               <option value="">All</option>
               {data.automations.map((automation) => (
                 <option key={automation.id} value={automation.id}>
@@ -244,38 +205,16 @@ function AutomationHistoryReady({ data }: { data: AutomationData }) {
             <span>Status</span>
             <select value={status} onChange={(event) => setStatus(event.target.value)}>
               <option value="">All</option>
-              {["succeeded", "published", "draft", "failed", "skipped", "dry-run"].map((value) => (
+              {["succeeded", "draft", "failed", "skipped", "dry-run"].map((value) => (
                 <option key={value} value={value}>
                   {value}
                 </option>
               ))}
             </select>
           </label>
-          <div className="inline-actions">
-            <button type="button" className="btn btn--ghost" disabled={pending !== null} onClick={() => void refreshRuns()}>
-              {pending === "refresh" ? "Refreshing…" : "Refresh log"}
-            </button>
-            {isFiltered ? (
-              <button
-                type="button"
-                className="btn btn--ghost"
-                onClick={() => {
-                  setAutomationId("");
-                  setStatus("");
-                  setFetchedRuns(null);
-                }}
-              >
-                Clear filters
-              </button>
-            ) : null}
-          </div>
         </div>
         {runs.length === 0 ? (
-          isFiltered && sourceRuns.length > 0 ? (
-            <p className="desk-note">No recorded runs match the selected filters.</p>
-          ) : (
-            <p className="desk-note">No runs recorded yet. A dry run is a safe way to produce the first entry.</p>
-          )
+          <p className="desk-note">No runs recorded yet. A dry run is a safe way to produce the first entry.</p>
         ) : (
           <div className="desk-table-wrap">
             <table className="desk-table">

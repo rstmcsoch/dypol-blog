@@ -485,41 +485,28 @@ export const adminLayout = createServerFn({ method: "GET" }).handler(async () =>
 
 export const adminSaveLayoutDraft = createServerFn({ method: "POST" })
   .validator((input: unknown) => {
-    const value = (input ?? {}) as { doc?: unknown; area?: unknown };
+    const value = (input ?? {}) as { doc?: unknown };
     if (value.doc === undefined) throw new Error("Nothing to save.");
-    const area = value.area === "homepage" ? "homepage" : value.area === "sidebar" ? "sidebar" : undefined;
-    return { doc: value.doc, area: area as "homepage" | "sidebar" | undefined };
+    return { doc: value.doc };
   })
   .handler(async ({ data }) => {
     await writeGuard();
     const { saveLayoutDraft } = await import("./layout.server");
-    return { ok: true, doc: await saveLayoutDraft(data.doc, data.area) };
+    return { ok: true, doc: await saveLayoutDraft(data.doc) };
   });
 
-export const adminPublishLayout = createServerFn({ method: "POST" })
-  .validator((input: unknown) => {
-    const value = (input ?? {}) as { doc?: unknown; area?: unknown };
-    const area = value.area === "homepage" ? "homepage" : value.area === "sidebar" ? "sidebar" : undefined;
-    return { doc: value.doc, area: area as "homepage" | "sidebar" | undefined };
-  })
-  .handler(async ({ data }) => {
-    await writeGuard();
-    const { publishLayout } = await import("./layout.server");
-    return { ok: true, doc: await publishLayout({ area: data.area, doc: data.doc }) };
-  });
+export const adminPublishLayout = createServerFn({ method: "POST" }).handler(async () => {
+  await writeGuard();
+  const { publishLayout } = await import("./layout.server");
+  return { ok: true, doc: await publishLayout() };
+});
 
-export const adminDiscardLayout = createServerFn({ method: "POST" })
-  .validator((input: unknown) => {
-    const value = (input ?? {}) as { area?: unknown };
-    const area = value.area === "homepage" ? "homepage" : value.area === "sidebar" ? "sidebar" : undefined;
-    return { area: area as "homepage" | "sidebar" | undefined };
-  })
-  .handler(async ({ data }) => {
-    await writeGuard();
-    const { discardLayoutDraft } = await import("./layout.server");
-    const published = await discardLayoutDraft(data.area);
-    return { ok: true, published };
-  });
+export const adminDiscardLayout = createServerFn({ method: "POST" }).handler(async () => {
+  await writeGuard();
+  const { discardLayoutDraft } = await import("./layout.server");
+  await discardLayoutDraft();
+  return { ok: true };
+});
 
 /** Resolves a draft document for the desk preview, without publishing it. */
 export const adminLayoutPreview = createServerFn({ method: "POST" })

@@ -18,8 +18,6 @@ import {
   LAYOUT_STYLES,
   SPACINGS,
   duplicateBlock,
-  isLayoutAreaDirty,
-  mergeLayoutArea,
   moveBlock,
   newBlock,
   summariseBlock,
@@ -73,9 +71,7 @@ export function LayoutBuilder({
   site: SiteConfig;
 }) {
   const router = useRouter();
-  const [doc, setDoc] = useState<LayoutDoc>(() =>
-    state.draft ? mergeLayoutArea(state.published, state.draft, area) : state.published,
-  );
+  const [doc, setDoc] = useState<LayoutDoc>(state.draft ?? state.published);
   const [open, setOpen] = useState<string | null>(null);
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
@@ -132,13 +128,9 @@ export function LayoutBuilder({
     void refreshPreview();
     // Preview follows the draft; debounce keeps typing comfortable.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [JSON.stringify(doc[area]), previewSlug, area]);
+  }, [JSON.stringify(doc), previewSlug, area]);
 
-  const dirty = useMemo(() => isLayoutAreaDirty(doc, state.published, area), [doc, state.published, area]);
-  const hasSavedAreaDraft = useMemo(
-    () => Boolean(state.draft && isLayoutAreaDirty(state.draft, state.published, area)),
-    [state.draft, state.published, area],
-  );
+  const dirty = useMemo(() => JSON.stringify(doc) !== JSON.stringify(state.published), [doc, state.published]);
 
   const update = (id: string, patch: Partial<Block>) => {
     setBlocks(blocks.map((block) => (block.id === id ? ({ ...block, ...patch } as Block) : block)));
@@ -153,56 +145,27 @@ export function LayoutBuilder({
       <p className="desk-note">{text.intro}</p>
 
       <div className="builder-bar">
-        <button
-          type="button"
-          className="btn"
-          disabled={pending !== null}
-          onClick={() =>
-            void run(
-              "save",
-              () => adminSaveLayoutDraft({ data: { doc, area } }),
-              "Draft saved. The public site still shows the published version.",
-            )
-          }
-        >
+        <button type="button" className="btn" disabled={pending !== null} onClick={() => void run("save", () => adminSaveLayoutDraft({ data: { doc } }), "Draft saved. The public site still shows the published version.")}>
           {pending === "save" ? "Saving…" : "Save draft"}
         </button>
         <button
           type="button"
           className="btn"
-          disabled={pending !== null || (!dirty && !hasSavedAreaDraft)}
-          onClick={() =>
-            void run(
-              "publish",
-              async () => {
-                const response = await adminPublishLayout({ data: { doc, area } });
-                setDoc(response.doc);
-              },
-              "Published. The live site now uses this arrangement.",
-            )
-          }
+          disabled={pending !== null || !dirty}
+          onClick={() => void run("publish", () => adminPublishLayout(), "Published. The live site now uses this arrangement.")}
         >
           {pending === "publish" ? "Publishing…" : "Publish"}
         </button>
         <button
           type="button"
           className="btn btn--ghost"
-          disabled={pending !== null || (!hasSavedAreaDraft && !dirty)}
-          onClick={() =>
-            void run(
-              "discard",
-              async () => {
-                const response = await adminDiscardLayout({ data: { area } });
-                setDoc((current) => mergeLayoutArea(current, response.published, area));
-              },
-              "Draft discarded; the published layout is unchanged.",
-            )
-          }
+          disabled={pending !== null || state.draft === null}
+          onClick={() => void run("discard", () => adminDiscardLayout(), "Draft discarded; the published layout is unchanged.")}
         >
           Discard draft
         </button>
-        <span className={dirty || hasSavedAreaDraft ? "builder-state builder-state--dirty" : "builder-state"}>
-          {dirty || hasSavedAreaDraft
+        <span className={dirty ? "builder-state builder-state--dirty" : "builder-state"}>
+          {dirty
             ? "Unpublished changes"
             : state.derived
               ? `Live layout derived from the old settings (${publishedCount} block${publishedCount === 1 ? "" : "s"})`

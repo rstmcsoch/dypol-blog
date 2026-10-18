@@ -1,13 +1,6 @@
 import { z } from "zod";
 import { parseCron } from "./schedule.ts";
-import {
-  AUTOMATION_MODES,
-  SERVER_API_PROVIDERS,
-  defaultModel,
-  type AutomationMode,
-  type AutomationSettings,
-  type ServerApiProvider,
-} from "./settings.ts";
+import { AUTOMATION_MODES, SERVER_API_PROVIDERS, defaultModel, type AutomationMode, type ServerApiProvider } from "./settings.ts";
 import { isValidTimeZone } from "./timezone.ts";
 
 /**
@@ -191,98 +184,6 @@ export const DEFAULT_AUTOMATION_INPUT: AutomationInput = {
   allowedCategoryIds: [],
   mcpDefault: true,
 };
-
-/** Maps a provider to its canonical Worker secret reference when migrating legacy settings. */
-export function defaultCredentialRefFor(provider: ServerApiProvider): CredentialRef {
-  switch (provider) {
-    case "xai":
-      return "XAI_API_KEY";
-    case "anthropic":
-      return "ANTHROPIC_API_KEY";
-    case "gemini":
-      return "GEMINI_API_KEY";
-    case "openrouter":
-      return "OPENROUTER_API_KEY";
-    case "openai-compatible":
-      return "AI_API_KEY";
-    case "openai":
-    default:
-      return "OPENAI_API_KEY";
-  }
-}
-
-/**
- * Validates a stored automation row while preserving all valid fields if a
- * single field or cross-field rule fails.
- */
-export function parseAutomationRecord(candidate: Record<string, unknown>, name = DEFAULT_AUTOMATION_INPUT.name): AutomationInput {
-  const parsed = automationInputSchema.safeParse(candidate);
-  if (parsed.success) return parsed.data;
-  const working: Record<string, unknown> = { ...DEFAULT_AUTOMATION_INPUT, ...candidate };
-  for (let pass = 0; pass < 3; pass += 1) {
-    const check = automationInputSchema.safeParse(working);
-    if (check.success) return check.data;
-    const keys = [...new Set(check.error.issues.map((issue) => issue.path[0]).filter((key): key is string => typeof key === "string"))];
-    for (const key of keys) {
-      if (key === "name") {
-        const trimmed = typeof name === "string" ? name.trim().slice(0, 60) : "";
-        working.name = trimmed.length >= 2 ? trimmed : DEFAULT_AUTOMATION_INPUT.name;
-      } else if (key === "credentialRef" && working.mode === "server-api") {
-        const prov =
-          typeof working.provider === "string" && (SERVER_API_PROVIDERS as readonly string[]).includes(working.provider)
-            ? (working.provider as ServerApiProvider)
-            : DEFAULT_AUTOMATION_INPUT.provider;
-        working.credentialRef = defaultCredentialRefFor(prov);
-      } else if (key === "baseUrl" && working.mode === "server-api" && working.provider === "openai-compatible") {
-        working.provider = DEFAULT_AUTOMATION_INPUT.provider;
-        working.baseUrl = "";
-      } else if (key === "imageMode") {
-        working.imageMode = "none";
-      } else if (key === "allowedCategoryIds" && working.publishMode === "auto") {
-        working.publishMode = "draft";
-        working.allowedCategoryIds = [];
-      } else if (key in DEFAULT_AUTOMATION_INPUT) {
-        working[key] = (DEFAULT_AUTOMATION_INPUT as Record<string, unknown>)[key];
-      }
-    }
-  }
-  const finalTry = automationInputSchema.safeParse(working);
-  if (finalTry.success) return finalTry.data;
-  const fallbackName = typeof name === "string" && name.trim().length >= 2 ? name.trim().slice(0, 60) : DEFAULT_AUTOMATION_INPUT.name;
-  return { ...DEFAULT_AUTOMATION_INPUT, name: fallbackName, enabled: false, paused: true };
-}
-
-/** Converts legacy site_settings('automation') into a valid per-automation record. */
-export function inputFromLegacySettings(settings: AutomationSettings): AutomationInput {
-  const isServerApi = settings.mode === "server-api";
-  const provider = settings.serverApi.provider;
-  const baseUrl = settings.serverApi.baseUrl.trim();
-  const canAutoPublish = settings.policy.autoPublish && settings.policy.allowedCategoryIds.length > 0;
-  return parseAutomationRecord(
-    {
-      ...DEFAULT_AUTOMATION_INPUT,
-      name: "Primary automation",
-      enabled: settings.enabled,
-      paused: settings.paused,
-      mode: isServerApi && provider === "openai-compatible" && !baseUrl ? "mcp-connector" : settings.mode,
-      provider,
-      model: settings.serverApi.model,
-      baseUrl,
-      credentialRef: isServerApi ? defaultCredentialRefFor(provider) : "",
-      topicIdeas: settings.topicIdeas,
-      topicSources: settings.topicSources,
-      minWords: settings.policy.minWords,
-      publishMode: canAutoPublish ? "auto" : "draft",
-      maxPerDay: settings.policy.maxPublishedPerDay,
-      requireSources: settings.policy.requireSources,
-      minSources: settings.policy.minSources,
-      requireCover: settings.policy.requireFeaturedImage,
-      allowedCategoryIds: settings.policy.allowedCategoryIds,
-      mcpDefault: true,
-    },
-    "Primary automation",
-  );
-}
 
 /** A short, unique, url-safe id derived from the automation name. */
 export function automationIdFromName(name: string, taken: string[] = []): string {
