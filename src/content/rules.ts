@@ -23,7 +23,8 @@ export function isSafeHref(value: string): boolean {
 export function publishProblems(input: { excerpt: string; blocks: ArticleBlock[] }): string | null {
   if (!input.excerpt.trim()) return "Add an excerpt before publishing.";
   const hasBody = input.blocks.some((block) => {
-    if (block.type === "list") return block.items.some((item) => item.trim());
+    if (block.type === "list" || block.type === "takeaways") return block.items.some((item) => item.trim());
+    if (block.type === "table") return block.rows.some((row) => row.some((cell) => cell.trim()));
     if (block.type === "code") return block.code.trim().length > 0;
     return block.text.trim().length > 0;
   });

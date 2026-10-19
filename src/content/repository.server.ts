@@ -660,7 +660,7 @@ export async function siteHealth() {
 }
 
 export function articleWordCount(article: Article): number {
-  const text = article.blocks.map((b) => (b.type === "list" ? b.items.join(" ") : b.type === "code" ? "" : b.text)).join(" ");
+  const text = article.blocks.map((b) => (b.type === "list" || b.type === "takeaways" ? b.items.join(" ") : b.type === "table" ? [...b.headers, ...b.rows.flat()].join(" ") : b.type === "code" ? "" : b.text)).join(" ");
   return text.split(/\s+/).filter(Boolean).length;
 }
 

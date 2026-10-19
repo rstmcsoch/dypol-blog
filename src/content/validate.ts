@@ -31,6 +31,12 @@ const blockSchema = z.discriminatedUnion("type", [
     attribution: z.string().max(200).optional(),
   }),
   z.object({
+    type: z.literal("table"),
+    headers: z.array(z.string().max(200)).max(8),
+    rows: z.array(z.array(z.string().max(2000)).max(8)).max(40),
+  }),
+  z.object({ type: z.literal("takeaways"), items: z.array(z.string().max(2000)).max(6) }),
+  z.object({
     type: z.literal("code"),
     language: z.string().max(40).optional(),
     code: z.string().max(20000),
