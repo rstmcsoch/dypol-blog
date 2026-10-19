@@ -454,17 +454,21 @@ export const adminSecuritySetupConfirm = createServerFn({ method: "POST" })
     const { sql, users, keyMaterial } = await securityContext();
     const user = await users.getAnyUser(sql);
     if (!user) return { ok: false as const, reason: "no-pending" as const, message: "Setup was not started. Create your credentials first." };
-    const result = await users.confirmTotp(sql, keyMaterial, user, data.code);
-    if (result !== "ok") {
-      // Reason is logged server-side (never the code or any secret) so a
-      // recurring failure is diagnosable from the Worker logs.
-      console.error(`[security] setup confirm failed: ${result}`);
+    const outcome = await users.confirmTotp(sql, keyMaterial, user, data.code);
+    if (outcome.status !== "ok") {
+      const { confirmMismatchMessage } = await import("@/lib/auth/admin-credentials");
+      // Reason + step diagnosis are logged server-side (never the code or
+      // any secret) so a recurring failure is provable from Worker logs:
+      // matchedStep non-null = right entry, phone clock off; null = the
+      // code came from a different authenticator entry (t84).
+      const pendingAgeSec = Math.max(0, Math.floor(Date.now() / 1000) - user.updated_at);
+      console.error(`[security] setup confirm failed: ${outcome.status} matchedStep=${outcome.matchedStep} pendingAgeSec=${pendingAgeSec}`);
       return {
         ok: false as const,
-        reason: result,
+        reason: outcome.status,
         message:
-          result === "code-mismatch"
-            ? "That code did not match the QR code on this page. The usual causes: the authenticator entry was typed in by hand with a wrong character, the entry is set to counter-based instead of time-based, or the phone clock is off. Easiest fix: use “Show a fresh QR code” below, scan it (do not type the secret), and enter the new code it shows."
+          outcome.status === "code-mismatch"
+            ? confirmMismatchMessage(outcome.matchedStep)
             : "This enrolment can no longer be confirmed. Use “Show a fresh QR code” below and scan the new one.",
       };
     }
@@ -517,10 +521,15 @@ export const adminSecurityResetTotpConfirm = createServerFn({ method: "POST" })
     const { sql, users, keyMaterial } = await securityContext();
     const user = await users.getEnabledUser(sql);
     if (!user) throw new Error("Password login is not set up yet.");
-    const result = await users.confirmTotp(sql, keyMaterial, user, data.code);
-    if (result !== "ok") {
-      console.error(`[security] totp reset confirm failed: ${result}`);
-      throw new Error("That code did not match the new QR code. Your previous authenticator entry still works until a new one is confirmed — check the code and try again, or generate another fresh QR.");
+    const outcome = await users.confirmTotp(sql, keyMaterial, user, data.code);
+    if (outcome.status !== "ok") {
+      const { confirmMismatchMessage } = await import("@/lib/auth/admin-credentials");
+      console.error(`[security] totp reset confirm failed: ${outcome.status} matchedStep=${outcome.matchedStep}`);
+      throw new Error(
+        outcome.status === "code-mismatch"
+          ? confirmMismatchMessage(outcome.matchedStep)
+          : "That code did not match the new QR code. Your previous authenticator entry still works until a new one is confirmed — check the code and try again, or generate another fresh QR.",
+      );
     }
     const recoveryCodes = await users.replaceRecoveryCodes(sql, user.id);
     return { ok: true, recoveryCodes };
