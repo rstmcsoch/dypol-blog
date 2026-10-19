@@ -50,6 +50,9 @@ export type SeoArticle = {
   updatedAt: string;
   topics: string[];
   coverMediaId?: string | null;
+  coverAlt?: string | null;
+  /** t91 Phase 3: plain-text article body for full-text RSS (optional). */
+  bodyText?: string;
 };
 
 /** The one public host. Both Worker names (and version-preview URLs) serve
@@ -113,7 +116,7 @@ export function breadcrumbJsonLd(input: { origin: string; items: { name: string;
 }
 
 /** WebSite + Organization graph for the homepage. */
-export function websiteJsonLd(input: { origin: string; siteName: string; title: string; description: string; publisher: string }) {
+export function websiteJsonLd(input: { origin: string; siteName: string; title: string; description: string; publisher: string; sameAs?: string[] }) {
   const home = absoluteUrl(input.origin, "/");
   return {
     "@context": "https://schema.org",
@@ -133,6 +136,7 @@ export function websiteJsonLd(input: { origin: string; siteName: string; title: 
         name: input.publisher,
         url: home,
         logo: absoluteUrl(input.origin, "/logo.png"),
+        ...(input.sameAs?.length ? { sameAs: input.sameAs } : {}),
       },
     ],
   };
@@ -202,6 +206,8 @@ export function rssXml(input: { origin: string; siteTitle: string; description: 
       const url = absoluteUrl(input.origin, `/articles/${a.slug}`);
       const pubDate = a.publishedAt ? new Date(a.publishedAt).toUTCString() : new Date(a.updatedAt).toUTCString();
       const cats = a.topics.map((t) => `      <category>${xmlEscape(t)}</category>`).join("\n");
+      const cover = a.coverMediaId ? `      <media:content url="${xmlEscape(absoluteUrl(input.origin, `/media/${a.coverMediaId}`))}" medium="image" />` : "";
+      const full = a.bodyText?.trim() ? `      <content:encoded>${xmlEscape(a.bodyText.trim())}</content:encoded>` : "";
       return [
         "    <item>",
         `      <title>${xmlEscape(a.title)}</title>`,
@@ -210,13 +216,15 @@ export function rssXml(input: { origin: string; siteTitle: string; description: 
         `      <pubDate>${pubDate}</pubDate>`,
         `      <description>${xmlEscape(a.excerpt)}</description>`,
         ...(cats ? [cats] : []),
+        ...(cover ? [cover] : []),
+        ...(full ? [full] : []),
         "    </item>",
       ].join("\n");
     })
     .join("\n");
   return [
     `<?xml version="1.0" encoding="UTF-8"?>`,
-    `<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">`,
+    `<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:media="http://search.yahoo.com/mrss/">`,
     "  <channel>",
     `    <title>${xmlEscape(input.siteTitle)}</title>`,
     `    <link>${xmlEscape(home)}</link>`,
@@ -238,6 +246,7 @@ export function socialMeta(input: {
   type: "website" | "article";
   siteName: string;
   image?: string | null;
+  imageAlt?: string | null;
   publishedAt?: string | null;
   modifiedAt?: string | null;
   section?: string;
@@ -255,6 +264,10 @@ export function socialMeta(input: {
   if (input.image) {
     meta.push({ property: "og:image", content: input.image });
     meta.push({ name: "twitter:image", content: input.image });
+    if (input.imageAlt?.trim()) {
+      meta.push({ property: "og:image:alt", content: input.imageAlt.trim() });
+      meta.push({ name: "twitter:image:alt", content: input.imageAlt.trim() });
+    }
   }
   if (input.type === "article") {
     const published = isoOrNull(input.publishedAt);

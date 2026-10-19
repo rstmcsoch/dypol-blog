@@ -349,7 +349,9 @@ export async function recordView(slug: string): Promise<boolean> {
 export async function readShell() {
   const [data, pages] = await Promise.all([publicCatalog(), readPageLinks()]);
   const live = published(data.articles);
-  return { site: data.site, trending: tickerEntries(data.site, live, await viewCounts(data.site)), pages };
+  // t91 Phase 3: the public shell must not carry automation internals.
+  // Admin Settings loads the real value separately via adminSettings().
+  return { site: { ...data.site, aiDailyPublishLimit: 0 }, trending: tickerEntries(data.site, live, await viewCounts(data.site)), pages };
 }
 
 // ---------- pages (t52: standard reader-facing pages, admin-only CMS) -----
@@ -421,7 +423,7 @@ export async function adminDeletePage(input: { id: string; actor: string }) {
 
 export async function readHome(draftSite?: SiteConfig) {
   const data = await publicCatalog();
-  const site = draftSite ?? data.site;
+  const site = draftSite ?? { ...data.site, aiDailyPublishLimit: 0 };
   const live = published(data.articles);
   const blocks = resolveBlocks(site.home.blocks, { site, live, categories: data.categories, tags: data.tags, views: await viewCounts(site) }, "home");
   return { blocks, empty: live.length === 0, site };
@@ -526,6 +528,13 @@ export async function readSitemap() {
   };
 }
 
+function articleBodyText(article: Article): string {
+  return article.blocks
+    .map((b) => (b.type === "list" ? b.items.join("\n") : b.type === "code" ? b.code : b.text))
+    .filter((x) => x.trim())
+    .join("\n\n");
+}
+
 /** Latest published articles for the RSS feed (newest first). */
 export async function readFeed(limit = 20) {
   const data = await publicCatalog();
@@ -541,6 +550,8 @@ export async function readFeed(limit = 20) {
       updatedAt: article.updatedAt,
       topics: article.topicIds.map((id) => labelOf.get(id) ?? "").filter(Boolean),
       coverMediaId: article.coverMediaId ?? null,
+      coverAlt: article.coverAlt ?? null,
+      bodyText: articleBodyText(article),
     }));
 }
 
