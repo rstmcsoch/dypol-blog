@@ -24,7 +24,7 @@ mkdirSync(SHOTS, { recursive: true });
 assert.ok(TOKEN.length >= 16, "set ADMIN_TOKEN (16+ chars) to match .dev.vars");
 
 execFileSync("npx", ["wrangler", "d1", "execute", "DB", "--local", "--json", "--command",
-  "create table if not exists admin_users (id integer primary key autoincrement, username text not null unique, password_hash text not null, totp_secret_enc text, totp_pending_enc text, totp_enabled integer not null default 0, created_at integer not null, updated_at integer not null); create table if not exists admin_recovery_codes (id integer primary key autoincrement, user_id integer not null, code_hash text not null, used_at integer, created_at integer not null); delete from admin_recovery_codes;"],
+  "create table if not exists admin_users (id integer primary key autoincrement, username text not null unique, password_hash text not null, totp_secret_enc text, totp_pending_enc text, totp_enabled integer not null default 0, created_at integer not null, updated_at integer not null); create table if not exists admin_recovery_codes (id integer primary key autoincrement, user_id integer not null, code_hash text not null, used_at integer, created_at integer not null); delete from admin_recovery_codes; delete from admin_users;"],
   { stdio: ["ignore", "pipe", "ignore"] });
 
 const B32 = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
@@ -81,12 +81,45 @@ await check("before setup: token login works and Security page offers setup", as
   await page.click('button:has-text("Create credentials")');
   await page.waitForSelector("text=Scan with your authenticator app");
   const body = await page.textContent("body");
-  secret = (body.match(/[A-Z2-7]{32}/) ?? [])[0] ?? "";
+  secret = ((body.match(/[A-Z2-7]{4}(?: [A-Z2-7]{4}){7}/) ?? [])[0] ?? "").replace(/ /g, "");
   assert.ok(secret.length === 32, "manual-entry secret shown");
   await page.screenshot({ path: `${SHOTS}/security-enrol-qr.png` });
+  // t82: reloading mid-enrolment (the exact prod state: credentials saved,
+  // authenticator pending) must offer the finish-setup path, not a dead end.
+  await page.reload();
+  await page.waitForSelector("text=Setup is half-finished");
+  await page.click('button:has-text("Show a fresh QR code")');
+  await page.waitForSelector("text=Scan with your authenticator app");
+  const bodyR = await page.textContent("body");
+  secret = ((bodyR.match(/[A-Z2-7]{4}(?: [A-Z2-7]{4}){7}/) ?? [])[0] ?? "").replace(/ /g, "");
+  assert.ok(secret.length === 32, "fresh secret after reload");
+  // t82: a wrong code must produce a VISIBLE inline error, not silence,
+  // and the enrolment must stay put so the user can retry.
+  const wrongCode = totp(secret) === "000000" ? "111111" : "000000";
+  await page.fill('input[autocomplete="one-time-code"]', wrongCode);
+  await page.click('button:has-text("Confirm code")');
+  await page.waitForSelector('section:has-text("Scan with your authenticator app") [role="alert"]');
+  assert.match(await page.textContent('section:has-text("Scan with your authenticator app") [role="alert"]'), /did not match/);
+  await page.screenshot({ path: `${SHOTS}/security-confirm-wrong-code.png` });
+  // t82: "fresh QR" rotates the pending secret — the old secret's code is
+  // then rejected, the new one confirms (also burns any shared secret).
+  await page.click('button:has-text("Show a fresh QR code")');
+  await page.waitForFunction((old) => {
+    const m = document.body.innerText.match(/[A-Z2-7]{4}(?: [A-Z2-7]{4}){7}/);
+    return m && m[0].replace(/ /g, "") !== old;
+  }, secret);
+  const body2 = await page.textContent("body");
+  const secret2 = ((body2.match(/[A-Z2-7]{4}(?: [A-Z2-7]{4}){7}/) ?? [])[0] ?? "").replace(/ /g, "");
+  assert.ok(secret2 && secret2 !== secret, "fresh QR produced a new secret");
+  await page.fill('input[autocomplete="one-time-code"]', totp(secret));
+  await page.click('button:has-text("Confirm code")');
+  await page.waitForSelector('section:has-text("Scan with your authenticator app") [role="alert"]');
+  secret = secret2;
   await page.fill('input[autocomplete="one-time-code"]', totp(secret));
   await page.click('button:has-text("Confirm code")');
   await page.waitForSelector("text=Save these recovery codes now");
+  await page.waitForSelector("text=Password + 2FA sign-in is now active");
+  assert.ok(await page.locator('button:has-text("Copy all codes")').count(), "copy button for recovery codes");
   const banner = await page.textContent("body");
   recoveryCodes = banner.match(/[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}/g) ?? [];
   assert.equal(recoveryCodes.length, 10, `10 recovery codes shown, got ${recoveryCodes.length}`);
