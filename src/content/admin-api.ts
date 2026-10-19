@@ -331,10 +331,16 @@ async function signInGateOrThrow(): Promise<void> {
 }
 
 export const adminLoginStatus = createServerFn({ method: "GET" }).handler(async () => {
-  const { deskConfigured, passwordLoginActiveSafe } = await import("@/lib/auth/admin.server");
+  const { deskConfigured, passwordSetupStateSafe } = await import("@/lib/auth/admin.server");
+  const { resolveLoginMode } = await import("@/lib/auth/login-mode");
   const configured = await deskConfigured();
-  const mode = configured && (await passwordLoginActiveSafe()) ? ("password" as const) : ("token" as const);
-  return { configured, mode };
+  // t83: the root login is decided here, from the real credential state in
+  // D1 - "active" (totp_enabled=1) means username+password+TOTP, anything
+  // else keeps the lockout-safe token bootstrap, with "pending" surfaced
+  // so a half-finished setup no longer looks like a missing feature.
+  const setup = configured ? await passwordSetupStateSafe() : ("none" as const);
+  const { mode, setupPending } = resolveLoginMode({ configured, setup });
+  return { configured, mode, setup, setupPending };
 });
 
 export const adminLoginStart = createServerFn({ method: "POST" })

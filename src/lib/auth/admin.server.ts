@@ -2,6 +2,7 @@ import { getCookie, getRequest, setCookie, deleteCookie } from "@tanstack/react-
 import { workerEnv } from "../cf-env.server";
 import { checkSignIn, clientKey, type LimitDecision } from "./sign-in-limit.ts";
 import { issueChallenge, verifyChallenge, CHALLENGE_TTL_SECONDS } from "./admin-credentials.ts";
+import { tokenSignInAllowed, type PasswordSetupState } from "./login-mode.ts";
 import { issueSession, SESSION_TTL_SECONDS, sessionKey, tokenMatches, verifySession } from "./session-token.ts";
 import { assertSameOrigin, ReadOnlyError, writesAllowed } from "../write-guard.server";
 
@@ -106,21 +107,33 @@ async function setSessionCookie(key: string): Promise<void> {
  * anyway), and this matches the SEC-005 revocation fail-open pattern.
  */
 export async function passwordLoginActiveSafe(): Promise<boolean> {
+  return (await passwordSetupStateSafe()) === "active";
+}
+
+/**
+ * t83: like passwordLoginActiveSafe, but distinguishes the half-finished
+ * "pending" state so /login can say so out loud, and logs (never silently
+ * swallows) a credential-store failure. The fail-safe direction is
+ * unchanged: on any error we report "unknown", which keeps token bootstrap
+ * available rather than bricking the owner's access.
+ */
+export async function passwordSetupStateSafe(): Promise<PasswordSetupState> {
   try {
     const { getSql } = await import("@/lib/db");
-    const { ensureAdminTables, passwordLoginActive } = await import("./admin-users.server");
+    const { ensureAdminTables, passwordSetupState } = await import("./admin-users.server");
     const sql = await getSql();
     await ensureAdminTables(sql);
-    return await passwordLoginActive(sql);
-  } catch {
-    return false;
+    return await passwordSetupState(sql);
+  } catch (error) {
+    console.error(`[auth] could not read admin credential state; falling back to token sign-in: ${error instanceof Error ? error.message : String(error)}`);
+    return "unknown";
   }
 }
 
 export async function signInDesk(token: string): Promise<boolean> {
   const s = await secrets();
   if (!s) return false;
-  if (await passwordLoginActiveSafe()) return false;
+  if (!tokenSignInAllowed(await passwordSetupStateSafe())) return false;
   if (!(await tokenMatches(token, s.token, s.key))) return false;
   await setSessionCookie(s.key);
   return true;

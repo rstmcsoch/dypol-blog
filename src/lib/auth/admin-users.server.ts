@@ -73,6 +73,18 @@ export async function passwordLoginActive(sql: Sql): Promise<boolean> {
   return (await getEnabledUser(sql)) !== null;
 }
 
+export type PasswordSetupState = "active" | "pending" | "none";
+
+/**
+ * Full setup state for the root sign-in page (t83): "pending" is the
+ * half-finished state (credentials saved, authenticator never confirmed)
+ * that used to look, from /login, as if password login did not exist.
+ */
+export async function passwordSetupState(sql: Sql): Promise<PasswordSetupState> {
+  if (await getEnabledUser(sql)) return "active";
+  return (await getAnyUser(sql)) ? "pending" : "none";
+}
+
 let dummyHash: Promise<string> | null = null;
 /** Verify against a real-looking hash for unknown usernames (timing equalisation). */
 export async function verifyPasswordForUser(user: AdminUserRow | null, password: string): Promise<boolean> {

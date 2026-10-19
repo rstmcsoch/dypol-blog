@@ -21,6 +21,8 @@ function LoginPage() {
   const { denied } = Route.useSearch();
   const router = useRouter();
   const [mode, setMode] = useState<Mode>("loading");
+  const [setupPending, setSetupPending] = useState(false);
+  const [statusError, setStatusError] = useState(false);
   const [locked, setLocked] = useState(false);
   const [step, setStep] = useState<"credentials" | "totp">("credentials");
   const [username, setUsername] = useState("");
@@ -34,9 +36,15 @@ function LoginPage() {
     void adminLoginStatus()
       .then((status) => {
         setLocked(!status.configured);
+        setSetupPending(status.setupPending);
         setMode(status.mode);
       })
-      .catch(() => setMode("token"));
+      .catch(() => {
+        // t83: never fall back silently - token sign-in stays available
+        // (lockout-safe), but the page says the check failed.
+        setStatusError(true);
+        setMode("token");
+      });
   }, []);
 
   const tooMany = (wait: number) => setError(`Too many attempts. Try again in ${wait} seconds.`);
@@ -190,6 +198,23 @@ function LoginPage() {
               </button>
               {error ? <p className="banner banner--bad" role="alert">{error}</p> : null}
             </form>
+          ) : null}
+
+          {mode === "token" && setupPending ? (
+            <p className="banner" role="status" style={{ maxWidth: "32rem" }}>
+              <strong>Password sign-in is not active yet.</strong> A username and password were saved, but the
+              authenticator step was never confirmed, so this page still uses the admin token. Sign in with the
+              token, open <strong>Admin → Security</strong>, and finish the authenticator confirmation there —
+              from that moment this page will ask for your username, password and authenticator code instead.
+            </p>
+          ) : null}
+
+          {mode === "token" && statusError ? (
+            <p className="banner banner--bad" role="alert" style={{ maxWidth: "32rem" }}>
+              The sign-in status check failed, so token sign-in is shown as a fallback. If you already finished
+              setting up password + 2FA, reload this page; if the problem repeats, it is a server problem, not
+              your credentials.
+            </p>
           ) : null}
 
           {mode === "token" ? (
