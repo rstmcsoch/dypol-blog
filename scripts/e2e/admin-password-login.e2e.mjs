@@ -62,8 +62,16 @@ const PASSWORD = "t80-e2e-password-1";
 let secret = "";
 let recoveryCodes = [];
 
+let capturedTokenLogin = null;
 await check("before setup: token login works and Security page offers setup", async () => {
   const { context, page } = await freshPage();
+  // Remember the exact token sign-in request so a later check can replay it
+  // after 2FA activation and prove the SERVER refuses the token (t83/g).
+  page.on("request", (req) => {
+    if (req.method() === "POST" && req.url().includes("_serverFn") && (req.postData() ?? "").includes(TOKEN)) {
+      capturedTokenLogin = { url: req.url(), body: req.postData(), headers: req.headers() };
+    }
+  });
   await page.goto(BASE + "/login");
   await page.waitForSelector('text=Admin token');
   await page.screenshot({ path: `${SHOTS}/login-token-before-setup.png` });
@@ -84,6 +92,19 @@ await check("before setup: token login works and Security page offers setup", as
   secret = ((body.match(/[A-Z2-7]{4}(?: [A-Z2-7]{4}){7}/) ?? [])[0] ?? "").replace(/ /g, "");
   assert.ok(secret.length === 32, "manual-entry secret shown");
   await page.screenshot({ path: `${SHOTS}/security-enrol-qr.png` });
+  // t83: half-finished setup (credentials saved, authenticator NOT confirmed)
+  // must be explicit at the root login: token form stays (lockout-safe
+  // bootstrap) but the page says password sign-in is not active yet, instead
+  // of silently looking as if password login was never implemented.
+  {
+    const pending = await freshPage();
+    await pending.page.goto(BASE + "/login");
+    await pending.page.waitForSelector('text=Admin token');
+    await pending.page.waitForSelector("text=Password sign-in is not active yet");
+    assert.equal(await pending.page.locator('input[autocomplete="username"]').count(), 0, "no password form before confirm");
+    await pending.page.screenshot({ path: `${SHOTS}/login-token-pending-setup.png` });
+    await pending.context.close();
+  }
   // t82: reloading mid-enrolment (the exact prod state: credentials saved,
   // authenticator pending) must offer the finish-setup path, not a dead end.
   await page.reload();
@@ -128,6 +149,28 @@ await check("before setup: token login works and Security page offers setup", as
   // sign out (revokes this session server-side, SEC-005 behaviour preserved)
   await page.click('button:has-text("Sign out")');
   await page.waitForURL("**/login**");
+  await context.close();
+});
+
+await check("after setup: token sign-in is refused at the server, not just hidden", async () => {
+  // The form disappearing is not the security boundary: signInDesk checks
+  // the same credential state server-side (tokenSignInAllowed). Drive the
+  // real server function the token form used, from a fresh browser context
+  // with the correct token, and assert no desk session is issued.
+  const { context, page } = await freshPage();
+  await page.goto(BASE + "/login");
+  await page.waitForSelector('input[autocomplete="username"]');
+  const resp = await context.request.get(BASE + "/admin", { maxRedirects: 0 }).catch(() => null);
+  assert.ok(!resp || [302, 307].includes(resp.status()), "no session without password+TOTP");
+  assert.ok(capturedTokenLogin, "token sign-in request was captured before setup");
+  const replay = await context.request.post(capturedTokenLogin.url, {
+    data: capturedTokenLogin.body,
+    headers: { "content-type": capturedTokenLogin.headers["content-type"] ?? "application/json" },
+  });
+  const replayText = await replay.text();
+  assert.ok(!/"ok"\s*:\s*true/.test(replayText), `token must not create a session after 2FA activation: ${replayText.slice(0, 200)}`);
+  const cookies = await context.cookies(BASE);
+  assert.ok(!cookies.some((c) => c.name === "dypol_desk"), "no desk session cookie issued for the token");
   await context.close();
 });
 
