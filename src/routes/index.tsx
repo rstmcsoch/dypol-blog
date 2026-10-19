@@ -5,6 +5,7 @@ import { useSite } from "@/components/site/use-site";
 import { getHome } from "@/content/public-api";
 import { site as fallbackSite } from "@/content/site";
 import { absoluteUrl, socialMeta, websiteJsonLd } from "@/lib/seo";
+import { visibleSocials } from "@/lib/social-links";
 
 export const Route = createFileRoute("/")({
   loader: () => getHome(),
@@ -32,7 +33,7 @@ export const Route = createFileRoute("/")({
         {
           type: "application/ld+json",
           children: JSON.stringify(
-            websiteJsonLd({ origin, siteName: current.name, title: current.title, description: current.description, publisher: current.publisher }),
+            websiteJsonLd({ origin, siteName: current.name, title: current.title, description: current.description, publisher: current.publisher, sameAs: visibleSocials(current.socials).map((s) => s.url).filter((u) => u.startsWith("https://")) }),
           ),
         },
       ],

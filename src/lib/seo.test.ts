@@ -77,7 +77,7 @@ test("publisher logo uses the dedicated raster brand asset, not the favicon (t58
   const ld = articleJsonLd({ origin: "https://example.com", siteName: "DYPOL Blog", publisher: "DYPOL Labs", article });
   assert.equal(ld.publisher.logo.url, "https://example.com/logo.png");
   const site = websiteJsonLd({ origin: "https://example.com", siteName: "DYPOL Blog", title: "DYPOL Blog", description: "d", publisher: "DYPOL Labs" });
-  const org = site["@graph"].find((n) => n["@type"] === "Organization");
+  const org = site["@graph"].find((n) => n["@type"] === "Organization") as unknown as { logo: string };
   assert.ok(org);
   assert.equal(org.logo, "https://example.com/logo.png");
 });
@@ -131,4 +131,21 @@ test("site is intentionally not AMP: sitemaps/RSS/JSON-LD never claim AMP (t86)"
     assert.doesNotMatch(out, /\/amp(?:[/?#"<]|$)/i);
     assert.doesNotMatch(out, /ampproject/i);
   }
+});
+
+test("t91: website Organization sameAs only when profiles configured", () => {
+  const withProfiles = websiteJsonLd({ origin: "https://e.com", siteName: "S", title: "T", description: "D", publisher: "P", sameAs: ["https://x.com/dypol"] });
+  const org = withProfiles["@graph"].find((n) => n["@type"] === "Organization") as unknown as { sameAs?: string[] };
+  assert.deepEqual(org.sameAs, ["https://x.com/dypol"]);
+  const without = websiteJsonLd({ origin: "https://e.com", siteName: "S", title: "T", description: "D", publisher: "P" });
+  const org2 = without["@graph"].find((n) => n["@type"] === "Organization") as unknown as Record<string, unknown>;
+  assert.equal("sameAs" in org2, false);
+});
+
+test("t91: RSS full text + cover media, and og:image:alt", () => {
+  const xml = rssXml({ origin: "https://e.com", siteTitle: "T", description: "D", articles: [{ ...article, bodyText: "Full body & text." }] });
+  assert.match(xml, /<content:encoded>Full body &amp; text\.<\/content:encoded>/);
+  assert.match(xml, /<media:content url="https:\/\/e\.com\/media\/media-1" medium="image" \/>/);
+  const meta = socialMeta({ title: "T", description: "D", url: "https://e.com/a", type: "article", siteName: "S", image: "https://e.com/i.jpg", imageAlt: "A chart" });
+  assert.ok(meta.some((m) => m.property === "og:image:alt" && m.content === "A chart"));
 });

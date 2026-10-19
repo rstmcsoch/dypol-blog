@@ -46,7 +46,7 @@ export const Route = createFileRoute("/articles/$slug")({
         { name: "description", content: description },
         ...socialMeta({
           title, description, url, type: "article", siteName: "DYPOL Blog", image: cover,
-          publishedAt: article.publishedAt, modifiedAt: article.updatedAt, section: topics[0],
+          publishedAt: article.publishedAt, modifiedAt: article.updatedAt, section: topics[0], imageAlt: article.coverAlt ?? article.title,
         }),
       ],
       links: [
