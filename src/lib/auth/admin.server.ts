@@ -1,6 +1,7 @@
 import { getCookie, getRequest, setCookie, deleteCookie } from "@tanstack/react-start/server";
 import { workerEnv } from "../cf-env.server";
 import { checkSignIn, clientKey, type LimitDecision } from "./sign-in-limit.ts";
+import { issueChallenge, verifyChallenge, CHALLENGE_TTL_SECONDS } from "./admin-credentials.ts";
 import { issueSession, SESSION_TTL_SECONDS, sessionKey, tokenMatches, verifySession } from "./session-token.ts";
 import { assertSameOrigin, ReadOnlyError, writesAllowed } from "../write-guard.server";
 
@@ -33,6 +34,7 @@ export class UnauthorizedError extends Error {
 export type AdminIdentity = { id: string; email: string | null; mode: "dev" | "account" };
 
 const COOKIE = "dypol_desk";
+const CHALLENGE_COOKIE = "dypol_2fa";
 
 async function secrets(): Promise<{ token: string; key: string } | null> {
   const env = await workerEnv();
@@ -86,18 +88,82 @@ export async function signInAllowed(): Promise<LimitDecision> {
   return checkSignIn(env.SIGNIN_LIMITER, key);
 }
 
-export async function signInDesk(token: string): Promise<boolean> {
-  const s = await secrets();
-  if (!s) return false;
-  if (!(await tokenMatches(token, s.token, s.key))) return false;
-  setCookie(COOKIE, await issueSession(s.key), {
+async function setSessionCookie(key: string): Promise<void> {
+  setCookie(COOKIE, await issueSession(key), {
     httpOnly: true,
     secure: true,
     sameSite: "lax",
     path: "/",
     maxAge: SESSION_TTL_SECONDS,
   });
+}
+
+/**
+ * t80: once username+password+TOTP setup is confirmed in the admin Security
+ * page, the shared ADMIN_TOKEN can no longer start a session. If the
+ * credential store is unreachable we fall back to allowing the token —
+ * bricking the owner's access is worse (D1 is down for the whole desk then
+ * anyway), and this matches the SEC-005 revocation fail-open pattern.
+ */
+export async function passwordLoginActiveSafe(): Promise<boolean> {
+  try {
+    const { getSql } = await import("@/lib/db");
+    const { ensureAdminTables, passwordLoginActive } = await import("./admin-users.server");
+    const sql = await getSql();
+    await ensureAdminTables(sql);
+    return await passwordLoginActive(sql);
+  } catch {
+    return false;
+  }
+}
+
+export async function signInDesk(token: string): Promise<boolean> {
+  const s = await secrets();
+  if (!s) return false;
+  if (await passwordLoginActiveSafe()) return false;
+  if (!(await tokenMatches(token, s.token, s.key))) return false;
+  await setSessionCookie(s.key);
   return true;
+}
+
+/** Issue the normal desk session after password+TOTP login (t80). Session
+ *  mechanics are identical to token sign-in: same cookie, HMAC, TTL, and
+ *  the SEC-005 revocation list applies unchanged. */
+export async function issueDeskSession(): Promise<boolean> {
+  const s = await secrets();
+  if (!s) return false;
+  await setSessionCookie(s.key);
+  return true;
+}
+
+/** Key material used to encrypt the stored TOTP secret (t80). */
+export async function deskKeyMaterial(): Promise<string | null> {
+  const s = await secrets();
+  return s?.key ?? null;
+}
+
+/* Pending second-factor step of password login: short-lived signed cookie. */
+export async function setPendingChallenge(userId: number): Promise<void> {
+  const s = await secrets();
+  if (!s) return;
+  setCookie(CHALLENGE_COOKIE, await issueChallenge(s.key, userId), {
+    httpOnly: true,
+    secure: true,
+    sameSite: "lax",
+    path: "/",
+    maxAge: CHALLENGE_TTL_SECONDS,
+  });
+}
+export async function readPendingChallenge(): Promise<number | null> {
+  const s = await secrets();
+  if (!s) return null;
+  const value = getCookie(CHALLENGE_COOKIE) ?? "";
+  if (!value) return null;
+  const result = await verifyChallenge(s.key, value);
+  return result.ok ? result.userId : null;
+}
+export function clearPendingChallenge(): void {
+  deleteCookie(CHALLENGE_COOKIE, { path: "/" });
 }
 
 export async function signOutDesk(): Promise<void> {

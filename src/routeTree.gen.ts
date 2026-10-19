@@ -32,6 +32,7 @@ import { Route as AdminHelpRouteImport } from './routes/admin/help'
 import { Route as AdminHomepageRouteImport } from './routes/admin/homepage'
 import { Route as AdminMediaRouteImport } from './routes/admin/media'
 import { Route as AdminPagesRouteImport } from './routes/admin/pages'
+import { Route as AdminSecurityRouteImport } from './routes/admin/security'
 import { Route as AdminSettingsRouteImport } from './routes/admin/settings'
 import { Route as AdminSiteTextRouteImport } from './routes/admin/site-text'
 import { Route as AdminTickerRouteImport } from './routes/admin/ticker'
@@ -170,6 +171,11 @@ const AdminPagesRoute = AdminPagesRouteImport.update({
   path: '/pages',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminSecurityRoute = AdminSecurityRouteImport.update({
+  id: '/security',
+  path: '/security',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminSettingsRoute = AdminSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
@@ -295,6 +301,7 @@ export interface FileRoutesByFullPath {
   '/admin/homepage': typeof AdminHomepageRoute
   '/admin/media': typeof AdminMediaRoute
   '/admin/pages': typeof AdminPagesRoute
+  '/admin/security': typeof AdminSecurityRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/site-text': typeof AdminSiteTextRoute
   '/admin/ticker': typeof AdminTickerRoute
@@ -339,6 +346,7 @@ export interface FileRoutesByTo {
   '/admin/homepage': typeof AdminHomepageRoute
   '/admin/media': typeof AdminMediaRoute
   '/admin/pages': typeof AdminPagesRoute
+  '/admin/security': typeof AdminSecurityRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/site-text': typeof AdminSiteTextRoute
   '/admin/ticker': typeof AdminTickerRoute
@@ -385,6 +393,7 @@ export interface FileRoutesById {
   '/admin/homepage': typeof AdminHomepageRoute
   '/admin/media': typeof AdminMediaRoute
   '/admin/pages': typeof AdminPagesRoute
+  '/admin/security': typeof AdminSecurityRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/site-text': typeof AdminSiteTextRoute
   '/admin/ticker': typeof AdminTickerRoute
@@ -432,6 +441,7 @@ export interface FileRouteTypes {
     | '/admin/homepage'
     | '/admin/media'
     | '/admin/pages'
+    | '/admin/security'
     | '/admin/settings'
     | '/admin/site-text'
     | '/admin/ticker'
@@ -476,6 +486,7 @@ export interface FileRouteTypes {
     | '/admin/homepage'
     | '/admin/media'
     | '/admin/pages'
+    | '/admin/security'
     | '/admin/settings'
     | '/admin/site-text'
     | '/admin/ticker'
@@ -521,6 +532,7 @@ export interface FileRouteTypes {
     | '/admin/homepage'
     | '/admin/media'
     | '/admin/pages'
+    | '/admin/security'
     | '/admin/settings'
     | '/admin/site-text'
     | '/admin/ticker'
@@ -736,6 +748,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminPagesRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/security': {
+      id: '/admin/security'
+      path: '/security'
+      fullPath: '/admin/security'
+      preLoaderRoute: typeof AdminSecurityRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/settings': {
       id: '/admin/settings'
       path: '/settings'
@@ -888,6 +907,7 @@ interface AdminRouteChildren {
   AdminHomepageRoute: typeof AdminHomepageRoute
   AdminMediaRoute: typeof AdminMediaRoute
   AdminPagesRoute: typeof AdminPagesRoute
+  AdminSecurityRoute: typeof AdminSecurityRoute
   AdminSettingsRoute: typeof AdminSettingsRoute
   AdminSiteTextRoute: typeof AdminSiteTextRoute
   AdminTickerRoute: typeof AdminTickerRoute
@@ -907,6 +927,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminHomepageRoute: AdminHomepageRoute,
   AdminMediaRoute: AdminMediaRoute,
   AdminPagesRoute: AdminPagesRoute,
+  AdminSecurityRoute: AdminSecurityRoute,
   AdminSettingsRoute: AdminSettingsRoute,
   AdminSiteTextRoute: AdminSiteTextRoute,
   AdminTickerRoute: AdminTickerRoute,
@@ -969,10 +990,11 @@ export const routeTree = rootRouteImport
   ._addFileTypes<FileRouteTypes>()
 
 import type { getRouter } from './router.tsx'
-import type { createStart } from '@tanstack/react-start'
+import type { startInstance } from './start.ts'
 declare module '@tanstack/react-start' {
   interface Register {
     ssr: true
     router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
   }
 }
