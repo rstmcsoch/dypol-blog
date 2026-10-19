@@ -18,7 +18,16 @@ export const Route = createFileRoute("/")({
         { name: "description", content: current.description },
         ...socialMeta({ title: current.title, description: current.description, url, type: "website", siteName: current.name, image: absoluteUrl(origin, "/og.jpg") }),
       ],
-      links: [{ rel: "canonical", href: url }],
+      links: [
+        { rel: "canonical", href: url },
+        // t88: preload the featured cover - it is the homepage LCP element.
+        ...(() => {
+          const lead = loaderData?.blocks?.find((b) => b.block.type === "featured")?.cards[0];
+          return lead?.coverMediaId
+            ? [{ rel: "preload", as: "image", href: `/media/${lead.coverMediaId}`, fetchPriority: "high" } as const]
+            : [];
+        })(),
+      ],
       scripts: [
         {
           type: "application/ld+json",

@@ -111,3 +111,24 @@ test("sitemap includes image namespace only when an image is present (t89)", () 
   const plain = sitemapXml({ origin: "https://e.com", urls: [{ path: "/", lastmod: null }] });
   assert.doesNotMatch(plain, /xmlns:image/);
 });
+
+test("site is intentionally not AMP: sitemaps/RSS/JSON-LD never claim AMP (t86)", () => {
+  // DYPOL Blog is a responsive site with no AMP edition. Google's AMP
+  // report ("Why AMP pages are invalid") is only actionable if a page
+  // advertises AMP (rel="amphtml", <html amp>, /amp URLs, amp URLs in a
+  // sitemap). These builders must therefore never emit an AMP claim;
+  // the live-surface half of this guard is in scripts/e2e/seo.e2e.mjs.
+  const now = new Date("2026-10-18T12:00:00Z");
+  const recent = { ...article, publishedAt: "2026-10-18T08:00:00.000Z" };
+  const outputs = [
+    sitemapXml({ origin: "https://e.com", urls: [{ path: "/", lastmod: null }, { path: "/articles/hello-world", lastmod: null }] }),
+    newsSitemapXml({ origin: "https://e.com", publicationName: "DYPOL Blog", articles: [recent], now }),
+    rssXml({ origin: "https://e.com", siteTitle: "DYPOL Blog", description: "Desc", articles: [recent] }),
+    JSON.stringify(articleJsonLd({ origin: "https://e.com", siteName: "DYPOL Blog", publisher: "DYPOL Labs", article: recent })),
+  ];
+  for (const out of outputs) {
+    assert.doesNotMatch(out, /amphtml/i);
+    assert.doesNotMatch(out, /\/amp(?:[/?#"<]|$)/i);
+    assert.doesNotMatch(out, /ampproject/i);
+  }
+});

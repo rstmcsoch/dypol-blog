@@ -49,7 +49,11 @@ export const Route = createFileRoute("/articles/$slug")({
           publishedAt: article.publishedAt, modifiedAt: article.updatedAt, section: topics[0],
         }),
       ],
-      links: [{ rel: "canonical", href: url }],
+      links: [
+        { rel: "canonical", href: url },
+        // t88: preload the article hero (LCP element) alongside the eager img.
+        ...(cover ? [{ rel: "preload", as: "image", href: cover, fetchPriority: "high" } as const] : []),
+      ],
       scripts: [
         { type: "application/ld+json", children: JSON.stringify(newsLd) },
         { type: "application/ld+json", children: JSON.stringify(crumbs) },

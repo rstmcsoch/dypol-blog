@@ -122,6 +122,16 @@ await check("static page: BreadcrumbList JSON-LD + sitemap image/lastmod (t89)",
   assert.ok(desc.length >= 80, `topic description enriched: ${desc.length}`);
 });
 
+await check("perf (t88): homepage LCP cover is eager/high-priority, cards use thumb variant + dimensions", async () => {
+  assert.match(home.text, /class="article-cover"[^>]*loading="eager"[^>]*fetchpriority="high"/i, "lead cover eager + high priority");
+  assert.match(home.text, /rel="preload" as="image"[^>]*fetchpriority="high"/i, "LCP preload");
+  assert.match(home.text, /variant=thumb/, "card/list images use the thumb variant, not the hero/original");
+  for (const img of [...home.text.matchAll(/<img[^>]+src="\/media\/[^"]+"[^>]*>/g)].map((m) => m[0])) {
+    if (img.includes("wordmark__logo")) continue; // fixed-height CSS, aspect is owner-uploaded
+    assert.match(img, /width="\d+" height="\d+"/, `sized img (CLS): ${img.slice(0, 80)}`);
+  }
+});
+
 await check("topics index: ItemList JSON-LD of the topics", async () => {
   const { status, text } = await get("/topics");
   assert.equal(status, 200);
@@ -137,6 +147,27 @@ await check("admin entry stays noindex; media files are immutable-cached", async
   assert.ok(mediaSrc, "media src");
   const media = await fetch(BASE + mediaSrc, { method: "HEAD" });
   assert.match(media.headers.get("cache-control") ?? "", /immutable/);
+});
+
+await check("not AMP by design: no amphtml/AMP markup, no AMP URLs in sitemaps, /amp is 404 (t86)", async () => {
+  // The site has no AMP edition (responsive design instead). If any page
+  // ever advertised AMP while serving normal HTML, Google Search Console
+  // would correctly report it under "Why AMP pages are invalid". Guard
+  // the whole live surface so that can never happen silently.
+  for (const [label, page] of [["home", home], ["article", articlePage]]) {
+    assert.doesNotMatch(page.text, /rel="amphtml"/i, `${label}: amphtml link`);
+    assert.doesNotMatch(page.text, /<html[^>]*\s(amp|\u26a1)[\s>]/i, `${label}: <html amp>`);
+    assert.doesNotMatch(page.text, /<amp-[a-z]/i, `${label}: amp-* element`);
+    assert.doesNotMatch(page.text, /cdn\.ampproject\.org/i, `${label}: AMP runtime`);
+  }
+  for (const path of ["/sitemap.xml", "/news-sitemap.xml", "/robots.txt", "/feed.xml"]) {
+    const { text } = await get(path);
+    assert.doesNotMatch(text, /amphtml|\/amp(?:[/?#"<]|$)/i, `${path}: AMP claim`);
+  }
+  for (const path of ["/amp", `/articles/${slug}/amp`, "/articles/amp/" + slug]) {
+    const { status } = await get(path);
+    assert.equal(status, 404, `${path} must not serve an AMP (or any) page`);
+  }
 });
 
 console.log(failures === 0 ? "ALL PASS" : `${failures} FAILURES`);

@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { formatDate, padIndex } from "@/lib/format";
 import type { ArticleMeta } from "@/content/present";
 import type { Article } from "@/content/types";
+import { thumbUrl } from "@/lib/media-url";
 
 export function IndexList({
   articles,
@@ -21,7 +22,7 @@ export function IndexList({
             <Link to="/articles/$slug" params={{ slug: article.slug }} className="index-row">
               <span className="index-row__num">{padIndex(row?.rank ?? 0)}</span>
               {article.coverMediaId ? (
-                <span className="index-row__thumb"><img src={`/media/${article.coverMediaId}`} alt={article.coverAlt?.trim() ? article.coverAlt : article.title} loading="lazy" /></span>
+                <span className="index-row__thumb"><img src={thumbUrl(article.coverMediaId)} alt={article.coverAlt?.trim() ? article.coverAlt : article.title} loading="lazy" decoding="async" width={480} height={360} /></span>
               ) : (
                 <span className="index-row__thumb index-row__thumb--empty" aria-hidden="true">{row?.categoryLabel ?? ""}</span>
               )}
