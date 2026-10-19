@@ -1022,8 +1022,18 @@ html[data-theme="dark"] .theme-switch__btn[data-value="dark"] .theme-switch__mar
 .article-top {
   display: grid;
   gap: 1rem;
-  max-width: 48rem;
+  /* t94: the article header (kicker, title, description/dek and byline)
+     spans the FULL container width — including the space above the
+     sidebar column. Only this header block widened; the body+sidebar
+     layout below (.article-layout) keeps its exact previous geometry. */
+  max-width: none;
   margin-bottom: 1.25rem;
+}
+
+/* The dek inside the article header fills the same full width (the global
+   .lede cap still applies everywhere else, e.g. the homepage hero). */
+.article-top .lede {
+  max-width: none;
 }
 
 .article-kicker a {
