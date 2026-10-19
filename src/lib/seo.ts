@@ -20,6 +20,27 @@ export function xmlEscape(value: string): string {
     .replaceAll("'", "&apos;");
 }
 
+/** Clean, snippet-ready meta description: collapse whitespace and cap at
+ * 160 chars on a word boundary (Guide: short, unique, relevant points). */
+export function metaDescription(text: string | null | undefined, fallback = ""): string {
+  const clean = (text ?? "").replace(/\s+/g, " ").trim() || fallback.replace(/\s+/g, " ").trim();
+  if (clean.length <= 160) return clean;
+  const cut = clean.slice(0, 157);
+  const lastSpace = cut.lastIndexOf(" ");
+  return `${(lastSpace > 80 ? cut.slice(0, lastSpace) : cut).trimEnd()}…`;
+}
+
+/** Topic pages seeded with a one-line description get a fuller, still
+ * accurate snippet instead of a 44–61 char fragment (live audit t89). */
+export function topicMetaDescription(label: string, description: string | null | undefined): string {
+  const base = (description ?? "").replace(/\s+/g, " ").trim().replace(/\.$/, "");
+  if (base.length >= 90) return metaDescription(base);
+  const enriched = base
+    ? `${base}. Latest ${label} news, reviews and explainers from DYPOL Blog.`
+    : `Latest ${label} news, reviews and explainers from DYPOL Blog.`;
+  return metaDescription(enriched);
+}
+
 export type SeoArticle = {
   slug: string;
   title: string;
@@ -130,16 +151,21 @@ export function itemListJsonLd(input: { origin: string; items: { name: string; p
   };
 }
 
-export type SitemapUrl = { path: string; lastmod?: string | null };
+export type SitemapUrl = { path: string; lastmod?: string | null; imagePath?: string | null; imageTitle?: string | null };
 
 export function sitemapXml(input: { origin: string; urls: SitemapUrl[] }): string {
+  const hasImages = input.urls.some((u) => u.imagePath);
   const rows = input.urls
     .map((u) => {
       const lastmod = isoOrNull(u.lastmod);
-      return `  <url><loc>${xmlEscape(absoluteUrl(input.origin, u.path))}</loc>${lastmod ? `<lastmod>${lastmod}</lastmod>` : ""}</url>`;
+      const image = u.imagePath
+        ? `<image:image><image:loc>${xmlEscape(absoluteUrl(input.origin, u.imagePath))}</image:loc>${u.imageTitle ? `<image:title>${xmlEscape(u.imageTitle)}</image:title>` : ""}</image:image>`
+        : "";
+      return `  <url><loc>${xmlEscape(absoluteUrl(input.origin, u.path))}</loc>${lastmod ? `<lastmod>${lastmod}</lastmod>` : ""}${image}</url>`;
     })
     .join("\n");
-  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${rows}\n</urlset>\n`;
+  const ns = hasImages ? ` xmlns:image="http://www.google.com/schemas/sitemap-image/1.1"` : "";
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"${ns}>\n${rows}\n</urlset>\n`;
 }
 
 /** Google News sitemap: only articles from the last 48 hours belong here. */

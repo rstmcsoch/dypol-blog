@@ -2,7 +2,7 @@ import { createFileRoute, notFound } from "@tanstack/react-router";
 import { NotFoundState, PagePending } from "@/components/site/states";
 import { StaticPage } from "@/components/site/static-page";
 import { getPage } from "@/content/public-api";
-import { absoluteUrl, socialMeta } from "@/lib/seo";
+import { absoluteUrl, breadcrumbJsonLd, metaDescription, socialMeta } from "@/lib/seo";
 
 /** About Us (t52): content lives in the Pages system (Admin → Pages). */
 export const Route = createFileRoute("/about")({
@@ -15,13 +15,15 @@ export const Route = createFileRoute("/about")({
     if (!loaderData) return { meta: [{ title: "About Us — DYPOL Blog" }] };
     const origin = loaderData.origin ?? "";
     const title = "About Us — DYPOL Blog";
+    const description = metaDescription(loaderData.description, title);
     return {
       meta: [
         { title },
-        { name: "description", content: loaderData.description },
-        ...socialMeta({ title, description: loaderData.description, url: absoluteUrl(origin, "/about"), type: "website", siteName: "DYPOL Blog", image: absoluteUrl(origin, "/og.jpg") }),
+        { name: "description", content: description },
+        ...socialMeta({ title, description, url: absoluteUrl(origin, "/about"), type: "website", siteName: "DYPOL Blog", image: absoluteUrl(origin, "/og.jpg") }),
       ],
       links: [{ rel: "canonical", href: absoluteUrl(origin, "/about") }],
+      scripts: [{ type: "application/ld+json", children: JSON.stringify(breadcrumbJsonLd({ origin, items: [{ name: "Home", path: "/" }, { name: "About Us", path: "/about" }] })) }],
     };
   },
   pendingComponent: PagePending,

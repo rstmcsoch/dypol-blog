@@ -50,7 +50,7 @@ export function Markdown({ source }: { source: string }) {
       const text = h[2];
       const id = text.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
       const content = inline(text, `h${k}`);
-      blocks.push(level <= 1 ? <h1 key={k++} id={id} className="md-h1">{content}</h1> : level === 2 ? <h2 key={k++} id={id}>{content}</h2> : <h3 key={k++} id={id}>{content}</h3>);
+      blocks.push(level <= 2 ? <h2 key={k++} id={id}>{content}</h2> : <h3 key={k++} id={id}>{content}</h3>);
       i += 1;
       continue;
     }

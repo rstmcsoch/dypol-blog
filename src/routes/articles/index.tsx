@@ -10,7 +10,7 @@ export const Route = createFileRoute("/articles/")({
   head: ({ loaderData }) => {
     const origin = loaderData?.origin ?? "";
     const title = "Index — DYPOL Blog";
-    const description = "Every published piece, newest first.";
+    const description = "Every published DYPOL Blog piece, newest first — tech news, reviews and explainers across AI, smartphones, cybersecurity, startups and more.";
     return {
       meta: [
         { title },
