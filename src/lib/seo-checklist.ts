@@ -11,6 +11,11 @@ export function seoChecklist(input: {
   topicCount: number;
   words: number;
   hasHeading: boolean;
+  /** t91 Phase 4 (advisory only, never a publish gate). When supplied,
+   * three engineer-report checks are appended. */
+  linkCount?: number;
+  hasTakeawayOrTable?: boolean;
+  hasReaderActionHeading?: boolean;
 }): ChecklistItem[] {
   const metaTitle = input.seoTitle || input.title;
   const items: ChecklistItem[] = [
@@ -60,6 +65,25 @@ export function seoChecklist(input: {
       hint: input.hasHeading ? "Heading found" : "Add a ## heading",
     },
   ];
+  if (input.linkCount !== undefined) {
+    items.push(
+      {
+        label: "Sources linked in the text (not just listed)",
+        ok: input.linkCount >= 1,
+        hint: input.linkCount >= 1 ? `${input.linkCount} link(s) in the body` : "Link the primary source beside the claim: [label](https://…)",
+      },
+      {
+        label: "At a glance box or a table (longer pieces)",
+        ok: input.hasTakeawayOrTable === true || input.words < 600,
+        hint: input.hasTakeawayOrTable ? "Found" : input.words < 600 ? "Optional under 600 words" : "Add an 'At a glance' list or a comparison table",
+      },
+      {
+        label: "Says what it means for the reader / what to do",
+        ok: input.hasReaderActionHeading === true,
+        hint: input.hasReaderActionHeading ? "Heading found" : "Add a heading like 'What this means for you' or 'What to do now' when the story has a reader action",
+      },
+    );
+  }
   return items;
 }
 
