@@ -10,6 +10,15 @@ async function log(request: Request): Promise<Response> {
   const none = new Response(null, { status: 204, headers: { "cache-control": "no-store" } });
   const origin = request.headers.get("origin");
   if (origin && origin !== new URL(request.url).origin) return new Response(null, { status: 403 });
+  // t79 (SEC-003): reject headerless script POSTs and rate-limit per IP.
+  const fetchSite = request.headers.get("sec-fetch-site");
+  if (!origin && fetchSite !== "same-origin" && fetchSite !== "none") return none;
+  try {
+    const { workerEnv } = await import("@/lib/cf-env.server");
+    const env = (await workerEnv()) as { MCP_LIMITER?: { limit(o: { key: string }): Promise<{ success: boolean }> } };
+    const ip = request.headers.get("cf-connecting-ip") ?? "local";
+    if (env.MCP_LIMITER && !(await env.MCP_LIMITER.limit({ key: `notfound:${ip}` })).success) return none;
+  } catch { /* limiter unavailable: the origin gate above still applies */ }
   const ua = request.headers.get("user-agent") ?? "";
   if (/bot|crawl|spider|slurp|facebookexternalhit|preview/i.test(ua)) return none;
   try {

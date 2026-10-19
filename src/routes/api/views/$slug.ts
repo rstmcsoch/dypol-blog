@@ -13,6 +13,10 @@ async function count(request: Request, slug: string): Promise<Response> {
   if (!/^[a-z0-9-]{1,80}$/.test(slug)) return none;
   const origin = request.headers.get("origin");
   if (origin && origin !== new URL(request.url).origin) return new Response(null, { status: 403 });
+  // t79 (SEC-003): headerless script POSTs (no Origin AND no same-origin
+  // fetch metadata) are silently not counted; browsers always send one.
+  const fetchSite = request.headers.get("sec-fetch-site");
+  if (!origin && fetchSite !== "same-origin" && fetchSite !== "none") return none;
   const ua = request.headers.get("user-agent") ?? "";
   if (/bot|crawl|spider|slurp|facebookexternalhit|preview/i.test(ua)) return none;
   const { workerEnv } = await import("@/lib/cf-env.server");
