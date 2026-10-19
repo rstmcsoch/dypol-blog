@@ -317,6 +317,203 @@ export const adminSignOut = createServerFn({ method: "POST" }).handler(async () 
   return { ok: true };
 });
 
+/* ---------- t80: username + password + TOTP admin login ---------- */
+
+async function signInGateOrThrow(): Promise<void> {
+  const { signInAllowed } = await import("@/lib/auth/admin.server");
+  const gate = await signInAllowed();
+  if (!gate.allowed) {
+    throw new Response(JSON.stringify({ ok: false, reason: "limited", retryAfter: gate.retryAfter }), {
+      status: 429,
+      headers: { "Content-Type": "application/json", "Retry-After": String(gate.retryAfter), "Cache-Control": "no-store", "x-tss-raw": "true" },
+    });
+  }
+}
+
+export const adminLoginStatus = createServerFn({ method: "GET" }).handler(async () => {
+  const { deskConfigured, passwordLoginActiveSafe } = await import("@/lib/auth/admin.server");
+  const configured = await deskConfigured();
+  const mode = configured && (await passwordLoginActiveSafe()) ? ("password" as const) : ("token" as const);
+  return { configured, mode };
+});
+
+export const adminLoginStart = createServerFn({ method: "POST" })
+  .validator((input: { username: string; password: string }) => ({
+    username: String(input?.username ?? "").slice(0, 64),
+    password: String(input?.password ?? "").slice(0, 256),
+  }))
+  .handler(async ({ data }) => {
+    const { assertSameOrigin } = await import("@/lib/write-guard.server");
+    assertSameOrigin();
+    await signInGateOrThrow();
+    const { deskConfigured, deskKeyMaterial, setPendingChallenge } = await import("@/lib/auth/admin.server");
+    if (!(await deskConfigured())) return { ok: false, stage: "locked" as const };
+    const keyMaterial = await deskKeyMaterial();
+    if (!keyMaterial) return { ok: false, stage: "locked" as const };
+    const { getSql } = await import("@/lib/db");
+    const users = await import("@/lib/auth/admin-users.server");
+    const { normalizeUsername } = await import("@/lib/auth/admin-credentials");
+    const sql = await getSql();
+    await users.ensureAdminTables(sql);
+    const enabled = await users.getEnabledUser(sql);
+    if (!enabled) return { ok: false, stage: "token" as const };
+    const user = await users.getUserByUsername(sql, normalizeUsername(data.username));
+    const ok = await users.verifyPasswordForUser(user && user.totp_enabled === 1 ? user : null, data.password);
+    if (!ok || !user) return { ok: false, stage: "credentials" as const };
+    await setPendingChallenge(user.id);
+    return { ok: true, stage: "totp" as const };
+  });
+
+export const adminLoginVerify = createServerFn({ method: "POST" })
+  .validator((input: { code: string }) => ({ code: String(input?.code ?? "").slice(0, 64) }))
+  .handler(async ({ data }) => {
+    const { assertSameOrigin } = await import("@/lib/write-guard.server");
+    assertSameOrigin();
+    await signInGateOrThrow();
+    const auth = await import("@/lib/auth/admin.server");
+    const userId = await auth.readPendingChallenge();
+    if (userId === null) return { ok: false, stage: "expired" as const };
+    const keyMaterial = await auth.deskKeyMaterial();
+    if (!keyMaterial) return { ok: false, stage: "expired" as const };
+    const { getSql } = await import("@/lib/db");
+    const users = await import("@/lib/auth/admin-users.server");
+    const sql = await getSql();
+    await users.ensureAdminTables(sql);
+    const user = await users.getUserById(sql, userId);
+    if (!user || user.totp_enabled !== 1) return { ok: false, stage: "expired" as const };
+    const factor = await users.checkSecondFactor(sql, keyMaterial, user, data.code);
+    if (!factor) return { ok: false, stage: "code" as const };
+    auth.clearPendingChallenge();
+    const issued = await auth.issueDeskSession();
+    return issued ? { ok: true, stage: "done" as const, via: factor } : { ok: false, stage: "expired" as const };
+  });
+
+/* ---------- t80: admin Security page (setup / password / 2FA management) ---------- */
+
+async function securityContext() {
+  const auth = await import("@/lib/auth/admin.server");
+  const keyMaterial = await auth.deskKeyMaterial();
+  if (!keyMaterial) throw new Error("Admin secrets are not configured on this deployment.");
+  const { getSql } = await import("@/lib/db");
+  const users = await import("@/lib/auth/admin-users.server");
+  const sql = await getSql();
+  await users.ensureAdminTables(sql);
+  return { auth, keyMaterial, sql, users };
+}
+
+export const adminSecurityStatus = createServerFn({ method: "GET" }).handler(async () => {
+  await guard();
+  const { sql, users } = await securityContext();
+  const user = await users.getAnyUser(sql);
+  return {
+    active: Boolean(user && user.totp_enabled === 1),
+    username: user?.username ?? null,
+    recoveryRemaining: user ? await users.countUnusedRecoveryCodes(sql, user.id) : 0,
+  };
+});
+
+export const adminSecuritySetupStart = createServerFn({ method: "POST" })
+  .validator((input: { username: string; password: string }) => ({
+    username: String(input?.username ?? "").slice(0, 64),
+    password: String(input?.password ?? "").slice(0, 256),
+  }))
+  .handler(async ({ data }) => {
+    await writeGuard();
+    const { sql, users, keyMaterial } = await securityContext();
+    if (await users.passwordLoginActive(sql)) throw new Error("Password login is already set up. Use the change options below.");
+    const creds = await import("@/lib/auth/admin-credentials");
+    const username = creds.normalizeUsername(data.username);
+    if (!creds.validUsername(username)) throw new Error("Username needs 3–32 characters: lowercase letters, numbers, dot, dash or underscore.");
+    if (!creds.validPassword(data.password)) throw new Error(`Password needs at least ${creds.PASSWORD_MIN_LENGTH} characters.`);
+    const { user, secret } = await users.startTotpEnrolment(sql, keyMaterial, { username, password: data.password });
+    const { qrSvg } = await import("@/lib/auth/qr");
+    const uri = creds.otpauthUri(secret, user.username);
+    return { username: user.username, secret, otpauthUri: uri, qrSvg: qrSvg(uri) };
+  });
+
+export const adminSecuritySetupConfirm = createServerFn({ method: "POST" })
+  .validator((input: { code: string }) => ({ code: String(input?.code ?? "").slice(0, 64) }))
+  .handler(async ({ data }) => {
+    await writeGuard();
+    const { sql, users, keyMaterial } = await securityContext();
+    const user = await users.getAnyUser(sql);
+    if (!user) throw new Error("Start setup first.");
+    if (!(await users.confirmTotp(sql, keyMaterial, user, data.code))) {
+      throw new Error("That code did not match. Check the authenticator entry and try again.");
+    }
+    const recoveryCodes = await users.replaceRecoveryCodes(sql, user.id);
+    return { ok: true, recoveryCodes };
+  });
+
+export const adminSecurityChangePassword = createServerFn({ method: "POST" })
+  .validator((input: { currentPassword: string; currentCode: string; newPassword: string }) => ({
+    currentPassword: String(input?.currentPassword ?? "").slice(0, 256),
+    currentCode: String(input?.currentCode ?? "").slice(0, 64),
+    newPassword: String(input?.newPassword ?? "").slice(0, 256),
+  }))
+  .handler(async ({ data }) => {
+    await writeGuard();
+    const { sql, users, keyMaterial } = await securityContext();
+    const user = await users.getEnabledUser(sql);
+    if (!user) throw new Error("Password login is not set up yet.");
+    if (!(await users.verifyPasswordForUser(user, data.currentPassword))) throw new Error("Current password or code is not right.");
+    if (!(await users.checkSecondFactor(sql, keyMaterial, user, data.currentCode))) throw new Error("Current password or code is not right.");
+    const creds = await import("@/lib/auth/admin-credentials");
+    if (!creds.validPassword(data.newPassword)) throw new Error(`New password needs at least ${creds.PASSWORD_MIN_LENGTH} characters.`);
+    await users.updatePassword(sql, user.id, data.newPassword);
+    return { ok: true };
+  });
+
+export const adminSecurityResetTotpStart = createServerFn({ method: "POST" })
+  .validator((input: { currentPassword: string; currentCode: string }) => ({
+    currentPassword: String(input?.currentPassword ?? "").slice(0, 256),
+    currentCode: String(input?.currentCode ?? "").slice(0, 64),
+  }))
+  .handler(async ({ data }) => {
+    await writeGuard();
+    const { sql, users, keyMaterial } = await securityContext();
+    const user = await users.getEnabledUser(sql);
+    if (!user) throw new Error("Password login is not set up yet.");
+    if (!(await users.verifyPasswordForUser(user, data.currentPassword))) throw new Error("Current password or code is not right.");
+    if (!(await users.checkSecondFactor(sql, keyMaterial, user, data.currentCode))) throw new Error("Current password or code is not right.");
+    const { secret } = await users.startTotpEnrolment(sql, keyMaterial, {});
+    const creds = await import("@/lib/auth/admin-credentials");
+    const { qrSvg } = await import("@/lib/auth/qr");
+    const uri = creds.otpauthUri(secret, user.username);
+    return { secret, otpauthUri: uri, qrSvg: qrSvg(uri) };
+  });
+
+export const adminSecurityResetTotpConfirm = createServerFn({ method: "POST" })
+  .validator((input: { code: string }) => ({ code: String(input?.code ?? "").slice(0, 64) }))
+  .handler(async ({ data }) => {
+    await writeGuard();
+    const { sql, users, keyMaterial } = await securityContext();
+    const user = await users.getEnabledUser(sql);
+    if (!user) throw new Error("Password login is not set up yet.");
+    if (!(await users.confirmTotp(sql, keyMaterial, user, data.code))) {
+      throw new Error("That code did not match. Your previous authenticator entry still works until a new one is confirmed.");
+    }
+    const recoveryCodes = await users.replaceRecoveryCodes(sql, user.id);
+    return { ok: true, recoveryCodes };
+  });
+
+export const adminSecurityRegenRecovery = createServerFn({ method: "POST" })
+  .validator((input: { currentPassword: string; currentCode: string }) => ({
+    currentPassword: String(input?.currentPassword ?? "").slice(0, 256),
+    currentCode: String(input?.currentCode ?? "").slice(0, 64),
+  }))
+  .handler(async ({ data }) => {
+    await writeGuard();
+    const { sql, users, keyMaterial } = await securityContext();
+    const user = await users.getEnabledUser(sql);
+    if (!user) throw new Error("Password login is not set up yet.");
+    if (!(await users.verifyPasswordForUser(user, data.currentPassword))) throw new Error("Current password or code is not right.");
+    if (!(await users.checkSecondFactor(sql, keyMaterial, user, data.currentCode))) throw new Error("Current password or code is not right.");
+    const recoveryCodes = await users.replaceRecoveryCodes(sql, user.id);
+    return { ok: true, recoveryCodes };
+  });
+
+
 function profileIdOf(input: unknown): string {
   const id = (input as { profileId?: unknown } | null)?.profileId;
   if (id === undefined || id === null || id === "") return "default";

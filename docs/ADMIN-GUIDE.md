@@ -4,10 +4,16 @@ This guide explains every part of the DYPOL Blog admin panel in plain language. 
 
 ## Signing in
 
-- The admin panel lives at `/admin`. You sign in at `/login` with your **admin token**.
-- The token is a long random password stored as the `ADMIN_TOKEN` **secret** on the Cloudflare Worker. It is never stored in the code or the database.
-- Changing `ADMIN_TOKEN` (or the optional `ADMIN_SESSION_SECRET`) signs everyone out immediately. Do this if you think the token leaked.
-- After 5 wrong attempts in a minute, sign-in pauses for about a minute.
+- The admin panel lives at `/admin`. You sign in at `/login`.
+- **Recommended sign-in: username + password + authenticator app (2FA).** Set it up once under **Admin → Security**: choose a username and a password (12+ characters), scan the QR code with any authenticator app (Google Authenticator, Authy, 1Password…), enter the 6-digit code it shows, and save the 10 recovery codes somewhere safe — they are shown only once and each works once if you lose your phone.
+- The moment you confirm that first code, **admin-token sign-in switches off**. Until then the token keeps working, so starting setup can never lock you out.
+- Your password is stored only as a one-way scramble (PBKDF2). The authenticator secret is stored encrypted. Nobody — including anyone reading the database — can read either back.
+- After 5 wrong attempts in a minute (either step), sign-in pauses for about a minute. Errors never say whether it was the username, the password or the code that was wrong.
+- Signing out now truly ends that session on the server, immediately — not just in the browser.
+- **If you lose your authenticator:** use a recovery code at the code step.
+- **If you lose everything (phone + recovery codes):** open Cloudflare → D1 → `dypol-blog-db` → Console and run `DELETE FROM admin_recovery_codes; DELETE FROM admin_users;` — admin-token sign-in comes back at once and you can set up again under Security. Only you can do this, because it needs your Cloudflare account.
+- The old **admin token** (`ADMIN_TOKEN` secret) is still needed by the server even after password sign-in is on — it helps protect your sessions and is the emergency door above. Keep it set, keep it long, never give it to an AI app.
+- Changing `ADMIN_TOKEN` (or `ADMIN_SESSION_SECRET`) signs everyone out immediately — and also makes the stored authenticator secret unreadable, so afterwards sign in with a recovery code and reset the authenticator under Security. Do this only if you think a secret leaked.
 - If the sign-in page says it is locked, the Worker has no `ADMIN_TOKEN` secret set yet.
 
 ## Articles
@@ -106,7 +112,7 @@ An AI app (Claude, ChatGPT, Grok, Cursor, Claude Code, …) can research and wri
 ### Tokens and secrets
 
 - `MCP_TOKEN` is a separate password just for AI apps. Changing it disconnects every AI app at once.
-- `ADMIN_TOKEN` is only for you to sign in. Never give it to an AI app.
+- `ADMIN_TOKEN` is your emergency sign-in key and part of how admin sessions are protected. Never give it to an AI app. (Signing in day-to-day uses your username, password and authenticator — see “Signing in”.)
 - Secrets live in Cloudflare (Workers → your worker → Settings → Variables and Secrets, type **Secret**). They are never in the code or database. A secret added as plain text instead of **Secret** can be wiped by the next deploy.
 - Optional AI provider keys (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `XAI_API_KEY`, `OPENROUTER_API_KEY`, `AI_API_KEY`) are only for the future “server-api” mode. Nothing uses them yet, and the site never calls an AI service by itself.
 

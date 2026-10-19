@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
-import { adminSignIn } from "@/content/admin-api";
+import { adminLoginStart, adminLoginStatus, adminLoginVerify, adminSignIn } from "@/content/admin-api";
 
 export const Route = createFileRoute("/login")({
   validateSearch: (search: Record<string, unknown>) => ({
@@ -15,70 +15,204 @@ export const Route = createFileRoute("/login")({
   component: LoginPage,
 });
 
+type Mode = "loading" | "token" | "password";
+
 function LoginPage() {
   const { denied } = Route.useSearch();
   const router = useRouter();
+  const [mode, setMode] = useState<Mode>("loading");
+  const [locked, setLocked] = useState(false);
+  const [step, setStep] = useState<"credentials" | "totp">("credentials");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [code, setCode] = useState("");
   const [token, setToken] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    void adminLoginStatus()
+      .then((status) => {
+        setLocked(!status.configured);
+        setMode(status.mode);
+      })
+      .catch(() => setMode("token"));
+  }, []);
+
+  const tooMany = (wait: number) => setError(`Too many attempts. Try again in ${wait} seconds.`);
+
+  const submitToken = () => {
+    setPending(true);
+    setError(null);
+    void adminSignIn({ data: { token } })
+      .then(async (raw) => {
+        if ((raw as unknown) instanceof Response) {
+          tooMany(Number((raw as unknown as Response).headers.get("Retry-After")) || 60);
+          return;
+        }
+        if (raw.ok) {
+          await router.navigate({ to: "/admin" });
+          return;
+        }
+        setError(
+          raw.reason === "locked"
+            ? "Sign-in is locked on this deployment: no ADMIN_TOKEN secret is set."
+            : "That token is not right.",
+        );
+      })
+      .catch((e: unknown) => {
+        if (e instanceof Response && e.status === 429) tooMany(Number(e.headers.get("Retry-After")) || 60);
+        else setError("Sign-in failed. Try again.");
+      })
+      .finally(() => setPending(false));
+  };
+
+  const submitCredentials = () => {
+    setPending(true);
+    setError(null);
+    void adminLoginStart({ data: { username, password } })
+      .then(async (raw) => {
+        if ((raw as unknown) instanceof Response) {
+          tooMany(Number((raw as unknown as Response).headers.get("Retry-After")) || 60);
+          return;
+        }
+        const result = raw;
+        if (result.ok) {
+          setStep("totp");
+          return;
+        }
+        if (result.stage === "locked") setError("Sign-in is locked on this deployment.");
+        else if (result.stage === "token") {
+          setMode("token");
+          setError("Password login is not set up yet — sign in with the admin token.");
+        } else setError("Username or password is not right.");
+      })
+      .catch((e: unknown) => {
+        if (e instanceof Response && e.status === 429) tooMany(Number(e.headers.get("Retry-After")) || 60);
+        else setError("Sign-in failed. Try again.");
+      })
+      .finally(() => setPending(false));
+  };
+
+  const submitCode = () => {
+    setPending(true);
+    setError(null);
+    void adminLoginVerify({ data: { code } })
+      .then(async (raw) => {
+        if ((raw as unknown) instanceof Response) {
+          tooMany(Number((raw as unknown as Response).headers.get("Retry-After")) || 60);
+          return;
+        }
+        const result = raw;
+        if (result.ok) {
+          await router.navigate({ to: "/admin" });
+          return;
+        }
+        if (result.stage === "expired") {
+          setStep("credentials");
+          setError("That step expired. Enter your password again.");
+        } else setError("That code is not right.");
+      })
+      .catch((e: unknown) => {
+        if (e instanceof Response && e.status === 429) tooMany(Number(e.headers.get("Retry-After")) || 60);
+        else setError("Sign-in failed. Try again.");
+      })
+      .finally(() => setPending(false));
+  };
+
   return (
     <div className="page">
       <div className="container">
         <header className="page-header">
           <p className="kicker">Admin</p>
           <h1 className="page-title">Sign in</h1>
-          {denied ? <p className="lede">Sign-in is locked until an admin token (ADMIN_TOKEN secret) is configured.</p> : null}
-          <form
-            className="stack login-form"
-            style={{ maxWidth: "24rem" }}
-            onSubmit={(event) => {
-              event.preventDefault();
-              setPending(true);
-              setError(null);
-              void adminSignIn({ data: { token } })
-                .then(async (raw) => {
-                  if ((raw as unknown) instanceof Response) {
-                    const wait = Number((raw as unknown as Response).headers.get("Retry-After")) || 60;
-                    setError(`Too many attempts. Try again in ${wait} seconds.`);
-                    return;
-                  }
-                  const result = raw;
-                  if (result.ok) {
-                    await router.navigate({ to: "/admin" });
-                    return;
-                  }
-                  setError(
-                    result.reason === "locked"
-                      ? "Sign-in is locked on this deployment: no ADMIN_TOKEN secret is set."
-                      : "That token is not right.",
-                  );
-                })
-                .catch((error: unknown) => {
-                  if (error instanceof Response && error.status === 429) {
-                    const wait = Number(error.headers.get("Retry-After")) || 60;
-                    setError(`Too many attempts. Try again in ${wait} seconds.`);
-                    return;
-                  }
-                  setError("Sign-in failed. Try again.");
-                })
-                .finally(() => setPending(false));
-            }}
-          >
-            <label className="field">
-              <span>Admin token</span>
-              <input
-                type="password"
-                autoComplete="current-password"
-                value={token}
-                onChange={(event) => setToken(event.target.value)}
-                required
-              />
-            </label>
-            <button className="btn" type="submit" disabled={pending}>
-              {pending ? "Checking…" : "Sign in"}
-            </button>
-            {error ? <p className="banner banner--bad" role="alert">{error}</p> : null}
-          </form>
+          {denied || locked ? (
+            <p className="lede">Sign-in is locked until the admin secrets (ADMIN_TOKEN / ADMIN_SESSION_SECRET) are configured.</p>
+          ) : null}
+
+          {mode === "password" && step === "credentials" ? (
+            <form
+              className="stack login-form"
+              style={{ maxWidth: "24rem" }}
+              onSubmit={(e) => {
+                e.preventDefault();
+                submitCredentials();
+              }}
+            >
+              <label className="field">
+                <span>Username</span>
+                <input autoComplete="username" value={username} onChange={(e) => setUsername(e.target.value)} required />
+              </label>
+              <label className="field">
+                <span>Password</span>
+                <input type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+              </label>
+              <button className="btn" type="submit" disabled={pending}>
+                {pending ? "Checking…" : "Continue"}
+              </button>
+              {error ? <p className="banner banner--bad" role="alert">{error}</p> : null}
+            </form>
+          ) : null}
+
+          {mode === "password" && step === "totp" ? (
+            <form
+              className="stack login-form"
+              style={{ maxWidth: "24rem" }}
+              onSubmit={(e) => {
+                e.preventDefault();
+                submitCode();
+              }}
+            >
+              <p className="field-help">Enter the 6-digit code from your authenticator app — or one of your recovery codes.</p>
+              <label className="field">
+                <span>Authentication code</span>
+                <input
+                  inputMode="text"
+                  autoComplete="one-time-code"
+                  value={code}
+                  onChange={(e) => setCode(e.target.value)}
+                  required
+                  autoFocus
+                />
+              </label>
+              <button className="btn" type="submit" disabled={pending}>
+                {pending ? "Checking…" : "Sign in"}
+              </button>
+              <button
+                className="btn btn--ghost"
+                type="button"
+                onClick={() => {
+                  setStep("credentials");
+                  setError(null);
+                }}
+              >
+                Back
+              </button>
+              {error ? <p className="banner banner--bad" role="alert">{error}</p> : null}
+            </form>
+          ) : null}
+
+          {mode === "token" ? (
+            <form
+              className="stack login-form"
+              style={{ maxWidth: "24rem" }}
+              onSubmit={(e) => {
+                e.preventDefault();
+                submitToken();
+              }}
+            >
+              <label className="field">
+                <span>Admin token</span>
+                <input type="password" autoComplete="current-password" value={token} onChange={(e) => setToken(e.target.value)} required />
+              </label>
+              <button className="btn" type="submit" disabled={pending}>
+                {pending ? "Checking…" : "Sign in"}
+              </button>
+              {error ? <p className="banner banner--bad" role="alert">{error}</p> : null}
+            </form>
+          ) : null}
+
+          {mode === "loading" ? <p className="field-help">Loading sign-in…</p> : null}
         </header>
       </div>
     </div>
