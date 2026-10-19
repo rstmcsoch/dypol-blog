@@ -2,7 +2,7 @@ import { Link } from "@tanstack/react-router";
 import type { ArticleMeta } from "@/content/present";
 import { readingMinutes } from "@/content/present";
 import type { Article, Category, SiteConfig, Tag } from "@/content/types";
-import { formatDate, padIndex } from "@/lib/format";
+import { formatDate, isMeaningfullyUpdated, padIndex } from "@/lib/format";
 import { ArticleBody } from "./article-body";
 import { Cover, hasCover } from "./cover";
 import { SidebarBlocks } from "./blocks";
@@ -55,6 +55,7 @@ export function ArticleView({
           <p className="meta">
             <span>by {site.publisher}</span>
             {article.publishedAt ? <span>{formatDate(article.publishedAt)}</span> : null}
+            {isMeaningfullyUpdated(article.publishedAt, article.updatedAt) ? <span>Updated {formatDate(article.updatedAt)}</span> : null}
             <span>
               {readingMinutes(article)} {site.labels.minRead}
             </span>
