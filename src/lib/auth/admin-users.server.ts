@@ -109,13 +109,15 @@ export async function startTotpEnrolment(sql: Sql, keyMaterial: string, opts: { 
 }
 
 /** Confirm a pending enrolment with a live code; activates the new secret. */
-export async function confirmTotp(sql: Sql, keyMaterial: string, user: AdminUserRow, code: string): Promise<boolean> {
-  if (!user.totp_pending_enc) return false;
+export type ConfirmResult = "ok" | "no-pending" | "decrypt-failed" | "code-mismatch";
+
+export async function confirmTotp(sql: Sql, keyMaterial: string, user: AdminUserRow, code: string): Promise<ConfirmResult> {
+  if (!user.totp_pending_enc) return "no-pending";
   const secret = await decryptTotpSecret(keyMaterial, user.totp_pending_enc);
-  if (!secret) return false;
-  if (!(await verifyTotp(secret, code))) return false;
+  if (!secret) return "decrypt-failed";
+  if (!(await verifyTotp(secret, code))) return "code-mismatch";
   await sql`update admin_users set totp_secret_enc = totp_pending_enc, totp_pending_enc = null, totp_enabled = 1, updated_at = ${nowSeconds()} where id = ${user.id}`;
-  return true;
+  return "ok";
 }
 
 export async function replaceRecoveryCodes(sql: Sql, userId: number): Promise<string[]> {

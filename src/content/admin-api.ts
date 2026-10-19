@@ -407,6 +407,7 @@ export const adminSecurityStatus = createServerFn({ method: "GET" }).handler(asy
   const user = await users.getAnyUser(sql);
   return {
     active: Boolean(user && user.totp_enabled === 1),
+    pending: Boolean(user && user.totp_enabled !== 1 && user.totp_pending_enc),
     username: user?.username ?? null,
     recoveryRemaining: user ? await users.countUnusedRecoveryCodes(sql, user.id) : 0,
   };
@@ -422,13 +423,22 @@ export const adminSecuritySetupStart = createServerFn({ method: "POST" })
     const { sql, users, keyMaterial } = await securityContext();
     if (await users.passwordLoginActive(sql)) throw new Error("Password login is already set up. Use the change options below.");
     const creds = await import("@/lib/auth/admin-credentials");
+    const { qrSvg } = await import("@/lib/auth/qr");
+    // Restart path (t82): credentials already saved, enrolment not finished —
+    // just issue a FRESH pending secret/QR (any earlier QR or typed secret
+    // stops working), keeping the username/password from the first attempt.
+    const existing = await users.getAnyUser(sql);
+    if (existing) {
+      const { secret } = await users.startTotpEnrolment(sql, keyMaterial, {});
+      const uri = creds.otpauthUri(secret, existing.username);
+      return { username: existing.username, secret, otpauthUri: uri, qrSvg: qrSvg(uri), restarted: true };
+    }
     const username = creds.normalizeUsername(data.username);
     if (!creds.validUsername(username)) throw new Error("Username needs 3–32 characters: lowercase letters, numbers, dot, dash or underscore.");
     if (!creds.validPassword(data.password)) throw new Error(`Password needs at least ${creds.PASSWORD_MIN_LENGTH} characters.`);
     const { user, secret } = await users.startTotpEnrolment(sql, keyMaterial, { username, password: data.password });
-    const { qrSvg } = await import("@/lib/auth/qr");
     const uri = creds.otpauthUri(secret, user.username);
-    return { username: user.username, secret, otpauthUri: uri, qrSvg: qrSvg(uri) };
+    return { username: user.username, secret, otpauthUri: uri, qrSvg: qrSvg(uri), restarted: false };
   });
 
 export const adminSecuritySetupConfirm = createServerFn({ method: "POST" })
@@ -437,12 +447,23 @@ export const adminSecuritySetupConfirm = createServerFn({ method: "POST" })
     await writeGuard();
     const { sql, users, keyMaterial } = await securityContext();
     const user = await users.getAnyUser(sql);
-    if (!user) throw new Error("Start setup first.");
-    if (!(await users.confirmTotp(sql, keyMaterial, user, data.code))) {
-      throw new Error("That code did not match. Check the authenticator entry and try again.");
+    if (!user) return { ok: false as const, reason: "no-pending" as const, message: "Setup was not started. Create your credentials first." };
+    const result = await users.confirmTotp(sql, keyMaterial, user, data.code);
+    if (result !== "ok") {
+      // Reason is logged server-side (never the code or any secret) so a
+      // recurring failure is diagnosable from the Worker logs.
+      console.error(`[security] setup confirm failed: ${result}`);
+      return {
+        ok: false as const,
+        reason: result,
+        message:
+          result === "code-mismatch"
+            ? "That code did not match the QR code on this page. The usual causes: the authenticator entry was typed in by hand with a wrong character, the entry is set to counter-based instead of time-based, or the phone clock is off. Easiest fix: use “Show a fresh QR code” below, scan it (do not type the secret), and enter the new code it shows."
+            : "This enrolment can no longer be confirmed. Use “Show a fresh QR code” below and scan the new one.",
+      };
     }
     const recoveryCodes = await users.replaceRecoveryCodes(sql, user.id);
-    return { ok: true, recoveryCodes };
+    return { ok: true as const, recoveryCodes };
   });
 
 export const adminSecurityChangePassword = createServerFn({ method: "POST" })
@@ -490,8 +511,10 @@ export const adminSecurityResetTotpConfirm = createServerFn({ method: "POST" })
     const { sql, users, keyMaterial } = await securityContext();
     const user = await users.getEnabledUser(sql);
     if (!user) throw new Error("Password login is not set up yet.");
-    if (!(await users.confirmTotp(sql, keyMaterial, user, data.code))) {
-      throw new Error("That code did not match. Your previous authenticator entry still works until a new one is confirmed.");
+    const result = await users.confirmTotp(sql, keyMaterial, user, data.code);
+    if (result !== "ok") {
+      console.error(`[security] totp reset confirm failed: ${result}`);
+      throw new Error("That code did not match the new QR code. Your previous authenticator entry still works until a new one is confirmed — check the code and try again, or generate another fresh QR.");
     }
     const recoveryCodes = await users.replaceRecoveryCodes(sql, user.id);
     return { ok: true, recoveryCodes };
