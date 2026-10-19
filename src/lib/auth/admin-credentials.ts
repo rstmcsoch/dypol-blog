@@ -2,8 +2,8 @@
  * Admin username/password + TOTP credentials (t80). Pure WebCrypto only —
  * no native deps, runs identically in Workers and in node tests.
  *
- * Passwords: PBKDF2-HMAC-SHA256, 600,000 iterations (OWASP 2023 guidance),
- * 128-bit random salt, 256-bit output, stored as
+ * Passwords: PBKDF2-HMAC-SHA256, 100,000 iterations, 128-bit random salt,
+ * 256-bit output, stored as
  *   pbkdf2-sha256$<iterations>$<salt b64>$<hash b64>
  * Verification recomputes and compares in constant time.
  *
@@ -23,7 +23,19 @@
 import { constantTimeEqual } from "./session-token.ts";
 
 const enc = new TextEncoder();
-const PBKDF2_ITERATIONS = 600_000;
+/**
+ * 100,000 is the maximum PBKDF2 iteration count Cloudflare Workers'
+ * WebCrypto accepts (t81: 600,000 threw "iteration counts above 100000 are
+ * not supported" in production). It is the strongest setting the platform
+ * allows; combined with a per-user 128-bit salt and this being a
+ * single-admin login behind a 5/min rate limit, that is the right tradeoff
+ * here. The count is embedded in every stored hash and verification reads
+ * it back from the record, so raising this constant later upgrades new
+ * hashes without invalidating old ones. Exported for the regression test
+ * that pins it to the Workers cap.
+ */
+export const PBKDF2_ITERATIONS = 100_000;
+export const WORKERS_PBKDF2_MAX_ITERATIONS = 100_000;
 export const PASSWORD_MIN_LENGTH = 12;
 export const PASSWORD_MAX_LENGTH = 128;
 export const USERNAME_PATTERN = /^[a-z0-9][a-z0-9._-]{2,31}$/;

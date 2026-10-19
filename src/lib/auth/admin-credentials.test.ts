@@ -3,19 +3,31 @@ import { test } from "node:test";
 import {
   base32Decode, base32Encode, decryptTotpSecret, encryptTotpSecret, generateRecoveryCodes,
   generateTotpSecret, hashPassword, hashRecoveryCode, issueChallenge, looksLikeRecoveryCode,
-  normalizeRecoveryCode, otpauthUri, totpCode, validPassword, validUsername, verifyChallenge,
+  normalizeRecoveryCode, otpauthUri, PBKDF2_ITERATIONS, totpCode, validPassword, validUsername, verifyChallenge,
   verifyPassword, verifyTotp,
 } from "./admin-credentials.ts";
 
 test("password hashing verifies, rejects wrong passwords and tampered hashes", async () => {
   const stored = await hashPassword("correct horse battery staple");
-  assert.match(stored, /^pbkdf2-sha256\$600000\$/);
+  assert.match(stored, /^pbkdf2-sha256\$100000\$/);
   assert.equal(await verifyPassword("correct horse battery staple", stored), true);
   assert.equal(await verifyPassword("correct horse battery staple!", stored), false);
   assert.equal(await verifyPassword("correct horse battery staple", stored.replace(/.$/, "A")), false);
   assert.equal(await verifyPassword("x", "not-a-hash"), false);
   const again = await hashPassword("correct horse battery staple");
   assert.notEqual(again, stored); // fresh salt every time
+});
+
+// Regression (t81): Workers WebCrypto rejects PBKDF2 above 100,000
+// iterations — the original 600,000 shipped and failed live in prod.
+test("pbkdf2 iteration count stays within the Workers WebCrypto cap", async () => {
+  assert.ok(PBKDF2_ITERATIONS <= 100_000, `configured ${PBKDF2_ITERATIONS}`);
+  assert.equal(PBKDF2_ITERATIONS, 100_000);
+  const stored = await hashPassword("iteration cap regression check");
+  const embedded = Number(stored.split("$")[1]);
+  assert.ok(embedded <= 100_000, `stored hash embeds ${embedded}`);
+  assert.equal(embedded, PBKDF2_ITERATIONS); // verify() must read this back, not a hardcoded count
+  assert.equal(await verifyPassword("iteration cap regression check", stored), true);
 });
 
 test("password + username policy", () => {
