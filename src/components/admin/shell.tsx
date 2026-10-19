@@ -127,7 +127,11 @@ export function AdminShell({
               type="button"
               className="adm-nav__item"
               onClick={() => {
-                void adminSignOut().then(() => router.navigate({ to: "/login", search: { denied: false } }));
+                void (async () => {
+                  await adminSignOut();
+                  await router.invalidate();
+                  await router.navigate({ to: "/admin", search: { denied: false } });
+                })();
               }}
             >
               <LogOut aria-hidden="true" size={18} className="adm-nav__icon" />

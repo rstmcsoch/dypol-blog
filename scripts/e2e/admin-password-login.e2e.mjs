@@ -62,6 +62,22 @@ const PASSWORD = "t80-e2e-password-1";
 let secret = "";
 let recoveryCodes = [];
 
+await check("single entry: GET /login 308-redirects to /admin, sign-in renders inline at /admin (token state)", async () => {
+  const { context, page } = await freshPage();
+  const resp = await context.request.get(BASE + "/login", { maxRedirects: 0 });
+  assert.equal(resp.status(), 308, `expected 308, got ${resp.status()}`);
+  assert.match(resp.headers()["location"] ?? "", /\/admin/, "Location must point at /admin");
+  await page.goto(BASE + "/admin");
+  assert.match(page.url(), /\/admin$/, "no redirect away from /admin");
+  await page.waitForSelector('text=Admin token');
+  await page.screenshot({ path: `${SHOTS}/admin-signin-token.png` });
+  // following the old bookmark lands on the same inline form, no loop
+  await page.goto(BASE + "/login");
+  await page.waitForSelector('text=Admin token');
+  assert.match(page.url(), /\/admin/, "old /login bookmark ends at /admin");
+  await context.close();
+});
+
 let capturedTokenLogin = null;
 await check("before setup: token login works and Security page offers setup", async () => {
   const { context, page } = await freshPage();
@@ -72,12 +88,12 @@ await check("before setup: token login works and Security page offers setup", as
       capturedTokenLogin = { url: req.url(), body: req.postData(), headers: req.headers() };
     }
   });
-  await page.goto(BASE + "/login");
+  await page.goto(BASE + "/admin");
   await page.waitForSelector('text=Admin token');
   await page.screenshot({ path: `${SHOTS}/login-token-before-setup.png` });
   await page.fill('input[type="password"]', TOKEN);
   await page.click('button[type="submit"]');
-  await page.waitForURL("**/admin");
+  await page.waitForSelector('button:has-text("Sign out")');
   await page.goto(BASE + "/admin/security");
   await page.waitForSelector("text=Set up password + 2FA sign-in");
   await page.screenshot({ path: `${SHOTS}/security-setup.png` });
@@ -98,7 +114,9 @@ await check("before setup: token login works and Security page offers setup", as
   // of silently looking as if password login was never implemented.
   {
     const pending = await freshPage();
-    await pending.page.goto(BASE + "/login");
+    const redir = await pending.context.request.get(BASE + "/login", { maxRedirects: 0 });
+    assert.equal(redir.status(), 308, "pending state: /login still 308s to /admin");
+    await pending.page.goto(BASE + "/admin");
     await pending.page.waitForSelector('text=Admin token');
     await pending.page.waitForSelector("text=Password sign-in is not active yet");
     assert.equal(await pending.page.locator('input[autocomplete="username"]').count(), 0, "no password form before confirm");
@@ -148,7 +166,8 @@ await check("before setup: token login works and Security page offers setup", as
   await page.screenshot({ path: `${SHOTS}/security-active.png` });
   // sign out (revokes this session server-side, SEC-005 behaviour preserved)
   await page.click('button:has-text("Sign out")');
-  await page.waitForURL("**/login**");
+  await page.waitForURL("**/admin");
+  await page.waitForSelector('text=Sign in');
   await context.close();
 });
 
@@ -158,10 +177,13 @@ await check("after setup: token sign-in is refused at the server, not just hidde
   // real server function the token form used, from a fresh browser context
   // with the correct token, and assert no desk session is issued.
   const { context, page } = await freshPage();
-  await page.goto(BASE + "/login");
+  await page.goto(BASE + "/admin");
   await page.waitForSelector('input[autocomplete="username"]');
-  const resp = await context.request.get(BASE + "/admin", { maxRedirects: 0 }).catch(() => null);
-  assert.ok(!resp || [302, 307].includes(resp.status()), "no session without password+TOTP");
+  // Single-entry behaviour: /admin itself answers 200 with the inline
+  // sign-in form (never a redirect to a separate login page, never the panel).
+  const resp = await context.request.get(BASE + "/admin", { maxRedirects: 0 });
+  assert.equal(resp.status(), 200, "unauthenticated /admin renders sign-in inline with 200");
+  assert.match(await resp.text(), /Sign in/, "sign-in form is rendered at /admin");
   assert.ok(capturedTokenLogin, "token sign-in request was captured before setup");
   const replay = await context.request.post(capturedTokenLogin.url, {
     data: capturedTokenLogin.body,
@@ -174,9 +196,11 @@ await check("after setup: token sign-in is refused at the server, not just hidde
   await context.close();
 });
 
-await check("after setup: /login asks username+password, no token field", async () => {
+await check("after setup: /admin asks username+password, no token field", async () => {
   const { context, page } = await freshPage();
-  await page.goto(BASE + "/login");
+  const redir = await context.request.get(BASE + "/login", { maxRedirects: 0 });
+  assert.equal(redir.status(), 308, "active state: /login 308s to /admin");
+  await page.goto(BASE + "/admin");
   await page.waitForSelector('input[autocomplete="username"]');
   assert.equal(await page.locator('text=Admin token').count(), 0);
   await page.screenshot({ path: `${SHOTS}/login-step1-password.png` });
@@ -185,7 +209,7 @@ await check("after setup: /login asks username+password, no token field", async 
 
 await check("wrong password gets the generic error", async () => {
   const { context, page } = await freshPage();
-  await page.goto(BASE + "/login");
+  await page.goto(BASE + "/admin");
   await page.fill('input[autocomplete="username"]', USERNAME);
   await page.fill('input[type="password"]', "definitely-wrong-password");
   await page.click('button[type="submit"]');
@@ -196,7 +220,7 @@ await check("wrong password gets the generic error", async () => {
 
 await check("password + TOTP signs in; wrong code does not", async () => {
   const { context, page } = await freshPage();
-  await page.goto(BASE + "/login");
+  await page.goto(BASE + "/admin");
   await page.fill('input[autocomplete="username"]', USERNAME);
   await page.fill('input[type="password"]', PASSWORD);
   await page.click('button[type="submit"]');
@@ -208,21 +232,27 @@ await check("password + TOTP signs in; wrong code does not", async () => {
   assert.match(await page.textContent('[role="alert"]'), /That code is not right/);
   await page.fill('input[autocomplete="one-time-code"]', totp(secret));
   await page.click('button[type="submit"]');
+  await page.waitForSelector('button:has-text("Sign out")');
+  // signed-in visit to old /login lands on the panel at /admin (no loop)
+  await page.goto(BASE + "/login");
   await page.waitForURL("**/admin");
+  await page.waitForSelector("text=Articles");
   // session is a normal desk session: admin pages load, sign-out revokes
   await page.goto(BASE + "/admin/articles");
   await page.waitForSelector("text=Articles");
   await page.click('button:has-text("Sign out")');
-  await page.waitForURL("**/login**");
-  const resp = await context.request.get(BASE + "/admin", { maxRedirects: 0 }).catch(() => null);
-  assert.ok(!resp || [302, 307].includes(resp.status()), "signed-out session no longer opens the desk");
+  await page.waitForURL("**/admin");
+  await page.waitForSelector('text=Sign in');
+  const resp = await context.request.get(BASE + "/admin", { maxRedirects: 0 });
+  assert.equal(resp.status(), 200, "signed-out /admin renders sign-in inline");
+  assert.ok(!(await resp.text()).includes("Live counts from your site."), "signed-out session no longer opens the desk");
   await context.close();
 });
 
 await check("recovery code signs in once; replaying it fails, the next one works", async () => {
   const { context, page } = await freshPage();
   const signInWith = async (code) => {
-    await page.goto(BASE + "/login");
+    await page.goto(BASE + "/admin");
     await page.fill('input[autocomplete="username"]', USERNAME);
     await page.fill('input[type="password"]', PASSWORD);
     await page.click('button[type="submit"]');
@@ -231,21 +261,22 @@ await check("recovery code signs in once; replaying it fails, the next one works
     await page.click('button[type="submit"]');
   };
   await signInWith(recoveryCodes[0]);
-  await page.waitForURL("**/admin");
+  await page.waitForSelector('button:has-text("Sign out")');
   await page.click('button:has-text("Sign out")');
-  await page.waitForURL("**/login**");
+  await page.waitForURL("**/admin");
+  await page.waitForSelector('text=Sign in');
   await signInWith(recoveryCodes[0]);
   await page.waitForSelector('[role="alert"]');
   assert.match(await page.textContent('[role="alert"]'), /That code is not right/);
   await page.fill('input[autocomplete="one-time-code"]', recoveryCodes[1]);
   await page.click('button[type="submit"]');
-  await page.waitForURL("**/admin");
+  await page.waitForSelector('button:has-text("Sign out")');
   await context.close();
 });
 
 await check("sign-in rate limit stops brute force (5/min per IP)", async () => {
   const { context, page } = await freshPage();
-  await page.goto(BASE + "/login");
+  await page.goto(BASE + "/admin");
   let limited = "";
   for (let i = 0; i < 7 && !limited; i += 1) {
     await page.fill('input[autocomplete="username"]', USERNAME);

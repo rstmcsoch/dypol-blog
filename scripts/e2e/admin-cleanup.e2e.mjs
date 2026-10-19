@@ -80,14 +80,14 @@ try {
   const anon = await browser.newContext();
   const anonPage = await anon.newPage();
   await anonPage.goto(BASE + "/admin/articles");
-  await check("logged-out /admin/articles redirects to /login", async () => {
-    await anonPage.waitForURL(/\/login/, { timeout: 10000 });
+  await check("logged-out /admin/articles redirects to /admin sign-in", async () => {
+    await anonPage.waitForURL(/\/admin$/, { timeout: 10000 });
   });
   await anon.close();
 
   const context = await browser.newContext();
   const page = await context.newPage();
-  await page.goto(BASE + "/login");
+  await page.goto(BASE + "/admin");
   await page.waitForLoadState("networkidle");
   await page.fill('input[type="password"]', TOKEN);
   await page.click('button[type="submit"]');

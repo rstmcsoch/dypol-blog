@@ -33,7 +33,7 @@ await check("robots.txt: public allowed, private paths disallowed, sitemaps list
   const { status, text } = await get("/robots.txt");
   assert.equal(status, 200);
   for (const line of ["Allow: /", "Disallow: /admin", "Disallow: /mcp", "Disallow: /api/", "Sitemap: ", "/news-sitemap.xml", "User-agent: OAI-SearchBot", "User-agent: Claude-SearchBot", "User-agent: Claude-User"]) assert.ok(text.includes(line), line);
-  assert.ok(!/^Disallow: \/login$/m.test(text), "/login must stay crawlable so its noindex can be read");
+  assert.ok(/^Disallow: \/admin$/m.test(text), "/admin (the only admin entry) is disallowed");
 });
 
 await check("sitemap.xml: absolute URLs with lastmod for articles and topics", async () => {
@@ -118,9 +118,9 @@ await check("topics index: ItemList JSON-LD of the topics", async () => {
   assert.ok(blocks.some((b) => b["@type"] === "ItemList"), "ItemList");
 });
 
-await check("login stays noindex; media files are immutable-cached", async () => {
-  const login = await get("/login?denied=false");
-  assert.match(login.text, /name="robots" content="noindex"/);
+await check("admin entry stays noindex; media files are immutable-cached", async () => {
+  const login = await get("/admin");
+  assert.match(login.text, /name="robots" content="noindex/);
   const page = (await findArticleWithMedia()) ?? articlePage;
   const mediaSrc = /src="(\/media\/[a-z0-9-]+)"/.exec(page.text)?.[1];
   assert.ok(mediaSrc, "media src");
@@ -157,8 +157,8 @@ process.exit(failures === 0 ? 0 : 1);
   for (const tag of ['href="/favicon.ico"', 'href="/favicon.svg"', 'href="/favicon-32x32.png"', 'href="/favicon-16x16.png"', 'href="/apple-touch-icon.png"', 'rel="manifest"']) {
     assert.ok(html.includes(tag), `home head includes ${tag}`);
   }
-  const loginHtml = await (await fetch(BASE + "/login")).text();
-  assert.ok(loginHtml.includes('href="/favicon.ico"'), "login head includes favicon.ico");
+  const loginHtml = await (await fetch(BASE + "/admin")).text();
+  assert.ok(loginHtml.includes('href="/favicon.ico"'), "admin sign-in head includes favicon.ico");
   const nf = await (await fetch(BASE + "/no-such-page-favicon")).text();
   assert.ok(nf.includes('href="/favicon.ico"'), "404 head includes favicon.ico");
   const manifest = await (await fetch(BASE + "/manifest.webmanifest")).json();
