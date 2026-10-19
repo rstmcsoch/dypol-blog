@@ -290,7 +290,7 @@
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background-image: url("/media/grain.png");
+  background-image: url("/media/grain.webp");
   background-size: 128px 128px;
   opacity: 0.55;
   mix-blend-mode: overlay;

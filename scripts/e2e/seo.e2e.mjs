@@ -111,6 +111,16 @@ await check("article: cover/thumbnail images carry descriptive alt text", async 
   for (const img of imgs) assert.match(img, /alt="[^"]+"/, img.slice(0, 90));
 });
 
+await check("perf (t88): homepage LCP cover is eager/high-priority, cards use thumb variant + dimensions", async () => {
+  assert.match(home.text, /class="article-cover"[^>]*loading="eager"[^>]*fetchpriority="high"/i, "lead cover eager + high priority");
+  assert.match(home.text, /rel="preload" as="image"[^>]*fetchpriority="high"/i, "LCP preload");
+  assert.match(home.text, /variant=thumb/, "card/list images use the thumb variant, not the hero/original");
+  for (const img of [...home.text.matchAll(/<img[^>]+src="\/media\/[^"]+"[^>]*>/g)].map((m) => m[0])) {
+    if (img.includes("wordmark__logo")) continue; // fixed-height CSS, aspect is owner-uploaded
+    assert.match(img, /width="\d+" height="\d+"/, `sized img (CLS): ${img.slice(0, 80)}`);
+  }
+});
+
 await check("topics index: ItemList JSON-LD of the topics", async () => {
   const { status, text } = await get("/topics");
   assert.equal(status, 200);

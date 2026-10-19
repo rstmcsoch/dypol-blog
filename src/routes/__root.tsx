@@ -13,6 +13,11 @@ import { getShell } from "@/content/public-api";
 import { appearanceCss } from "@/lib/appearance";
 import { site as fallbackSite } from "@/content/site";
 import appCss from "../styles.css?url";
+// t88: preload the latin display font. It sets the header/headline metrics;
+// arriving late swapped the font and shifted article content (CLS 0.28 in
+// Lighthouse). Same file the CSS @font-face references - no extra family,
+// no visual change, just earlier delivery.
+import familjenLatin from "@fontsource-variable/familjen-grotesk/files/familjen-grotesk-latin-wght-normal.woff2?url";
 
 export const Route = createRootRoute({
   loader: () => getShell(),
@@ -39,6 +44,7 @@ export const Route = createRootRoute({
         { rel: "icon", type: "image/png", sizes: "32x32", href: "/favicon-32x32.png" },
         { rel: "icon", type: "image/png", sizes: "16x16", href: "/favicon-16x16.png" },
         { rel: "apple-touch-icon", sizes: "180x180", href: "/apple-touch-icon.png" },
+        { rel: "preload", as: "font", type: "font/woff2", href: familjenLatin, crossOrigin: "anonymous" },
         { rel: "stylesheet", href: appCss },
         { rel: "manifest", href: "/manifest.webmanifest" },
         { rel: "alternate", type: "application/rss+xml", title: `${current.title} feed`, href: "/feed.xml" },

@@ -6,10 +6,11 @@ import { Markdown } from "@/components/markdown";
 import { Cover, hasCover } from "./cover";
 import { ShareLinks } from "./share";
 import { TopicGrid } from "./topic-grid";
+import { thumbUrl } from "@/lib/media-url";
 
 /** Each card's OWN cover (16/9), or a clean fallback panel with its topic — never another article's image. */
 function Thumb({ c, className = "story-card__img" }: { c: Card; className?: string }) {
-  if (c.coverMediaId) return <img className={className} src={`/media/${c.coverMediaId}`} alt={c.coverAlt?.trim() ? c.coverAlt : c.title} loading="lazy" />;
+  if (c.coverMediaId) return <img className={className} src={thumbUrl(c.coverMediaId)} alt={c.coverAlt?.trim() ? c.coverAlt : c.title} loading="lazy" decoding="async" width={480} height={270} />;
   return (
     <span className={`${className} story-card__img--empty`} aria-hidden="true">
       {c.categoryLabel || c.title}
@@ -32,7 +33,7 @@ function CardList({ cards, layout, minRead }: { cards: Card[]; layout: "list" | 
             <Link to="/articles/$slug" params={{ slug: c.slug }} className="index-row">
               <span className="index-row__num">{padIndex(c.rank)}</span>
               {c.coverMediaId ? (
-                <span className="index-row__thumb"><img src={`/media/${c.coverMediaId}`} alt={c.coverAlt?.trim() ? c.coverAlt : c.title} loading="lazy" /></span>
+                <span className="index-row__thumb"><img src={thumbUrl(c.coverMediaId)} alt={c.coverAlt?.trim() ? c.coverAlt : c.title} loading="lazy" decoding="async" width={480} height={360} /></span>
               ) : (
                 <span className="index-row__thumb index-row__thumb--empty" aria-hidden="true">{c.categoryLabel}</span>
               )}
@@ -103,7 +104,7 @@ function Featured({ r, site }: { r: ResolvedBlock; site: SiteConfig }) {
         </div>
         {cover ? (
           <Link to="/articles/$slug" params={{ slug: lead.slug }} className="plate-link" aria-label={lead.title}>
-            <Cover mediaId={lead.coverMediaId} fallback={fallback} motif={lead.motif} index={padIndex(lead.rank || 1)} category={lead.categoryLabel} title={lead.title} />
+            <Cover mediaId={lead.coverMediaId} fallback={fallback} motif={lead.motif} index={padIndex(lead.rank || 1)} category={lead.categoryLabel} title={lead.title} priority />
           </Link>
         ) : null}
       </div>
@@ -248,7 +249,7 @@ export function SidebarBlocks({ blocks, site, title, slug }: { blocks: ResolvedB
                 {r.cards.map((c) => (
                   <li key={c.id}>
                     <Link to="/articles/$slug" params={{ slug: c.slug }}>
-                      {c.coverMediaId ? <img className="aside-thumb" src={`/media/${c.coverMediaId}`} alt={c.coverAlt?.trim() ? c.coverAlt : c.title} loading="lazy" /> : null}
+                      {c.coverMediaId ? <img className="aside-thumb" src={thumbUrl(c.coverMediaId)} alt={c.coverAlt?.trim() ? c.coverAlt : c.title} loading="lazy" decoding="async" width={480} height={360} /> : null}
                       <span className="aside-title">{c.title}</span>
                     </Link>
                   </li>
