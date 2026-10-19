@@ -1,0 +1,6 @@
+# Hashed build assets (JS/CSS/fonts under /assets/*) are immutable by
+# construction - the filename changes when the content changes. Serving
+# them with max-age=0 forced a revalidation round-trip on every visit
+# and failed PageSpeed's "Use efficient cache lifetimes" audit (t88).
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable

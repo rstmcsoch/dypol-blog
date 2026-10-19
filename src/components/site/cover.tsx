@@ -1,5 +1,6 @@
 import type { CoverFallback, CoverMotif } from "@/content/types";
 import { CoverPlate } from "./cover-plate";
+import { mediaUrl } from "@/lib/media-url";
 
 /**
  * Article cover: the stored image when there is one; otherwise the owner's
@@ -31,10 +32,11 @@ export function Cover({
     return (
       <img
         className="article-cover"
-        src={`/media/${mediaId}`}
+        src={mediaUrl(mediaId)}
         alt={alt?.trim() ? alt : title}
         loading={priority ? "eager" : "lazy"}
         fetchPriority={priority ? "high" : undefined}
+        decoding="async"
         width={1200}
         height={675}
       />
