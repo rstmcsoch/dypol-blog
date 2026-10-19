@@ -12,3 +12,13 @@ export function formatDate(iso: string): string {
 export function padIndex(n: number): string {
   return String(n).padStart(2, "0");
 }
+
+/** True when an article was genuinely edited after publication (t91):
+ * more than a minute later, so seed/import timestamps never fake an update. */
+export function isMeaningfullyUpdated(publishedAt: string | null, updatedAt: string): boolean {
+  if (!publishedAt) return false;
+  const published = Date.parse(publishedAt);
+  const updated = Date.parse(updatedAt);
+  if (Number.isNaN(published) || Number.isNaN(updated)) return false;
+  return updated - published > 60_000;
+}
