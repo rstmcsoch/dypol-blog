@@ -30,3 +30,15 @@ test("seo checklist: gaps are flagged with hints", () => {
   assert.equal(byLabel["URL slug set"], false);
   assert.equal(checklistScore(items).passed, 3);
 });
+
+test("t91: advisory report checks appear only when body signals are supplied", () => {
+  const base = seoChecklist(ready);
+  assert.equal(base.some((i) => i.label.startsWith("Sources linked")), false);
+  const items = seoChecklist({ ...ready, linkCount: 0, hasTakeawayOrTable: false, hasReaderActionHeading: false });
+  const byLabel = Object.fromEntries(items.map((i) => [i.label, i.ok]));
+  assert.equal(byLabel["Sources linked in the text (not just listed)"], false);
+  assert.equal(byLabel["At a glance box or a table (longer pieces)"], false);
+  assert.equal(byLabel["Says what it means for the reader / what to do"], false);
+  const good = seoChecklist({ ...ready, linkCount: 3, hasTakeawayOrTable: true, hasReaderActionHeading: true });
+  assert.equal(checklistScore(good).passed, good.length);
+});

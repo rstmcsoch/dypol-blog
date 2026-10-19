@@ -684,6 +684,8 @@ function SeoChecklist({ draft }: { draft: Draft }) {
     .join(" ")
     .split(/\s+/)
     .filter(Boolean).length;
+  const bodyStrings = draft.blocks.flatMap((b) => (b.type === "list" ? b.items : b.type === "code" ? [] : [b.text]));
+  const linkCount = bodyStrings.reduce((n, s) => n + (s.match(/\[[^\]]+\]\(https?:\/\/[^)\s]+\)|https?:\/\/[^\s)]+/g) ?? []).length, 0);
   const items = seoChecklist({
     title: draft.title,
     seoTitle: draft.seoTitle,
@@ -694,6 +696,9 @@ function SeoChecklist({ draft }: { draft: Draft }) {
     topicCount: 1 + draft.topicIds.filter((id) => id !== draft.categoryId).length,
     words,
     hasHeading: draft.blocks.some((b) => b.type === "heading"),
+    linkCount,
+    hasTakeawayOrTable: draft.blocks.some((b) => b.type === "heading" && /at a glance|key takeaways/i.test(b.text)),
+    hasReaderActionHeading: draft.blocks.some((b) => b.type === "heading" && /what (this means|to do|.*means for you)|should you|how to (protect|fix|turn|stop)|what readers|what (you|users|developers) (can|should)/i.test(b.text)),
   });
   const score = checklistScore(items);
   return (
