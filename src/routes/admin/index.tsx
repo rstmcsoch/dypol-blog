@@ -3,9 +3,26 @@ import { adminDashboard } from "@/content/admin-api";
 import { formatDate } from "@/lib/format";
 
 export const Route = createFileRoute("/admin/")({
-  loader: () => adminDashboard(),
+  // Without a desk session the /admin layout renders the sign-in form and
+  // this component is never shown, so skip the guarded dashboard call
+  // (it would throw Unauthorized) and return empty placeholder data.
+  loader: async ({ context }) => {
+    if (!(context as { desk?: { session: unknown } }).desk?.session) return EMPTY_DASHBOARD;
+    return adminDashboard();
+  },
   component: DeskHome,
 });
+
+const EMPTY_DASHBOARD: Awaited<ReturnType<typeof adminDashboard>> = {
+  counts: { published: 0, draft: 0, unpublished: 0, scheduled: 0, topics: 0, tags: 0 },
+  media: { files: 0, bytes: 0 },
+  totalViews: 0,
+  publishedThisWeek: 0,
+  topArticles: [],
+  recent: [],
+  attention: [],
+  recentRuns: [],
+};
 
 function DeskHome() {
   const data = Route.useLoaderData();

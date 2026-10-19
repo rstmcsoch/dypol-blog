@@ -4,7 +4,7 @@ This guide explains every part of the DYPOL Blog admin panel in plain language. 
 
 ## Signing in
 
-- The admin panel lives at `/admin`. You sign in at `/login`.
+- The admin panel lives at `/admin` — that is also where you sign in: visiting `/admin` signed out shows the sign-in form right there. (Old `/login` bookmarks permanently redirect to `/admin`.)
 - **Recommended sign-in: username + password + authenticator app (2FA).** Set it up once under **Admin → Security**: choose a username and a password (12+ characters), scan the QR code with any authenticator app (Google Authenticator, Authy, 1Password…), enter the 6-digit code it shows, and save the 10 recovery codes somewhere safe — they are shown only once and each works once if you lose your phone.
 - The moment you confirm that first code, **admin-token sign-in switches off**. Until then the token keeps working, so starting setup can never lock you out.
 - Your password is stored only as a one-way scramble (PBKDF2). The authenticator secret is stored encrypted. Nobody — including anyone reading the database — can read either back.

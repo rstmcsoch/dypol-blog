@@ -12,7 +12,7 @@ export const Route = createFileRoute("/preview/home")({
       return await adminHomePreview({ data: {} });
     } catch (error) {
       const message = error instanceof Error ? error.message : "";
-      if (message.includes("Unauthorized") || message.includes("Forbidden")) throw redirect({ to: "/login", search: { denied: message.includes("Forbidden") } });
+      if (message.includes("Unauthorized") || message.includes("Forbidden")) throw redirect({ to: "/admin", search: { denied: message.includes("Forbidden") } });
       throw error;
     }
   },

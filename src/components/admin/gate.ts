@@ -1,15 +1,32 @@
 import { redirect } from "@tanstack/react-router";
 import { adminSession } from "@/content/admin-api";
 
-export async function requireDesk() {
+export type DeskSession = Awaited<ReturnType<typeof adminSession>>;
+
+/**
+ * Single-entry gate (t83 follow-up): /admin is the only admin page.
+ * Unauthenticated visits render the sign-in form inline at /admin instead
+ * of redirecting to a separate login page. Returns the session, or null
+ * with `locked` when the deployment has no admin secrets configured
+ * (Forbidden). Any other error is rethrown - it is a server problem, not
+ * a sign-in state.
+ */
+export async function getDeskSession(): Promise<{ session: DeskSession | null; locked: boolean }> {
   try {
-    return await adminSession();
+    return { session: await adminSession(), locked: false };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    if (message.includes("Forbidden")) throw redirect({ to: "/login", search: { denied: true } });
-    if (message.includes("Unauthorized")) throw redirect({ to: "/login", search: { denied: false } });
+    if (message.includes("Forbidden")) return { session: null, locked: true };
+    if (message.includes("Unauthorized")) return { session: null, locked: false };
     throw error;
   }
+}
+
+/** @deprecated Callers should render sign-in inline via getDeskSession(). */
+export async function requireDesk() {
+  const { session, locked } = await getDeskSession();
+  if (!session) throw redirect({ to: "/admin", search: { denied: locked } });
+  return session;
 }
 
 /** Plain-language error text; validation errors become "field: problem" lines. */

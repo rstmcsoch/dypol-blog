@@ -53,11 +53,13 @@ function refused(status, body) {
 const browser = await chromium.launch();
 const anon = await pwRequest.newContext({ baseURL: BASE });
 
-await check("/admin without a session redirects to /login", async () => {
+await check("/admin without a session renders the sign-in inline (single entry, no /login page)", async () => {
   const r = await anon.get("/admin", { maxRedirects: 0 });
-  assert.equal(r.status(), 307);
-  assert.match(r.headers().location ?? "", /\/login\?denied=(true|false)/);
-  if (LOCKED) assert.match(r.headers().location ?? "", /denied=true/);
+  assert.equal(r.status(), 200);
+  assert.match(await r.text(), /Sign in/);
+  const old = await anon.get("/login", { maxRedirects: 0 });
+  assert.equal(old.status(), 308);
+  assert.match(old.headers().location ?? "", /\/admin/);
 });
 
 for (const path of ["/admin/articles", "/admin/topics", "/admin/media", "/admin/settings", "/admin/articles/new", "/admin/homepage", "/admin/site-text", "/admin/appearance", "/admin/help", "/admin/automation", "/admin/ticker", "/preview/home"]) {
@@ -70,13 +72,13 @@ for (const path of ["/admin/articles", "/admin/topics", "/admin/media", "/admin/
 if (LOCKED) {
   await check("sign-in is refused when ADMIN_TOKEN is not configured", async () => {
     const page = await browser.newPage();
-    await page.goto(BASE + "/login");
+    await page.goto(BASE + "/admin");
     await page.fill('input[type="password"]', "anything-anything-anything");
     await page.click('button[type="submit"]');
     await page.waitForSelector('[role="alert"]');
     assert.match(await page.textContent('[role="alert"]'), /locked/i);
     await page.goto(BASE + "/admin");
-    assert.match(page.url(), /\/login/);
+    await page.waitForSelector('text=Admin token');
     await page.close();
   });
 } else {
@@ -91,7 +93,7 @@ if (LOCKED) {
   });
 
   await check("wrong token is rejected", async () => {
-    await page.goto(BASE + "/login");
+    await page.goto(BASE + "/admin");
     await page.fill('input[type="password"]', "definitely-not-the-token");
     await page.click('button[type="submit"]');
     await page.waitForSelector('[role="alert"]');
@@ -100,7 +102,7 @@ if (LOCKED) {
 
   await page.fill('input[type="password"]', TOKEN);
   await page.click('button[type="submit"]');
-  await page.waitForURL(/\/admin$/);
+  await page.waitForSelector('button:has-text("Sign out")');
 
   const signInCalls = calls.slice();
   await check("desk cookie is HttpOnly, Secure, SameSite=Lax, short-lived, signed with iat/exp/nonce", async () => {
@@ -148,7 +150,11 @@ if (LOCKED) {
     const [v, iat, , nonce, mac] = cookie.value.split(".");
     const forged = [v, iat, String(Number(iat) + 365 * 86400), nonce, mac].join(".");
     const r = await anon.get("/admin", { headers: { cookie: `dypol_desk=${forged}` }, maxRedirects: 0 });
-    assert.equal(r.status(), 307);
+    // Single-entry: a refused session gets the inline sign-in at /admin
+    // (200), never the desk - it is no longer bounced to a /login page.
+    assert.equal(r.status(), 200);
+    assert.match(await r.text(), /Sign in/);
+    assert.ok(!(await r.text()).includes("Live counts"), "tampered session never renders the desk");
     const ok = await anon.get("/admin", { headers: { cookie: `dypol_desk=${cookie.value}` }, maxRedirects: 0 });
     assert.equal(ok.status(), 200, "the genuine cookie still works");
   });
@@ -176,9 +182,9 @@ if (LOCKED) {
   await check("sign-out clears the session", async () => {
     await page.goto(BASE + "/admin/settings");
     await page.getByRole("button", { name: "Sign out" }).click();
-    await page.waitForURL(/\/login/);
+    await page.waitForURL(/\/admin$/);
     await page.goto(BASE + "/admin");
-    assert.match(page.url(), /\/login/);
+    await page.waitForSelector('text=Admin token');
   });
   await context.close();
 
@@ -203,7 +209,7 @@ if (LOCKED) {
     assert.equal(r.headers()["set-cookie"], undefined, "no session issued while throttled");
     const ui = await browser.newPage();
     // Fixed windows can roll over mid-test, so use a wrong token until the UI shows the throttle.
-    await ui.goto(BASE + "/login");
+    await ui.goto(BASE + "/admin");
     let message = "";
     for (let i = 0; i < 7 && !/Too many/.test(message); i += 1) {
       await ui.fill('input[type="password"]', "still-the-wrong-token");

@@ -6,9 +6,9 @@ export const Route = createFileRoute("/robots.txt")({
       GET: async ({ request }) => {
         const { canonicalOriginFrom } = await import("@/lib/seo");
         const origin = canonicalOriginFrom(request.url);
-        // /login is deliberately NOT disallowed: it carries a noindex meta,
-        // and crawlers must be able to fetch it to see that directive (the
-        // page itself stays behind the sign-in flow). AI *search* crawlers
+        // The admin entry is /admin (single-entry design): it is disallowed
+        // here AND carries a noindex meta. /login only 308-redirects to
+        // /admin, so it needs no rule of its own. AI *search* crawlers
         // are expressly allowed on the same terms; training-bot policy is
         // the owner's separate decision and stays under the wildcard rule.
         const privatePaths = ["Disallow: /admin", "Disallow: /preview", "Disallow: /mcp", "Disallow: /api/", "Disallow: /oauth/"].join("\n");
