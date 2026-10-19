@@ -291,6 +291,8 @@ export function ArticleEditor({
               <option value="list">List</option>
               <option value="quote">Quote</option>
               <option value="code">Code</option>
+              <option value="table">Table</option>
+              <option value="takeaways">At a glance (takeaways)</option>
             </select>
           </label>
         </div>
@@ -564,6 +566,8 @@ function emptyBlock(type: string): ArticleBlock {
   if (type === "list") return { type: "list", items: [""] };
   if (type === "quote") return { type: "quote", text: "" };
   if (type === "code") return { type: "code", code: "" };
+  if (type === "table") return { type: "table", headers: ["", ""], rows: [["", ""]] };
+  if (type === "takeaways") return { type: "takeaways", items: [""] };
   return { type: "paragraph", text: "" };
 }
 
@@ -626,6 +630,29 @@ function BlockFields({ block, onChange }: { block: ArticleBlock; onChange: (bloc
       </>
     );
   }
+  if (block.type === "table") {
+    const text = [block.headers.join(" | "), ...block.rows.map((r) => r.join(" | "))].join("\n");
+    return (
+      <label className="field">
+        <span>Table — first line is the header; one row per line; cells separated by |</span>
+        <textarea
+          value={text}
+          onChange={(event) => {
+            const lines = event.target.value.split("\n");
+            onChange({ type: "table", headers: (lines[0] ?? "").split("|").map((c) => c.trim()), rows: lines.slice(1).map((l) => l.split("|").map((c) => c.trim())) });
+          }}
+        />
+      </label>
+    );
+  }
+  if (block.type === "takeaways") {
+    return (
+      <label className="field">
+        <span>At a glance — 2–4 bullets, one per line (result, who is affected, main caveat)</span>
+        <textarea value={block.items.join("\n")} onChange={(event) => onChange({ ...block, items: event.target.value.split("\n") })} />
+      </label>
+    );
+  }
   if (block.type === "code") {
     return (
       <>
@@ -653,7 +680,7 @@ function BlockFields({ block, onChange }: { block: ArticleBlock; onChange: (bloc
 
 function SeoChecklist({ draft }: { draft: Draft }) {
   const words = draft.blocks
-    .map((b) => (b.type === "list" ? b.items.join(" ") : b.type === "code" ? "" : b.text))
+    .map((b) => (b.type === "list" || b.type === "takeaways" ? b.items.join(" ") : b.type === "table" ? [...b.headers, ...b.rows.flat()].join(" ") : b.type === "code" ? "" : b.text))
     .join(" ")
     .split(/\s+/)
     .filter(Boolean).length;

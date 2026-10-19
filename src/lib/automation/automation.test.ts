@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { bodyToBlocks, contentHash, wordCount } from "./body.ts";
+import { blocksToBody, bodyToBlocks, contentHash, wordCount } from "./body.ts";
 import { decodeBase64Image, fetchImage, ImageIntakeError, MAX_IMAGE_BYTES, sniffImage, unsafeUrlReason } from "./image-fetch.ts";
 import { draftFlags, publishDecision, sourceProblems } from "./policy.ts";
 import { buildRequest, configuredKeyNames, generateWithServerApi, parseResponse, providerStatus, ProviderError } from "./provider.ts";
@@ -254,4 +254,22 @@ test("bug fix: one invalid stored field no longer resets (and disables) all auto
   assert.deepEqual(out.topicSources, ["https://a.example"]);
   assert.equal(out.policy.autoPublish, true);
   assert.equal(out.policy.maxPublishedPerRun, DEFAULT_AUTOMATION_SETTINGS.policy.maxPublishedPerRun);
+});
+
+test("t91: markdown pipe table becomes a table block and round-trips", () => {
+  const blocks = bodyToBlocks("Intro.\n\n| Model | Score |\n|---|---|\n| A | 10 |\n| B | 8 |\n\nAfter.");
+  const table = blocks.find((b) => b.type === "table");
+  assert.ok(table && table.type === "table");
+  assert.deepEqual(table.headers, ["Model", "Score"]);
+  assert.deepEqual(table.rows, [["A", "10"], ["B", "8"]]);
+  assert.ok(wordCount(blocks) >= 8);
+  const again = bodyToBlocks(blocksToBody(blocks));
+  assert.deepEqual(again.find((b) => b.type === "table"), table);
+});
+
+test("t91: 'At a glance' heading + list becomes a takeaways box and round-trips", () => {
+  const blocks = bodyToBlocks("## At a glance\n- Result one\n- Who is affected\n- Main caveat\n\n## Body\nText.");
+  assert.deepEqual(blocks[0], { type: "takeaways", items: ["Result one", "Who is affected", "Main caveat"] });
+  const again = bodyToBlocks(blocksToBody(blocks));
+  assert.deepEqual(again[0], blocks[0]);
 });

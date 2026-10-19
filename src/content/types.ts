@@ -9,7 +9,11 @@ export type ArticleBlock =
   | { type: "heading"; level: 2 | 3; text: string }
   | { type: "list"; ordered?: boolean; items: string[] }
   | { type: "quote"; text: string; attribution?: string }
-  | { type: "code"; language?: string; code: string };
+  | { type: "code"; language?: string; code: string }
+  /** t91 Phase 2: comparison/data table (markdown pipe table in automation bodies). */
+  | { type: "table"; headers: string[]; rows: string[][] }
+  /** t91 Phase 2: "At a glance" key-takeaways box (2-4 bullets). */
+  | { type: "takeaways"; items: string[] };
 
 /** Canonical article. Public pages, a future editor, and automation all use this shape. */
 export type Article = {
