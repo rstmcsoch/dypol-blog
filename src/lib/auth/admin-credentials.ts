@@ -139,16 +139,57 @@ export async function totpCode(secretBytes: Uint8Array, atSeconds: number, digit
   return String(binary % 10 ** digits).padStart(digits, "0");
 }
 
-/** Accepts the current step and one step either side (clock skew / typing time). */
-export async function verifyTotp(secretBase32: string, code: string, atSeconds = Math.floor(Date.now() / 1000)): Promise<boolean> {
+/**
+ * Accepted window: the current step plus two steps either side (t84).
+ * +-1 covered most clock skew, but a phone with its clock a minute or two
+ * out produced a correct code for its own entry that could never match -
+ * indistinguishable from a wrong entry. +-2 steps keeps the guess space
+ * at 5 codes in 1,000,000 behind a 5-attempts/minute rate limit (and the
+ * Security-page confirm is behind a live admin session), which is the
+ * right trade for a single-admin login.
+ */
+export const TOTP_WINDOW_STEPS = 2;
+/** Diagnosis only: how far (in steps) outside the window we still look. */
+export const TOTP_DIAGNOSE_STEPS = 5;
+
+/**
+ * Which step offset a code matches, searching `maxSteps` either side, or
+ * null when no nearby step matches. Diagnostic (t84): lets the confirm
+ * handler tell "right entry, phone clock off by N steps" apart from
+ * "code from a different entry" WITHOUT logging codes or secrets.
+ * Never widen acceptance based on this beyond TOTP_WINDOW_STEPS.
+ */
+export async function totpMatchStep(secretBase32: string, code: string, atSeconds = Math.floor(Date.now() / 1000), maxSteps = TOTP_WINDOW_STEPS): Promise<number | null> {
   const clean = code.replace(/\s/g, "");
-  if (!/^\d{6}$/.test(clean)) return false;
+  if (!/^\d{6}$/.test(clean)) return null;
   let bytes: Uint8Array;
-  try { bytes = base32Decode(secretBase32); } catch { return false; }
-  for (const delta of [-30, 0, 30]) {
-    if (constantTimeEqual(await totpCode(bytes, atSeconds + delta), clean)) return true;
+  try { bytes = base32Decode(secretBase32); } catch { return null; }
+  for (let magnitude = 0; magnitude <= maxSteps; magnitude += 1) {
+    const offsets = magnitude === 0 ? [0] : [-magnitude, magnitude];
+    for (const step of offsets) {
+      if (constantTimeEqual(await totpCode(bytes, atSeconds + step * 30), clean)) return step;
+    }
   }
-  return false;
+  return null;
+}
+
+export async function verifyTotp(secretBase32: string, code: string, atSeconds = Math.floor(Date.now() / 1000)): Promise<boolean> {
+  return (await totpMatchStep(secretBase32, code, atSeconds, TOTP_WINDOW_STEPS)) !== null;
+}
+
+/**
+ * t84: a confirm failure must say WHICH kind it is. A code that matches a
+ * nearby step belongs to this secret but the phone clock is off; a code
+ * that matches no nearby step belongs to a different entry (phones keep
+ * old "DYPOL Blog" entries after every re-scan, all with the same name).
+ */
+export function confirmMismatchMessage(matchedStep: number | null): string {
+  if (matchedStep !== null) {
+    const minutes = Math.max(1, Math.round((Math.abs(matchedStep) * 30) / 60));
+    const direction = matchedStep > 0 ? "ahead of" : "behind";
+    return `That code is from the right authenticator entry, but it is about ${minutes} minute${minutes === 1 ? "" : "s"} out of date \u2014 your phone clock is ${direction} the real time. Set your phone's date & time to automatic (network-provided), then enter a fresh code here.`;
+  }
+  return "That code is not from the authenticator entry for the QR code on this page. After re-scanning, phones often keep several entries all named \u201cDYPOL Blog\u201d showing different codes. Delete every \u201cDYPOL Blog\u201d entry in your authenticator, scan the QR code on THIS page once, and enter the code from that newest entry (do not type the secret by hand).";
 }
 
 export function otpauthUri(secretBase32: string, username: string): string {

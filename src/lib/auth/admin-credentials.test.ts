@@ -4,8 +4,9 @@ import {
   base32Decode, base32Encode, decryptTotpSecret, encryptTotpSecret, generateRecoveryCodes,
   generateTotpSecret, hashPassword, hashRecoveryCode, issueChallenge, looksLikeRecoveryCode,
   normalizeRecoveryCode, otpauthUri, PBKDF2_ITERATIONS, totpCode, validPassword, validUsername, verifyChallenge,
-  verifyPassword, verifyTotp,
+  verifyPassword, verifyTotp, totpMatchStep, TOTP_WINDOW_STEPS, TOTP_DIAGNOSE_STEPS, confirmMismatchMessage,
 } from "./admin-credentials.ts";
+import { createHmac } from "node:crypto";
 
 test("password hashing verifies, rejects wrong passwords and tampered hashes", async () => {
   const stored = await hashPassword("correct horse battery staple");
@@ -51,17 +52,70 @@ test("totp matches RFC 6238 vectors", async () => {
   }
 });
 
-test("totp verify accepts ±1 step, rejects other codes", async () => {
+test("totp verify accepts ±2 steps (t84), rejects other codes", async () => {
   const { secret, bytes } = generateTotpSecret();
   const now = 1_700_000_000;
   const current = await totpCode(bytes, now);
   const prev = await totpCode(bytes, now - 30);
+  const twoStepsBack = await totpCode(bytes, now - 60);
   const far = await totpCode(bytes, now - 120);
   assert.equal(await verifyTotp(secret, current, now), true);
   assert.equal(await verifyTotp(secret, prev, now), true);
+  assert.equal(await verifyTotp(secret, twoStepsBack, now), true);
   assert.equal(await verifyTotp(secret, far, now), false);
   assert.equal(await verifyTotp(secret, "abcdef", now), false);
   assert.equal(await verifyTotp("!!!not-base32!!!", current, now), false);
+});
+
+// t84 regression net: an INDEPENDENT TOTP implementation (node:crypto
+// HMAC + a from-scratch base32 decoder, the pyotp/authenticator semantics)
+// must agree with the repo on freshly generated secrets, through the full
+// pending path (encrypt at enrolment -> decrypt at confirm -> verify),
+// at multiple times and with leading-zero codes preserved as strings.
+// This is the test that fails if generate/QR/store/verify ever drift apart.
+test("independent TOTP implementation agrees through the encrypt-store-verify path", async () => {
+  const B32 = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+  const independent = (secretB32: string, atSeconds: number): string => {
+    let bits = 0, value = 0; const out: number[] = [];
+    for (const ch of secretB32.replace(/\s/g, "")) { value = (value << 5) | B32.indexOf(ch); bits += 5; if (bits >= 8) { out.push((value >>> (bits - 8)) & 255); bits -= 8; } }
+    const counter = Buffer.alloc(8); counter.writeBigUInt64BE(BigInt(Math.floor(atSeconds / 30)));
+    const mac = createHmac("sha1", Buffer.from(out)).update(counter).digest();
+    return String(mac.readUInt32BE(mac[mac.length - 1] & 0x0f) & 0x7fffffff).padStart(10, "0").slice(-6).padStart(6, "0");
+  };
+  const times = [1_700_000_000, 1_790_000_123, 1_234_567_890];
+  for (let i = 0; i < 25; i += 1) {
+    const { secret } = generateTotpSecret();
+    // enrolment stores the pending secret encrypted; confirm decrypts it back
+    const restored = await decryptTotpSecret("diag-key", await encryptTotpSecret("diag-key", secret));
+    assert.equal(restored, secret);
+    for (const at of times) {
+      const expected = independent(secret, at);
+      assert.equal(await totpCode(base32Decode(secret), at), expected, `code drift secret#${i} t=${at}`);
+      assert.equal(await verifyTotp(restored!, expected, at), true, `verify drift secret#${i} t=${at}`);
+    }
+  }
+  // leading zeros survive as a 6-char string (never parsed as a number)
+  const { secret, bytes } = generateTotpSecret();
+  let leadingAt = 0; let leadingCode = "";
+  for (let at = 1_700_000_000; at < 1_700_100_000; at += 30) {
+    const c = await totpCode(bytes, at);
+    if (c.startsWith("0")) { leadingAt = at; leadingCode = c; break; }
+  }
+  assert.ok(leadingCode.startsWith("0") && leadingCode.length === 6);
+  assert.equal(await verifyTotp(secret, leadingCode, leadingAt), true);
+});
+
+test("totpMatchStep diagnoses clock skew vs wrong entry without widening acceptance", async () => {
+  const { secret, bytes } = generateTotpSecret();
+  const other = generateTotpSecret();
+  const now = 1_700_000_000;
+  assert.equal(await totpMatchStep(secret, await totpCode(bytes, now), now, TOTP_DIAGNOSE_STEPS), 0);
+  assert.equal(await totpMatchStep(secret, await totpCode(bytes, now - 90), now, TOTP_DIAGNOSE_STEPS), -3);
+  assert.equal(await totpMatchStep(secret, await totpCode(bytes, now + 150), now, TOTP_DIAGNOSE_STEPS), 5);
+  assert.equal(await totpMatchStep(secret, await totpCode(other.bytes, now), now, TOTP_DIAGNOSE_STEPS), null);
+  assert.equal(await totpMatchStep(secret, await totpCode(bytes, now - (TOTP_WINDOW_STEPS + 1) * 30), now), null, "default search stays within the accepted window");
+  assert.match(confirmMismatchMessage(-3), /phone clock/);
+  assert.match(confirmMismatchMessage(null), /not from the authenticator entry/);
 });
 
 test("base32 round-trips and otpauth URI is well-formed", () => {

@@ -14,7 +14,7 @@
 import type { Sql } from "@/lib/db";
 import {
   decryptTotpSecret, generateRecoveryCodes, generateTotpSecret, hashPassword, hashRecoveryCode,
-  looksLikeRecoveryCode, verifyPassword, verifyTotp,
+  looksLikeRecoveryCode, totpMatchStep, verifyPassword, verifyTotp, TOTP_DIAGNOSE_STEPS,
 } from "./admin-credentials.ts";
 
 export interface AdminUserRow {
@@ -122,14 +122,27 @@ export async function startTotpEnrolment(sql: Sql, keyMaterial: string, opts: { 
 
 /** Confirm a pending enrolment with a live code; activates the new secret. */
 export type ConfirmResult = "ok" | "no-pending" | "decrypt-failed" | "code-mismatch";
+export interface ConfirmOutcome {
+  status: ConfirmResult;
+  /**
+   * t84 diagnosis (never a code or secret): on code-mismatch, the step
+   * offset the code DID match within TOTP_DIAGNOSE_STEPS, or null when no
+   * nearby step matches. A non-null value means the code came from the
+   * right secret but the phone clock is off by about |step| x 30 seconds;
+   * null means it came from a different authenticator entry / secret.
+   */
+  matchedStep: number | null;
+}
 
-export async function confirmTotp(sql: Sql, keyMaterial: string, user: AdminUserRow, code: string): Promise<ConfirmResult> {
-  if (!user.totp_pending_enc) return "no-pending";
+export async function confirmTotp(sql: Sql, keyMaterial: string, user: AdminUserRow, code: string): Promise<ConfirmOutcome> {
+  if (!user.totp_pending_enc) return { status: "no-pending", matchedStep: null };
   const secret = await decryptTotpSecret(keyMaterial, user.totp_pending_enc);
-  if (!secret) return "decrypt-failed";
-  if (!(await verifyTotp(secret, code))) return "code-mismatch";
+  if (!secret) return { status: "decrypt-failed", matchedStep: null };
+  if (!(await verifyTotp(secret, code))) {
+    return { status: "code-mismatch", matchedStep: await totpMatchStep(secret, code, Math.floor(Date.now() / 1000), TOTP_DIAGNOSE_STEPS) };
+  }
   await sql`update admin_users set totp_secret_enc = totp_pending_enc, totp_pending_enc = null, totp_enabled = 1, updated_at = ${nowSeconds()} where id = ${user.id}`;
-  return "ok";
+  return { status: "ok", matchedStep: 0 };
 }
 
 export async function replaceRecoveryCodes(sql: Sql, userId: number): Promise<string[]> {

@@ -138,7 +138,7 @@ await check("before setup: token login works and Security page offers setup", as
   await page.fill('input[autocomplete="one-time-code"]', wrongCode);
   await page.click('button:has-text("Confirm code")');
   await page.waitForSelector('section:has-text("Scan with your authenticator app") [role="alert"]');
-  assert.match(await page.textContent('section:has-text("Scan with your authenticator app") [role="alert"]'), /did not match/);
+  assert.match(await page.textContent('section:has-text("Scan with your authenticator app") [role="alert"]'), /not from the authenticator entry|right authenticator entry/);
   await page.screenshot({ path: `${SHOTS}/security-confirm-wrong-code.png` });
   // t82: "fresh QR" rotates the pending secret — the old secret's code is
   // then rejected, the new one confirms (also burns any shared secret).
