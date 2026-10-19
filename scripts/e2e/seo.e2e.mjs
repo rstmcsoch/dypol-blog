@@ -68,6 +68,20 @@ await check("manifest.webmanifest: valid JSON with name + theme color", async ()
   assert.ok(m.name && m.theme_color, "fields");
 });
 
+await check("google analytics: exactly one gtag loader + one config in <head> on every page type (t95)", async () => {
+  const pages = ["/", `/articles/${slug}`, "/topics/tech-news", "/about", "/admin"];
+  for (const path of pages) {
+    const { status, text } = await get(path);
+    assert.ok([200, 302, 307, 308].includes(status), `${path} status ${status}`);
+    const head = text.slice(text.indexOf("<head>"), text.indexOf("</head>"));
+    assert.ok(head.length > 0, `${path}: has head`);
+    assert.equal((head.match(/googletagmanager\.com\/gtag\/js\?id=G-T1R0QJ2F0Z/g) ?? []).length, 1, `${path}: one GA loader`);
+    assert.equal((head.match(/gtag\('config', 'G-T1R0QJ2F0Z'\)/g) ?? []).length, 1, `${path}: one GA config`);
+    assert.equal((head.match(/G-T1R0QJ2F0Z/g) ?? []).length, 2, `${path}: id only in loader+config`);
+    assert.match(head, /<script[^>]*src="https:\/\/www\.googletagmanager\.com\/gtag\/js\?id=G-T1R0QJ2F0Z"[^>]*async/, `${path}: async loader`);
+  }
+});
+
 const home = await get("/");
 await check("homepage: OG meta + WebSite/Organization JSON-LD + feed discovery", async () => {
   assert.equal(home.status, 200);

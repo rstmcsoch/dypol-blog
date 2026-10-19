@@ -11,6 +11,8 @@ import { NotFoundState } from "@/components/site/states";
 import { useSite } from "@/components/site/use-site";
 import { getShell } from "@/content/public-api";
 import { appearanceCss } from "@/lib/appearance";
+import { GA_SCRIPT_URL, gtagInitScript } from "@/lib/analytics";
+import { GoogleAnalytics } from "@/components/site/google-analytics";
 import { site as fallbackSite } from "@/content/site";
 import appCss from "../styles.css?url";
 // t88: preload the latin display font. It sets the header/headline metrics;
@@ -32,6 +34,17 @@ export const Route = createRootRoute({
         { name: "theme-color", media: "(prefers-color-scheme: light)", content: "#ffffff" },
         { name: "theme-color", media: "(prefers-color-scheme: dark)", content: "#0a0a0a" },
         { name: "robots", content: "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" },
+      ],
+      // t95: Google Analytics 4 - ONE site-wide gtag in the document head,
+      // rendered by the root route so every page (public + admin) gets it
+      // exactly once. Async loader (never blocks rendering) + inline
+      // bootstrap; the initial config sends the landing page_view, and
+      // <GoogleAnalytics /> in RootLayout sends later SPA navigations.
+      // No CSP exists on HTML responses (see src/start.ts), so
+      // googletagmanager.com needs no header change.
+      scripts: [
+        { src: GA_SCRIPT_URL, async: true },
+        { children: gtagInitScript },
       ],
       links: [
         // t74: hardcoded favicon set at STABLE root paths (never hashed, never
@@ -76,8 +89,12 @@ function RootLayout() {
   const site = useSite();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const desk = pathname === "/admin" || pathname.startsWith("/admin/");
-  if (desk) return <Outlet />;
+  // GoogleAnalytics stays the first child of a stable fragment so switching
+  // between the public shell and the admin desk never remounts its tracker.
+  if (desk) return (<><GoogleAnalytics /><Outlet /></>);
   return (
+    <>
+    <GoogleAnalytics />
     <div className="site">
       <a className="skip" href="#content">
         {site.labels.skip}
@@ -91,5 +108,6 @@ function RootLayout() {
       </main>
       <SiteFooter />
     </div>
+    </>
   );
 }
