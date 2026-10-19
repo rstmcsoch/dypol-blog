@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { absoluteUrl, articleJsonLd, breadcrumbJsonLd, canonicalOriginFrom, itemListJsonLd, newsSitemapXml, rssXml, sitemapXml, socialMeta, websiteJsonLd, xmlEscape } from "./seo.ts";
+import { absoluteUrl, articleJsonLd, breadcrumbJsonLd, canonicalOriginFrom, itemListJsonLd, metaDescription, newsSitemapXml, rssXml, sitemapXml, socialMeta, topicMetaDescription, websiteJsonLd, xmlEscape } from "./seo.ts";
 
 const article = {
   slug: "hello-world",
@@ -86,4 +86,28 @@ test("canonical origin consolidates workers.dev aliases, keeps custom domains (t
   assert.equal(canonicalOriginFrom("https://dypol-blog.rstmcsoch.workers.dev/articles/x"), "https://dypolblog.rstmcsoch.workers.dev");
   assert.equal(canonicalOriginFrom("https://abc123-dypolblog.rstmcsoch.workers.dev/"), "https://dypolblog.rstmcsoch.workers.dev");
   assert.equal(canonicalOriginFrom("https://blog.example.com/articles/x"), "https://blog.example.com");
+});
+
+test("metaDescription caps at 160 on a word boundary, collapses whitespace (t89)", () => {
+  const long = "word ".repeat(60).trim();
+  const out = metaDescription(long);
+  assert.ok(out.length <= 160 && out.endsWith("…"));
+  assert.equal(metaDescription("  a  b\n c "), "a b c");
+  assert.equal(metaDescription("", "Fallback title"), "Fallback title");
+});
+
+test("topicMetaDescription enriches short seeded descriptions, keeps full ones (t89)", () => {
+  const short = topicMetaDescription("Chips & Gaming", "Processors, graphics and the games industry.");
+  assert.ok(short.length >= 90 && short.includes("Chips & Gaming") && short.includes("DYPOL Blog"));
+  const full = "A".repeat(100);
+  assert.equal(topicMetaDescription("X", full), full);
+});
+
+test("sitemap includes image namespace only when an image is present (t89)", () => {
+  const withImg = sitemapXml({ origin: "https://e.com", urls: [{ path: "/articles/a", lastmod: "2026-10-18", imagePath: "/media/m1", imageTitle: "A & B" }] });
+  assert.match(withImg, /xmlns:image=/);
+  assert.match(withImg, /<image:loc>https:\/\/e\.com\/media\/m1<\/image:loc>/);
+  assert.match(withImg, /<image:title>A &amp; B<\/image:title>/);
+  const plain = sitemapXml({ origin: "https://e.com", urls: [{ path: "/", lastmod: null }] });
+  assert.doesNotMatch(plain, /xmlns:image/);
 });

@@ -376,13 +376,13 @@ export async function readPage(slug: string): Promise<PageRow | null> {
 }
 
 /** Footer links: published pages, standard pages first in reading order. */
-export async function readPageLinks(): Promise<{ slug: string; title: string }[]> {
+export async function readPageLinks(): Promise<{ slug: string; title: string; updatedAt?: string }[]> {
   const rows = await dbPages();
-  const publishedRows = rows ? rows.filter((r) => r.status === "published") : STANDARD_PAGES.map((p) => ({ slug: p.slug, title: p.title }));
+  const publishedRows = rows ? rows.filter((r) => r.status === "published") : STANDARD_PAGES.map((p) => ({ slug: p.slug, title: p.title, updated_at: "2026-10-18T00:00:00.000Z" }));
   const order = new Map(STANDARD_PAGES.map((p, i) => [p.slug, i]));
   return [...publishedRows]
     .sort((a, b) => (order.get(a.slug) ?? 99) - (order.get(b.slug) ?? 99) || a.title.localeCompare(b.title))
-    .map((r) => ({ slug: r.slug, title: r.title }));
+    .map((r) => ({ slug: r.slug, title: r.title, updatedAt: (r as { updated_at?: string }).updated_at }));
 }
 
 export async function adminListPages() {
@@ -507,7 +507,7 @@ export async function readSitemap() {
   const labelOf = new Map(data.categories.map((c) => [c.id, c.label]));
   const pageLinks = await readPageLinks();
   return {
-    pages: pageLinks.map((p) => ({ slug: p.slug })),
+    pages: pageLinks.map((p) => ({ slug: p.slug, lastmod: p.updatedAt ?? null })),
     articles: live.map((article) => ({
       slug: article.slug,
       lastmod: article.updatedAt,

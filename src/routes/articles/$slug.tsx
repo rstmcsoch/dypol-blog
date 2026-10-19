@@ -4,7 +4,7 @@ import { ArticleView } from "@/components/site/article-view";
 import { ArticlePagePending, NotFoundState } from "@/components/site/states";
 import { useSite } from "@/components/site/use-site";
 import { getArticle } from "@/content/public-api";
-import { absoluteUrl, articleJsonLd, breadcrumbJsonLd, socialMeta } from "@/lib/seo";
+import { absoluteUrl, articleJsonLd, breadcrumbJsonLd, metaDescription, socialMeta } from "@/lib/seo";
 
 export const Route = createFileRoute("/articles/$slug")({
   loader: async ({ params }) => {
@@ -17,7 +17,7 @@ export const Route = createFileRoute("/articles/$slug")({
     const { article } = loaderData;
     const origin = loaderData.origin ?? "";
     const title = article.seoTitle ?? `${article.title} — DYPOL Blog`;
-    const description = article.seoDescription ?? article.excerpt;
+    const description = metaDescription(article.seoDescription ?? article.excerpt, article.title);
     const topics = (loaderData.topics ?? []).map((t) => t.label);
     const url = absoluteUrl(origin, `/articles/${article.slug}`);
     const cover = article.coverMediaId ? absoluteUrl(origin, `/media/${article.coverMediaId}`) : null;

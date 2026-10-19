@@ -111,6 +111,17 @@ await check("article: cover/thumbnail images carry descriptive alt text", async 
   for (const img of imgs) assert.match(img, /alt="[^"]+"/, img.slice(0, 90));
 });
 
+await check("static page: BreadcrumbList JSON-LD + sitemap image/lastmod (t89)", async () => {
+  const about = await get("/about");
+  assert.ok(jsonLdBlocks(about.text).some((b) => b["@type"] === "BreadcrumbList"), "about breadcrumb");
+  const sm = await get("/sitemap.xml");
+  assert.match(sm.text, /xmlns:image=/, "image sitemap namespace when covers exist");
+  assert.match(sm.text, /\/about<\/loc><lastmod>/, "static page lastmod");
+  const topic = await get("/topics/tech-news");
+  const desc = /name="description" content="([^"]+)"/.exec(topic.text)?.[1] ?? "";
+  assert.ok(desc.length >= 80, `topic description enriched: ${desc.length}`);
+});
+
 await check("topics index: ItemList JSON-LD of the topics", async () => {
   const { status, text } = await get("/topics");
   assert.equal(status, 200);

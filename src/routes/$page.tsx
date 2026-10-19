@@ -2,7 +2,7 @@ import { createFileRoute, notFound } from "@tanstack/react-router";
 import { NotFoundState, PagePending } from "@/components/site/states";
 import { StaticPage } from "@/components/site/static-page";
 import { getPage } from "@/content/public-api";
-import { absoluteUrl, socialMeta } from "@/lib/seo";
+import { absoluteUrl, breadcrumbJsonLd, metaDescription, socialMeta } from "@/lib/seo";
 
 /**
  * Standard reader-facing pages (t52): /privacy-policy, /terms, /dmca,
@@ -20,13 +20,15 @@ export const Route = createFileRoute("/$page")({
     if (!loaderData) return { meta: [{ title: "DYPOL Blog" }] };
     const origin = loaderData.origin ?? "";
     const title = `${loaderData.title} — DYPOL Blog`;
+    const description = metaDescription(loaderData.description, loaderData.title);
     return {
       meta: [
         { title },
-        { name: "description", content: loaderData.description },
-        ...socialMeta({ title, description: loaderData.description, url: absoluteUrl(origin, `/${loaderData.slug}`), type: "website", siteName: "DYPOL Blog", image: absoluteUrl(origin, "/og.jpg") }),
+        { name: "description", content: description },
+        ...socialMeta({ title, description, url: absoluteUrl(origin, `/${loaderData.slug}`), type: "website", siteName: "DYPOL Blog", image: absoluteUrl(origin, "/og.jpg") }),
       ],
       links: [{ rel: "canonical", href: absoluteUrl(origin, `/${loaderData.slug}`) }],
+      scripts: [{ type: "application/ld+json", children: JSON.stringify(breadcrumbJsonLd({ origin, items: [{ name: "Home", path: "/" }, { name: loaderData.title, path: `/${loaderData.slug}` }] })) }],
     };
   },
   pendingComponent: PagePending,

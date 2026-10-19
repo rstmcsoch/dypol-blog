@@ -3,7 +3,7 @@ import { IndexList } from "@/components/site/index-list";
 import { EmptyState, NotFoundState, PagePending } from "@/components/site/states";
 import { useSite } from "@/components/site/use-site";
 import { getTopic } from "@/content/public-api";
-import { absoluteUrl, breadcrumbJsonLd, itemListJsonLd, socialMeta } from "@/lib/seo";
+import { absoluteUrl, breadcrumbJsonLd, itemListJsonLd, socialMeta, topicMetaDescription } from "@/lib/seo";
 
 export const Route = createFileRoute("/topics/$slug")({
   loader: async ({ params }) => {
@@ -15,7 +15,7 @@ export const Route = createFileRoute("/topics/$slug")({
     if (!loaderData) return { meta: [{ title: "Topics — DYPOL Blog" }] };
     const origin = loaderData.origin ?? "";
     const title = `${loaderData.category.label} — DYPOL Blog`;
-    const description = loaderData.category.description || `Articles filed under ${loaderData.category.label} on DYPOL Blog.`;
+    const description = topicMetaDescription(loaderData.category.label, loaderData.category.description);
     return {
       meta: [
         { title },
