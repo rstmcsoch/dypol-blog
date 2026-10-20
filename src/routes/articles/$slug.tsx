@@ -4,7 +4,7 @@ import { ArticleView } from "@/components/site/article-view";
 import { ArticlePagePending, NotFoundState } from "@/components/site/states";
 import { useSite } from "@/components/site/use-site";
 import { getArticle } from "@/content/public-api";
-import { absoluteUrl, articleJsonLd, breadcrumbJsonLd, metaDescription, socialMeta } from "@/lib/seo";
+import { absoluteUrl, articleJsonLd, breadcrumbJsonLd, metaDescription, sitePageTitle, socialMeta } from "@/lib/seo";
 
 export const Route = createFileRoute("/articles/$slug")({
   loader: async ({ params }) => {
@@ -13,10 +13,10 @@ export const Route = createFileRoute("/articles/$slug")({
     return data;
   },
   head: ({ loaderData }) => {
-    if (!loaderData) return { meta: [{ title: "DYPOL Blog" }] };
+    if (!loaderData) return { meta: [{ title: sitePageTitle("Article") }] };
     const { article } = loaderData;
     const origin = loaderData.origin ?? "";
-    const title = article.seoTitle ?? `${article.title} — DYPOL Blog`;
+    const title = sitePageTitle(article.seoTitle ?? article.title);
     const description = metaDescription(article.seoDescription ?? article.excerpt, article.title);
     const topics = (loaderData.topics ?? []).map((t) => t.label);
     const url = absoluteUrl(origin, `/articles/${article.slug}`);
@@ -24,7 +24,8 @@ export const Route = createFileRoute("/articles/$slug")({
     const newsLd = articleJsonLd({
       origin,
       siteName: "DYPOL Blog",
-      publisher: "DYPOL Labs",
+      publisher: "DYPOL Blog",
+      authorName: "DYPOL Labs",
       article: {
         slug: article.slug, title: article.title, excerpt: article.excerpt, description,
         publishedAt: article.publishedAt, updatedAt: article.updatedAt, topics,

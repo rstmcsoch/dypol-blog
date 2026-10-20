@@ -1,6 +1,7 @@
 import { createFileRoute, notFound, redirect } from "@tanstack/react-router";
 import { ArticleView } from "@/components/site/article-view";
 import { adminPreview } from "@/content/admin-api";
+import { sitePageTitle } from "@/lib/seo";
 
 export const Route = createFileRoute("/preview/$id")({
   loader: async ({ params }) => {
@@ -18,7 +19,7 @@ export const Route = createFileRoute("/preview/$id")({
   },
   head: () => ({
     meta: [
-      { title: "Preview — DYPOL Blog" },
+      { title: sitePageTitle("Preview") },
       { name: "robots", content: "noindex" },
     ],
   }),

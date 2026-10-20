@@ -3,13 +3,13 @@ import { IndexList } from "@/components/site/index-list";
 import { PagePending } from "@/components/site/states";
 import { useSite } from "@/components/site/use-site";
 import { getIndex } from "@/content/public-api";
-import { absoluteUrl, itemListJsonLd, socialMeta } from "@/lib/seo";
+import { absoluteUrl, itemListJsonLd, sitePageTitle, socialMeta } from "@/lib/seo";
 
 export const Route = createFileRoute("/articles/")({
   loader: () => getIndex(),
   head: ({ loaderData }) => {
     const origin = loaderData?.origin ?? "";
-    const title = "Index — DYPOL Blog";
+    const title = sitePageTitle("Index");
     const description = "Every published DYPOL Blog piece, newest first — tech news, reviews and explainers across AI, smartphones, cybersecurity, startups and more.";
     return {
       meta: [

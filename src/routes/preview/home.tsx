@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { HomeBlocks } from "@/components/site/blocks";
 import { adminHomePreview } from "@/content/admin-api";
+import { sitePageTitle } from "@/lib/seo";
 
 type Preview = Awaited<ReturnType<typeof adminHomePreview>>;
 
@@ -16,7 +17,7 @@ export const Route = createFileRoute("/preview/home")({
       throw error;
     }
   },
-  head: () => ({ meta: [{ title: "Homepage preview" }, { name: "robots", content: "noindex" }] }),
+  head: () => ({ meta: [{ title: sitePageTitle("Homepage preview") }, { name: "robots", content: "noindex" }] }),
   component: HomePreview,
 });
 
