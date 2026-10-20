@@ -32,7 +32,7 @@ const slug = slugMatch[1];
 await check("robots.txt: public allowed, private paths disallowed, sitemaps listed", async () => {
   const { status, text } = await get("/robots.txt");
   assert.equal(status, 200);
-  for (const line of ["Allow: /", "Disallow: /admin", "Disallow: /mcp", "Disallow: /api/", "Sitemap: ", "/news-sitemap.xml", "User-agent: OAI-SearchBot", "User-agent: Claude-SearchBot", "User-agent: Claude-User"]) assert.ok(text.includes(line), line);
+  for (const line of ["Allow: /", "User-agent: Googlebot", "Disallow: /admin", "Disallow: /mcp", "Disallow: /api/", "Sitemap: ", "/news-sitemap.xml", "User-agent: OAI-SearchBot", "User-agent: Claude-SearchBot", "User-agent: Claude-User"]) assert.ok(text.includes(line), line);
   assert.ok(/^Disallow: \/admin$/m.test(text), "/admin (the only admin entry) is disallowed");
 });
 
@@ -83,14 +83,22 @@ await check("google analytics: exactly one gtag loader + one config in <head> on
 });
 
 const home = await get("/");
-await check("homepage: OG meta + WebSite/Organization JSON-LD + feed discovery", async () => {
+await check("homepage: exact title, shared brand meta, WebSite JSON-LD + feed discovery", async () => {
   assert.equal(home.status, 200);
+  assert.match(home.text, /<title>DYPOL Blog<\/title>/);
   assert.match(home.text, /property="og:title"/);
   assert.match(home.text, /property="og:image"/);
+  assert.match(home.text, /property="og:site_name" content="DYPOL Blog"/);
+  assert.match(home.text, /name="application-name" content="DYPOL Blog"/);
+  assert.match(home.text, /name="apple-mobile-web-app-title" content="DYPOL Blog"/);
+  assert.equal((home.text.match(/property="og:site_name"/g) ?? []).length, 1, "one shared site name");
   assert.match(home.text, /application\/rss\+xml/);
-  const graphs = jsonLdBlocks(home.text).flatMap((b) => b["@graph"] ?? [b]);
-  assert.ok(graphs.some((g) => g["@type"] === "WebSite"), "WebSite");
-  assert.ok(graphs.some((g) => g["@type"] === "Organization"), "Organization");
+  const blocks = jsonLdBlocks(home.text);
+  assert.equal(blocks.length, 1, "homepage has exactly one JSON-LD block");
+  assert.equal(blocks[0]["@type"], "WebSite");
+  assert.equal(blocks[0].name, "DYPOL Blog");
+  assert.deepEqual(blocks[0].alternateName, ["dypolblog.rstmcsoch.workers.dev", "DYPOL"]);
+  assert.equal(blocks[0].url, "https://dypolblog.rstmcsoch.workers.dev/");
   assert.match(home.text, /max-image-preview:large/);
 });
 
@@ -115,6 +123,8 @@ await check("article: absolute canonical, OG article meta, valid NewsArticle + B
   const news = blocks.find((b) => b["@type"] === "NewsArticle");
   assert.ok(news, "NewsArticle present");
   assert.ok(news.headline && news.datePublished, "headline+date");
+  assert.equal(news.publisher?.name, "DYPOL Blog", "publisher name");
+  assert.match(articlePage.text, /<title>[^<]+ \| DYPOL Blog<\/title>/, "branded article title");
   assert.ok(blocks.some((b) => b["@type"] === "BreadcrumbList"), "BreadcrumbList");
 });
 
@@ -123,6 +133,23 @@ await check("article: cover/thumbnail images carry descriptive alt text", async 
   const imgs = [...page.text.matchAll(/<img[^>]+src="\/media\/[^"]+"[^>]*>/g)].map((m) => m[0]);
   assert.ok(imgs.length > 0, "has media images");
   for (const img of imgs) assert.match(img, /alt="[^"]+"/, img.slice(0, 90));
+});
+
+await check("inner pages use the consistent title suffix and remain indexable", async () => {
+  const pages = [
+    ["/about", "About Us | DYPOL Blog"],
+    ["/articles", "Index | DYPOL Blog"],
+    ["/topics", "Topics | DYPOL Blog"],
+  ];
+  for (const [path, title] of pages) {
+    const page = await get(path);
+    assert.equal(page.status, 200, path);
+    assert.ok(page.text.includes("<title>" + title + "</title>"), path + " title: " + title);
+    assert.ok(page.text.includes('property="og:site_name" content="DYPOL Blog"'), path + " site name");
+    assert.ok(page.text.includes('name="application-name" content="DYPOL Blog"'), path + " application name");
+    assert.ok(page.text.includes('name="apple-mobile-web-app-title" content="DYPOL Blog"'), path + " mobile title");
+    assert.doesNotMatch(page.text, /name="robots" content="noindex/i, path + " stays indexable");
+  }
 });
 
 await check("static page: BreadcrumbList JSON-LD + sitemap image/lastmod (t89)", async () => {
