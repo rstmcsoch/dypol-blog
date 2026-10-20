@@ -2,6 +2,7 @@ import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
 import { getDeskSession } from "@/components/admin/gate";
 import { AdminShell } from "@/components/admin/shell";
 import { AdminSignIn } from "@/components/admin/sign-in";
+import { sitePageTitle } from "@/lib/seo";
 
 export const Route = createFileRoute("/admin")({
   // Optional on purpose: a required parent search param would be inherited
@@ -22,7 +23,7 @@ export const Route = createFileRoute("/admin")({
   loader: ({ context }) => context.desk,
   head: () => ({
     meta: [
-      { title: "Admin — DYPOL Blog" },
+      { title: sitePageTitle("Admin") },
       { name: "robots", content: "noindex, nofollow" },
     ],
   }),
