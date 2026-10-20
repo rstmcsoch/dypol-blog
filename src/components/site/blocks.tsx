@@ -86,11 +86,11 @@ function Featured({ r, site }: { r: ResolvedBlock; site: SiteConfig }) {
             {r.title}
             {lead.topicLabels.length ? ` · ${topicLine(lead)}` : ""}
           </p>
-          <h1 className="display">
+          <h2 className="display">
             <Link to="/articles/$slug" params={{ slug: lead.slug }}>
               {lead.title}
             </Link>
-          </h1>
+          </h2>
           <p className="lede">{lead.excerpt}</p>
           <p className="meta">
             {lead.publishedAt ? <span>{formatDate(lead.publishedAt)}</span> : null}
@@ -131,7 +131,7 @@ export function HomeBlocks({ blocks, site }: { blocks: ResolvedBlock[]; site: Si
   const hasH1 = blocks.some((r) => r.block.type === "featured");
   return (
     <>
-      {hasH1 ? null : <h1 className="sr-only">{site.name}</h1>}
+      <h1 className="sr-only">DYPOL Blog</h1>
       {blocks.map((r, i) => {
         const id = `blk-${r.block.id}`;
         const t = r.block.type;
