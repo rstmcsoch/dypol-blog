@@ -32,7 +32,7 @@ export function metaDescription(text: string | null | undefined, fallback = ""):
 
 /** Consistent brand suffix for every non-home page title. */
 export function sitePageTitle(pageTitle: string): string {
-  const clean = pageTitle.trim().replace(/\\s*(?:\\||—|-)\\s*DYPOL Blog\\s*$/i, "").trim();
+  const clean = pageTitle.trim().replace(/\s*(?:\||—|-)\s*DYPOL Blog\s*$/i, "").trim();
   return `${clean || "Page"} | DYPOL Blog`;
 }
 
