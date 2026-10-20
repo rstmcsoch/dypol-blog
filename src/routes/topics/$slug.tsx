@@ -3,7 +3,7 @@ import { IndexList } from "@/components/site/index-list";
 import { EmptyState, NotFoundState, PagePending } from "@/components/site/states";
 import { useSite } from "@/components/site/use-site";
 import { getTopic } from "@/content/public-api";
-import { absoluteUrl, breadcrumbJsonLd, itemListJsonLd, socialMeta, topicMetaDescription } from "@/lib/seo";
+import { absoluteUrl, breadcrumbJsonLd, itemListJsonLd, sitePageTitle, socialMeta, topicMetaDescription } from "@/lib/seo";
 
 export const Route = createFileRoute("/topics/$slug")({
   loader: async ({ params }) => {
@@ -12,17 +12,14 @@ export const Route = createFileRoute("/topics/$slug")({
     return data;
   },
   head: ({ loaderData }) => {
-    if (!loaderData) return { meta: [{ title: "Topics — DYPOL Blog" }] };
+    if (!loaderData) return { meta: [{ title: sitePageTitle("Topics") }] };
     const origin = loaderData.origin ?? "";
-    const title = `${loaderData.category.label} — DYPOL Blog`;
+    const title = sitePageTitle(loaderData.category.label);
     const description = topicMetaDescription(loaderData.category.label, loaderData.category.description);
     return {
       meta: [
         { title },
         { name: "description", content: description },
-        // A topic with nothing published yet is a thin/empty hub: keep it
-        // crawlable for discovery but out of the index until it has stories.
-        ...(loaderData.articles.length === 0 ? [{ name: "robots", content: "noindex, follow" }] : []),
         ...socialMeta({ title, description, url: absoluteUrl(origin, `/topics/${loaderData.category.slug}`), type: "website", siteName: "DYPOL Blog", image: absoluteUrl(origin, "/og.jpg") }),
       ],
       links: [{ rel: "canonical", href: absoluteUrl(origin, `/topics/${loaderData.category.slug}`) }],
