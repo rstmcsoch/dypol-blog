@@ -3,13 +3,13 @@ import { PagePending } from "@/components/site/states";
 import { TopicGrid } from "@/components/site/topic-grid";
 import { useSite } from "@/components/site/use-site";
 import { getTopics } from "@/content/public-api";
-import { absoluteUrl, itemListJsonLd, socialMeta } from "@/lib/seo";
+import { absoluteUrl, itemListJsonLd, sitePageTitle, socialMeta } from "@/lib/seo";
 
 export const Route = createFileRoute("/topics/")({
   loader: () => getTopics(),
   head: ({ loaderData }) => {
     const origin = loaderData?.origin ?? "";
-    const title = "Topics — DYPOL Blog";
+    const title = sitePageTitle("Topics");
     const description = "Pieces are filed by subject: AI, smartphones, cybersecurity, startups, product reviews, tech news and more.";
     return {
       meta: [
