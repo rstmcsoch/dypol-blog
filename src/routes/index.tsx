@@ -4,8 +4,7 @@ import { PagePending } from "@/components/site/states";
 import { useSite } from "@/components/site/use-site";
 import { getHome } from "@/content/public-api";
 import { site as fallbackSite } from "@/content/site";
-import { absoluteUrl, socialMeta, websiteJsonLd } from "@/lib/seo";
-import { visibleSocials } from "@/lib/social-links";
+import { absoluteUrl, socialMeta } from "@/lib/seo";
 
 export const Route = createFileRoute("/")({
   loader: () => getHome(),
@@ -13,11 +12,12 @@ export const Route = createFileRoute("/")({
     const origin = loaderData?.origin ?? "";
     const url = absoluteUrl(origin, "/");
     const current = loaderData?.site ?? fallbackSite;
+    const title = "DYPOL Blog";
     return {
       meta: [
-        { title: current.title },
+        { title },
         { name: "description", content: current.description },
-        ...socialMeta({ title: current.title, description: current.description, url, type: "website", siteName: current.name, image: absoluteUrl(origin, "/og.jpg") }),
+        ...socialMeta({ title, description: current.description, url, type: "website", siteName: "DYPOL Blog", image: absoluteUrl(origin, "/og.jpg") }),
       ],
       links: [
         { rel: "canonical", href: url },
@@ -32,9 +32,13 @@ export const Route = createFileRoute("/")({
       scripts: [
         {
           type: "application/ld+json",
-          children: JSON.stringify(
-            websiteJsonLd({ origin, siteName: current.name, title: current.title, description: current.description, publisher: current.publisher, sameAs: visibleSocials(current.socials).map((s) => s.url).filter((u) => u.startsWith("https://")) }),
-          ),
+          children: JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "WebSite",
+            name: "DYPOL Blog",
+            alternateName: ["dypolblog.rstmcsoch.workers.dev", "DYPOL"],
+            url: "https://dypolblog.rstmcsoch.workers.dev/",
+          }),
         },
       ],
     };
