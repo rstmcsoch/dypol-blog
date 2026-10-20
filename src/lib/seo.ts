@@ -30,6 +30,12 @@ export function metaDescription(text: string | null | undefined, fallback = ""):
   return `${(lastSpace > 80 ? cut.slice(0, lastSpace) : cut).trimEnd()}…`;
 }
 
+/** Consistent brand suffix for every non-home page title. */
+export function sitePageTitle(pageTitle: string): string {
+  const clean = pageTitle.trim().replace(/\\s*(?:\\||—|-)\\s*DYPOL Blog\\s*$/i, "").trim();
+  return `${clean || "Page"} | DYPOL Blog`;
+}
+
 /** Topic pages seeded with a one-line description get a fuller, still
  * accurate snippet instead of a 44–61 char fragment (live audit t89). */
 export function topicMetaDescription(label: string, description: string | null | undefined): string {
@@ -76,8 +82,8 @@ function isoOrNull(value: string | null | undefined): string | null {
 }
 
 /** NewsArticle JSON-LD for an article page (Google Article rich results + Discover). */
-export function articleJsonLd(input: { origin: string; siteName: string; publisher: string; article: SeoArticle }) {
-  const { origin, publisher, article } = input;
+export function articleJsonLd(input: { origin: string; siteName: string; publisher: string; authorName?: string; article: SeoArticle }) {
+  const { origin, publisher, authorName, article } = input;
   const url = absoluteUrl(origin, `/articles/${article.slug}`);
   const published = isoOrNull(article.publishedAt);
   const modified = isoOrNull(article.updatedAt) ?? published;
@@ -89,7 +95,7 @@ export function articleJsonLd(input: { origin: string; siteName: string; publish
     ...(article.coverMediaId ? { image: [absoluteUrl(origin, `/media/${article.coverMediaId}`)] } : {}),
     ...(published ? { datePublished: published } : {}),
     ...(modified ? { dateModified: modified } : {}),
-    author: [{ "@type": "Organization", name: publisher, url: absoluteUrl(origin, "/about") }],
+    author: [{ "@type": "Organization", name: authorName ?? publisher, url: absoluteUrl(origin, "/about") }],
     publisher: {
       "@type": "Organization",
       name: publisher,
@@ -256,7 +262,6 @@ export function socialMeta(input: {
     { property: "og:description", content: input.description },
     { property: "og:url", content: input.url },
     { property: "og:type", content: input.type },
-    { property: "og:site_name", content: input.siteName },
     { name: "twitter:card", content: input.image ? "summary_large_image" : "summary" },
     { name: "twitter:title", content: input.title },
     { name: "twitter:description", content: input.description },
