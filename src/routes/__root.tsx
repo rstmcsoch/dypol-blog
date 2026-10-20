@@ -29,8 +29,11 @@ export const Route = createRootRoute({
       meta: [
         { charSet: "utf-8" },
         { name: "viewport", content: "width=device-width, initial-scale=1" },
-        { title: current.title },
+        { title: "DYPOL Blog" },
         { name: "description", content: current.description },
+        { property: "og:site_name", content: "DYPOL Blog" },
+        { name: "application-name", content: "DYPOL Blog" },
+        { name: "apple-mobile-web-app-title", content: "DYPOL Blog" },
         { name: "theme-color", media: "(prefers-color-scheme: light)", content: "#ffffff" },
         { name: "theme-color", media: "(prefers-color-scheme: dark)", content: "#0a0a0a" },
         { name: "robots", content: "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" },
@@ -51,7 +54,7 @@ export const Route = createRootRoute({
         // admin-overridable) so Google/Bing/browsers always find real files:
         // /favicon.ico was previously a 404 HTML fallback — the Search Console
         // "no favicon" cause. Files live in public/ (scripts/generate-favicons.mjs).
-        { rel: "icon", href: "/favicon.ico", sizes: "any" },
+        { rel: "icon", href: "/favicon.ico", sizes: "48x48" },
         { rel: "shortcut icon", href: "/favicon.ico" },
         { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" },
         { rel: "icon", type: "image/png", sizes: "32x32", href: "/favicon-32x32.png" },
@@ -60,7 +63,7 @@ export const Route = createRootRoute({
         { rel: "preload", as: "font", type: "font/woff2", href: familjenLatin, crossOrigin: "anonymous" },
         { rel: "stylesheet", href: appCss },
         { rel: "manifest", href: "/manifest.webmanifest" },
-        { rel: "alternate", type: "application/rss+xml", title: `${current.title} feed`, href: "/feed.xml" },
+        { rel: "alternate", type: "application/rss+xml", title: "DYPOL Blog feed", href: "/feed.xml" },
       ],
     };
   },
