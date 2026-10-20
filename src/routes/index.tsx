@@ -54,7 +54,7 @@ function Home() {
     return (
       <div className="page">
         <div className="container">
-          <h1 className="page-title">{site.name}</h1>
+          <h1 className="page-title">DYPOL Blog</h1>
           <p className="lede">{site.labels.emptyBody}</p>
         </div>
       </div>
