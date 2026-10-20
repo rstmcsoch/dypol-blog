@@ -128,7 +128,6 @@ function Cta({ r }: { r: ResolvedBlock }) {
 
 /** Homepage blocks in the owner's order. */
 export function HomeBlocks({ blocks, site }: { blocks: ResolvedBlock[]; site: SiteConfig }) {
-  const hasH1 = blocks.some((r) => r.block.type === "featured");
   return (
     <>
       <h1 className="sr-only">DYPOL Blog</h1>
