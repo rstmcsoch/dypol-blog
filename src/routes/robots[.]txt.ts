@@ -13,6 +13,7 @@ export const Route = createFileRoute("/robots.txt")({
         // the owner's separate decision and stays under the wildcard rule.
         const privatePaths = ["Disallow: /admin", "Disallow: /preview", "Disallow: /mcp", "Disallow: /api/", "Disallow: /oauth/"].join("\n");
         const body = [
+          `User-agent: Googlebot\nAllow: /\n${privatePaths}`,
           `User-agent: *\nAllow: /\n${privatePaths}`,
           `User-agent: OAI-SearchBot\nAllow: /\n${privatePaths}`,
           `User-agent: Claude-SearchBot\nAllow: /\n${privatePaths}`,
