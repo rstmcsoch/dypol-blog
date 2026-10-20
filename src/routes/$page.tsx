@@ -2,7 +2,7 @@ import { createFileRoute, notFound } from "@tanstack/react-router";
 import { NotFoundState, PagePending } from "@/components/site/states";
 import { StaticPage } from "@/components/site/static-page";
 import { getPage } from "@/content/public-api";
-import { absoluteUrl, breadcrumbJsonLd, metaDescription, socialMeta } from "@/lib/seo";
+import { absoluteUrl, breadcrumbJsonLd, metaDescription, sitePageTitle, socialMeta } from "@/lib/seo";
 
 /**
  * Standard reader-facing pages (t52): /privacy-policy, /terms, /dmca,
@@ -17,9 +17,9 @@ export const Route = createFileRoute("/$page")({
     return data;
   },
   head: ({ loaderData }) => {
-    if (!loaderData) return { meta: [{ title: "DYPOL Blog" }] };
+    if (!loaderData) return { meta: [{ title: sitePageTitle("Page") }] };
     const origin = loaderData.origin ?? "";
-    const title = `${loaderData.title} — DYPOL Blog`;
+    const title = sitePageTitle(loaderData.title);
     const description = metaDescription(loaderData.description, loaderData.title);
     return {
       meta: [
