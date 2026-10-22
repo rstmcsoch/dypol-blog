@@ -35,8 +35,11 @@ import { Route as AdminPagesRouteImport } from './routes/admin/pages'
 import { Route as AdminSecurityRouteImport } from './routes/admin/security'
 import { Route as AdminSettingsRouteImport } from './routes/admin/settings'
 import { Route as AdminSiteTextRouteImport } from './routes/admin/site-text'
+import { Route as AdminStatsRouteImport } from './routes/admin/stats'
 import { Route as AdminTickerRouteImport } from './routes/admin/ticker'
 import { Route as AdminTopicsRouteImport } from './routes/admin/topics'
+import { Route as ApiEngageRouteImport } from './routes/api/engage'
+import { Route as ApiMeterRouteImport } from './routes/api/meter'
 import { Route as ApiNotFoundRouteImport } from './routes/api/not-found'
 import { Route as ArticlesIndexRouteImport } from './routes/articles/index'
 import { Route as ArticlesSlugRouteImport } from './routes/articles/$slug'
@@ -186,6 +189,11 @@ const AdminSiteTextRoute = AdminSiteTextRouteImport.update({
   path: '/site-text',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminStatsRoute = AdminStatsRouteImport.update({
+  id: '/stats',
+  path: '/stats',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminTickerRoute = AdminTickerRouteImport.update({
   id: '/ticker',
   path: '/ticker',
@@ -195,6 +203,16 @@ const AdminTopicsRoute = AdminTopicsRouteImport.update({
   id: '/topics',
   path: '/topics',
   getParentRoute: () => AdminRoute,
+} as any)
+const ApiEngageRoute = ApiEngageRouteImport.update({
+  id: '/api/engage',
+  path: '/api/engage',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMeterRoute = ApiMeterRouteImport.update({
+  id: '/api/meter',
+  path: '/api/meter',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const ApiNotFoundRoute = ApiNotFoundRouteImport.update({
   id: '/api/not-found',
@@ -304,8 +322,11 @@ export interface FileRoutesByFullPath {
   '/admin/security': typeof AdminSecurityRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/site-text': typeof AdminSiteTextRoute
+  '/admin/stats': typeof AdminStatsRoute
   '/admin/ticker': typeof AdminTickerRoute
   '/admin/topics': typeof AdminTopicsRoute
+  '/api/engage': typeof ApiEngageRoute
+  '/api/meter': typeof ApiMeterRoute
   '/api/not-found': typeof ApiNotFoundRoute
   '/articles/$slug': typeof ArticlesSlugRoute
   '/media/$id': typeof MediaIdRoute
@@ -349,8 +370,11 @@ export interface FileRoutesByTo {
   '/admin/security': typeof AdminSecurityRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/site-text': typeof AdminSiteTextRoute
+  '/admin/stats': typeof AdminStatsRoute
   '/admin/ticker': typeof AdminTickerRoute
   '/admin/topics': typeof AdminTopicsRoute
+  '/api/engage': typeof ApiEngageRoute
+  '/api/meter': typeof ApiMeterRoute
   '/api/not-found': typeof ApiNotFoundRoute
   '/articles/$slug': typeof ArticlesSlugRoute
   '/media/$id': typeof MediaIdRoute
@@ -396,8 +420,11 @@ export interface FileRoutesById {
   '/admin/security': typeof AdminSecurityRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/site-text': typeof AdminSiteTextRoute
+  '/admin/stats': typeof AdminStatsRoute
   '/admin/ticker': typeof AdminTickerRoute
   '/admin/topics': typeof AdminTopicsRoute
+  '/api/engage': typeof ApiEngageRoute
+  '/api/meter': typeof ApiMeterRoute
   '/api/not-found': typeof ApiNotFoundRoute
   '/articles/$slug': typeof ArticlesSlugRoute
   '/media/$id': typeof MediaIdRoute
@@ -444,8 +471,11 @@ export interface FileRouteTypes {
     | '/admin/security'
     | '/admin/settings'
     | '/admin/site-text'
+    | '/admin/stats'
     | '/admin/ticker'
     | '/admin/topics'
+    | '/api/engage'
+    | '/api/meter'
     | '/api/not-found'
     | '/articles/$slug'
     | '/media/$id'
@@ -489,8 +519,11 @@ export interface FileRouteTypes {
     | '/admin/security'
     | '/admin/settings'
     | '/admin/site-text'
+    | '/admin/stats'
     | '/admin/ticker'
     | '/admin/topics'
+    | '/api/engage'
+    | '/api/meter'
     | '/api/not-found'
     | '/articles/$slug'
     | '/media/$id'
@@ -535,8 +568,11 @@ export interface FileRouteTypes {
     | '/admin/security'
     | '/admin/settings'
     | '/admin/site-text'
+    | '/admin/stats'
     | '/admin/ticker'
     | '/admin/topics'
+    | '/api/engage'
+    | '/api/meter'
     | '/api/not-found'
     | '/articles/$slug'
     | '/media/$id'
@@ -571,6 +607,8 @@ export interface RootRouteChildren {
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   DotwellKnownOauthAuthorizationServerRoute: typeof DotwellKnownOauthAuthorizationServerRoute
   DotwellKnownOauthProtectedResourceRoute: typeof DotwellKnownOauthProtectedResourceRouteWithChildren
+  ApiEngageRoute: typeof ApiEngageRoute
+  ApiMeterRoute: typeof ApiMeterRoute
   ApiNotFoundRoute: typeof ApiNotFoundRoute
   ArticlesSlugRoute: typeof ArticlesSlugRoute
   MediaIdRoute: typeof MediaIdRoute
@@ -769,6 +807,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminSiteTextRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/stats': {
+      id: '/admin/stats'
+      path: '/stats'
+      fullPath: '/admin/stats'
+      preLoaderRoute: typeof AdminStatsRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/ticker': {
       id: '/admin/ticker'
       path: '/ticker'
@@ -782,6 +827,20 @@ declare module '@tanstack/react-router' {
       fullPath: '/admin/topics'
       preLoaderRoute: typeof AdminTopicsRouteImport
       parentRoute: typeof AdminRoute
+    }
+    '/api/engage': {
+      id: '/api/engage'
+      path: '/api/engage'
+      fullPath: '/api/engage'
+      preLoaderRoute: typeof ApiEngageRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/meter': {
+      id: '/api/meter'
+      path: '/api/meter'
+      fullPath: '/api/meter'
+      preLoaderRoute: typeof ApiMeterRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/api/not-found': {
       id: '/api/not-found'
@@ -910,6 +969,7 @@ interface AdminRouteChildren {
   AdminSecurityRoute: typeof AdminSecurityRoute
   AdminSettingsRoute: typeof AdminSettingsRoute
   AdminSiteTextRoute: typeof AdminSiteTextRoute
+  AdminStatsRoute: typeof AdminStatsRoute
   AdminTickerRoute: typeof AdminTickerRoute
   AdminTopicsRoute: typeof AdminTopicsRoute
   AdminIndexRoute: typeof AdminIndexRoute
@@ -930,6 +990,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminSecurityRoute: AdminSecurityRoute,
   AdminSettingsRoute: AdminSettingsRoute,
   AdminSiteTextRoute: AdminSiteTextRoute,
+  AdminStatsRoute: AdminStatsRoute,
   AdminTickerRoute: AdminTickerRoute,
   AdminTopicsRoute: AdminTopicsRoute,
   AdminIndexRoute: AdminIndexRoute,
@@ -972,6 +1033,8 @@ const rootRouteChildren: RootRouteChildren = {
     DotwellKnownOauthAuthorizationServerRoute,
   DotwellKnownOauthProtectedResourceRoute:
     DotwellKnownOauthProtectedResourceRouteWithChildren,
+  ApiEngageRoute: ApiEngageRoute,
+  ApiMeterRoute: ApiMeterRoute,
   ApiNotFoundRoute: ApiNotFoundRoute,
   ArticlesSlugRoute: ArticlesSlugRoute,
   MediaIdRoute: MediaIdRoute,
