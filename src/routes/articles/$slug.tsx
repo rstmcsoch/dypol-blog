@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { ArticleEngage } from "@/components/site/article-engage";
 import { createFileRoute, notFound } from "@tanstack/react-router";
 import { ArticleView } from "@/components/site/article-view";
 import { ArticlePagePending, NotFoundState } from "@/components/site/states";
@@ -73,17 +73,10 @@ export const Route = createFileRoute("/articles/$slug")({
 function ArticlePage() {
   const site = useSite();
   const data = Route.useLoaderData();
-  const slug = data.article.slug;
-  useEffect(() => {
-    // One anonymous count per article view (see /api/views). Ignored if it fails.
-    const key = `dypol-viewed:${slug}`;
-    try {
-      if (sessionStorage.getItem(key)) return;
-      sessionStorage.setItem(key, "1");
-    } catch {
-      /* private mode: still count */
-    }
-    void fetch(`/api/views/${slug}`, { method: "POST", keepalive: true }).catch(() => undefined);
-  }, [slug]);
-  return <ArticleView {...data} site={site} />;
+  return (
+    <>
+      <ArticleEngage slug={data.article.slug} />
+      <ArticleView {...data} site={site} />
+    </>
+  );
 }

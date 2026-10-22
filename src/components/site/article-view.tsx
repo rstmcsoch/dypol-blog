@@ -78,6 +78,7 @@ export function ArticleView({
         ) : null}
         <div className={blocks.length > 0 ? "article-layout" : "article-layout article-layout--full"}>
           <ArticleBody blocks={article.blocks} />
+          <div id="article-end" className="article-end" aria-hidden="true" />
           {blocks.length > 0 ? (
             <aside className="article-aside">
               <SidebarBlocks blocks={blocks} site={site} title={article.title} slug={article.slug} />
