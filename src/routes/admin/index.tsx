@@ -58,7 +58,8 @@ function DeskHome() {
         </p>
       </div>
       <p className="adm-row-actions" style={{ marginTop: "1rem" }}>
-        <Link to="/admin/articles/new" className="btn">New article</Link>
+        <Link to="/admin/stats" className="btn">Stats</Link>
+        <Link to="/admin/articles/new" className="btn btn--ghost">New article</Link>
         <Link to="/admin/media" className="btn btn--ghost">Media library</Link>
         <Link to="/admin/automation" className="btn btn--ghost">AI automation</Link>
         <Link to="/admin/health" className="btn btn--ghost">Site health</Link>

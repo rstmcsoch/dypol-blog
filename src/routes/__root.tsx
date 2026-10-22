@@ -13,6 +13,7 @@ import { getShell } from "@/content/public-api";
 import { appearanceCss } from "@/lib/appearance";
 import { GA_SCRIPT_URL, gtagInitScript } from "@/lib/analytics";
 import { GoogleAnalytics } from "@/components/site/google-analytics";
+import { PageMeter } from "@/components/site/page-meter";
 import { site as fallbackSite } from "@/content/site";
 import appCss from "../styles.css?url";
 // t88: preload the latin display font. It sets the header/headline metrics;
@@ -111,6 +112,7 @@ function RootLayout() {
       </main>
       <SiteFooter />
     </div>
+    <PageMeter />
     </>
   );
 }
