@@ -176,7 +176,7 @@ async function topicMap(sql: Sql, ids: string[]): Promise<Map<string, string[]>>
       }),
     );
     const links = perChunk.flat();
-  for (const link of links) {
+    for (const link of links) {
       const list = map.get(link.article_id) ?? [];
       list.push(link.category_id);
       map.set(link.article_id, list);
@@ -226,12 +226,9 @@ async function loadArticles(sql: Sql, where = "", params: unknown[] = []): Promi
     );
   }
   const ids = rows.map((row) => row.id);
-  // Independent lookups run together: each D1 round-trip is a network hop,
-  // so serial awaits were the article page's main server-side cost (t56).
   const [tags, topics, coverAlts] = await Promise.all([tagMap(sql, ids), topicMap(sql, ids), coverAltMap(sql, rows)]);
   return rows.map((row) => {
     const article = mapArticle(row, tags.get(row.id) ?? [], topics.get(row.id) ?? [], row.cover_media_id ? (coverAlts.get(row.cover_media_id) ?? null) : null);
-    // The primary topic always leads, even if the join table is stale.
     if (article.topicIds[0] !== article.categoryId) {
       article.topicIds = [article.categoryId, ...article.topicIds.filter((id) => id !== article.categoryId)];
     }
@@ -239,7 +236,6 @@ async function loadArticles(sql: Sql, where = "", params: unknown[] = []): Promi
   });
 }
 
-/** media id -> stored alt text for cover images. Never throws (older DBs just fall back to titles). */
 async function coverAltMap(sql: Sql, rows: ArticleRow[]): Promise<Map<string, string>> {
   const map = new Map<string, string>();
   const mediaIds = [...new Set(rows.map((r) => r.cover_media_id).filter((v): v is string => Boolean(v)))];
@@ -273,4 +269,126 @@ async function catalog(): Promise<{ articles: Article[]; categories: Category[];
   const raw = settings[0]?.data;
   const siteConfig = normalizeSite(typeof raw === "string" ? JSON.parse(raw) : raw);
   return { articles, categories, tags, site: siteConfig };
+}
+
+function staticCatalog(): Awaited<ReturnType<typeof catalog>> {
+  return {
+    articles: seedArticles.map((article) => ({ ...article, coverMediaId: article.coverMediaId ?? null })),
+    categories: seedCategories,
+    tags: seedTags,
+    site: normalizeSite(site),
+  };
+}
+
+async function publicCatalog(): Promise<Awaited<ReturnType<typeof catalog>>> {
+  try {
+    return await catalog();
+  } catch (error) {
+    console.error("[content] D1 unavailable, serving built-in content.", error);
+    return staticCatalog();
+  }
+}
+
+function published(articles: Article[]): Article[] {
+  return articles.filter((article) => article.status === "published" && article.publishedAt).sort(byNewest);
+}
+
+function categoryOf(categories: Category[], idOrSlug: string): Category | undefined {
+  return categories.find((category) => category.id === idOrSlug || category.slug === idOrSlug);
+}
+
+export function metaFor(articles: Article[], publishedOrder: Article[], categories: Category[]): Record<string, ArticleMeta> {
+  const meta: Record<string, ArticleMeta> = {};
+  for (const article of articles) {
+    const rank = publishedOrder.findIndex((item) => item.id === article.id);
+    meta[article.id] = {
+      rank: rank === -1 ? 0 : rank + 1,
+      categoryLabel: categoryOf(categories, article.categoryId)?.label ?? "",
+      topicLabels: article.topicIds.map((id) => categoryOf(categories, id)?.label ?? "").filter(Boolean),
+      minutes: readingMinutes(article),
+    };
+  }
+  return meta;
+}
+
+function needsViews(site: SiteConfig): boolean {
+  const all = [...site.home.blocks, ...site.articleSidebar.blocks];
+  return site.trending.source === "popular" || all.some((b) => b.enabled && (b.type === "popular" || (b.type === "ticker" && site.trending.source === "popular")));
+}
+
+async function viewCounts(site: SiteConfig): Promise<Record<string, number>> {
+  if (!needsViews(site)) return {};
+  try {
+    const sql = await getSql();
+    const rows = await sql<{ article_id: string; views: number }>`select article_id, views from article_views`;
+    return Object.fromEntries(rows.map((r) => [r.article_id, Number(r.views)]));
+  } catch {
+    return {};
+  }
+}
+
+export async function recordView(slug: string): Promise<boolean> {
+  const sql = await getSql();
+  const rows = await sql<{ id: string }>`select id from articles where slug = ${slug} and status = 'published' limit 1`;
+  const id = rows[0]?.id;
+  if (!id) return false;
+  const now = new Date().toISOString();
+  await sql`insert into article_views (article_id, views, updated_at) values (${id}, 1, ${now})
+    on conflict (article_id) do update set views = views + 1, updated_at = excluded.updated_at`;
+  return true;
+}
+
+export async function readShell() {
+  const [data, pages] = await Promise.all([publicCatalog(), readPageLinks()]);
+  const live = published(data.articles);
+  return { site: { ...data.site, aiDailyPublishLimit: 0 }, trending: tickerEntries(data.site, live, await viewCounts(data.site)), pages };
+}
+
+type PageRow = { slug: string; title: string; body: string; status: string; updated_at: string };
+
+async function dbPages(): Promise<(PageRow & { id: string })[] | null> {
+  try {
+    const sql = await getSql();
+    return await sql.query<PageRow & { id: string }>("select id,slug,title,body,status,updated_at from pages order by slug");
+  } catch {
+    return null;
+  }
+}
+
+export async function readPage(slug: string): Promise<PageRow | null> {
+  const rows = await dbPages();
+  if (rows) {
+    const row = rows.find((r) => r.slug === slug);
+    return row && row.status === "published" ? row : null;
+  }
+  const seed = standardPage(slug);
+  return seed ? { slug: seed.slug, title: seed.title, body: seed.body, status: "published", updated_at: "2026-10-18T00:00:00.000Z" } : null;
+}
+
+export async function readPageLinks(): Promise<{ slug: string; title: string; updatedAt?: string }[]> {
+  const rows = await dbPages();
+  const publishedRows = rows ? rows.filter((r) => r.status === "published") : STANDARD_PAGES.map((p) => ({ slug: p.slug, title: p.title, updated_at: "2026-10-18T00:00:00.000Z" }));
+  const order = new Map(STANDARD_PAGES.map((p, i) => [p.slug, i]));
+  return [...publishedRows]
+    .sort((a, b) => (order.get(a.slug) ?? 99) - (order.get(b.slug) ?? 99) || a.title.localeCompare(b.title))
+    .map((r) => ({ slug: r.slug, title: r.title, updatedAt: (r as { updated_at?: string }).updated_at }));
+}
+
+export async function readFeed(limit = 20) {
+  const data = await publicCatalog();
+  const labelOf = new Map(data.categories.map((c) => [c.id, c.label]));
+  return published(data.articles)
+    .slice(0, limit)
+    .map((article) => ({
+      slug: article.slug,
+      title: article.title,
+      excerpt: article.excerpt,
+      description: article.seoDescription ?? article.excerpt,
+      publishedAt: article.publishedAt,
+      updatedAt: article.updatedAt,
+      topics: article.topicIds.map((id) => labelOf.get(id) ?? "").filter(Boolean),
+      coverMediaId: article.coverMediaId ?? null,
+      coverAlt: article.coverAlt ?? null,
+      bodyText: articlePlainText(article.blocks),
+    }));
 }
