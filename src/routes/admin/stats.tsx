@@ -363,8 +363,8 @@ function DonutChart({
             data={data}
             cx="50%"
             cy="50%"
-            innerRadius={70}
-            outerRadius={90}
+            innerRadius={55}
+            outerRadius={75}
             fill="#888"
             paddingAngle={2}
             labelLine={false}
@@ -394,7 +394,7 @@ function HorizontalBarChart({
     <div className="adm-chart-wrap">
       <div className="adm-chart__label">{label}</div>
       <ResponsiveContainer width="100%" height={height}>
-        <BarChart data={sorted} margin={{ top: 15, right: 15, bottom: 8, left: 90 }} layout="vertical">
+        <BarChart data={sorted} margin={{ top: 15, right: 15, bottom: 8, left: 65 }} layout="vertical">
           <XAxis type="number" tickFormatter={formatter} tick={{ fontSize: 11, fill: "#6b7280" }} width={40} />
           <YAxis dataKey="name" type="category" tick={{ fontSize: 12, fill: "#1d2330" }} />
           <Tooltip cursor={{ fill: "transparent" }} />
