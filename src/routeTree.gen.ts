@@ -35,6 +35,7 @@ import { Route as AdminPagesRouteImport } from './routes/admin/pages'
 import { Route as AdminSecurityRouteImport } from './routes/admin/security'
 import { Route as AdminSettingsRouteImport } from './routes/admin/settings'
 import { Route as AdminSiteTextRouteImport } from './routes/admin/site-text'
+import { Route as AdminStatsRouteImport } from './routes/admin/stats'
 import { Route as AdminTickerRouteImport } from './routes/admin/ticker'
 import { Route as AdminTopicsRouteImport } from './routes/admin/topics'
 import { Route as ApiNotFoundRouteImport } from './routes/api/not-found'
@@ -52,6 +53,8 @@ import { Route as DotwellKnownOauthProtectedResourceMcpRouteImport } from './rou
 import { Route as AdminArticlesIndexRouteImport } from './routes/admin/articles/index'
 import { Route as AdminArticlesIdRouteImport } from './routes/admin/articles/$id'
 import { Route as AdminArticlesNewRouteImport } from './routes/admin/articles/new'
+import { Route as ApiAnalyticsBeaconRouteImport } from './routes/api/analytics/beacon'
+import { Route as ApiAnalyticsExportRouteImport } from './routes/api/analytics/export'
 import { Route as ApiViewsSlugRouteImport } from './routes/api/views/$slug'
 
 const IndexRoute = IndexRouteImport.update({
@@ -186,6 +189,11 @@ const AdminSiteTextRoute = AdminSiteTextRouteImport.update({
   path: '/site-text',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminStatsRoute = AdminStatsRouteImport.update({
+  id: '/stats',
+  path: '/stats',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminTickerRoute = AdminTickerRouteImport.update({
   id: '/ticker',
   path: '/ticker',
@@ -272,6 +280,16 @@ const AdminArticlesNewRoute = AdminArticlesNewRouteImport.update({
   path: '/articles/new',
   getParentRoute: () => AdminRoute,
 } as any)
+const ApiAnalyticsBeaconRoute = ApiAnalyticsBeaconRouteImport.update({
+  id: '/api/analytics/beacon',
+  path: '/api/analytics/beacon',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAnalyticsExportRoute = ApiAnalyticsExportRouteImport.update({
+  id: '/api/analytics/export',
+  path: '/api/analytics/export',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiViewsSlugRoute = ApiViewsSlugRouteImport.update({
   id: '/api/views/$slug',
   path: '/api/views/$slug',
@@ -304,6 +322,7 @@ export interface FileRoutesByFullPath {
   '/admin/security': typeof AdminSecurityRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/site-text': typeof AdminSiteTextRoute
+  '/admin/stats': typeof AdminStatsRoute
   '/admin/ticker': typeof AdminTickerRoute
   '/admin/topics': typeof AdminTopicsRoute
   '/api/not-found': typeof ApiNotFoundRoute
@@ -321,6 +340,8 @@ export interface FileRoutesByFullPath {
   '/.well-known/oauth-protected-resource/mcp': typeof DotwellKnownOauthProtectedResourceMcpRoute
   '/admin/articles/$id': typeof AdminArticlesIdRoute
   '/admin/articles/new': typeof AdminArticlesNewRoute
+  '/api/analytics/beacon': typeof ApiAnalyticsBeaconRoute
+  '/api/analytics/export': typeof ApiAnalyticsExportRoute
   '/api/views/$slug': typeof ApiViewsSlugRoute
   '/admin/articles/': typeof AdminArticlesIndexRoute
 }
@@ -349,6 +370,7 @@ export interface FileRoutesByTo {
   '/admin/security': typeof AdminSecurityRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/site-text': typeof AdminSiteTextRoute
+  '/admin/stats': typeof AdminStatsRoute
   '/admin/ticker': typeof AdminTickerRoute
   '/admin/topics': typeof AdminTopicsRoute
   '/api/not-found': typeof ApiNotFoundRoute
@@ -366,6 +388,8 @@ export interface FileRoutesByTo {
   '/.well-known/oauth-protected-resource/mcp': typeof DotwellKnownOauthProtectedResourceMcpRoute
   '/admin/articles/$id': typeof AdminArticlesIdRoute
   '/admin/articles/new': typeof AdminArticlesNewRoute
+  '/api/analytics/beacon': typeof ApiAnalyticsBeaconRoute
+  '/api/analytics/export': typeof ApiAnalyticsExportRoute
   '/api/views/$slug': typeof ApiViewsSlugRoute
   '/admin/articles': typeof AdminArticlesIndexRoute
 }
@@ -396,6 +420,7 @@ export interface FileRoutesById {
   '/admin/security': typeof AdminSecurityRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/site-text': typeof AdminSiteTextRoute
+  '/admin/stats': typeof AdminStatsRoute
   '/admin/ticker': typeof AdminTickerRoute
   '/admin/topics': typeof AdminTopicsRoute
   '/api/not-found': typeof ApiNotFoundRoute
@@ -413,6 +438,8 @@ export interface FileRoutesById {
   '/.well-known/oauth-protected-resource/mcp': typeof DotwellKnownOauthProtectedResourceMcpRoute
   '/admin/articles/$id': typeof AdminArticlesIdRoute
   '/admin/articles/new': typeof AdminArticlesNewRoute
+  '/api/analytics/beacon': typeof ApiAnalyticsBeaconRoute
+  '/api/analytics/export': typeof ApiAnalyticsExportRoute
   '/api/views/$slug': typeof ApiViewsSlugRoute
   '/admin/articles/': typeof AdminArticlesIndexRoute
 }
@@ -444,6 +471,7 @@ export interface FileRouteTypes {
     | '/admin/security'
     | '/admin/settings'
     | '/admin/site-text'
+    | '/admin/stats'
     | '/admin/ticker'
     | '/admin/topics'
     | '/api/not-found'
@@ -461,6 +489,8 @@ export interface FileRouteTypes {
     | '/.well-known/oauth-protected-resource/mcp'
     | '/admin/articles/$id'
     | '/admin/articles/new'
+    | '/api/analytics/beacon'
+    | '/api/analytics/export'
     | '/api/views/$slug'
     | '/admin/articles/'
   fileRoutesByTo: FileRoutesByTo
@@ -489,6 +519,7 @@ export interface FileRouteTypes {
     | '/admin/security'
     | '/admin/settings'
     | '/admin/site-text'
+    | '/admin/stats'
     | '/admin/ticker'
     | '/admin/topics'
     | '/api/not-found'
@@ -506,6 +537,8 @@ export interface FileRouteTypes {
     | '/.well-known/oauth-protected-resource/mcp'
     | '/admin/articles/$id'
     | '/admin/articles/new'
+    | '/api/analytics/beacon'
+    | '/api/analytics/export'
     | '/api/views/$slug'
     | '/admin/articles'
   id:
@@ -535,6 +568,7 @@ export interface FileRouteTypes {
     | '/admin/security'
     | '/admin/settings'
     | '/admin/site-text'
+    | '/admin/stats'
     | '/admin/ticker'
     | '/admin/topics'
     | '/api/not-found'
@@ -552,6 +586,8 @@ export interface FileRouteTypes {
     | '/.well-known/oauth-protected-resource/mcp'
     | '/admin/articles/$id'
     | '/admin/articles/new'
+    | '/api/analytics/beacon'
+    | '/api/analytics/export'
     | '/api/views/$slug'
     | '/admin/articles/'
   fileRoutesById: FileRoutesById
@@ -582,6 +618,8 @@ export interface RootRouteChildren {
   TopicsSlugRoute: typeof TopicsSlugRoute
   ArticlesIndexRoute: typeof ArticlesIndexRoute
   TopicsIndexRoute: typeof TopicsIndexRoute
+  ApiAnalyticsBeaconRoute: typeof ApiAnalyticsBeaconRoute
+  ApiAnalyticsExportRoute: typeof ApiAnalyticsExportRoute
   ApiViewsSlugRoute: typeof ApiViewsSlugRoute
 }
 
@@ -769,6 +807,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminSiteTextRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/stats': {
+      id: '/admin/stats'
+      path: '/stats'
+      fullPath: '/admin/stats'
+      preLoaderRoute: typeof AdminStatsRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/ticker': {
       id: '/admin/ticker'
       path: '/ticker'
@@ -888,6 +933,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminArticlesNewRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/api/analytics/beacon': {
+      id: '/api/analytics/beacon'
+      path: '/api/analytics/beacon'
+      fullPath: '/api/analytics/beacon'
+      preLoaderRoute: typeof ApiAnalyticsBeaconRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/analytics/export': {
+      id: '/api/analytics/export'
+      path: '/api/analytics/export'
+      fullPath: '/api/analytics/export'
+      preLoaderRoute: typeof ApiAnalyticsExportRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/views/$slug': {
       id: '/api/views/$slug'
       path: '/api/views/$slug'
@@ -910,6 +969,7 @@ interface AdminRouteChildren {
   AdminSecurityRoute: typeof AdminSecurityRoute
   AdminSettingsRoute: typeof AdminSettingsRoute
   AdminSiteTextRoute: typeof AdminSiteTextRoute
+  AdminStatsRoute: typeof AdminStatsRoute
   AdminTickerRoute: typeof AdminTickerRoute
   AdminTopicsRoute: typeof AdminTopicsRoute
   AdminIndexRoute: typeof AdminIndexRoute
@@ -930,6 +990,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminSecurityRoute: AdminSecurityRoute,
   AdminSettingsRoute: AdminSettingsRoute,
   AdminSiteTextRoute: AdminSiteTextRoute,
+  AdminStatsRoute: AdminStatsRoute,
   AdminTickerRoute: AdminTickerRoute,
   AdminTopicsRoute: AdminTopicsRoute,
   AdminIndexRoute: AdminIndexRoute,
@@ -983,6 +1044,8 @@ const rootRouteChildren: RootRouteChildren = {
   TopicsSlugRoute: TopicsSlugRoute,
   ArticlesIndexRoute: ArticlesIndexRoute,
   TopicsIndexRoute: TopicsIndexRoute,
+  ApiAnalyticsBeaconRoute: ApiAnalyticsBeaconRoute,
+  ApiAnalyticsExportRoute: ApiAnalyticsExportRoute,
   ApiViewsSlugRoute: ApiViewsSlugRoute,
 }
 export const routeTree = rootRouteImport

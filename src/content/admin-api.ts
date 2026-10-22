@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import type { DatePreset } from "@/lib/analytics-dates";
 
 async function guard() {
   const { requireAdmin } = await import("@/lib/auth/admin.server");
@@ -691,3 +692,59 @@ export const adminActivity = createServerFn({ method: "GET" }).handler(async () 
   const { activityFeed, listNotFounds } = await import("./repository.server");
   return { entries: await activityFeed(), notFounds: await listNotFounds(15) };
 });
+
+/** Stats dashboard payload for one reporting period (all queries in one call). */
+export const adminStats = createServerFn({ method: "POST" })
+  .validator((input: unknown) => input)
+  .handler(async ({ data }) => {
+    await guard();
+    const {
+      analyticsOverview,
+      analyticsLeaderboard,
+      analyticsTopics,
+      analyticsSources,
+      analyticsDevices,
+      analyticsEngagementDistribution,
+      analyticsRecirculation,
+      analyticsPublishing,
+    } = await import("./analytics.server");
+    type PeriodInput = Parameters<typeof analyticsOverview>[0];
+    type LeaderboardSort = Parameters<typeof analyticsLeaderboard>[0]["sort"];
+    const inputData = (data ?? {}) as {
+      preset?: string;
+      from?: string;
+      to?: string;
+      sort?: string;
+      categoryId?: string | null;
+      tagId?: string | null;
+      q?: string | null;
+      page?: number;
+      pageSize?: number;
+      articleId?: string | null;
+    };
+    const periodInput: PeriodInput = {
+      preset: (inputData.preset ?? "last-28") as DatePreset,
+      from: inputData.from ?? "",
+      to: inputData.to ?? "",
+    };
+    const [overview, leaderboard, topics, sources, devices, distribution, recirculation, publishing] =
+      await Promise.all([
+        analyticsOverview(periodInput),
+        analyticsLeaderboard({
+          period: periodInput,
+          sort: (inputData.sort ?? "views") as LeaderboardSort,
+          categoryId: inputData.categoryId,
+          tagId: inputData.tagId,
+          q: inputData.q,
+          page: inputData.page,
+          pageSize: inputData.pageSize,
+        }),
+        analyticsTopics({ period: periodInput }),
+        analyticsSources({ period: periodInput }),
+        analyticsDevices({ period: periodInput }),
+        analyticsEngagementDistribution({ period: periodInput, articleId: inputData.articleId ?? null }),
+        analyticsRecirculation({ period: periodInput }),
+        analyticsPublishing({ period: periodInput }),
+      ]);
+    return { overview, leaderboard, topics, sources, devices, distribution, recirculation, publishing };
+  });
