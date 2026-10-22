@@ -16,6 +16,20 @@ This guide explains every part of the DYPOL Blog admin panel in plain language. 
 - Changing `ADMIN_TOKEN` (or `ADMIN_SESSION_SECRET`) signs everyone out immediately — and also makes the stored authenticator secret unreadable, so afterwards sign in with a recovery code and reset the authenticator under Security. Do this only if you think a secret leaked.
 - If the sign-in page says it is locked, the Worker has no `ADMIN_TOKEN` secret set yet.
 
+## Stats
+
+Admin → **Stats** is the audience and editorial report. It is historical: it does not show live visitors.
+
+- Pick Today, Yesterday, 7, 28, 30 or 90 days, 12 months, or a custom range. Dates use **Asia/Kolkata**. “Compare with previous period” sets the same-length window immediately before.
+- **Article views** are the existing anonymous counter: one per browser tab session per article. They are not unique people and they are not Google Analytics sessions.
+- **Recorded reads** are a single note sent when the reader leaves the article: time the tab was actually visible (capped at 20 minutes), how far they scrolled, and whether they clicked another article. The site does not ping in the background.
+- The median reading time comes from those coarse buckets. If there are no recorded reads, it is shown as unavailable — it is never invented from an average.
+- All-time views are the old undated total. They are labeled separately and are not treated as “this week”.
+- Google Analytics (`G-T1R0QJ2F0Z`) still runs in the browser, but this page cannot read Google’s reports until an Analytics Data API credential is added. Search Console and Core Web Vitals are not connected, so those sections say so instead of showing zeros.
+- Signed-in admin browsers are skipped when the request carries the admin cookie. That does not catch every device.
+- Export CSV or JSON from the Articles section. Exports contain only the figures on screen — no tokens and no visitor identifiers.
+- Daily history starts when this version is deployed. Older lifetime counts stay, but they have no dates. If the database has not created the stats tables yet, opening Stats creates them (the same schema is in migration `0014_editorial_stats.sql`).
+
 ## Articles
 
 - **Articles** lists everything: published articles, drafts and unpublished ones. Filter by status, topic or tag, or search by title.
@@ -84,7 +98,7 @@ An AI app (Claude, ChatGPT, Grok, Cursor, Claude Code, …) can research and wri
 ### Editing drafts
 
 - An AI can fully revise **drafts it created** over MCP (`list_editable_articles`, `get_article`, `update_article_draft`, `set_article_cover`, `remove_article_cover`, `delete_article_draft`). Editing never publishes by itself.
-- **Publishing has two paths, plus two hard limits.** *Automatic* publishing (during submit / cover attach) obeys your Publishing policy below: allowed topics, quality flags, featured-image rule. *Explicit* publishing — the AI deliberately calling `publish_article_if_allowed` on a draft — works for drafts that profile may edit (master token: any draft); the policy does not block it, and the tool reports what the policy would have said as warnings. **Hard limits block both paths:** "Maximum articles per run" (Automation tab, per profile — one run = one run_id the AI sends, or publishes less than 30 minutes apart) and "Maximum AI-published articles per day (whole website)" (Settings — every AI publish across all profiles per UTC day). Publishing manually in the admin panel is never counted or blocked. The Recent runs list marks these “published (explicit)” versus “published (automatic)”. Once published, only you control the article: the AI cannot unpublish, delete, re-publish or change its status (edits only with the per-article grant above).
+- **Publishing has two paths, plus two hard limits.** *Automatic* publishing (during submit / cover attach) obeys your Publishing policy below: allowed topics, quality flags, featured-image rule. *Explicit* publishing — the AI deliberately calling `publish_article_if_allowed` on a draft — works for drafts that profile may edit (master token: any draft); the policy does not block it, and the tool reports what the policy would have said as warnings. **Hard limits block both paths:** \"Maximum articles per run\" (Automation tab, per profile — one run = one run_id the AI sends, or publishes less than 30 minutes apart) and \"Maximum AI-published articles per day (whole website)\" (Settings — every AI publish across all profiles per UTC day). Publishing manually in the admin panel is never counted or blocked. The Recent runs list marks these “published (explicit)” versus “published (automatic)”. Once published, only you control the article: the AI cannot unpublish, delete, re-publish or change its status (edits only with the per-article grant above).
 - The **master MCP token** can edit any draft. A profile can edit other profiles' (or your own admin-written) drafts only if you tick **“AI may edit drafts created by other automations”** in that profile's Publishing policy (off by default).
 - **Published articles are locked** for AI. To let the AI revise one, open it in the editor and tick **“Allow AI to edit this article”** (or use the button in the Articles list). Even then the AI cannot delete it, unpublish it, or change its slug/status. Revoke the grant when done.
 - Deleting a draft through MCP needs an explicit confirm plus the draft's slug echoed back, so an AI cannot delete the wrong piece by accident. Cover files follow the same keep/delete-if-unused rule as admin deletes.
