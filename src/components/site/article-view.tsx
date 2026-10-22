@@ -8,6 +8,7 @@ import { Cover, hasCover } from "./cover";
 import { SidebarBlocks } from "./blocks";
 import type { ResolvedBlock } from "@/content/blocks";
 import { IndexList } from "./index-list";
+import "./article-end.css";
 
 export function ArticleView({
   article,
