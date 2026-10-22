@@ -36,7 +36,7 @@ test("text block only renders with text; cta always", () => {
 });
 
 test("ticker: pinned with no live picks falls back to latest (prod regression)", () => {
-  const r = tickerEntries({ ...site, trending: { ...site.trending, source: "pinned", slugs: ["gone"], count: 2 } }, live);
+  const t = tickerEntries({ ...site, trending: { ...site.trending, source: "pinned", slugs: ["gone"], count: 2 } }, live);
   assert.deepEqual(t.map((x) => x.id), ["a5", "a4"]);
   const off = tickerEntries({ ...site, trending: { ...site.trending, enabled: false } }, live);
   assert.equal(off.length, 0);
