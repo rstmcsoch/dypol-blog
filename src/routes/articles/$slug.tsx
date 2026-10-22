@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { createFileRoute, notFound } from "@tanstack/react-router";
+import { initArticleAnalytics } from "@/lib/analytics-beacon";
 import { ArticleView } from "@/components/site/article-view";
 import { ArticlePagePending, NotFoundState } from "@/components/site/states";
 import { useSite } from "@/components/site/use-site";
@@ -85,5 +86,14 @@ function ArticlePage() {
     }
     void fetch(`/api/views/${slug}`, { method: "POST", keepalive: true }).catch(() => undefined);
   }, [slug]);
+  useEffect(() => {
+    // First-party engagement beacon for the Stats dashboard (opt-in style:
+    // one small aggregated ping per session per article, no personal data).
+    const { teardown } = initArticleAnalytics({
+      articleId: data.article.id,
+      path: `/articles/${slug}`,
+    });
+    return teardown;
+  }, [data.article.id, slug]);
   return <ArticleView {...data} site={site} />;
 }

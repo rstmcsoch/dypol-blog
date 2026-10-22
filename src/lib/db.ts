@@ -22,7 +22,7 @@ export class DatabaseUnavailableError extends Error {
 }
 
 function toSqlite(text: string): string {
-  return text.replace(/::(jsonb|json|int|integer|text)\b/g, "").replace(/\$(\d+)/g, "?$1");
+  return text.replace(/::[a-zA-Z_]+/g, "").replace(/\$(\d+)/g, "?$1");
 }
 
 function bindable(value: unknown): unknown {
