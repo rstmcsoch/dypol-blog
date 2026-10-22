@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { parseStatsRequest } from "@/lib/stats/range";
 
 async function guard() {
   const { requireAdmin } = await import("@/lib/auth/admin.server");
@@ -469,7 +470,7 @@ export const adminSecuritySetupConfirm = createServerFn({ method: "POST" })
         message:
           outcome.status === "code-mismatch"
             ? confirmMismatchMessage(outcome.matchedStep)
-            : "This enrolment can no longer be confirmed. Use “Show a fresh QR code” below and scan the new one.",
+            : "This enrolment can no longer be confirmed. Use \u201cShow a fresh QR code\u201d below and scan the new one.",
       };
     }
     const recoveryCodes = await users.replaceRecoveryCodes(sql, user.id);
@@ -684,6 +685,14 @@ export const adminRestoreRevision = createServerFn({ method: "POST" })
     const out = await restoreRevision(data.revisionId);
     await logAdminAction("article.restore", `Restored an older version of ${out.slug}`);
     return out;
+  });
+
+export const adminEditorialStats = createServerFn({ method: "POST" })
+  .validator((input: unknown) => parseStatsRequest(input))
+  .handler(async ({ data }) => {
+    await guard();
+    const { loadEditorialStats } = await import("@/lib/stats/report.server");
+    return loadEditorialStats(data);
   });
 
 export const adminActivity = createServerFn({ method: "GET" }).handler(async () => {
