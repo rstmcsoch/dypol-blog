@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { resolveBlocks } from "./blocks.ts";
 import { tickerEntries } from "./ticker.ts";
 import { block, site } from "./site.ts";
+import { articlePlainText } from "./present.ts";
 import type { Article, Category } from "./types.ts";
 
 const cats: Category[] = [{ id: "c1", slug: "design", label: "Design", description: "" } as Category, { id: "c2", slug: "notes", label: "Notes", description: "" } as Category];
@@ -35,7 +36,7 @@ test("text block only renders with text; cta always", () => {
 });
 
 test("ticker: pinned with no live picks falls back to latest (prod regression)", () => {
-  const t = tickerEntries({ ...site, trending: { ...site.trending, source: "pinned", slugs: ["gone"], count: 2 } }, live);
+  const r = tickerEntries({ ...site, trending: { ...site.trending, source: "pinned", slugs: ["gone"], count: 2 } }, live);
   assert.deepEqual(t.map((x) => x.id), ["a5", "a4"]);
   const off = tickerEntries({ ...site, trending: { ...site.trending, enabled: false } }, live);
   assert.equal(off.length, 0);
@@ -47,4 +48,19 @@ test("ticker default is on, rotating, newest articles", () => {
   assert.equal(site.trending.enabled, true);
   assert.equal(site.trending.mode, "rotate");
   assert.equal(site.trending.source, "latest");
+});
+
+test("article plain text keeps takeaways and tables (RSS feed must not 500)", () => {
+  const text = articlePlainText([
+    { type: "paragraph", text: "Intro" },
+    { type: "takeaways", items: ["One point", "Two point"] },
+    { type: "table", headers: ["A", "B"], rows: [["1", "2"]] },
+    { type: "code", code: "const n = 1;" },
+    { type: "heading", level: 2, text: "Next" },
+  ]);
+  assert.match(text, /Intro/);
+  assert.match(text, /One point/);
+  assert.match(text, /A \| B/);
+  assert.match(text, /const n = 1/);
+  assert.equal(articlePlainText([]), "");
 });
