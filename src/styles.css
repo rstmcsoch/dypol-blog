@@ -288,35 +288,31 @@
 }
 
 /*
- * t96 grain: one light, reusable texture for every ORANGE surface (stamp,
- * trending badge, "Also filed" band, cover plates, accent buttons, active
- * menu marks). A tiny dedicated speckle tile (/media/grain-speck.webp,
- * 128px, ~1.7 KB) is drawn over the accent colour: isolated 1px specks at
- * ~5% coverage with at least two clear pixels around each one, mostly dark
- * and a few light, at low alpha. The tile is shown at its native size (1
- * image px = 1 CSS px, pixelated) so specks never smear into streaks, and
- * the orange only shifts ~2% (text contrast unchanged). No extra DOM, no
- * filters, no compositing layers, no layout shift. White and black theme
- * surfaces never get it. Use the class, or the
- * --grain-image/--grain-size/--grain-blend trio for pseudo-elements.
+ * t96 grain: one reusable film/risograph texture for every ORANGE surface
+ * (stamp, trending badge, "Also filed" band, cover plates, accent buttons,
+ * active menu marks). A prerendered, seamless 256px tile of fine gaussian
+ * film grain (/media/grain-film.webp, ~17 KB, mixed light and dark grains,
+ * no dots or streaks) is blended INTO the orange with hard-light, which
+ * keeps the hue (about 2% darker on average, text contrast unchanged). A
+ * very soft warm light (--grain-tone) gives the surface a tactile, slightly
+ * uneven print feel. No extra DOM, no live SVG filters, no compositing
+ * layers, no layout shift. White and black theme surfaces never get it.
+ * Use the class, or the --grain-image/--grain-size/--grain-blend trio for
+ * pseudo-elements.
  */
 :root {
-  --grain-image: url("/media/grain-speck.webp");
+  --grain-image: url("/media/grain-film.webp");
   --grain-size: 128px 128px;
-  --grain-blend: normal;
+  --grain-blend: hard-light;
+  --grain-tone: radial-gradient(120% 140% at 18% 0%, rgb(255 236 214 / 0.16), transparent 62%),
+    radial-gradient(90% 120% at 100% 100%, rgb(120 20 0 / 0.12), transparent 70%);
 }
 
 .grain {
   background-color: var(--accent);
-  background-image: var(--grain-image);
-  background-size: var(--grain-size);
-  background-blend-mode: var(--grain-blend);
-  image-rendering: pixelated;
-}
-
-/* image-rendering inherits — keep real images inside orange blocks smooth. */
-.grain * {
-  image-rendering: auto;
+  background-image: var(--grain-image), var(--grain-tone);
+  background-size: var(--grain-size), 100% 100%, 100% 100%;
+  background-blend-mode: var(--grain-blend), normal, normal;
 }
 
 .site-header {
