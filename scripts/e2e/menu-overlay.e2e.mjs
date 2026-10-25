@@ -24,6 +24,17 @@ const fail = (msg) => { failures.push(msg); console.log("FAIL", msg); };
 const wait = (p, ms) => p.waitForTimeout(ms);
 // Tap the menu button where it is on screen, like a finger would (locator.click()
 // would first scroll the sticky button "into view" and move the page itself).
+// t113: the header auto-hides while scrolling down; a reader scrolls up a little
+// to bring it back before tapping Menu. Returns the new scrollY.
+async function reveal(page) {
+  await wait(page, 300); // let the 200ms hide transition settle
+  const hidden = await page.evaluate(() => document.querySelector(".site-header").getBoundingClientRect().bottom <= 1);
+  if (hidden) {
+    await page.mouse.wheel(0, -40);
+    await wait(page, 350);
+  }
+  return page.evaluate(() => Math.round(window.scrollY));
+}
 async function tapMenu(page) {
   const box = await page.locator(".menu-btn").boundingBox();
   await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
@@ -32,7 +43,7 @@ async function tapMenu(page) {
 async function scrollTo(page, target) {
   await page.evaluate((t) => window.scrollTo({ top: t === "bottom" ? document.documentElement.scrollHeight : t, behavior: "instant" }), target);
   await wait(page, 150);
-  return page.evaluate(() => Math.round(window.scrollY));
+  return reveal(page);
 }
 
 /** Is the page usable: nothing overlay-ish on top, no lock left behind. */
@@ -109,6 +120,25 @@ async function runPage(page, route, width) {
 const ctx = await browser.newContext();
 const page = await ctx.newPage();
 for (const route of ["/", ARTICLE]) for (const w of WIDTHS) await runPage(page, route, w);
+
+// t113 auto-hide: scrolling down hides the header, a small scroll up shows it.
+for (const w of [390, 1280]) {
+  for (const route of ["/", ARTICLE]) {
+    await page.setViewportSize({ width: w, height: 800 });
+    await page.goto(BASE + route, { waitUntil: "networkidle" });
+    const pos = () => page.evaluate(() => { const r = document.querySelector(".site-header").getBoundingClientRect(); return [Math.round(r.top), Math.round(r.bottom)]; });
+    await page.mouse.wheel(0, 40); await wait(page, 350);
+    const nearTop = await pos();
+    await page.mouse.wheel(0, 700); await wait(page, 350);
+    const down = await pos();
+    await page.mouse.wheel(0, -12); await wait(page, 350);
+    const up = await pos();
+    await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" })); await wait(page, 350);
+    const top = await pos();
+    checks++;
+    if (nearTop[0] !== 0 || down[1] > 0 || up[0] !== 0 || top[0] !== 0) fail(`autohide ${route} @${w}: nearTop=${nearTop} down=${down} up=${up} top=${top}`);
+  }
+}
 
 // Navigation from the menu closes it, unlocks, and lands at the new page's top.
 await page.setViewportSize({ width: 390, height: 760 });

@@ -323,6 +323,32 @@
   border-bottom: var(--line) solid var(--ink);
 }
 
+/* t113: auto-hide while reading down (transform only: no layout shift). */
+.site-header.is-hidden {
+  transform: translateY(calc(-100% - var(--line)));
+}
+
+/* A transform would become the containing block of the fixed menu: never
+   while the menu is open or focus is inside the header. */
+html.nav-open .site-header,
+.site-header:focus-within {
+  transform: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .site-header {
+    transition:
+      transform 200ms ease,
+      background-color 180ms ease,
+      color 180ms ease,
+      border-color 180ms ease;
+  }
+
+  html.nav-open .site-header {
+    transition: none;
+  }
+}
+
 .bar {
   position: relative;
   display: flex;

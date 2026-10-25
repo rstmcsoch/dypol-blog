@@ -103,6 +103,58 @@ export function SiteHeader() {
     };
   }, [open]);
 
+  // t113: hide the header while reading down, show it on a small scroll up.
+  // Passive + rAF-throttled; never while the menu is open (its scroll lock moves
+  // scrollY) or while keyboard focus is inside the header.
+  useEffect(() => {
+    const root = document.documentElement;
+    const head = header.current;
+    if (!head) return;
+    const UP = 8;
+    let last: number | null = window.scrollY;
+    let frame = 0;
+    const update = () => {
+      frame = 0;
+      const y = Math.max(0, window.scrollY);
+      if (root.classList.contains("nav-open")) {
+        last = null; // lock/unlock jumps are not reader scrolls
+        head.classList.remove("is-hidden");
+        return;
+      }
+      if (last === null) {
+        last = y;
+        return;
+      }
+      const near = y <= head.offsetHeight;
+      if (near || head.contains(document.activeElement)) {
+        head.classList.remove("is-hidden");
+        last = y;
+      } else if (y > last) {
+        head.classList.add("is-hidden");
+        last = y;
+      } else if (last - y >= UP) {
+        head.classList.remove("is-hidden");
+        last = y;
+      }
+    };
+    const onScroll = () => {
+      if (!frame) frame = requestAnimationFrame(update);
+    };
+    const onFocus = () => head.classList.remove("is-hidden");
+    window.addEventListener("scroll", onScroll, { passive: true });
+    head.addEventListener("focusin", onFocus);
+    return () => {
+      if (frame) cancelAnimationFrame(frame);
+      window.removeEventListener("scroll", onScroll);
+      head.removeEventListener("focusin", onFocus);
+      head.classList.remove("is-hidden");
+    };
+  }, []);
+
+  useEffect(() => {
+    if (open) header.current?.classList.remove("is-hidden");
+  }, [open]);
+
   // Safety net: never leave a lock behind if the header unmounts mid-open.
   useEffect(() => () => document.documentElement.classList.remove("nav-open"), []);
 
