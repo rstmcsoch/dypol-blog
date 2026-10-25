@@ -1,23 +1,41 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, notFound } from "@tanstack/react-router";
 import { IndexList } from "@/components/site/index-list";
-import { PagePending } from "@/components/site/states";
+import { NotFoundState, PagePending } from "@/components/site/states";
+import { Pager, pageHref, parsePage } from "@/components/site/pager";
 import { useSite } from "@/components/site/use-site";
 import { getIndex } from "@/content/public-api";
 import { absoluteUrl, itemListJsonLd, sitePageTitle, socialMeta } from "@/lib/seo";
 
 export const Route = createFileRoute("/articles/")({
-  loader: () => getIndex(),
+  validateSearch: (search: Record<string, unknown>): { page?: number } => {
+    const page = parsePage(search.page);
+    return page === undefined || page === 1 ? {} : { page };
+  },
+  loaderDeps: ({ search }) => ({ page: search.page ?? 1 }),
+  loader: async ({ deps }) => {
+    const data = await getIndex({ data: { page: deps.page } });
+    if (!data) throw notFound();
+    return data;
+  },
   head: ({ loaderData }) => {
-    const origin = loaderData?.origin ?? "";
-    const title = sitePageTitle("Index");
+    if (!loaderData) return { meta: [{ title: sitePageTitle("Not found") }, { name: "robots", content: "noindex" }] };
+    const origin = loaderData.origin ?? "";
+    const page = loaderData.page ?? 1;
+    const pages = loaderData.pages ?? 1;
+    const path = pageHref("/articles", page);
+    const title = sitePageTitle(page > 1 ? `Index — Page ${page}` : "Index");
     const description = "Every published DYPOL Blog piece, newest first — tech news, reviews and explainers across AI, smartphones, cybersecurity, startups and more.";
     return {
       meta: [
         { title },
         { name: "description", content: description },
-        ...socialMeta({ title, description, url: absoluteUrl(origin, "/articles"), type: "website", siteName: "DYPOL Blog", image: absoluteUrl(origin, "/og.jpg") }),
+        ...socialMeta({ title, description, url: absoluteUrl(origin, path), type: "website", siteName: "DYPOL Blog", image: absoluteUrl(origin, "/og.jpg") }),
       ],
-      links: [{ rel: "canonical", href: absoluteUrl(origin, "/articles") }],
+      links: [
+        { rel: "canonical", href: absoluteUrl(origin, path) },
+        ...(page > 1 ? [{ rel: "prev", href: absoluteUrl(origin, pageHref("/articles", page - 1)) }] : []),
+        ...(page < pages ? [{ rel: "next", href: absoluteUrl(origin, pageHref("/articles", page + 1)) }] : []),
+      ],
       scripts: [
         {
           type: "application/ld+json",
@@ -29,12 +47,13 @@ export const Route = createFileRoute("/articles/")({
     };
   },
   pendingComponent: PagePending,
+  notFoundComponent: NotFoundState,
   component: ArticlesPage,
 });
 
 function ArticlesPage() {
   const site = useSite();
-  const { articles, meta } = Route.useLoaderData();
+  const { articles, meta, page, pages, start } = Route.useLoaderData();
   return (
     <div className="page">
       <div className="container">
@@ -43,7 +62,8 @@ function ArticlesPage() {
           <h1 className="page-title">{site.labels.indexTitle}</h1>
           <p className="lede">{site.labels.indexLede}</p>
         </header>
-        <IndexList articles={articles} meta={meta} minRead={site.labels.minRead} />
+        <IndexList articles={articles} meta={meta} minRead={site.labels.minRead} start={start} />
+        <Pager basePath="/articles" page={page} pages={pages} />
       </div>
     </div>
   );

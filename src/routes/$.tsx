@@ -1,6 +1,6 @@
 import { createFileRoute, notFound } from "@tanstack/react-router";
 import { NotFoundState } from "@/components/site/states";
-import { site } from "@/content/site";
+import { sitePageTitle } from "@/lib/seo";
 
 export const Route = createFileRoute("/$")({
   loader: () => {
@@ -8,7 +8,7 @@ export const Route = createFileRoute("/$")({
   },
   head: () => ({
     meta: [
-      { title: `${site.labels.notFoundKicker} — ${site.name}` },
+      { title: sitePageTitle("Not found") },
       { name: "robots", content: "noindex" },
     ],
   }),

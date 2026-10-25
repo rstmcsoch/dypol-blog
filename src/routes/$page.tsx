@@ -17,7 +17,7 @@ export const Route = createFileRoute("/$page")({
     return data;
   },
   head: ({ loaderData }) => {
-    if (!loaderData) return { meta: [{ title: sitePageTitle("Page") }] };
+    if (!loaderData) return { meta: [{ title: sitePageTitle("Not found") }, { name: "robots", content: "noindex" }] };
     const origin = loaderData.origin ?? "";
     const title = sitePageTitle(loaderData.title);
     const description = metaDescription(loaderData.description, loaderData.title);

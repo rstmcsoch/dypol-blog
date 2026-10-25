@@ -6,7 +6,7 @@ import { site } from "./site";
 import { categories as seedCategories, tags as seedTags } from "./taxonomy";
 import { tickerEntries } from "./ticker";
 import { STANDARD_PAGES, standardPage } from "./pages-seed";
-import { resolveBlocks } from "./blocks";
+import { related as relatedArticles, resolveBlocks } from "./blocks";
 import type { Article, ArticleBlock, Category, PublicationStatus, SiteConfig, Tag } from "./types";
 import { blockPlainText, blocksPlainText } from "./block-text.ts";
 import { stripCreditsAndSources } from "../lib/automation/body.ts";
@@ -326,15 +326,31 @@ function needsViews(site: SiteConfig): boolean {
 }
 
 /** article id -> view count. Never throws (an older database without the table just has no counts). */
-async function viewCounts(site: SiteConfig): Promise<Record<string, number>> {
-  if (!needsViews(site)) return {};
+/**
+ * t115: "Most read" ranks the last 7 days of page views (analytics rollups) when
+ * at least three stories have views this week; otherwise the all-time counter.
+ * The window travels with the counts so the heading states it accurately.
+ */
+async function viewCountsWindowed(site: SiteConfig): Promise<{ views: Record<string, number>; viewsWindow?: "week" | "all" }> {
+  if (!needsViews(site)) return { views: {} };
+  const sql = await getSql().catch(() => null);
+  if (!sql) return { views: {} };
   try {
-    const sql = await getSql();
+    const since = new Date(Date.now() + 330 * 60_000 - 6 * 86_400_000).toISOString().slice(0, 10);
+    const week = await sql<{ article_id: string; views: number }>`select article_id, sum(page_views) as views from analytics_article_session where date >= ${since} group by article_id`;
+    const counts = week.filter((r) => Number(r.views) > 0);
+    if (counts.length >= 3) return { views: Object.fromEntries(counts.map((r) => [r.article_id, Number(r.views)])), viewsWindow: "week" };
+  } catch { /* no rollups yet: fall back below */ }
+  try {
     const rows = await sql<{ article_id: string; views: number }>`select article_id, views from article_views`;
-    return Object.fromEntries(rows.map((r) => [r.article_id, Number(r.views)]));
+    return { views: Object.fromEntries(rows.map((r) => [r.article_id, Number(r.views)])), viewsWindow: "all" };
   } catch {
-    return {};
+    return { views: {} };
   }
+}
+
+async function viewCounts(site: SiteConfig): Promise<Record<string, number>> {
+  return (await viewCountsWindowed(site)).views;
 }
 
 /** Privacy-friendly counter: one integer per article, no IPs, cookies or user data stored. */
@@ -433,34 +449,50 @@ export async function readHome(draftSite?: SiteConfig) {
   const data = await publicCatalog();
   const site = draftSite ?? { ...data.site, aiDailyPublishLimit: 0 };
   const live = published(data.articles);
-  const blocks = resolveBlocks(site.home.blocks, { site, live, categories: data.categories, tags: data.tags, views: await viewCounts(site) }, "home");
+  const blocks = resolveBlocks(site.home.blocks, { site, live, categories: data.categories, tags: data.tags, ...(await viewCountsWindowed(site)) }, "home");
   return { blocks, empty: live.length === 0, site };
 }
 
-export async function readIndex() {
+/** t115: public listings are paged, 12 per page; null = page out of range (404). */
+export const PAGE_SIZE = 12;
+function paginate<T>(list: T[], page: number) {
+  const pages = Math.max(1, Math.ceil(list.length / PAGE_SIZE));
+  if (!Number.isInteger(page) || page < 1 || page > pages) return null;
+  const start = (page - 1) * PAGE_SIZE;
+  return { items: list.slice(start, start + PAGE_SIZE), page, pages, total: list.length, start };
+}
+
+export async function readIndex(page = 1) {
   const data = await publicCatalog();
   const live = published(data.articles);
-  return { articles: live, meta: metaFor(live, live, data.categories) };
+  const p = paginate(live, page);
+  if (!p) return null;
+  return { articles: p.items, meta: metaFor(p.items, live, data.categories), page: p.page, pages: p.pages, total: p.total, start: p.start };
 }
 
 export async function readTopics() {
   const data = await publicCatalog();
   const live = published(data.articles);
   return {
-    topics: data.categories.map((category) => ({
-      category,
-      count: live.filter((article) => article.topicIds.includes(category.id)).length,
-    })),
+    // t115: topics with no published stories are hidden everywhere.
+    topics: data.categories
+      .map((category) => ({
+        category,
+        count: live.filter((article) => article.topicIds.includes(category.id)).length,
+      }))
+      .filter((t) => t.count > 0),
   };
 }
 
-export async function readTopic(slug: string) {
+export async function readTopic(slug: string, page = 1) {
   const data = await publicCatalog();
   const category = categoryOf(data.categories, slug);
   if (!category) return null;
   const live = published(data.articles).filter((article) => article.topicIds.includes(category.id));
   const all = published(data.articles);
-  return { category, articles: live, meta: metaFor(live, all, data.categories) };
+  const p = paginate(live, page);
+  if (!p) return null;
+  return { category, articles: p.items, meta: metaFor(p.items, all, data.categories), page: p.page, pages: p.pages, total: p.total, start: p.start };
 }
 
 export async function readArticle(slug: string) {
@@ -469,6 +501,43 @@ export async function readArticle(slug: string) {
   const article = live.find((item) => item.slug === slug);
   if (!article) return null;
   return articlePayload(data, article, live);
+}
+
+// ---------- redirects (t115): old slug -> new slug, served as 301 ----------
+let redirectsReady = false;
+async function ensureRedirects(sql: Sql): Promise<void> {
+  if (redirectsReady) return;
+  await sql`create table if not exists redirects (from_slug text primary key, to_slug text not null, created_at text not null)`;
+  redirectsReady = true;
+}
+
+/** Follows the redirect table (at most 5 hops) to a live slug, or null. */
+export async function resolveRedirect(slug: string): Promise<string | null> {
+  try {
+    const sql = await getSql();
+    await ensureRedirects(sql);
+    let current = slug;
+    for (let hop = 0; hop < 5; hop++) {
+      const rows = await sql<{ to_slug: string }>`select to_slug from redirects where from_slug = ${current} limit 1`;
+      const next = rows[0]?.to_slug;
+      if (!next || next === current) break;
+      current = next;
+    }
+    return current === slug ? null : current;
+  } catch {
+    return null;
+  }
+}
+
+/** Records old -> new (and repoints older chains), so a renamed slug keeps working. */
+export async function addRedirect(sql: Sql, fromSlug: string, toSlug: string): Promise<void> {
+  if (!fromSlug || !toSlug || fromSlug === toSlug) return;
+  await ensureRedirects(sql);
+  const now = new Date().toISOString();
+  await sql`delete from redirects where from_slug = ${toSlug}`;
+  await sql`update redirects set to_slug = ${toSlug} where to_slug = ${fromSlug}`;
+  await sql`insert into redirects (from_slug, to_slug, created_at) values (${fromSlug}, ${toSlug}, ${now})
+    on conflict (from_slug) do update set to_slug = excluded.to_slug, created_at = excluded.created_at`;
 }
 
 export async function readPreview(id: string) {
@@ -485,12 +554,18 @@ async function articlePayload(
   live: Article[],
 ) {
   const index = live.findIndex((item) => item.id === article.id);
-  const same = live.filter((item) => item.id !== article.id && item.topicIds.some((id) => article.topicIds.includes(id)));
-  const rest = live.filter((item) => item.id !== article.id && !same.some((picked) => picked.id === item.id));
-  const related = [...same, ...rest].slice(0, 3);
+  // t115: one "already shown" set for the whole article page: the story itself,
+  // then the sidebar sections, then Newer/Older, then Continue. No story repeats.
+  const used = new Set<string>([article.id]);
   const sidebar = data.site.articleSidebar.enabled
-    ? resolveBlocks(data.site.articleSidebar.blocks, { site: data.site, live, categories: data.categories, tags: data.tags, views: await viewCounts(data.site), current: article }, "sidebar")
+    ? resolveBlocks(data.site.articleSidebar.blocks, { site: data.site, live, categories: data.categories, tags: data.tags, ...(await viewCountsWindowed(data.site)), current: article, used }, "sidebar")
     : [];
+  const newer = index > 0 ? live.slice(0, index).reverse().find((a) => !used.has(a.id)) : undefined;
+  if (newer) used.add(newer.id);
+  const older = index >= 0 ? live.slice(index + 1).find((a) => !used.has(a.id)) : undefined;
+  if (older) used.add(older.id);
+  const related = relatedArticles(article, live).filter((a) => !used.has(a.id)).slice(0, 3);
+  for (const a of related) used.add(a.id);
   return {
     article,
     category: categoryOf(data.categories, article.categoryId) ?? null,
@@ -501,10 +576,7 @@ async function articlePayload(
       .map((id) => data.tags.find((tag) => tag.id === id))
       .filter((tag): tag is Tag => Boolean(tag)),
     related,
-    neighbors: {
-      newer: index > 0 ? live[index - 1] : undefined,
-      older: index >= 0 ? live[index + 1] : undefined,
-    },
+    neighbors: { newer, older },
     rank: index === -1 ? 0 : index + 1,
     sidebar,
     meta: metaFor(related, live, data.categories),
@@ -943,8 +1015,8 @@ export async function saveArticle(raw: unknown): Promise<{ id: string; slug: str
     if (knownTags.length !== input.tagIds.length) throw new ContentError("One of the tags no longer exists.");
 
     const existing = input.id
-      ? await sql<{ id: string; status: PublicationStatus; published_at: string | Date | null }>`
-          select id, status, published_at from articles where id = ${input.id}
+      ? await sql<{ id: string; slug: string; status: PublicationStatus; published_at: string | Date | null }>`
+          select id, slug, status, published_at from articles where id = ${input.id}
         `
       : [];
     if (input.id && existing.length === 0) throw new ContentError("That article no longer exists.", 404);
@@ -986,6 +1058,10 @@ export async function saveArticle(raw: unknown): Promise<{ id: string; slug: str
         scheduled_at = ${scheduledAt},
         blocks = ${blocks}::jsonb
         where id = ${id}`;
+      // t115: a renamed, once-published slug keeps working via a 301.
+      if (previous.slug && previous.slug !== slug && previous.published_at) {
+        await addRedirect(sql, previous.slug, slug).catch((e) => console.error("[redirects]", e));
+      }
     } else {
       await sql`insert into articles (
         id, slug, title, excerpt, status, published_at, updated_at, category_id, motif, featured,
