@@ -16,12 +16,19 @@
 
 import { getSql, type Sql } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth/admin.server";
-import { bucketIndex, computePeriod, type DatePreset, type Period } from "@/lib/analytics-dates";
-
-/** Kolkata date expression for a UTC timestamp column/expression. */
-function kolkataDateOf(expression: string): string {
-  return `strftime('%Y-%m-%d', ${expression}, '+5 hours', '30 minutes')`;
-}
+import { bucketIndex, computePeriod, kolkataAddDays, type DatePreset, type Period } from "@/lib/analytics-dates";
+import {
+  RETURNING_WINDOW_DAYS,
+  articleRecirculation,
+  classifyVisitors,
+  completionQualifies,
+  growth,
+  isEngagedRead,
+  sessionsFromReads,
+  summarize,
+  type ReadRow,
+  type SessionAgg,
+} from "@/lib/analytics-metrics";
 
 async function guardedSql(): Promise<Sql> {
   await requireAdmin();
@@ -35,7 +42,7 @@ async function guardedSql(): Promise<Sql> {
 export type PeriodInput = { preset?: DatePreset; from?: string; to?: string } | null;
 
 export function resolvePeriod(input: PeriodInput): Period {
-  const preset = input?.preset ?? "last-28";
+  const preset = input?.preset === "last-30" ? "last-28" : input?.preset ?? "last-28";
   const custom =
     input && (input.preset === "custom" || input.from || input.to)
       ? { from: input.from ?? "", to: input.to ?? "" }
@@ -44,58 +51,66 @@ export function resolvePeriod(input: PeriodInput): Period {
 }
 
 /** ------------------------------------------------------------------ */
-/** Raw rollup readers                                                 */
+/** Raw rollup readers (t116: one source, one IST date key)            */
 /** ------------------------------------------------------------------ */
 
-type ArticleSessionRow = {
-  article_id: string;
-  page_views: number;
-  engaged_seconds: number;
-  engaged_sessions: number;
-  completed: number;
-  max_scroll: number;
-};
-
-async function articleSessionsInPeriod(
-  sql: Sql,
-  from: string,
-  to: string,
-): Promise<ArticleSessionRow[]> {
-  return sql<ArticleSessionRow>`
-    select article_id,
-           sum(page_views)::int as page_views,
-           sum(engaged_seconds)::real as engaged_seconds,
-           sum(engaged_sessions)::int as engaged_sessions,
-           sum(completed)::int as completed,
-           max(max_scroll)::int as max_scroll
+async function readsInRange(sql: Sql, from: string, to: string): Promise<ReadRow[]> {
+  const rows = await sql<ReadRow>`
+    select session_id, date, article_id, page_views, engaged_seconds, completed, key_events, max_scroll
     from analytics_article_session
     where date between ${from} and ${to}
-    group by article_id
   `;
+  return rows.map((r) => ({
+    ...r,
+    page_views: Number(r.page_views ?? 0),
+    engaged_seconds: Number(r.engaged_seconds ?? 0),
+    completed: Number(r.completed ?? 0),
+    key_events: Number(r.key_events ?? 0),
+    max_scroll: Number(r.max_scroll ?? 0),
+  }));
 }
 
-async function sessionsInPeriod(
-  sql: Sql,
-  from: string,
-  to: string,
-): Promise<Array<{
-  session_id: string;
-  page_views: number;
-  engaged_seconds: number;
-  bounced: number;
-  started_at: string;
-  last_seen: string;
-  source: string;
-  medium: string;
-  referrer_domain: string;
-  device_category: string;
-}>> {
-  return sql`
-    select session_id, page_views, engaged_seconds, bounced, started_at, last_seen,
-           source, medium, referrer_domain, device_category
+type VisitorAttrs = { source: string; medium: string; referrer: string; device: string; country: string };
+
+/** Visitor-level attributes (first-touch source, device) for visitors seen in the period. */
+async function visitorAttributes(sql: Sql, from: string, to: string): Promise<Map<string, VisitorAttrs>> {
+  const rows = await sql<{ session_id: string; source: string; medium: string; referrer_domain: string; device_category: string; country: string | null }>`
+    select session_id, source, medium, referrer_domain, device_category, country
     from analytics_sessions
-    where ${kolkataDateOf("last_seen")} between ${from} and ${to}
+    where session_id in (select distinct session_id from analytics_article_session where date between ${from} and ${to})
   `;
+  const map = new Map<string, VisitorAttrs>();
+  for (const r of rows) {
+    map.set(r.session_id, {
+      source: r.source || "direct",
+      medium: mediumFor(r.source || "direct"),
+      referrer: r.referrer_domain || "",
+      device: r.device_category || "desktop",
+      country: (r.country || "").toUpperCase(),
+    });
+  }
+  return map;
+}
+
+function mediumFor(source: string): string {
+  switch (source) {
+    case "direct": return "(none)";
+    case "organic": return "organic";
+    case "social": return "social";
+    case "referral": return "referral";
+    case "internal": return "internal";
+    case "campaign": return "campaign";
+    default: return source;
+  }
+}
+
+function hostOf(referrer: string): string {
+  if (!referrer) return "";
+  try {
+    return new URL(referrer).hostname.replace(/^www\./, "");
+  } catch {
+    return referrer.replace(/^https?:\/\//, "").replace(/^www\./, "").split("/")[0];
+  }
 }
 
 async function allTimeViews(sql: Sql): Promise<Record<string, number>> {
@@ -105,11 +120,21 @@ async function allTimeViews(sql: Sql): Promise<Record<string, number>> {
   return out;
 }
 
+function daysBetween(from: string, to: string): string[] {
+  const out: string[] = [];
+  let cursor = from;
+  for (let i = 0; i <= periodDays(from, to); i += 1) {
+    out.push(cursor);
+    cursor = kolkataAddDays(cursor, 1);
+  }
+  return out;
+}
+
 /** ------------------------------------------------------------------ */
 /** Overview                                                           */
 /** ------------------------------------------------------------------ */
 
-export type OverviewPoint = { date: string; pageViews: number; sessions: number; engagedSeconds: number };
+export type OverviewPoint = { date: string; pageViews: number; sessions: number; engagedSeconds: number; published: number };
 
 export type OverviewData = {
   source: "first-party";
@@ -117,21 +142,21 @@ export type OverviewData = {
   freshness: string | null;
   pageViews: number;
   sessions: number;
-  users: number | null;
-  newUsers: number | null;
-  returningUsers: number | null;
-  sessionsPerUser: number | null;
+  users: number;
+  newUsers: number;
+  returningUsers: number;
   pageViewsPerSession: number | null;
   engagedSessions: number;
   engagementRate: number | null;
   bounceRate: number | null;
   avgEngagementTime: number | null;
-  avgEngagementTimePerSession: number | null;
   totalEngagedTime: number;
   publishedArticles: number;
   publishedInPeriod: number;
+  prevHasData: boolean;
   prevPageViews: number;
   prevSessions: number;
+  prevUsers: number;
   prevEngagementRate: number | null;
   prevBounceRate: number | null;
   prevAvgEngagementTime: number | null;
@@ -141,152 +166,106 @@ export type OverviewData = {
   notes: string[];
 };
 
+function seriesFor(rows: ReadRow[], from: string, to: string, publishedByDate: Map<string, number>): OverviewPoint[] {
+  const byDate = new Map<string, { pv: number; visitors: Set<string>; secs: number }>();
+  for (const r of rows) {
+    let e = byDate.get(r.date);
+    if (!e) { e = { pv: 0, visitors: new Set(), secs: 0 }; byDate.set(r.date, e); }
+    e.pv += r.page_views;
+    e.visitors.add(r.session_id);
+    e.secs += r.engaged_seconds;
+  }
+  return daysBetween(from, to).map((date) => {
+    const e = byDate.get(date);
+    return {
+      date,
+      pageViews: e?.pv ?? 0,
+      sessions: e?.visitors.size ?? 0,
+      engagedSeconds: Math.round((e?.secs ?? 0) * 10) / 10,
+      published: publishedByDate.get(date) ?? 0,
+    };
+  });
+}
+
+async function visitDatesWindow(sql: Sql, from: string, to: string): Promise<Map<string, Set<string>>> {
+  const rows = await sql<{ session_id: string; date: string }>`
+    select distinct session_id, date from analytics_article_session
+    where date between ${kolkataAddDays(from, -(RETURNING_WINDOW_DAYS - 1))} and ${to}
+  `;
+  const map = new Map<string, Set<string>>();
+  for (const r of rows) {
+    let set = map.get(r.session_id);
+    if (!set) { set = new Set(); map.set(r.session_id, set); }
+    set.add(r.date);
+  }
+  return map;
+}
+
 export async function analyticsOverview(input: PeriodInput): Promise<OverviewData> {
   const sql = await guardedSql();
   const period = resolvePeriod(input);
 
-  const [current, previous] = await Promise.all([
-    aggregatePeriod(sql, period.from, period.to),
-    aggregatePeriod(sql, period.previousFrom, period.previousTo),
+  const [cur, prev, visitDates, articles, freshness] = await Promise.all([
+    readsInRange(sql, period.from, period.to),
+    readsInRange(sql, period.previousFrom, period.previousTo),
+    visitDatesWindow(sql, period.from, period.to),
+    catalogArticles(sql),
+    sql<{ last_seen: string }>`select max(last_seen) as last_seen from analytics_sessions`,
   ]);
-
-  const freshness = await sql<{ last_seen: string }>`
-    select max(last_seen) as last_seen from analytics_sessions
-  `;
   const lastSeen = freshness[0]?.last_seen;
-  const publishedRows = await sql<{ n: number }>`select count(*)::int as n from articles where status = 'published'`;
-  const publishedArticles = Number(publishedRows[0]?.n ?? 0);
-  const publishedInPeriod = await sql<{ n: number }>`
-    select count(*)::int as n from articles
-    where status = 'published' and ${kolkataDateOf("published_at")} between ${period.from} and ${period.to}
-  `;
 
-  const users = current.sessions; // session-based estimate
-  const newUsers = current.newSessions;
-  const returningUsers = current.returningSessions;
+  const publishedByDate = new Map<string, number>();
+  let publishedInPeriod = 0;
+  for (const a of articles) {
+    if (!a.publishedAt) continue;
+    const d = kolkataDateOfZone(a.publishedAt);
+    publishedByDate.set(d, (publishedByDate.get(d) ?? 0) + 1);
+    if (d >= period.from && d <= period.to) publishedInPeriod += 1;
+  }
 
-  const engagementRate = current.sessions > 0 ? (current.engagedSessions / current.sessions) * 100 : null;
-  const bounceRate = current.sessions > 0 ? (current.bouncedSessions / current.sessions) * 100 : null;
-  const avgEngagementTime = current.engagedSessions > 0 ? current.totalEngagedTime / current.engagedSessions : null;
-  const avgEngagementTimePerSession = current.sessions > 0 ? current.totalEngagedTime / current.sessions : null;
-  const pageViewsPerSession = current.sessions > 0 ? current.pageViews / current.sessions : null;
-  const sessionsPerUser = users && users > 0 ? current.sessions / users : null;
-
-  const prevEngagementRate =
-    previous.sessions > 0 ? (previous.engagedSessions / previous.sessions) * 100 : null;
-  const prevBounceRate =
-    previous.sessions > 0 ? (previous.bouncedSessions / previous.sessions) * 100 : null;
-  const prevAvgEngagementTime =
-    previous.engagedSessions > 0 ? previous.totalEngagedTime / previous.engagedSessions : null;
+  const curSum = summarize(sessionsFromReads(cur));
+  const prevSum = summarize(sessionsFromReads(prev));
+  const periodVisitors = new Set(cur.map((r) => r.session_id));
+  // Returning = more than one visit day within 30 days (window clipped to the period end).
+  const windowed = new Map<string, Set<string>>();
+  for (const v of periodVisitors) windowed.set(v, visitDates.get(v) ?? new Set());
+  const visitors = classifyVisitors(periodVisitors, windowed);
 
   return {
     source: "first-party",
     period,
-    freshness: lastSeen ? `${kolkataDisplay(lastSeen)} ${kolkataTime(lastSeen)} IST` : null,
-    pageViews: current.pageViews,
-    sessions: current.sessions,
-    users,
-    newUsers,
-    returningUsers,
-    sessionsPerUser,
-    pageViewsPerSession,
-    engagedSessions: current.engagedSessions,
-    engagementRate,
-    bounceRate,
-    avgEngagementTime,
-    avgEngagementTimePerSession,
-    totalEngagedTime: current.totalEngagedTime,
-    publishedArticles,
-    publishedInPeriod: Number(publishedInPeriod[0]?.n ?? 0),
-    prevPageViews: previous.pageViews,
-    prevSessions: previous.sessions,
-    prevEngagementRate,
-    prevBounceRate,
-    prevAvgEngagementTime,
-    prevTotalEngagedTime: previous.totalEngagedTime,
-    series: current.series,
-    previousSeries: previous.series,
+    freshness: lastSeen ? `${kolkataDisplay(lastSeen)} ${kolkataTime(lastSeen)}` : null,
+    pageViews: curSum.pageViews,
+    sessions: curSum.sessions,
+    users: visitors.users,
+    newUsers: visitors.newUsers,
+    returningUsers: visitors.returningUsers,
+    pageViewsPerSession: curSum.pagesPerSession,
+    engagedSessions: curSum.engagedSessions,
+    engagementRate: curSum.engagementRate,
+    bounceRate: curSum.bounceRate,
+    avgEngagementTime: curSum.avgEngagedTime,
+    totalEngagedTime: curSum.engagedSeconds,
+    publishedArticles: articles.length,
+    publishedInPeriod,
+    prevHasData: prev.length > 0,
+    prevPageViews: prevSum.pageViews,
+    prevSessions: prevSum.sessions,
+    prevUsers: new Set(prev.map((r) => r.session_id)).size,
+    prevEngagementRate: prevSum.engagementRate,
+    prevBounceRate: prevSum.bounceRate,
+    prevAvgEngagementTime: prevSum.avgEngagedTime,
+    prevTotalEngagedTime: prevSum.engagedSeconds,
+    series: seriesFor(cur, period.from, period.to, publishedByDate),
+    previousSeries: seriesFor(prev, period.previousFrom, period.previousTo, publishedByDate),
     notes: [
-      ...(current.series.length === 0 || current.pageViews === 0
-        ? ["No measured traffic yet for this period — the first-party beacon starts recording on readers' first article view after this feature is deployed."]
+      ...(cur.length === 0
+        ? ["No measured traffic yet for this period — the first-party beacon records readers' article views from its deployment onward."]
         : []),
-      "Users and sessions are first-party session estimates from a 30-day cookie; they are not a census of real people.",
-      "Engaged time counts only when the article tab is visible and active; abandoned background tabs do not inflate it.",
-      "GA4 (G-T1R0QJ2F0Z) is installed on the site, but its reporting API is not connected to this dashboard.",
+      "Session = one reader (random first-party id, no IP stored) on one IST calendar day. Users = distinct reader ids; returning = visited on more than one day within 30 days.",
+      "Engaged session (GA4): ≥10s engaged, or 2+ page views, or an internal article click. Bounce rate = 100% − engagement rate.",
+      "Engaged time counts only while the article tab is visible and active.",
     ],
-  };
-}
-
-type PeriodAggregate = {
-  pageViews: number;
-  sessions: number;
-  newSessions: number;
-  returningSessions: number;
-  engagedSessions: number;
-  bouncedSessions: number;
-  totalEngagedTime: number;
-  series: OverviewPoint[];
-};
-
-async function aggregatePeriod(sql: Sql, from: string, to: string): Promise<PeriodAggregate> {
-  const rows = await sql<{
-    date: string;
-    page_views: number;
-    sessions: number;
-    engaged_seconds: number;
-  }>`
-    select date,
-           sum(page_views)::int as page_views,
-           count(distinct session_id)::int as sessions,
-           sum(engaged_seconds)::real as engaged_seconds
-    from analytics_article_session
-    where date between ${from} and ${to}
-    group by date
-    order by date
-  `;
-  const sessionRows = await sessionsInPeriod(sql, from, to);
-
-  const byDate = new Map<string, OverviewPoint>();
-  for (const row of rows) {
-    byDate.set(row.date, {
-      date: row.date,
-      pageViews: Number(row.page_views ?? 0),
-      sessions: Number(row.sessions ?? 0),
-      engagedSeconds: Number(row.engaged_seconds ?? 0),
-    });
-  }
-  const series: OverviewPoint[] = [];
-  let cursor = from;
-  const span = periodDays(from, to);
-  for (let i = 0; i <= span; i += 1) {
-    series.push(byDate.get(cursor) ?? { date: cursor, pageViews: 0, sessions: 0, engagedSeconds: 0 });
-    cursor = addKolkataDays(cursor, 1);
-  }
-
-  let engagedSessions = 0;
-  let bouncedSessions = 0;
-  let totalEngagedTime = 0;
-  let newSessions = 0;
-  let returningSessions = 0;
-  for (const s of sessionRows) {
-    totalEngagedTime += Number(s.engaged_seconds ?? 0);
-    const startedInPeriod = kolkataDateOfZone(s.started_at) >= from && kolkataDateOfZone(s.started_at) <= to;
-    if (startedInPeriod) newSessions += 1;
-    else returningSessions += 1;
-    const engaged = Number(s.engaged_seconds ?? 0) >= 10 || Number(s.page_views ?? 0) >= 2;
-    if (engaged) engagedSessions += 1;
-    if (Number(s.page_views ?? 0) <= 1) bouncedSessions += 1;
-  }
-
-  return {
-    pageViews: series.reduce((sum, p) => sum + p.pageViews, 0),
-    sessions: sessionRows.length,
-    newSessions,
-    returningSessions,
-    engagedSessions,
-    bouncedSessions,
-    totalEngagedTime: Math.round(totalEngagedTime * 10) / 10,
-    series,
   };
 }
 
@@ -308,12 +287,11 @@ function kolkataDisplay(utcIso: string): string {
 function kolkataTime(utcIso: string): string {
   const ms = Date.parse(utcIso);
   if (Number.isNaN(ms)) return utcIso;
-  return new Intl.DateTimeFormat("en-GB", {
+  return `${new Intl.DateTimeFormat("en-GB", {
     timeZone: "Asia/Kolkata",
     hour: "2-digit",
     minute: "2-digit",
-    timeZoneName: "short",
-  }).format(new Date(ms));
+  }).format(new Date(ms))} IST`;
 }
 
 function kolkataDateOfZone(utcIso: string): string {
@@ -327,22 +305,25 @@ function kolkataDateOfZone(utcIso: string): string {
   }).format(new Date(ms));
 }
 
-function addKolkataDays(yyyymmdd: string, days: number): string {
-  const [y, m, d] = yyyymmdd.split("-").map(Number);
-  const ms = new Date(Date.UTC(y, m - 1, d + days)).getTime();
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Kolkata",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(new Date(ms));
-}
-
 /** ------------------------------------------------------------------ */
 /** Article leaderboard                                                */
 /** ------------------------------------------------------------------ */
 
-export type LeaderboardSort = "views" | "engagedTime" | "completionRate" | "growth" | "published" | "title";
+export const LEADERBOARD_SORTS = [
+  "title", "categoryLabel", "publishedAt", "ageDays", "views", "allTimeViews", "sessions",
+  "avgEngagementTime", "engagementRate", "completionRate", "growth", "internalClicks", "recirculation",
+  "first24h", "first7d",
+] as const;
+export type LeaderboardSortKey = (typeof LEADERBOARD_SORTS)[number];
+/** Sort string: key (descending) or key + "-" (ascending). */
+export type LeaderboardSort = string;
+
+export function parseSort(sort: string | null | undefined): { key: LeaderboardSortKey; asc: boolean } {
+  const raw = (sort ?? "views").trim();
+  const asc = raw.endsWith("-");
+  const key = raw.replace(/-$/, "") as LeaderboardSortKey;
+  return LEADERBOARD_SORTS.includes(key) ? { key, asc } : { key: "views", asc: false };
+}
 
 export type LeaderboardRow = {
   id: string;
@@ -355,13 +336,17 @@ export type LeaderboardRow = {
   views: number;
   allTimeViews: number;
   sessions: number;
-  users: number | null;
   engagedSeconds: number;
   avgEngagementTime: number | null;
   engagementRate: number | null;
   completionRate: number | null;
   growth: number | null;
+  growthLabel: string;
+  growthRank: number;
   internalClicks: number;
+  recirculation: number | null;
+  first24h: number | null;
+  first7d: number | null;
 };
 
 export type LeaderboardData = {
@@ -371,8 +356,44 @@ export type LeaderboardData = {
   page: number;
   pageSize: number;
   total: number;
+  sort: { key: LeaderboardSortKey; asc: boolean };
   notes: string[];
 };
+
+type ArticleAgg = { views: number; reads: number; sessions: Set<string>; secs: number; engagedReads: number; completions: number };
+
+function aggregateByArticle(rows: ReadRow[]): Map<string, ArticleAgg> {
+  const map = new Map<string, ArticleAgg>();
+  for (const r of rows) {
+    let a = map.get(r.article_id);
+    if (!a) { a = { views: 0, reads: 0, sessions: new Set(), secs: 0, engagedReads: 0, completions: 0 }; map.set(r.article_id, a); }
+    a.views += r.page_views;
+    a.reads += 1;
+    a.sessions.add(`${r.session_id}|${r.date}`);
+    a.secs += r.engaged_seconds;
+    if (isEngagedRead(r)) a.engagedReads += 1;
+    if (completionQualifies(r)) a.completions += 1;
+  }
+  return map;
+}
+
+/** Views in the first 24h / 7 days after publication (IST day granularity for older rows). */
+async function earlyViews(sql: Sql, articles: CatalogArticle[]): Promise<Map<string, { first24h: number; first7d: number }>> {
+  const rows = await sql<{ article_id: string; date: string; views: number }>`
+    select article_id, date, sum(page_views)::int as views from analytics_article_session group by article_id, date
+  `;
+  const pub = new Map(articles.filter((a) => a.publishedAt).map((a) => [a.id, kolkataDateOfZone(a.publishedAt!)]));
+  const out = new Map<string, { first24h: number; first7d: number }>();
+  for (const r of rows) {
+    const p = pub.get(r.article_id);
+    if (!p || r.date < p) continue;
+    let e = out.get(r.article_id);
+    if (!e) { e = { first24h: 0, first7d: 0 }; out.set(r.article_id, e); }
+    if (r.date <= kolkataAddDays(p, 1)) e.first24h += Number(r.views ?? 0);
+    if (r.date <= kolkataAddDays(p, 6)) e.first7d += Number(r.views ?? 0);
+  }
+  return out;
+}
 
 export async function analyticsLeaderboard(input: {
   period: PeriodInput;
@@ -385,178 +406,121 @@ export async function analyticsLeaderboard(input: {
 }): Promise<LeaderboardData> {
   const sql = await guardedSql();
   const period = resolvePeriod(input.period);
-  const page = Math.max(1, Number(input.page ?? 1));
-  const pageSize = Math.min(100, Math.max(1, Number(input.pageSize ?? 25)));
-  const offset = (page - 1) * pageSize;
+  const page = Math.max(1, Number(input.page ?? 1) || 1);
+  const pageSize = Math.min(10000, Math.max(1, Number(input.pageSize ?? 25) || 25));
+  const sort = parseSort(input.sort);
 
-  const [current, previous, allViews, articles, tags] = await Promise.all([
-    articleSessionsInPeriod(sql, period.from, period.to),
-    articleSessionsInPeriod(sql, period.previousFrom, period.previousTo),
+  const [cur, prev, allViews, articles, clicks] = await Promise.all([
+    readsInRange(sql, period.from, period.to),
+    readsInRange(sql, period.previousFrom, period.previousTo),
     allTimeViews(sql),
     catalogArticles(sql),
-    catalogTags(sql),
+    internalClicksByFrom(sql, period.from, period.to),
   ]);
-
-  return buildLeaderboard({
-    sql,
-    period,
-    page,
-    pageSize,
-    offset,
-    current,
-    previous,
-    allViews,
-    articles,
-    tags,
-    categoryId: input.categoryId ?? null,
-    tagId: input.tagId ?? null,
-    q: input.q ?? null,
-    sort: input.sort ?? "views",
-  });
-}
-
-async function buildLeaderboard(input: {
-  sql: Sql;
-  period: Period;
-  page: number;
-  pageSize: number;
-  offset: number;
-  current: ArticleSessionRow[];
-  previous: ArticleSessionRow[];
-  allViews: Record<string, number>;
-  articles: Array<{
-    id: string; slug: string; title: string; categoryId: string; categoryLabel: string;
-    publishedAt: string | null; tagIds: string[];
-  }>;
-  tags: Array<{ id: string; label: string }>;
-  categoryId: string | null;
-  tagId: string | null;
-  q: string | null;
-  sort: LeaderboardSort;
-}): Promise<LeaderboardData> {
-  const { sql, period, articles, tags, current, previous, allViews, categoryId, tagId, q, sort, page, pageSize, offset } = input;
-  const tagLabelsById = new Map(tags.map((t) => [t.id, t.label]));
-
-  const byArticle = new Map<string, ArticleSessionRow>();
-  for (const row of current) byArticle.set(row.article_id, row);
-  const prevByArticle = new Map<string, number>();
-  for (const row of previous) prevByArticle.set(row.article_id, Number(row.page_views ?? 0));
-
-  const sessionsByArticle = await distinctSessionsPerArticle(sql, period.from, period.to);
+  const early = await earlyViews(sql, articles);
+  const curAgg = aggregateByArticle(cur);
+  const prevAgg = aggregateByArticle(prev);
+  const beaconStart = await sql<{ d: string | null }>`select min(date) as d from analytics_article_session`;
+  const measuredFrom = beaconStart[0]?.d ?? null;
 
   const list: LeaderboardRow[] = [];
   for (const article of articles) {
-    if (categoryId && article.categoryId !== categoryId) continue;
-    if (tagId && !article.tagIds.includes(tagId)) continue;
-    if (q) {
-      const needle = q.toLowerCase();
+    if (input.categoryId && article.categoryId !== input.categoryId && !article.topicIds.includes(input.categoryId)) continue;
+    if (input.tagId && !article.topicIds.includes(input.tagId)) continue;
+    if (input.q) {
+      const needle = input.q.toLowerCase();
       if (!article.title.toLowerCase().includes(needle) && !article.slug.toLowerCase().includes(needle)) continue;
     }
-    const agg = byArticle.get(article.id);
-    const views = agg ? Number(agg.page_views ?? 0) : 0;
-    const sessions = sessionsByArticle.get(article.id) ?? 0;
-    const engagedSeconds = agg ? Number(agg.engaged_seconds ?? 0) : 0;
-    const engagedSessions = agg ? Number(agg.engaged_sessions ?? 0) : 0;
-    const completed = agg ? Number(agg.completed ?? 0) : 0;
-    const prevViews = prevByArticle.get(article.id) ?? 0;
-    const publishedAt = article.publishedAt;
-    const ageDays = publishedAt ? Math.round((Date.now() - Date.parse(publishedAt)) / 86400000) : null;
+    const a = curAgg.get(article.id);
+    const views = a?.views ?? 0;
+    const reads = a?.reads ?? 0;
+    const prevViews = prevAgg.get(article.id)?.views ?? 0;
+    const g = growth(views, prevViews);
+    const ageDays = article.publishedAt ? Math.floor((Date.now() - Date.parse(article.publishedAt)) / 86400000) : null;
+    const internal = clicks.get(article.id) ?? 0;
+    const pubDate = article.publishedAt ? kolkataDateOfZone(article.publishedAt) : null;
+    // Early-window views only exist when the beacon was measuring on the publish day.
+    const measurable = pubDate !== null && measuredFrom !== null && pubDate >= measuredFrom;
+    const e = early.get(article.id);
     list.push({
       id: article.id,
       slug: article.slug,
       title: article.title,
       categoryLabel: article.categoryLabel,
-      tagLabels: article.tagIds
-        .map((id) => tagLabelsById.get(id))
-        .filter((label): label is string => label !== undefined),
-      publishedAt,
+      tagLabels: article.topicLabels,
+      publishedAt: article.publishedAt,
       ageDays,
       views,
       allTimeViews: allViews[article.id] ?? 0,
-      sessions,
-      users: null,
-      engagedSeconds,
-      avgEngagementTime: sessions > 0 ? Math.round((engagedSeconds / sessions) * 10) / 10 : null,
-      engagementRate: sessions > 0 ? Math.round((engagedSessions / sessions) * 1000) / 10 : null,
-      completionRate: views > 0 ? Math.round((completed / views) * 1000) / 10 : null,
-      growth: percentChangeSafe(views, prevViews),
-      internalClicks: 0,
+      sessions: a?.sessions.size ?? 0,
+      engagedSeconds: Math.round((a?.secs ?? 0) * 10) / 10,
+      avgEngagementTime: views > 0 ? Math.round(((a?.secs ?? 0) / views) * 10) / 10 : null,
+      engagementRate: reads > 0 ? Math.round(((a?.engagedReads ?? 0) / reads) * 1000) / 10 : null,
+      completionRate: reads > 0 ? Math.round(((a?.completions ?? 0) / reads) * 1000) / 10 : null,
+      growth: g.value,
+      growthLabel: g.label,
+      growthRank: g.rank,
+      internalClicks: internal,
+      recirculation: articleRecirculation(views, internal),
+      first24h: measurable ? (e?.first24h ?? 0) : null,
+      first7d: measurable ? (e?.first7d ?? 0) : null,
     });
   }
 
-  const clicks = await internalClicksByFrom(sql, period.from, period.to);
-  for (const row of list) row.internalClicks = clicks.get(row.id) ?? 0;
-
-  list.sort((a, b) => compareLeaderboard(a, b, sort));
-
+  list.sort((x, y) => compareLeaderboard(x, y, sort.key, sort.asc));
   const total = list.length;
-  const pageRows = list.slice(offset, offset + pageSize);
+  const offset = (page - 1) * pageSize;
 
   return {
     source: "first-party",
     period,
-    rows: pageRows,
+    rows: list.slice(offset, offset + pageSize),
     page,
     pageSize,
     total,
+    sort,
     notes: [
-      "Views are first-party beacon counts for the selected period; all-time views come from the site's cumulative counter.",
-      "Growth compares the period with the previous equivalent period; null means no measurable prior-period traffic.",
-      "Engagement rate is the share of reading sessions with at least 10 seconds of engaged time.",
-      "Completion rate is the share of page views that reached roughly 90% scroll depth.",
+      "Views, reads and engagement are first-party beacon data (bots, crawlers and previews excluded) for the selected period, in IST days.",
+      "Raw hits (all-time) is the site's cumulative server counter: it counts every request, including bots and your own visits, so it is always higher.",
+      "Growth: 0 → 0 shows —, a drop to 0 shows −100%, traffic with no prior-period views shows New.",
+      "Avg engaged time = engaged time ÷ page views. Engagement = share of reads with ≥10s engaged, 2+ views or an internal click. Completion = reads reaching ~90% scroll with ≥15s engaged.",
+      "Recirculation (per article) = share of the article's views followed by a click to another article.",
+      "First 24h / 7d = views in the publication day + next day / first 7 IST days; — when the article was published before measurement started.",
     ],
   };
 }
 
-async function catalogArticles(sql: Sql): Promise<Array<{
+type CatalogArticle = {
   id: string; slug: string; title: string; categoryId: string; categoryLabel: string;
-  publishedAt: string | null; tagIds: string[];
-}>> {
-  const rows = await sql<{
-    id: string; slug: string; title: string; categoryId: string; categoryLabel: string;
-    publishedAt: string | null; tagIds: string;
-  }>`
-    select a.id, a.slug, a.title, a.category_id as categoryId, c.label as categoryLabel,
-           a.published_at as publishedAt,
-           coalesce(group_concat(t.tag_id), '') as tagIds
-    from articles a
-    join categories c on c.id = a.category_id
-    left join article_tags t on t.article_id = a.id
-    where a.status = 'published'
-    group by a.id, a.slug, a.title, a.category_id, c.label, a.published_at
-    order by a.title
-  `;
-  return rows.map((row) => ({
-    ...row,
-    tagIds: row.tagIds.split(",").filter(Boolean),
-  }));
+  publishedAt: string | null; topicIds: string[]; topicLabels: string[];
+};
+
+async function catalogArticles(sql: Sql): Promise<CatalogArticle[]> {
+  const [rows, topics] = await Promise.all([
+    sql<{ id: string; slug: string; title: string; categoryId: string; categoryLabel: string; publishedAt: string | null }>`
+      select a.id, a.slug, a.title, a.category_id as categoryId, c.label as categoryLabel, a.published_at as publishedAt
+      from articles a
+      join categories c on c.id = a.category_id
+      where a.status = 'published'
+      order by a.title
+    `,
+    sql<{ article_id: string; id: string; label: string }>`
+      select t.article_id, c.id, c.label from article_topics t join categories c on c.id = t.category_id
+    `,
+  ]);
+  const byArticle = new Map<string, Array<{ id: string; label: string }>>();
+  for (const t of topics) {
+    let list = byArticle.get(t.article_id);
+    if (!list) { list = []; byArticle.set(t.article_id, list); }
+    list.push({ id: t.id, label: t.label });
+  }
+  return rows.map((row) => {
+    const list = byArticle.get(row.id) ?? [{ id: row.categoryId, label: row.categoryLabel }];
+    return { ...row, topicIds: list.map((t) => t.id), topicLabels: list.map((t) => t.label) };
+  });
 }
 
-async function catalogTags(sql: Sql): Promise<Array<{ id: string; label: string }>> {
-  return sql<{ id: string; label: string }>`select id, label from tags order by label`;
-}
-
-async function distinctSessionsPerArticle(
-  sql: Sql,
-  from: string,
-  to: string,
-): Promise<Map<string, number>> {
-  const rows = await sql<{ article_id: string; n: number }>`
-    select article_id, count(distinct session_id)::int as n
-    from analytics_article_session
-    where date between ${from} and ${to}
-    group by article_id
-  `;
-  const map = new Map<string, number>();
-  for (const row of rows) map.set(row.article_id, Number(row.n ?? 0));
-  return map;
-}
-
-async function internalClicksByFrom(
-  sql: Sql,
-  from: string,
-  to: string,
-): Promise<Map<string, number>> {
+async function internalClicksByFrom(sql: Sql, from: string, to: string): Promise<Map<string, number>> {
   const rows = await sql<{ from_article_id: string; clicks: number }>`
     select from_article_id, sum(clicks)::int as clicks
     from analytics_link_clicks
@@ -568,27 +532,27 @@ async function internalClicksByFrom(
   return map;
 }
 
-function compareLeaderboard(a: LeaderboardRow, b: LeaderboardRow, sort: LeaderboardSort): number {
+function compareLeaderboard(a: LeaderboardRow, b: LeaderboardRow, key: LeaderboardSortKey, asc: boolean): number {
+  const dir = asc ? 1 : -1;
+  if (key === "title" || key === "categoryLabel") {
+    return (a[key] ?? "").localeCompare(b[key] ?? "") * (asc ? 1 : -1) || a.title.localeCompare(b.title);
+  }
   const get = (row: LeaderboardRow): number => {
-    switch (sort) {
-      case "engagedTime": return row.engagedSeconds;
-      case "completionRate": return row.completionRate ?? 0;
-      case "growth": return row.growth ?? -1e9;
-      case "published": return row.publishedAt ? Date.parse(row.publishedAt) : -1;
-      default: return row.views;
+    switch (key) {
+      case "publishedAt": return row.publishedAt ? Date.parse(row.publishedAt) : -1;
+      case "growth": return row.growthRank;
+      default: {
+        const v = row[key] as number | null;
+        return v === null || v === undefined ? -1 : v;
+      }
     }
   };
-  if (sort === "title") return a.title.localeCompare(b.title);
-  return get(b) - get(a);
-}
-
-function percentChangeSafe(current: number, previous: number): number | null {
-  if (previous === 0) return current > 0 ? null : 0;
-  return Math.round(((current - previous) / previous) * 1000) / 10;
+  const diff = (get(a) - get(b)) * dir;
+  return diff !== 0 ? diff : b.views - a.views || a.title.localeCompare(b.title);
 }
 
 /** ------------------------------------------------------------------ */
-/** Categories & tags                                                  */
+/** Categories & tags (topics)                                         */
 /** ------------------------------------------------------------------ */
 
 export type TopicRow = {
@@ -607,82 +571,65 @@ export async function analyticsTopics(input: { period: PeriodInput }): Promise<{
   source: "first-party";
   period: Period;
   categories: TopicRow[];
-  tags: Array<{ id: string; label: string; views: number; articles: number }>;
+  tags: Array<{ id: string; label: string; views: number; articles: number; avgEngagedTime: number | null }>;
   notes: string[];
 }> {
   const sql = await guardedSql();
   const period = resolvePeriod(input.period);
-  const current = await articleSessionsInPeriod(sql, period.from, period.to);
-  const articles = await catalogArticles(sql);
-  const tags = await catalogTags(sql);
+  const [cur, articles] = await Promise.all([readsInRange(sql, period.from, period.to), catalogArticles(sql)]);
+  const agg = aggregateByArticle(cur);
 
-  const viewsByArticle = new Map<string, number>();
-  const engagedSecondsByArticle = new Map<string, number>();
-  const engagedSessionsByArticle = new Map<string, number>();
-  const completedByArticle = new Map<string, number>();
-  for (const row of current) {
-    viewsByArticle.set(row.article_id, Number(row.page_views ?? 0));
-    engagedSecondsByArticle.set(row.article_id, Number(row.engaged_seconds ?? 0));
-    engagedSessionsByArticle.set(row.article_id, Number(row.engaged_sessions ?? 0));
-    completedByArticle.set(row.article_id, Number(row.completed ?? 0));
-  }
-  const sessMap = await distinctSessionsPerArticle(sql, period.from, period.to);
-
-  const catMap = new Map<string, TopicRow & { engagedSessions: number }>();
+  const catMap = new Map<string, TopicRow & { reads: number; engagedReads: number; completions: number }>();
   for (const article of articles) {
     let cat = catMap.get(article.categoryId);
     if (!cat) {
-      cat = {
-        id: article.categoryId,
-        label: article.categoryLabel,
-        views: 0, sessions: 0, engagedSeconds: 0, engagedSessions: 0, engagementRate: null,
-        completionRate: null, articles: 0,
-        topArticle: null,
-      };
+      cat = { id: article.categoryId, label: article.categoryLabel, views: 0, sessions: 0, engagedSeconds: 0, engagementRate: null, completionRate: null, articles: 0, topArticle: null, reads: 0, engagedReads: 0, completions: 0 };
       catMap.set(article.categoryId, cat);
     }
-    const views = viewsByArticle.get(article.id) ?? 0;
+    const a = agg.get(article.id);
+    const views = a?.views ?? 0;
     cat.views += views;
-    cat.sessions += sessMap.get(article.id) ?? 0;
-    cat.engagedSeconds += engagedSecondsByArticle.get(article.id) ?? 0;
-    cat.engagedSessions += engagedSessionsByArticle.get(article.id) ?? 0;
+    cat.sessions += a?.sessions.size ?? 0;
+    cat.engagedSeconds += a?.secs ?? 0;
+    cat.reads += a?.reads ?? 0;
+    cat.engagedReads += a?.engagedReads ?? 0;
+    cat.completions += a?.completions ?? 0;
     cat.articles += 1;
-    const prev = cat.topArticle;
-    if (!prev || views > prev.views) {
-      cat.topArticle = { id: article.id, title: article.title, slug: article.slug, views };
-    }
+    if (!cat.topArticle || views > cat.topArticle.views) cat.topArticle = { id: article.id, title: article.title, slug: article.slug, views };
   }
-
-  const tagMap = new Map<string, { views: number; articles: Set<string> }>();
-  for (const article of articles) {
-    for (const tagId of article.tagIds) {
-      let entry = tagMap.get(tagId);
-      if (!entry) { entry = { views: 0, articles: new Set() }; tagMap.set(tagId, entry); }
-      entry.views += viewsByArticle.get(article.id) ?? 0;
-      entry.articles.add(article.id);
-    }
-  }
-
   for (const cat of catMap.values()) {
-    cat.engagementRate = cat.sessions > 0 ? Math.round((cat.engagedSessions / cat.sessions) * 1000) / 10 : null;
+    cat.engagementRate = cat.reads > 0 ? Math.round((cat.engagedReads / cat.reads) * 1000) / 10 : null;
+    cat.completionRate = cat.reads > 0 ? Math.round((cat.completions / cat.reads) * 1000) / 10 : null;
+    cat.engagedSeconds = Math.round(cat.engagedSeconds * 10) / 10;
+  }
+
+  const tagMap = new Map<string, { label: string; views: number; secs: number; articles: Set<string> }>();
+  for (const article of articles) {
+    article.topicIds.forEach((id, i) => {
+      let e = tagMap.get(id);
+      if (!e) { e = { label: article.topicLabels[i], views: 0, secs: 0, articles: new Set() }; tagMap.set(id, e); }
+      const a = agg.get(article.id);
+      e.views += a?.views ?? 0;
+      e.secs += a?.secs ?? 0;
+      e.articles.add(article.id);
+    });
   }
 
   return {
     source: "first-party",
     period,
-    categories: Array.from(catMap.values()).sort((a, b) => b.views - a.views),
+    categories: Array.from(catMap.values()).map(({ reads: _r, engagedReads: _e, completions: _c, ...rest }) => rest).sort((a, b) => b.views - a.views),
     tags: Array.from(tagMap.entries())
-      .map(([id, entry]) => ({ id, label: tags.find((t) => t.id === id)?.label ?? id, views: entry.views, articles: entry.articles.size }))
+      .map(([id, e]) => ({ id, label: e.label, views: e.views, articles: e.articles.size, avgEngagedTime: e.views > 0 ? Math.round((e.secs / e.views) * 10) / 10 : null }))
       .sort((a, b) => b.views - a.views),
     notes: [
-      "Topic popularity is measured by first-party article page views in the period.",
-      "Read engagement (time spent) is a fairer topic signal than views alone — both are shown so they are not confused.",
+      "Category = each article's primary topic. Tags = every topic an article is filed under, so tag totals add up to more than the site total.",
     ],
   };
 }
 
 /** ------------------------------------------------------------------ */
-/** Traffic sources                                                    */
+/** Traffic sources & devices (beacon visitor attributes)              */
 /** ------------------------------------------------------------------ */
 
 export type SourceRow = {
@@ -690,11 +637,24 @@ export type SourceRow = {
   medium: string;
   sessions: number;
   pageViews: number;
-  users: number | null;
   engagementRate: number | null;
   avgEngagementTime: number | null;
   viewsPerSession: number | null;
 };
+
+type Bucket = { sessions: SessionAgg[] };
+
+function sessionsByAttr(cur: ReadRow[], attrs: Map<string, VisitorAttrs>, pick: (a: VisitorAttrs) => string): Map<string, Bucket> {
+  const out = new Map<string, Bucket>();
+  for (const s of sessionsFromReads(cur)) {
+    const a = attrs.get(s.visitor) ?? { source: "direct", medium: "(none)", referrer: "", device: "desktop", country: "" };
+    const key = pick(a);
+    let b = out.get(key);
+    if (!b) { b = { sessions: [] }; out.set(key, b); }
+    b.sessions.push(s);
+  }
+  return out;
+}
 
 export async function analyticsSources(input: { period: PeriodInput }): Promise<{
   source: "first-party";
@@ -706,61 +666,35 @@ export async function analyticsSources(input: { period: PeriodInput }): Promise<
 }> {
   const sql = await guardedSql();
   const period = resolvePeriod(input.period);
-  const rows = await sessionsInPeriod(sql, period.from, period.to);
-
-  const map = new Map<string, SourceRow & { engaged: number; engagedTime: number }>();
-  for (const row of rows) {
-    const key = `${row.source}|${row.medium}`;
-    let entry = map.get(key);
-    if (!entry) {
-      entry = {
-        source: row.source, medium: row.medium, sessions: 0, pageViews: 0,
-        users: null, engagementRate: null, avgEngagementTime: null,
-        viewsPerSession: null, engaged: 0, engagedTime: 0,
-      };
-      map.set(key, entry);
-    }
-    entry.sessions += 1;
-    entry.pageViews += Number(row.page_views ?? 0);
-    const engaged = Number(row.engaged_seconds ?? 0) >= 10 || Number(row.page_views ?? 0) >= 2;
-    if (engaged) entry.engaged += 1;
-    entry.engagedTime += Number(row.engaged_seconds ?? 0);
+  const [cur, attrs] = await Promise.all([readsInRange(sql, period.from, period.to), visitorAttributes(sql, period.from, period.to)]);
+  const groups = sessionsByAttr(cur, attrs, (a) => `${a.source}|${a.medium}`);
+  const rows: SourceRow[] = [];
+  let organic = 0;
+  let total = 0;
+  for (const [key, b] of groups) {
+    const [source, medium] = key.split("|");
+    const sum = summarize(b.sessions);
+    rows.push({ source, medium, sessions: sum.sessions, pageViews: sum.pageViews, engagementRate: sum.engagementRate, avgEngagementTime: sum.avgEngagedTime, viewsPerSession: sum.pagesPerSession });
+    total += sum.sessions;
+    if (source === "organic") organic += sum.sessions;
   }
-  let organicSessions = 0;
-  for (const entry of map.values()) {
-    entry.viewsPerSession = entry.sessions > 0 ? entry.pageViews / entry.sessions : null;
-    entry.engagementRate = entry.sessions > 0 ? Math.round((entry.engaged / entry.sessions) * 1000) / 10 : null;
-    entry.avgEngagementTime = entry.engaged > 0 ? Math.round((entry.engagedTime / entry.engaged) * 10) / 10 : null;
-    if (entry.source === "organic") organicSessions += entry.sessions;
-  }
-  const totalSessions = rows.length;
-
-  const referrers = await sql<{ domain: string; n: number }>`
-    select referrer_domain as domain, count(*)::int as n
-    from analytics_sessions
-    where ${kolkataDateOf("last_seen")} between ${period.from} and ${period.to}
-      and source = 'referral' and referrer_domain <> ''
-    group by referrer_domain
-    order by n desc
-    limit 10
-  `;
-
+  const refGroups = sessionsByAttr(cur, attrs, (a) => (a.source === "internal" ? "" : hostOf(a.referrer)));
+  const referrers = Array.from(refGroups.entries())
+    .filter(([domain]) => domain)
+    .map(([domain, b]) => ({ domain, sessions: b.sessions.length }))
+    .sort((a, b) => b.sessions - a.sessions)
+    .slice(0, 10);
   return {
     source: "first-party",
     period,
-    rows: Array.from(map.values()).sort((a, b) => b.sessions - a.sessions),
-    referrers: referrers.map((r) => ({ domain: r.domain, sessions: Number(r.n ?? 0) })),
-    organicShare: totalSessions > 0 ? Math.round((organicSessions / totalSessions) * 1000) / 10 : null,
+    rows: rows.sort((a, b) => b.sessions - a.sessions),
+    referrers,
+    organicShare: total > 0 ? Math.round((organic / total) * 1000) / 10 : null,
     notes: [
-      "Source is taken from the referrer of the session's first article view; UTM-tagged arrivals are attributed to campaign.",
-      "A missing referrer is reported as 'direct' — that does not mean the URL was typed in.",
+      "Source is the reader's first-touch referrer (UTM-tagged arrivals = campaign); a missing referrer is reported as direct.",
     ],
   };
 }
-
-/** ------------------------------------------------------------------ */
-/** Devices                                                            */
-/** ------------------------------------------------------------------ */
 
 export type DeviceRow = {
   device: string;
@@ -774,32 +708,25 @@ export async function analyticsDevices(input: { period: PeriodInput }): Promise<
   source: "first-party";
   period: Period;
   rows: DeviceRow[];
+  countries: Array<{ country: string; sessions: number; pageViews: number }>;
   notes: string[];
 }> {
   const sql = await guardedSql();
   const period = resolvePeriod(input.period);
-  const rows = await sessionsInPeriod(sql, period.from, period.to);
-
-  const map = new Map<string, { device: string; sessions: number; pageViews: number; engaged: number; engagedTime: number }>();
-  for (const row of rows) {
-    let entry = map.get(row.device_category);
-    if (!entry) { entry = { device: row.device_category, sessions: 0, pageViews: 0, engaged: 0, engagedTime: 0 }; map.set(row.device_category, entry); }
-    entry.sessions += 1;
-    entry.pageViews += Number(row.page_views ?? 0);
-    const engaged = Number(row.engaged_seconds ?? 0) >= 10 || Number(row.page_views ?? 0) >= 2;
-    if (engaged) entry.engaged += 1;
-    entry.engagedTime += Number(row.engaged_seconds ?? 0);
-  }
+  const [cur, attrs] = await Promise.all([readsInRange(sql, period.from, period.to), visitorAttributes(sql, period.from, period.to)]);
+  const rows = Array.from(sessionsByAttr(cur, attrs, (a) => a.device).entries()).map(([device, b]) => {
+    const sum = summarize(b.sessions);
+    return { device, sessions: sum.sessions, pageViews: sum.pageViews, engagementRate: sum.engagementRate, avgEngagementTime: sum.avgEngagedTime };
+  });
+  const countries = Array.from(sessionsByAttr(cur, attrs, (a) => a.country || "").entries())
+    .filter(([c]) => c)
+    .map(([country, b]) => ({ country, sessions: b.sessions.length, pageViews: b.sessions.reduce((n, s) => n + s.pageViews, 0) }))
+    .sort((a, b) => b.sessions - a.sessions);
   return {
     source: "first-party",
     period,
-    rows: Array.from(map.values()).map((e) => ({
-      device: e.device,
-      sessions: e.sessions,
-      pageViews: e.pageViews,
-      engagementRate: e.sessions > 0 ? Math.round((e.engaged / e.sessions) * 1000) / 10 : null,
-      avgEngagementTime: e.engaged > 0 ? Math.round((e.engagedTime / e.engaged) * 10) / 10 : null,
-    })).sort((a, b) => b.sessions - a.sessions),
+    rows: rows.sort((a, b) => b.sessions - a.sessions),
+    countries,
     notes: ["Device category is derived from the browser's user-agent string and is approximate."],
   };
 }
@@ -828,17 +755,8 @@ export async function analyticsEngagementDistribution(input: {
 }> {
   const sql = await guardedSql();
   const period = resolvePeriod(input.period);
-  const rows = await sql.query(
-    `select engaged_seconds from analytics_article_session
-     where date between $1 and $2${input.articleId ? " and article_id = $3" : ""}
-     order by engaged_seconds
-     limit 200000`,
-    input.articleId ? [period.from, period.to, input.articleId] : [period.from, period.to],
-  );
-  const values = (rows as { engaged_seconds: number }[]).map((r) => Number(r.engaged_seconds ?? 0)).sort((a, b) => a - b);
-  const truncated = rows.length === 200000;
-
-  const buckets = computeBuckets(values);
+  const rows = (await readsInRange(sql, period.from, period.to)).filter((r) => !input.articleId || r.article_id === input.articleId);
+  const values = rows.map((r) => r.engaged_seconds).sort((a, b) => a - b);
   const stats = values.length > 0 ? {
     count: values.length,
     average: values.reduce((a, b) => a + b, 0) / values.length,
@@ -846,17 +764,14 @@ export async function analyticsEngagementDistribution(input: {
     p75: percentile(values, 0.75),
     p90: percentile(values, 0.9),
   } : null;
-
   return {
     source: "first-party",
     period,
-    buckets,
+    buckets: computeBuckets(values),
     stats,
     notes: [
-      "Each value is one reader's engaged time with one article in one session (visible, active time only).",
-      stats
-        ? `Median and percentiles are computed exactly from the ${values.length} recorded session-article durations${truncated ? ", capped at 200,000 rows" : ""}.`
-        : "No engagement records yet for this period.",
+      "Each value is one reader's engaged time with one article on one day (visible, active time only).",
+      stats ? `Exact median and percentiles over ${values.length} reads.` : "No engagement records yet for this period.",
     ],
   };
 }
@@ -867,16 +782,8 @@ function computeBuckets(values: number[]): Array<{ label: string; count: number;
     const i = bucketIndex(v);
     if (i >= 0) counts[i] += 1;
   }
-  const labels = [
-    { label: "Under 10s", min: 0, max: 10 },
-    { label: "10–30s", min: 10, max: 30 },
-    { label: "30–60s", min: 30, max: 60 },
-    { label: "1–3 min", min: 60, max: 180 },
-    { label: "3–5 min", min: 180, max: 300 },
-    { label: "5–10 min", min: 300, max: 600 },
-    { label: "Over 10 min", min: 600, max: null },
-  ];
-  return labels.map((b, i) => ({ label: b.label, count: counts[i], seconds: 0 }));
+  const labels = ["Under 10s", "10–30s", "30–60s", "1–3 min", "3–5 min", "5–10 min", "Over 10 min"];
+  return labels.map((label, i) => ({ label, count: counts[i], seconds: 0 }));
 }
 
 function percentile(sorted: number[], p: number): number | null {
@@ -896,58 +803,51 @@ export async function analyticsRecirculation(input: { period: PeriodInput }): Pr
   source: "first-party";
   period: Period;
   sessions: number;
-  recirculatedSessions: number;
-  recirculationRate: number | null;
+  multiArticleSessions: number;
+  multiArticleRate: number | null;
   avgArticlesPerSession: number | null;
+  pageViews: number;
+  internalClicks: number;
+  clickThroughRate: number | null;
   topLinks: Array<{ fromTitle: string; toTitle: string; clicks: number }>;
   notes: string[];
 }> {
   const sql = await guardedSql();
   const period = resolvePeriod(input.period);
-  const rows = await sql<{ session_id: string; article_id: string }>`
-    select distinct session_id, article_id
-    from analytics_article_session
-    where date between ${period.from} and ${period.to}
-  `;
-  const articles = await catalogArticles(sql);
+  const [cur, articles, clicks] = await Promise.all([
+    readsInRange(sql, period.from, period.to),
+    catalogArticles(sql),
+    sql<{ from_article_id: string; to_article_id: string; clicks: number }>`
+      select from_article_id, to_article_id, sum(clicks)::int as clicks
+      from analytics_link_clicks
+      where date between ${period.from} and ${period.to}
+      group by from_article_id, to_article_id
+      order by clicks desc
+    `,
+  ]);
   const titles = new Map(articles.map((a) => [a.id, a.title]));
-  const articlesPerSession = new Map<string, Set<string>>();
-  for (const row of rows) {
-    let set = articlesPerSession.get(row.session_id);
-    if (!set) { set = new Set(); articlesPerSession.set(row.session_id, set); }
-    set.add(row.article_id);
-  }
-  let recirculated = 0;
-  let totalArticleVisits = 0;
-  for (const set of articlesPerSession.values()) {
-    totalArticleVisits += set.size;
-    if (set.size > 1) recirculated += 1;
-  }
-  const sessions = articlesPerSession.size;
-  const clicks = await sql<{ from_article_id: string; to_article_id: string; clicks: number }>`
-    select from_article_id, to_article_id, sum(clicks)::int as clicks
-    from analytics_link_clicks
-    where date between ${period.from} and ${period.to}
-    group by from_article_id, to_article_id
-    order by clicks desc
-    limit 10
-  `;
+  const sessions = sessionsFromReads(cur);
+  const multi = sessions.filter((s) => s.articles > 1).length;
+  const pageViews = cur.reduce((n, r) => n + r.page_views, 0);
+  const internalClicks = clicks.reduce((n, c) => n + Number(c.clicks ?? 0), 0);
   return {
     source: "first-party",
     period,
-    sessions,
-    recirculatedSessions: recirculated,
-    recirculationRate: sessions > 0 ? Math.round((recirculated / sessions) * 1000) / 10 : null,
-    avgArticlesPerSession: sessions > 0 ? Math.round((totalArticleVisits / sessions) * 100) / 100 : null,
-    topLinks: clicks.map((c) => ({
+    sessions: sessions.length,
+    multiArticleSessions: multi,
+    multiArticleRate: sessions.length > 0 ? Math.round((multi / sessions.length) * 1000) / 10 : null,
+    avgArticlesPerSession: sessions.length > 0 ? Math.round((sessions.reduce((n, s) => n + s.articles, 0) / sessions.length) * 100) / 100 : null,
+    pageViews,
+    internalClicks,
+    clickThroughRate: articleRecirculation(pageViews, internalClicks),
+    topLinks: clicks.slice(0, 10).map((c) => ({
       fromTitle: titles.get(c.from_article_id) ?? c.from_article_id,
       toTitle: titles.get(c.to_article_id) ?? c.to_article_id,
       clicks: Number(c.clicks ?? 0),
     })),
     notes: [
-      "Recirculated session = a session that read more than one article.",
-      "Numerator: recirculated sessions. Denominator: all sessions in the period.",
-      "Internal clicks are beacon-reported clicks on links to other DYPOL Blog articles.",
+      "Recirculation (Parse.ly style) = internal article clicks ÷ article page views, site-wide; the per-article figure is in the leaderboard.",
+      "Multi-article sessions (site-level) = sessions that read 2+ different articles in one IST day, by any route (menu, home, back button).",
     ],
   };
 }
@@ -966,9 +866,20 @@ export async function analyticsPublishing(input: { period: PeriodInput }): Promi
   const sql = await guardedSql();
   const period = resolvePeriod(input.period);
   const articles = await catalogArticles(sql);
-  const allViews = await allTimeViews(sql);
+  const daily = await sql<{ article_id: string; date: string; views: number }>`
+    select article_id, date, sum(page_views)::int as views from analytics_article_session group by article_id, date
+  `;
+  const pub = new Map(articles.filter((a) => a.publishedAt).map((a) => [a.id, kolkataDateOfZone(a.publishedAt!)]));
+  const first28: Record<string, number> = {};
+  const measured: Record<string, number> = {};
+  for (const r of daily) {
+    const p = pub.get(r.article_id);
+    if (!p) continue;
+    measured[r.article_id] = (measured[r.article_id] ?? 0) + Number(r.views ?? 0);
+    if (r.date >= p && r.date <= kolkataAddDays(p, 27)) first28[r.article_id] = (first28[r.article_id] ?? 0) + Number(r.views ?? 0);
+  }
 
-  const byMonthMap = new Map<string, { published: number; articleIds: string[] }>();
+  const byMonthMap = new Map<string, string[]>();
   const now = Date.now();
   const ageBuckets: { label: string; min: number; max: number | null; articles: number; views: number }[] = [
     { label: "Under 7 days", min: 0, max: 7, articles: 0, views: 0 },
@@ -976,75 +887,44 @@ export async function analyticsPublishing(input: { period: PeriodInput }): Promi
     { label: "1–6 months", min: 30, max: 180, articles: 0, views: 0 },
     { label: "Over 6 months", min: 180, max: null, articles: 0, views: 0 },
   ];
-
   for (const article of articles) {
     if (!article.publishedAt) continue;
     const pubDate = kolkataDateOfZone(article.publishedAt);
-    const age = Math.round((now - Date.parse(article.publishedAt)) / 86400000);
+    const age = Math.floor((now - Date.parse(article.publishedAt)) / 86400000);
     const bucket = ageBuckets.find((b) => age >= b.min && (b.max === null || age < b.max));
-    if (bucket) { bucket.articles += 1; bucket.views += allViews[article.id] ?? 0; }
+    if (bucket) { bucket.articles += 1; bucket.views += measured[article.id] ?? 0; }
     if (pubDate < period.from || pubDate > period.to) continue;
     const month = pubDate.slice(0, 7);
-    let entry = byMonthMap.get(month);
-    if (!entry) { entry = { published: 0, articleIds: [] }; byMonthMap.set(month, entry); }
-    entry.published += 1;
-    entry.articleIds.push(article.id);
+    const list = byMonthMap.get(month) ?? [];
+    list.push(article.id);
+    byMonthMap.set(month, list);
   }
 
-  const first28 = await first28DayViews(sql, articles.map((a) => a.id));
   const byMonth: Array<{ periodLabel: string; published: number; avgViewsFirst28Days: number | null }> = [];
   let cursor = period.from.slice(0, 7);
   const endMonth = period.to.slice(0, 7);
-  while (true) {
-    const entry = byMonthMap.get(cursor);
-    const ids = entry ? entry.articleIds : [];
+  for (let guard = 0; guard < 24; guard += 1) {
+    const ids = byMonthMap.get(cursor) ?? [];
     byMonth.push({
-      periodLabel: new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Kolkata", month: "short", year: "numeric" }).format(new Date(`${cursor}-01T00:00:00Z`)),
-      published: entry?.published ?? 0,
+      periodLabel: new Intl.DateTimeFormat("en-GB", { timeZone: "UTC", month: "short", year: "numeric" }).format(new Date(`${cursor}-01T00:00:00Z`)),
+      published: ids.length,
       avgViewsFirst28Days: ids.length > 0 ? Math.round((ids.reduce((sum, id) => sum + (first28[id] ?? 0), 0) / ids.length) * 10) / 10 : null,
     });
     if (cursor === endMonth) break;
     const [y, m] = cursor.split("-").map(Number);
-    const next = new Date(Date.UTC(y, m - 1, 1));
-    next.setUTCMonth(next.getUTCMonth() + 1);
-    cursor = next.toISOString().slice(0, 7);
+    cursor = new Date(Date.UTC(y, m, 1)).toISOString().slice(0, 7);
   }
-
-  const ageCohorts = ageBuckets.map((b) => ({
-    label: b.label,
-    articles: b.articles,
-    avgViews: b.articles > 0 ? Math.round((b.views / b.articles) * 10) / 10 : null,
-  }));
 
   return {
     source: "first-party",
     period,
     byMonth,
-    ageCohorts,
+    ageCohorts: ageBuckets.map((b) => ({ label: b.label, articles: b.articles, avgViews: b.articles > 0 ? Math.round((b.views / b.articles) * 10) / 10 : null })),
     notes: [
-      "First 28 days counts beacon-measured views from the article's publication date (Kolkata calendar) forward.",
-      "Age cohorts mix articles of different ages; cumulative views naturally favor older articles — compare within cohorts, not across them.",
+      "Months are by IST publication date. First 28 days = beacon views from the publication day to day 28.",
+      "Age cohorts use beacon-measured views (bots excluded); compare within a cohort, not across.",
     ],
   };
-}
-
-async function first28DayViews(sql: Sql, articleIds: string[]): Promise<Record<string, number>> {
-  const out: Record<string, number> = {};
-  for (let i = 0; i < articleIds.length; i += 200) {
-    const chunk = articleIds.slice(i, i + 200);
-    const placeholders = chunk.map((_, k) => `$${k + 1}`).join(",");
-    const rows = await sql.query(
-      `select article_id, sum(page_views)::int as views
-       from analytics_article_session
-       where article_id in (${placeholders})
-       group by article_id`,
-      chunk,
-    );
-    for (const row of rows as { article_id: string; views: number }[]) {
-      out[row.article_id] = Number(row.views ?? 0);
-    }
-  }
-  return out;
 }
 
 /** ------------------------------------------------------------------ */
