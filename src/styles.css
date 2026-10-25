@@ -290,18 +290,20 @@
 /*
  * t96 grain: one light, reusable texture for every ORANGE surface (stamp,
  * trending badge, "Also filed" band, cover plates, accent buttons, active
- * menu marks). The cached 128px grain.webp tile is layered over the accent
- * colour with background-blend-mode — no extra DOM, no filters, no
- * compositing layers, so it costs nothing at scroll time and never shifts
- * layout. hard-light keeps the hue (measured: about 5% darker on average,
- * text contrast unchanged) while the grain stays visible but light. White
- * and black theme surfaces never get it. Use the class, or the
+ * menu marks). A tiny dedicated speckle tile (/media/grain-speck.webp,
+ * 128px, ~1.7 KB) is drawn over the accent colour: isolated 1px specks at
+ * ~5% coverage with at least two clear pixels around each one, mostly dark
+ * and a few light, at low alpha. The tile is shown at its native size (1
+ * image px = 1 CSS px, pixelated) so specks never smear into streaks, and
+ * the orange only shifts ~2% (text contrast unchanged). No extra DOM, no
+ * filters, no compositing layers, no layout shift. White and black theme
+ * surfaces never get it. Use the class, or the
  * --grain-image/--grain-size/--grain-blend trio for pseudo-elements.
  */
 :root {
-  --grain-image: url("/media/grain.webp");
+  --grain-image: url("/media/grain-speck.webp");
   --grain-size: 128px 128px;
-  --grain-blend: hard-light;
+  --grain-blend: normal;
 }
 
 .grain {
@@ -309,6 +311,12 @@
   background-image: var(--grain-image);
   background-size: var(--grain-size);
   background-blend-mode: var(--grain-blend);
+  image-rendering: pixelated;
+}
+
+/* image-rendering inherits — keep real images inside orange blocks smooth. */
+.grain * {
+  image-rendering: auto;
 }
 
 .site-header {
