@@ -29,7 +29,7 @@ test("one invalid new group falls back alone, the rest is kept", () => {
 test("PR #5 homepage sections become builder blocks (unknown/duplicate dropped, order kept)", () => {
   const out = normalizeSite({ home: { sections: [{ id: "latest", enabled: false, count: 5 }, { id: "bogus", enabled: true, count: 1 }, { id: "latest", enabled: true, count: 9 }, { id: "featured", enabled: true, count: 1 }] } });
   // Sections shape gets the same essential-section backfill as blocks shape.
-  assert.deepEqual(out.home.blocks.map((b) => b.type), ["latest", "featured", "related", "topics", "tags"]);
+  assert.deepEqual(out.home.blocks.map((b) => b.type), ["latest", "featured", "river", "topicRows", "quickReads", "related", "topics", "moreStories", "tags"]);
   assert.equal(out.home.blocks[0]?.enabled, false);
   assert.equal(out.home.blocks[0]?.count, 5);
   assert.equal(out.home.blocks[0]?.title, "Our new articles");
@@ -134,4 +134,30 @@ test("t96: menu hrefs stay closed — only fixed pages or /topics/<slug>", () =>
   for (const href of ["/topics/startups", "/articles", "/"]) {
     assert.doesNotThrow(() => parseSite({ ...normalizeSite({}), nav: [{ id: "x", label: "X", href, visible: true }] }), href);
   }
+});
+
+// ---- t96: sectioned homepage ----
+const PROD_HOME = { sections: [{ id: "featured", enabled: true, count: 1 }, { id: "also", enabled: true, count: 3 }, { id: "latest", enabled: true, count: 5 }, { id: "topics", enabled: true, count: 12 }, { id: "related", enabled: true, count: 3 }] };
+
+test("t96: a pre-t96 homepage gains the new sections once, in a sensible order", () => {
+  const out = normalizeSite({ home: PROD_HOME });
+  assert.deepEqual(out.home.blocks.map((b) => b.type), ["featured", "also", "river", "topicRows", "quickReads", "latest", "topics", "related", "moreStories", "tags"]);
+  assert.equal(out.home.blocks.find((b) => b.type === "latest")?.enabled, false, "the river replaces the old latest list");
+  assert.ok(out.home.blocks.filter((b) => b.type !== "latest").every((b) => b.enabled));
+  // Round-trips through the strict schema and is stable on a second pass.
+  const again = normalizeSite({ home: parseSite(out).home });
+  assert.deepEqual(again.home, out.home);
+});
+
+test("t96: once any new section exists the owner's list is left alone (deletes stick)", () => {
+  const first = normalizeSite({ home: PROD_HOME }).home.blocks;
+  const ownerEdit = first.filter((b) => b.type !== "quickReads" && b.type !== "moreStories");
+  const out = normalizeSite({ home: { blocks: ownerEdit } });
+  assert.deepEqual(out.home.blocks.map((b) => b.id), ownerEdit.map((b) => b.id));
+});
+
+test("t96: the default homepage is the long sectioned page", () => {
+  const types = site.home.blocks.filter((b) => b.enabled).map((b) => b.type);
+  assert.deepEqual(types, ["featured", "also", "river", "topicRows", "quickReads", "related", "topics", "moreStories", "tags"]);
+  assert.deepEqual(normalizeSite({ home: site.home }).home, site.home);
 });

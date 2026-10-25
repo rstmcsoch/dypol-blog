@@ -7,6 +7,8 @@ import { Cover, hasCover } from "./cover";
 import { ShareLinks } from "./share";
 import { TopicGrid } from "./topic-grid";
 import { thumbUrl } from "@/lib/media-url";
+import { ArrowRight } from "lucide-react";
+import type { ReactNode } from "react";
 
 /** Each card's OWN cover (16/9), or a clean fallback panel with its topic — never another article's image. */
 function Thumb({ c, className = "story-card__img" }: { c: Card; className?: string }) {
@@ -112,6 +114,181 @@ function Featured({ r, site }: { r: ResolvedBlock; site: SiteConfig }) {
   );
 }
 
+function Kicker({ c }: { c: Card }) {
+  return c.topicLabels.length ? <span className="story-card__cat">{topicLine(c)}</span> : null;
+}
+
+function Meta({ c, minRead }: { c: Card; minRead: string }) {
+  return (
+    <span className="story-card__meta">
+      {c.publishedAt ? <time dateTime={c.publishedAt}>{formatDate(c.publishedAt)}</time> : null}
+      {c.publishedAt ? " · " : ""}
+      {c.minutes} {minRead}
+    </span>
+  );
+}
+
+function SectionHead({ id, title, children }: { id: string; title: string; children?: ReactNode }) {
+  return (
+    <div className="section-head">
+      <h2 id={id}>{title}</h2>
+      {children}
+    </div>
+  );
+}
+
+/** t96: "Latest" river (dated rows) with a numbered "Most read" rail, like Android Police / TechCrunch. */
+function River({ r, site, id }: { r: ResolvedBlock; site: SiteConfig; id: string }) {
+  const rail = r.rail ?? [];
+  const railId = `${id}-rail`;
+  return (
+    <section className="section river-section" aria-labelledby={id} data-block="river">
+      <div className={rail.length ? "container river" : "container river river--solo"}>
+        <div className="river__main">
+          <SectionHead id={id} title={r.title}>
+            <Link to="/articles" className="text-link">
+              {site.labels.fullIndex}
+            </Link>
+          </SectionHead>
+          <ol className="river__list">
+            {r.cards.map((c) => (
+              <li key={c.id}>
+                <Link to="/articles/$slug" params={{ slug: c.slug }} className="river-row">
+                  <span className="river-row__when">{c.publishedAt ? <time dateTime={c.publishedAt}>{formatDate(c.publishedAt)}</time> : null}</span>
+                  <span className="river-row__main">
+                    <Kicker c={c} />
+                    <span className="river-row__title">{c.title}</span>
+                    <span className="river-row__excerpt">{c.excerpt}</span>
+                  </span>
+                  <Thumb c={c} className="river-row__img" />
+                </Link>
+              </li>
+            ))}
+          </ol>
+        </div>
+        {rail.length ? (
+          <aside className="rail" aria-labelledby={railId}>
+            <h2 id={railId} className="rail__head">
+              {site.labels.popular}
+            </h2>
+            <ol className="rail__list">
+              {rail.map((c, i) => (
+                <li key={c.id}>
+                  <Link to="/articles/$slug" params={{ slug: c.slug }} className="rail-row">
+                    <span className="rail-row__num grain" aria-hidden="true">
+                      {i + 1}
+                    </span>
+                    <span className="rail-row__title">{c.title}</span>
+                  </Link>
+                </li>
+              ))}
+            </ol>
+          </aside>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
+/** t96: one row per busy topic — a big story and three compact ones, then "More in …". */
+function TopicRows({ r, site, id }: { r: ResolvedBlock; site: SiteConfig; id: string }) {
+  return (
+    <section className="section topic-rows" aria-labelledby={id} data-block="topicRows">
+      <div className="container">
+        <p id={id} className="kicker topic-rows__kicker">
+          {r.title}
+        </p>
+        {(r.rows ?? []).map((row) => {
+          const [big, ...rest] = row.cards;
+          const rowId = `${id}-${row.category.slug}`;
+          return (
+            <section key={row.category.id} className="topic-row" aria-labelledby={rowId}>
+              <div className="topic-row__head">
+                <h2 id={rowId}>
+                  <Link to="/topics/$slug" params={{ slug: row.category.slug }}>
+                    {row.category.label}
+                  </Link>
+                </h2>
+                <Link to="/topics/$slug" params={{ slug: row.category.slug }} className="btn btn--accent btn--sm grain">
+                  {site.labels.moreIn} {row.category.label}
+                  <span className="sr-only"> ({row.count})</span>
+                  <ArrowRight aria-hidden="true" />
+                </Link>
+              </div>
+              <div className="topic-row__grid">
+                {big ? (
+                  <Link to="/articles/$slug" params={{ slug: big.slug }} className="story-card topic-row__big">
+                    <Thumb c={big} />
+                    <span className="story-card__title">{big.title}</span>
+                    <span className="story-card__excerpt">{big.excerpt}</span>
+                    <Meta c={big} minRead={site.labels.minRead} />
+                  </Link>
+                ) : null}
+                <ul className="topic-row__list">
+                  {rest.map((c) => (
+                    <li key={c.id}>
+                      <Link to="/articles/$slug" params={{ slug: c.slug }} className="mini-card">
+                        <Thumb c={c} className="mini-card__img" />
+                        <span className="mini-card__main">
+                          <span className="mini-card__title">{c.title}</span>
+                          <Meta c={c} minRead={site.labels.minRead} />
+                        </span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </section>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+/** t96: shortest unseen stories as compact text cards with an orange reading-time badge. */
+function QuickReads({ r, site, id }: { r: ResolvedBlock; site: SiteConfig; id: string }) {
+  return (
+    <section className="section quick-reads" aria-labelledby={id} data-block="quickReads">
+      <div className="container">
+        <SectionHead id={id} title={r.title} />
+        <ul className="quick-grid">
+          {r.cards.map((c) => (
+            <li key={c.id}>
+              <Link to="/articles/$slug" params={{ slug: c.slug }} className="quick-card">
+                <span className="quick-card__time grain">
+                  {c.minutes} {site.labels.minRead}
+                </span>
+                <Kicker c={c} />
+                <span className="quick-card__title">{c.title}</span>
+                <span className="quick-card__excerpt">{c.excerpt}</span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </section>
+  );
+}
+
+/** t96: the rest of the archive as a grid, ending in a button to the full index. */
+function MoreStories({ r, site, id }: { r: ResolvedBlock; site: SiteConfig; id: string }) {
+  return (
+    <section className="section more-stories" aria-labelledby={id} data-block="moreStories">
+      <div className="container">
+        <SectionHead id={id} title={r.title} />
+        <CardList cards={r.cards} layout={r.block.layout} minRead={site.labels.minRead} />
+        <p className="more-stories__foot">
+          <Link to="/articles" className="btn btn--accent grain">
+            {site.labels.fullIndex}
+            <ArrowRight aria-hidden="true" />
+          </Link>
+        </p>
+      </div>
+    </section>
+  );
+}
+
 function Cta({ r }: { r: ResolvedBlock }) {
   const { block } = r;
   const external = /^https?:/.test(block.ctaHref);
@@ -135,6 +312,10 @@ export function HomeBlocks({ blocks, site }: { blocks: ResolvedBlock[]; site: Si
         const id = `blk-${r.block.id}`;
         const t = r.block.type;
         if (t === "featured") return <Featured key={r.block.id} r={r} site={site} />;
+        if (t === "river") return <River key={r.block.id} r={r} site={site} id={id} />;
+        if (t === "topicRows") return <TopicRows key={r.block.id} r={r} site={site} id={id} />;
+        if (t === "quickReads") return <QuickReads key={r.block.id} r={r} site={site} id={id} />;
+        if (t === "moreStories") return <MoreStories key={r.block.id} r={r} site={site} id={id} />;
         if (t === "also") {
           return (
             <section key={r.block.id} className="band grain" aria-labelledby={id} data-block={t}>

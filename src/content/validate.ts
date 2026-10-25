@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { isSafeHref } from "./rules.ts";
-import { site } from "./site.ts";
+import { site, T96_HOME_BLOCKS } from "./site.ts";
 import { BLOCK_TYPES, publicationStatuses, type ContentBlock, type NavItem, type SiteConfig } from "./types.ts";
 import { SOCIAL_PLATFORMS, normalizeSocials, validSocialUrl } from "../lib/social-links.ts";
 
@@ -71,7 +71,9 @@ const hrefSchema = z
   .max(300)
   .refine((value) => isSafeHref(value), "Link must be a site path or an https URL.");
 
-export const HOME_BLOCK_TYPES = ["featured", "also", "latest", "related", "popular", "category", "tag", "topics", "ticker", "text", "cta", "tags"] as const;
+export const HOME_BLOCK_TYPES = ["featured", "also", "latest", "related", "popular", "category", "tag", "topics", "ticker", "text", "cta", "tags", "river", "topicRows", "quickReads", "moreStories"] as const;
+/** t96 homepage section types; a saved homepage without any of them gets them once. */
+export const T96_HOME_TYPES = ["river", "topicRows", "quickReads", "moreStories"] as const;
 export const SIDEBAR_BLOCK_TYPES = ["tags", "related", "newStories", "popular", "share", "category", "tag", "text", "cta"] as const;
 
 const labelText = z.string().trim().min(1).max(80);
@@ -164,6 +166,10 @@ const siteSchema = z.object({
     linkCopied: labelText,
     tags: labelText,
     popular: labelText,
+    topicRows: labelText,
+    quickReads: labelText,
+    moreStories: labelText,
+    moreIn: labelText,
   }),
   nav: z
     .array(
@@ -275,7 +281,37 @@ export function upgradeHome(raw: unknown): unknown {
   const missing = ESSENTIAL_HOME_BLOCKS.filter((b) => !have.has(b.type));
   // Featured belongs first; the rest append in default order, respecting the owner's existing order/visibility.
   const featured = missing.filter((b) => b.type === "featured");
-  return { blocks: [...featured, ...blocks, ...missing.filter((b) => b.type !== "featured")] };
+  return { blocks: addT96Sections([...featured, ...blocks, ...missing.filter((b) => b.type !== "featured")]) };
+}
+
+/**
+ * t96: a homepage saved before the sectioned front page existed gets the new
+ * sections once — river, topic rows and quick reads right after the coloured
+ * band (or the hero), "More stories" before the tags (or at the end). The old
+ * "latest" block is switched off (not deleted) because the river replaces it.
+ * A list that already has any t96 section is the owner's and is left alone,
+ * so deleting one of them later sticks.
+ */
+export function addT96Sections(blocks: ContentBlock[]): ContentBlock[] {
+  if (blocks.some((b) => (T96_HOME_TYPES as readonly string[]).includes(b.type))) return blocks;
+  if (blocks.length + T96_HOME_BLOCKS.length + 1 > 30) return blocks; // never push the owner's own blocks out
+  const ids = new Set(blocks.map((b) => b.id));
+  const uniq = (b: ContentBlock): ContentBlock => {
+    let id = b.id;
+    for (let n = 2; ids.has(id); n++) id = `${b.id}-${n}`;
+    ids.add(id);
+    return { ...b, id };
+  };
+  const firstLatest = blocks.findIndex((b) => b.type === "latest" && b.enabled);
+  const next = blocks.map((b, i) => (i === firstLatest ? { ...b, enabled: false } : b));
+  let at = next.findIndex((b) => b.type === "also");
+  if (at < 0) at = next.findIndex((b) => b.type === "featured");
+  next.splice(at + 1, 0, ...T96_HOME_BLOCKS.map(uniq));
+  const tagsAt = next.findIndex((b) => b.type === "tags");
+  const more = uniq(fill({ id: "home-more", type: "moreStories", count: 9, layout: "grid" }));
+  if (tagsAt >= 0) next.splice(tagsAt, 0, more);
+  else next.push(more);
+  return next;
 }
 
 /**
