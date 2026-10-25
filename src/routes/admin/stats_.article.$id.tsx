@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from "recharts";
 import { adminArticleStats } from "@/content/admin-api";
 import { formatCount, formatDuration, formatPercent, kolkataDisplayDate } from "@/lib/analytics-dates";
-import { niceMax, shortDate } from "@/lib/analytics-metrics";
+import { niceTicks, shortDate } from "@/lib/analytics-metrics";
 
 type Search = { preset?: string; from?: string; to?: string };
 
@@ -39,7 +39,8 @@ function ArticleStatsPage() {
   if (error === "not-signed-in") return null;
   if (!data) return <div className="adm-banner adm-banner--bad" role="alert">{error ?? "Article not found."}</div>;
   const d = data;
-  const max = niceMax(d.series.map((p) => p.views));
+  const yTicks = niceTicks(d.series.map((p) => p.views));
+  const max = yTicks[yTicks.length - 1];
   const series = d.series.map((p) => ({ ...p, label: shortDate(p.date) }));
   return (
     <div className="adm-stats-page">
@@ -73,7 +74,7 @@ function ArticleStatsPage() {
               <BarChart data={series} margin={{ top: 10, right: 16, bottom: 8, left: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
                 <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#6b7280" }} interval={Math.max(0, Math.ceil(series.length / 7) - 1)} />
-                <YAxis domain={[0, max]} allowDecimals={false} tick={{ fontSize: 11, fill: "#6b7280" }} width={36} />
+                <YAxis domain={[0, max]} ticks={yTicks} interval={0} allowDecimals={false} tick={{ fontSize: 11, fill: "#6b7280" }} width={36} />
                 <Tooltip />
                 <Bar dataKey="views" name="Views" fill="#2f5bea" radius={[4, 4, 0, 0]} />
               </BarChart>
@@ -101,10 +102,10 @@ function ArticleStatsPage() {
           {d.sources.length === 0 ? (
             <p className="adm-empty__body adm-left">No source data yet for this period.</p>
           ) : (
-            <table className="adm-table--compact">
+            <div className="adm-scroll-x"><table className="adm-table--compact">
               <thead><tr><th>Source</th><th className="text-right">Sessions</th></tr></thead>
               <tbody>{d.sources.map((s) => <tr key={s.source}><td>{s.source}</td><td className="text-right">{formatCount(s.sessions)}</td></tr>)}</tbody>
-            </table>
+            </table></div>
           )}
         </div>
         <div className="adm-panel adm-panel__body">
@@ -112,7 +113,7 @@ function ArticleStatsPage() {
           {d.nextPages.length === 0 ? (
             <p className="adm-empty__body adm-left">No internal article clicks from this article yet.</p>
           ) : (
-            <table className="adm-table--compact">
+            <div className="adm-scroll-x"><table className="adm-table--compact">
               <thead><tr><th>Article</th><th className="text-right">Clicks</th></tr></thead>
               <tbody>
                 {d.nextPages.map((n) => (
@@ -122,7 +123,7 @@ function ArticleStatsPage() {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table></div>
           )}
         </div>
       </section>

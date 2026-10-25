@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   alignSeries, articleRecirculation, classifyVisitors, completionQualifies, deltaPercent, growth,
-  insightsAllowed, niceMax, scrollFunnel, sessionsFromReads, shortDate, summarize, type ReadRow,
+  insightsAllowed, niceMax, niceTicks, scrollFunnel, sessionsFromReads, shortDate, summarize, type ReadRow,
 } from "./analytics-metrics.ts";
 
 const r = (session_id: string, date: string, article_id: string, page_views: number, engaged_seconds: number, extra: Partial<ReadRow> = {}): ReadRow =>
@@ -91,4 +91,14 @@ test("scroll funnel 25/50/75/100", () => {
   const f = scrollFunnel([10, 30, 60, 80, 100]);
   assert.deepEqual(f.map((x) => x.reads), [4, 3, 2, 1]);
   assert.equal(f[0].share, 80);
+});
+
+test("niceTicks: integer, deduped, contains max", () => {
+  for (const v of [[0], [1], [3], [4], [6], [15], [33], [50], [2950]]) {
+    const t = niceTicks(v);
+    assert.ok(t[t.length - 1] >= Math.max(...v));
+    assert.equal(new Set(t).size, t.length);
+    assert.ok(t.every((x) => Number.isInteger(x)));
+    assert.ok(t.length <= 6);
+  }
 });

@@ -172,6 +172,20 @@ export function niceMax(values: number[]): number {
   return 10 * pow;
 }
 
+/** Integer, evenly spaced, de-duplicated y-axis ticks from 0 to a top that contains the data. */
+export function niceTicks(values: number[], maxTicks = 5): number[] {
+  const max = Math.max(0, ...values.filter((v) => Number.isFinite(v)));
+  if (max <= 0) return [0, 1];
+  const raw = max / (maxTicks - 1);
+  const pow = 10 ** Math.floor(Math.log10(raw));
+  let step = Math.max(1, [1, 2, 5, 10].map((m) => m * pow).find((c) => c >= raw) ?? 10 * pow);
+  step = Math.ceil(step);
+  const top = Math.ceil(max / step) * step;
+  const ticks: number[] = [];
+  for (let v = 0; v <= top; v += step) ticks.push(v);
+  return [...new Set(ticks)];
+}
+
 /** Per-article recirculation: share of views followed by an internal click (capped at 100%). */
 export function articleRecirculation(views: number, clicks: number): number | null {
   if (views <= 0) return null;

@@ -3661,3 +3661,39 @@ html.nav-open .reading-progress { display: none; }
 .adm-btn--sm { min-height: 1.9rem; padding: 0.2rem 0.6rem; font-size: 0.8rem; }
 .adm-zero { color: #8a1f1f; }
 .adm-article-head { display: grid; gap: 0.3rem; }
+
+/* t119: admin layout is fluid — the page adapts to the device, never the reverse.
+   Root cause: grid containers with an implicit `auto` column (e.g. .adm-stats-page)
+   size to max-content, so Recharts' ResponsiveContainer and nowrap table headers
+   grew the track to ~1430px on phones. Every admin grid track is now minmax(0, 1fr). */
+.adm-content { min-width: 0; max-width: min(68rem, 100%); box-sizing: border-box; }
+.adm-stats-page, .adm-panel-grid, .adm-section--two-col, .adm-insight-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; min-width: 0; }
+.adm-stats-page > *, .adm-panel-grid > *, .adm-section--two-col > *, .adm-section > *, .adm-content > *, .desk-split > *, .stack > *, .editor-grid > *, .stat-grid > * { min-width: 0; }
+.adm-section, .adm-panel, .adm-panel__body, .adm-chart-wrap, .recharts-responsive-container { min-width: 0; max-width: 100%; }
+.adm-stat-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr)); }
+.adm-stat-grid--mini { grid-template-columns: repeat(auto-fit, minmax(min(100%, 120px), 1fr)); }
+.adm-panel__body { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.adm-table--compact { width: 100%; }
+.adm-section__desc, .desk-note, .desk-title, .adm-chart__label { min-width: 0; overflow-wrap: anywhere; }
+.adm-filters > *, .adm-stats__header > * { min-width: 0; max-width: 100%; }
+.adm-content table:not(.adm-table--compact) { max-width: none; }
+.adm-content img, .adm-content video, .adm-content iframe { max-width: 100%; }
+@media (max-width: 640px) {
+  .adm-table td:first-child { min-width: 9.5rem; }
+}
+@media (min-width: 900px) {
+  .adm-panel-grid--engagement { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 1099px) {
+  .adm-section--two-col { grid-template-columns: minmax(0, 1fr); }
+}
+@media (min-width: 1100px) {
+  .adm-section--two-col { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+.adm-scroll-x { max-width: 100%; min-width: 0; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.adm-scroll-x > table { width: 100%; }
+.adm-table--compact td, .adm-table--compact th { overflow-wrap: normal; word-break: normal; }
+.adm-table--compact th, .adm-table--compact td.text-right { white-space: nowrap; }
+.adm-table--compact td:first-child { overflow-wrap: break-word; }
+/* Absolutely positioned bits (sr-only labels, menus) inside scrollers must not escape and widen the page. */
+.desk-table-wrap, .adm-table-wrap, .adm-scroll-x { position: relative; }

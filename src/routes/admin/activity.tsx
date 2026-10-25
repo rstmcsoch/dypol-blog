@@ -48,7 +48,7 @@ function ActivityDesk() {
         {data.notFounds.length === 0 ? (
           <p className="desk-note">No 404s recorded yet.</p>
         ) : (
-          <table className="table">
+          <div className="adm-scroll-x"><table className="table">
             <thead><tr><th>Path</th><th>Hits</th><th>Last seen</th><th>Came from</th></tr></thead>
             <tbody>
               {data.notFounds.map((n) => (
@@ -60,7 +60,7 @@ function ActivityDesk() {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         )}
       </section>
     </>
