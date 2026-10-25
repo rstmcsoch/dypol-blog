@@ -133,8 +133,8 @@
 }
 
 @media (forced-colors: active) {
-  .grain-layer {
-    display: none;
+  .grain {
+    background-image: none;
   }
 
   .btn,
@@ -175,7 +175,8 @@
   left: 1rem;
   top: -5rem;
   z-index: 50;
-  background: var(--accent);
+  background: var(--accent) var(--grain-image) 0 0 / var(--grain-size);
+  background-blend-mode: var(--grain-blend);
   color: var(--accent-ink);
   border: var(--line) solid var(--ink);
   padding: 0.6rem 0.9rem;
@@ -286,14 +287,32 @@
   box-shadow: 0 0 0 var(--accent);
 }
 
-.grain-layer {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background-image: url("/media/grain.webp");
-  background-size: 128px 128px;
-  opacity: 0.55;
-  mix-blend-mode: overlay;
+/*
+ * t96 grain: one reusable film/risograph texture for every ORANGE surface
+ * (stamp, trending badge, "Also filed" band, cover plates, accent buttons,
+ * active menu marks). A prerendered, seamless 256px tile of fine gaussian
+ * film grain (/media/grain-film.webp, ~17 KB, mixed light and dark grains,
+ * no dots or streaks) is blended INTO the orange with hard-light, which
+ * keeps the hue (about 2% darker on average, text contrast unchanged). A
+ * very soft warm light (--grain-tone) gives the surface a tactile, slightly
+ * uneven print feel. No extra DOM, no live SVG filters, no compositing
+ * layers, no layout shift. White and black theme surfaces never get it.
+ * Use the class, or the --grain-image/--grain-size/--grain-blend trio for
+ * pseudo-elements.
+ */
+:root {
+  --grain-image: url("/media/grain-film.webp");
+  --grain-size: 128px 128px;
+  --grain-blend: hard-light;
+  --grain-tone: radial-gradient(120% 140% at 18% 0%, rgb(255 236 214 / 0.16), transparent 62%),
+    radial-gradient(90% 120% at 100% 100%, rgb(120 20 0 / 0.12), transparent 70%);
+}
+
+.grain {
+  background-color: var(--accent);
+  background-image: var(--grain-image), var(--grain-tone);
+  background-size: var(--grain-size), 100% 100%, 100% 100%;
+  background-blend-mode: var(--grain-blend), normal, normal;
 }
 
 .site-header {
@@ -335,7 +354,7 @@
   align-items: center;
   overflow: hidden;
   border: var(--line) solid var(--ink);
-  background: var(--accent);
+  background-color: var(--accent);
   color: var(--accent-ink);
   padding: 0.2rem 0.38rem 0.16rem;
   font-size: 0.68rem;
@@ -412,20 +431,23 @@
 
 html[data-theme="light"] .theme-switch__btn[data-value="light"] .theme-switch__mark,
 html[data-theme="dark"] .theme-switch__btn[data-value="dark"] .theme-switch__mark {
-  background: var(--accent);
+  background: var(--accent) var(--grain-image) 0 0 / var(--grain-size);
+  background-blend-mode: var(--grain-blend);
   border-color: currentColor;
 }
 
 @media (prefers-color-scheme: dark) {
   html:not([data-theme="light"]) .theme-switch__btn[data-value="dark"] .theme-switch__mark {
-    background: var(--accent);
+    background: var(--accent) var(--grain-image) 0 0 / var(--grain-size);
+    background-blend-mode: var(--grain-blend);
     border-color: currentColor;
   }
 }
 
 @media (prefers-color-scheme: light) {
   html:not([data-theme="dark"]) .theme-switch__btn[data-value="light"] .theme-switch__mark {
-    background: var(--accent);
+    background: var(--accent) var(--grain-image) 0 0 / var(--grain-size);
+    background-blend-mode: var(--grain-blend);
     border-color: currentColor;
   }
 }
@@ -453,15 +475,23 @@ html[data-theme="dark"] .theme-switch__btn[data-value="dark"] .theme-switch__mar
   }
 }
 
+/*
+ * t96 menu. Desktop: five clean links with an orange grain bar that slides in
+ * on hover and stays on the current section (TechCrunch / Android Authority
+ * pattern). Phones and tablets: a hamburger opens a full-height panel with big
+ * tap targets, story counts per topic and the busiest topics as chips
+ * (9to5Google / Android Police drawer pattern).
+ */
 .menu-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 0.5rem;
   min-height: 2.75rem;
-  min-width: 5.25rem;
-  padding: 0 0.8rem;
+  min-width: 2.75rem;
+  padding: 0 0.75rem;
   border: var(--line) solid var(--ink);
-  background: var(--paper);
+  background-color: var(--paper);
   color: var(--ink);
   box-shadow: var(--shadow-tight);
   font: inherit;
@@ -469,11 +499,64 @@ html[data-theme="dark"] .theme-switch__btn[data-value="dark"] .theme-switch__mar
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+  cursor: pointer;
+}
+
+.menu-btn.grain {
+  background-color: var(--accent);
+  color: var(--accent-ink);
 }
 
 .menu-btn:active {
   transform: translate(2px, 2px);
   box-shadow: 0 0 0 var(--ink);
+}
+
+.menu-btn__icon {
+  position: relative;
+  display: inline-grid;
+  align-content: center;
+  gap: 4px;
+  width: 1.1rem;
+  height: 1rem;
+  flex: none;
+}
+
+.menu-btn__icon i {
+  display: block;
+  height: 2px;
+  background: currentColor;
+  transform-origin: center;
+}
+
+.menu-btn[aria-expanded="true"] .menu-btn__icon i:nth-child(1) {
+  transform: translateY(6px) rotate(45deg);
+}
+
+.menu-btn[aria-expanded="true"] .menu-btn__icon i:nth-child(2) {
+  opacity: 0;
+}
+
+.menu-btn[aria-expanded="true"] .menu-btn__icon i:nth-child(3) {
+  transform: translateY(-6px) rotate(-45deg);
+}
+
+@media (max-width: 420px) {
+  .menu-btn {
+    padding-inline: 0;
+  }
+
+  .menu-btn__label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
 }
 
 .site-nav {
@@ -483,20 +566,78 @@ html[data-theme="dark"] .theme-switch__btn[data-value="dark"] .theme-switch__mar
 .site-nav__inner {
   display: flex;
   align-items: center;
-  gap: 1.1rem;
+}
+
+.site-nav__list {
+  display: flex;
+  align-items: center;
+  gap: clamp(0.1rem, 0.6vw, 0.4rem);
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
 .nav-link {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 2.75rem;
+  padding: 0 0.7rem;
   color: inherit;
   text-decoration: none;
+  font-size: 0.98rem;
   font-weight: 700;
   letter-spacing: -0.02em;
-  border-bottom: 2px solid transparent;
-  padding-block: 0.2rem;
+  white-space: nowrap;
 }
 
-.nav-link.is-active {
-  border-bottom-color: var(--accent);
+/* The bar: orange + grain, hidden until hover/current. */
+.nav-link::after {
+  content: "";
+  position: absolute;
+  left: 0.7rem;
+  right: 0.7rem;
+  bottom: 0.3rem;
+  height: 4px;
+  background: var(--accent) var(--grain-image) 0 0 / var(--grain-size);
+  background-blend-mode: var(--grain-blend);
+  transform: scaleX(0);
+  transform-origin: left center;
+}
+
+.nav-link.is-active::after,
+.nav-link[aria-current]::after {
+  transform: scaleX(1);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .nav-link:hover::after {
+    transform: scaleX(1);
+  }
+}
+
+.nav-link:focus-visible {
+  outline-offset: -3px;
+}
+
+/* Topic shortcuts carry a small orange stamp, like the BLOG mark. */
+.nav-link--topic .nav-link__label::before {
+  content: "";
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  margin-right: 0.42rem;
+  border: 1.5px solid var(--ink);
+  background: var(--accent) var(--grain-image) 0 0 / var(--grain-size);
+  background-blend-mode: var(--grain-blend);
+  vertical-align: 0.08em;
+}
+
+.nav-link__count,
+.nav-link__arrow,
+.site-nav__topics {
+  display: none;
 }
 
 @media (max-width: 959px) {
@@ -521,26 +662,134 @@ html[data-theme="dark"] .theme-switch__btn[data-value="dark"] .theme-switch__mar
   }
 
   .site-nav__inner {
+    min-height: 0;
     overflow: hidden;
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .site-nav.is-open .site-nav__inner {
+    max-height: calc(100dvh - var(--header-h));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .site-nav__list {
+    flex-direction: column;
+    align-items: stretch;
     gap: 0;
-    padding: 0.35rem 1rem 0.85rem;
+    padding: 0.35rem clamp(1rem, 4vw, 2.5rem) 0;
   }
 
   .nav-link {
     display: flex;
-    align-items: center;
-    min-height: 3rem;
+    min-height: 3.5rem;
+    padding: 0 0.15rem;
     border-bottom: var(--line) solid var(--ink);
-    font-size: 1.35rem;
+    font-size: clamp(1.35rem, 1.1rem + 1.2vw, 1.75rem);
     letter-spacing: -0.04em;
   }
 
-  .nav-link.is-active {
-    border-bottom-color: var(--ink);
-    box-shadow: inset 4px 0 0 var(--accent);
-    padding-left: 0.7rem;
+  .nav-link::after {
+    left: 0;
+    right: auto;
+    top: 0.75rem;
+    bottom: 0.75rem;
+    width: 6px;
+    height: auto;
+    transform: scaleY(0);
+  }
+
+  .nav-link.is-active,
+  .nav-link[aria-current] {
+    padding-left: 1rem;
+  }
+
+  .nav-link.is-active::after,
+  .nav-link[aria-current]::after {
+    transform: scaleY(1);
+  }
+
+  .nav-link__label {
+    flex: 1;
+    min-width: 0;
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+
+  .nav-link__count {
+    display: inline;
+    color: var(--muted);
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .nav-link__arrow {
+    display: block;
+    width: 1.15rem;
+    height: 1.15rem;
+    flex: none;
+  }
+
+  .site-nav__topics {
+    display: grid;
+    gap: 0.85rem;
+    padding: 1.4rem clamp(1rem, 4vw, 2.5rem) 1.6rem;
+  }
+
+  .site-nav__heading {
+    margin: 0;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .nav-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .nav-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    max-width: 100%;
+    min-height: 2.5rem;
+    padding: 0.3rem 0.75rem;
+    border: var(--line) solid var(--ink);
+    color: inherit;
+    font-size: 0.88rem;
+    font-weight: 700;
+    text-decoration: none;
+    overflow-wrap: anywhere;
+  }
+
+  .nav-chip__count {
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .nav-chip:active {
+    background: var(--accent) var(--grain-image) 0 0 / var(--grain-size);
+    background-blend-mode: var(--grain-blend);
+    color: var(--accent-ink);
+  }
+
+  .site-nav__all {
+    justify-self: start;
+  }
+
+  html.nav-open,
+  html.nav-open body {
+    overflow: hidden;
   }
 }
 
@@ -550,7 +799,19 @@ html[data-theme="dark"] .theme-switch__btn[data-value="dark"] .theme-switch__mar
   }
 
   .site-nav {
-    margin-right: 0.4rem;
+    margin-right: 0.6rem;
+  }
+}
+
+@media (min-width: 960px) and (max-width: 1099px) {
+  .nav-link {
+    padding-inline: 0.5rem;
+    font-size: 0.92rem;
+  }
+
+  .nav-link::after {
+    left: 0.5rem;
+    right: 0.5rem;
   }
 }
 
@@ -558,6 +819,36 @@ html[data-theme="dark"] .theme-switch__btn[data-value="dark"] .theme-switch__mar
   .site-nav {
     transition: grid-template-rows 200ms ease;
   }
+
+  .nav-link::after,
+  .menu-btn__icon i {
+    transition:
+      transform 180ms ease,
+      opacity 180ms ease;
+  }
+}
+
+/* Orange action button (grain): "All topics", "More in …". */
+.btn--accent {
+  border-color: var(--ink);
+  background-color: var(--accent);
+  color: var(--accent-ink);
+  box-shadow: var(--shadow-tight);
+}
+
+.btn--accent svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .btn--accent:hover {
+    box-shadow: 5px 5px 0 var(--ink);
+  }
+}
+
+.btn--accent:active {
+  box-shadow: 0 0 0 var(--ink);
 }
 
 .trend {
@@ -581,7 +872,7 @@ html[data-theme="dark"] .theme-switch__btn[data-value="dark"] .theme-switch__mar
   overflow: hidden;
   margin: 0;
   border: var(--line) solid var(--ink);
-  background: var(--accent);
+  background-color: var(--accent);
   color: var(--accent-ink);
   padding: 0.28rem 0.5rem;
   font-size: 0.72rem;
@@ -663,7 +954,7 @@ html[data-theme="dark"] .theme-switch__btn[data-value="dark"] .theme-switch__mar
 .plate__ink {
   position: absolute;
   overflow: hidden;
-  background: var(--accent);
+  background-color: var(--accent);
 }
 
 .plate[data-motif="corner"] .plate__ink {
@@ -771,13 +1062,9 @@ html[data-theme="dark"] .theme-switch__btn[data-value="dark"] .theme-switch__mar
 .band {
   position: relative;
   isolation: isolate;
-  background: var(--accent);
+  background-color: var(--accent);
   color: var(--accent-ink);
   border-block: var(--line) solid var(--ink);
-}
-
-.band .grain-layer {
-  z-index: 0;
 }
 
 .band-inner {

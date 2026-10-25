@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { isSafeHref } from "./rules.ts";
 import { site } from "./site.ts";
-import { BLOCK_TYPES, publicationStatuses, type ContentBlock, type SiteConfig } from "./types.ts";
+import { BLOCK_TYPES, publicationStatuses, type ContentBlock, type NavItem, type SiteConfig } from "./types.ts";
 import { SOCIAL_PLATFORMS, normalizeSocials, validSocialUrl } from "../lib/social-links.ts";
 
 export { isSafeHref, publishProblems, slugify } from "./rules.ts";
@@ -76,6 +76,9 @@ export const SIDEBAR_BLOCK_TYPES = ["tags", "related", "newStories", "popular", 
 
 const labelText = z.string().trim().min(1).max(80);
 
+/** t96: a menu shortcut to one topic page. */
+export const NAV_TOPIC_HREF = /^\/topics\/[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
 const blockSchema2 = z.object({
   id: z.string().trim().min(1).max(60).regex(/^[A-Za-z0-9_-]+$/),
   type: z.enum(BLOCK_TYPES),
@@ -140,6 +143,8 @@ const siteSchema = z.object({
     notFoundBody: z.string().trim().min(1).max(240),
     backHome: labelText,
     menu: labelText,
+    menuTopics: labelText,
+    menuAllTopics: labelText,
     close: labelText,
     day: labelText,
     night: labelText,
@@ -165,7 +170,7 @@ const siteSchema = z.object({
       z.object({
         id: z.string().min(1).max(40),
         label: labelText,
-        href: z.enum(["/", "/articles", "/topics", "/about"]),
+        href: z.union([z.enum(["/", "/articles", "/topics", "/about"]), z.string().regex(NAV_TOPIC_HREF, "Topic shortcuts must be /topics/<slug>.") as z.ZodType<`/topics/${string}`>]),
         visible: z.boolean(),
       }),
     )
@@ -273,6 +278,29 @@ export function upgradeHome(raw: unknown): unknown {
   return { blocks: [...featured, ...blocks, ...missing.filter((b) => b.type !== "featured")] };
 }
 
+/**
+ * t96: the original four-link menu (Home, Index, Topics, About) becomes the
+ * new default (Latest, two topic shortcuts, Topics, About; Home stays
+ * reachable from the logo). Only an untouched legacy menu is upgraded — the
+ * owner's own labels and hidden items carry over, and any menu that already
+ * has a topic shortcut (i.e. was saved after t96) is left exactly as saved.
+ */
+export function upgradeNav(raw: unknown): NavItem[] {
+  if (!Array.isArray(raw) || raw.length === 0) return site.nav;
+  const items = raw as NavItem[];
+  const legacyIds = ["home", "index", "topics", "about"];
+  const legacy = items.every((item) => item && legacyIds.includes(item.id) && ["/", "/articles", "/topics", "/about"].includes(item.href));
+  if (!legacy) return items;
+  const legacyLabels: Record<string, string> = { home: "Home", index: "Index", topics: "Topics", about: "About" };
+  return site.nav.map((item) => {
+    const old = items.find((x) => x.id === item.id);
+    if (!old) return item;
+    const customLabel = old.label.trim() && old.label.trim() !== legacyLabels[item.id] ? old.label : item.label;
+    // Home moves to the logo by default; an owner-hidden item stays hidden.
+    return { ...item, label: customLabel, visible: item.visible && old.visible };
+  });
+}
+
 export function upgradeSidebar(raw: unknown): unknown {
   const r = (raw ?? {}) as { enabled?: boolean; blocks?: unknown[]; count?: number };
   if (!Array.isArray(r.blocks)) return { ...site.articleSidebar, ...(typeof r.enabled === "boolean" ? { enabled: r.enabled } : {}) };
@@ -318,7 +346,7 @@ function normalizeCore(input: unknown): SiteConfig {
     ...site,
     ...raw,
     labels: { ...site.labels, ...(raw.labels ?? {}) },
-    nav: Array.isArray(raw.nav) && raw.nav.length > 0 ? raw.nav : site.nav,
+    nav: upgradeNav(raw.nav),
     trending: { ...site.trending, ...(raw.trending ?? {}) },
     footer: { ...site.footer, ...(raw.footer ?? {}), links: raw.footer?.links ?? site.footer.links },
     about: {

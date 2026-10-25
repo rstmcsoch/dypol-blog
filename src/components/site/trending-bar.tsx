@@ -53,8 +53,7 @@ export function TrendingBar() {
       onBlur={() => setHover(false)}
     >
       <div className="container trend__row">
-        <p className="trend__label">
-          <span className="grain-layer" aria-hidden="true" />
+        <p className="trend__label grain">
           <span>{t.label}</span>
         </p>
         <div className="trend__viewport">

@@ -137,8 +137,7 @@ export function HomeBlocks({ blocks, site }: { blocks: ResolvedBlock[]; site: Si
         if (t === "featured") return <Featured key={r.block.id} r={r} site={site} />;
         if (t === "also") {
           return (
-            <section key={r.block.id} className="band" aria-labelledby={id} data-block={t}>
-              <span className="grain-layer" aria-hidden="true" />
+            <section key={r.block.id} className="band grain" aria-labelledby={id} data-block={t}>
               <div className="container band-inner">
                 <h2 id={id} className="band-head">
                   {r.title}
