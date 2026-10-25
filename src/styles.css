@@ -1557,7 +1557,12 @@ html[data-theme="dark"] .theme-switch__btn[data-value="dark"] .theme-switch__mar
 @media (max-width: 520px) {
   .article-table-wrap th,
   .article-table-wrap td {
-    padding: 0.5rem 0.6rem;
+    padding: 0.5rem 0.5rem;
+    overflow-wrap: anywhere;
+  }
+  .article-table-wrap thead th {
+    white-space: normal;
+    letter-spacing: 0.03em;
   }
 }
 
