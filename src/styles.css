@@ -641,37 +641,39 @@ html[data-theme="dark"] .theme-switch__btn[data-value="dark"] .theme-switch__mar
 }
 
 @media (max-width: 959px) {
+  /* t112: the open menu is a viewport-fixed layer under the (pinned) header,
+     full height, scrolling on its own. Never positioned against the header,
+     so page scroll can't push it (or Close) off-screen. */
   .site-nav {
-    display: grid;
-    grid-template-rows: 0fr;
-    position: absolute;
+    position: fixed;
+    top: var(--nav-top, var(--header-h));
     left: 0;
     right: 0;
-    top: 100%;
+    bottom: 0;
     z-index: 25;
+    display: flex;
+    flex-direction: column;
     visibility: hidden;
+    opacity: 0;
     pointer-events: none;
     background: var(--paper);
-    border-bottom: var(--line) solid var(--ink);
   }
 
   .site-nav.is-open {
-    grid-template-rows: 1fr;
     visibility: visible;
+    opacity: 1;
     pointer-events: auto;
   }
 
   .site-nav__inner {
+    flex: 1;
     min-height: 0;
-    overflow: hidden;
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .site-nav.is-open .site-nav__inner {
-    max-height: calc(100dvh - var(--header-h));
     overflow-y: auto;
     overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    flex-direction: column;
+    align-items: stretch;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
   }
 
   .site-nav__list {
@@ -787,9 +789,13 @@ html[data-theme="dark"] .theme-switch__btn[data-value="dark"] .theme-switch__mar
     justify-self: start;
   }
 
-  html.nav-open,
-  html.nav-open body {
-    overflow: hidden;
+  /* Body is pinned by JS (position: fixed + top offset); the header is pinned
+     to the viewport so the bar and Close stay on screen at any scroll depth. */
+  html.nav-open .site-header {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
   }
 }
 
@@ -817,7 +823,15 @@ html[data-theme="dark"] .theme-switch__btn[data-value="dark"] .theme-switch__mar
 
 @media (prefers-reduced-motion: no-preference) {
   .site-nav {
-    transition: grid-template-rows 200ms ease;
+    transition:
+      opacity 160ms ease,
+      visibility 0s linear 160ms;
+  }
+
+  .site-nav.is-open {
+    transition:
+      opacity 160ms ease,
+      visibility 0s;
   }
 
   .nav-link::after,
@@ -1708,6 +1722,9 @@ html[data-theme="dark"] .theme-switch__btn[data-value="dark"] .theme-switch__mar
 /* t106: "You're leaving" external-link dialog (theme-matched, light + dark) */
 .leave-dialog {
   width: min(32rem, calc(100vw - 2rem));
+  max-height: calc(100dvh - 2rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   max-width: none;
   padding: 0;
   margin: auto;

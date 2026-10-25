@@ -37,7 +37,8 @@
     "test:e2e:ai-edit": "node scripts/e2e/ai-edit.e2e.mjs",
     "test:e2e:cleanup": "node scripts/e2e/admin-cleanup.e2e.mjs",
     "test:e2e:multi-topics": "node scripts/e2e/topics-multi.e2e.mjs",
-    "test:e2e:seo": "node scripts/e2e/seo.e2e.mjs"
+    "test:e2e:seo": "node scripts/e2e/seo.e2e.mjs",
+    "test:e2e:menu": "node scripts/e2e/menu-overlay.e2e.mjs"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.4",

@@ -24,6 +24,7 @@ export function SiteHeader() {
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const button = useRef<HTMLButtonElement>(null);
   const panel = useRef<HTMLDivElement>(null);
+  const header = useRef<HTMLElement>(null);
 
   // A topic shortcut shows only while its topic exists and has published stories
   // (counts unknown = content layer down: show the owner's menu as saved).
@@ -46,30 +47,67 @@ export function SiteHeader() {
   }, [pathname]);
 
   useEffect(() => {
-    const root = document.documentElement;
-    root.classList.toggle("nav-open", open);
     if (!open) return;
+    const root = document.documentElement;
+    const body = document.body;
+    const head = header.current;
+    // Scroll lock (t112). The old lock set overflow:hidden on <html> AND <body>,
+    // which turned <body> into the scroll container of the sticky header: once
+    // the page was scrolled, the header (and the menu inside it) snapped back to
+    // the document top, i.e. off-screen, leaving a locked page with no Close.
+    // Now: pin <body> at its current offset, pin the header to the viewport, and
+    // put the panel in a fixed, internally scrolling layer below the header.
+    const scrollY = window.scrollY;
+    const openedAt = window.location.pathname;
+    const gutter = window.innerWidth - root.clientWidth;
+    const saved = {
+      position: body.style.position,
+      top: body.style.top,
+      left: body.style.left,
+      right: body.style.right,
+      width: body.style.width,
+      paddingRight: body.style.paddingRight,
+    };
+    const setTop = () => head && root.style.setProperty("--nav-top", `${Math.round(head.getBoundingClientRect().height)}px`);
+    setTop();
+    root.classList.add("nav-open");
+    Object.assign(body.style, { position: "fixed", top: `-${scrollY}px`, left: "0", right: "0", width: "100%" });
+    if (gutter > 0) body.style.paddingRight = `${gutter}px`;
+    panel.current?.scrollTo?.({ top: 0 });
     panel.current?.querySelector<HTMLElement>("a")?.focus({ preventScroll: true });
+
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setOpen(false);
-        button.current?.focus();
+        button.current?.focus({ preventScroll: true });
       }
     };
-    // Back to the desktop layout: the phone menu has nothing to show.
+    // Back to the desktop layout (window resize, rotation): the phone menu has nothing to show.
     const wide = window.matchMedia("(min-width: 960px)");
     const onWide = () => wide.matches && setOpen(false);
+    const resize = head ? new ResizeObserver(setTop) : null;
+    if (head) resize?.observe(head);
     window.addEventListener("keydown", onKey);
+    window.addEventListener("resize", setTop);
     wide.addEventListener("change", onWide);
+    onWide();
     return () => {
       root.classList.remove("nav-open");
+      Object.assign(body.style, saved);
+      // Same page: put the reader back where they were. New page: the router owns scroll.
+      if (window.location.pathname === openedAt) window.scrollTo({ top: scrollY, left: 0, behavior: "instant" as ScrollBehavior });
+      resize?.disconnect();
       window.removeEventListener("keydown", onKey);
+      window.removeEventListener("resize", setTop);
       wide.removeEventListener("change", onWide);
     };
   }, [open]);
 
+  // Safety net: never leave a lock behind if the header unmounts mid-open.
+  useEffect(() => () => document.documentElement.classList.remove("nav-open"), []);
+
   return (
-    <header className="site-header">
+    <header className="site-header" ref={header}>
       <div className="container bar">
         <NavLink href="/" className="wordmark">
           {site.logoMediaId ? <img className="wordmark__logo" src={`/media/${site.logoMediaId}`} alt="" /> : null}
