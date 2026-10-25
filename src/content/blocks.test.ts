@@ -48,3 +48,53 @@ test("ticker default is on, rotating, newest articles", () => {
   assert.equal(site.trending.mode, "rotate");
   assert.equal(site.trending.source, "latest");
 });
+
+// ---- t96: sectioned homepage ----
+const many = Array.from({ length: 40 }, (_, i) => art(40 - i, i % 3 === 0 ? "c2" : "c1", { publishedAt: new Date(Date.UTC(2026, 8, 1) + (40 - i) * 864e5).toISOString() }));
+const t96Blocks = [
+  block("f", "featured"),
+  block("a", "also", { count: 3 }),
+  block("r", "river", { count: 6 }),
+  block("tr", "topicRows", { count: 4 }),
+  block("q", "quickReads", { count: 4 }),
+  block("rel", "related", { count: 3 }),
+  block("m", "moreStories", { count: 9 }),
+];
+
+test("t96: no story appears twice across the article sections", () => {
+  const views = Object.fromEntries(many.map((a, i) => [a.id, 100 - i]));
+  const r = resolveBlocks(t96Blocks, { ...ctx, live: many, views }, "home");
+  const ids = r.flatMap((x) => x.cards.map((c) => c.id));
+  assert.equal(new Set(ids).size, ids.length, "article sections never repeat");
+  assert.deepEqual(r.map((x) => x.block.type), ["featured", "also", "river", "topicRows", "quickReads", "related", "moreStories"]);
+  const river = r.find((x) => x.block.type === "river");
+  assert.equal(river?.cards.length, 6);
+  assert.ok((river?.rail?.length ?? 0) >= 3, "most-read rail shows");
+  assert.ok(!river?.rail?.some((c) => c.id === "a40"), "rail never repeats the lead");
+  const rows = r.find((x) => x.block.type === "topicRows")?.rows ?? [];
+  assert.ok(rows.length >= 1 && rows.every((row) => row.cards.length >= 3 && row.cards.every((c) => c.topicLabels.includes(row.category.label))));
+});
+
+test("t96: a tiny archive drops empty sections instead of rendering empty headings", () => {
+  const r = resolveBlocks(t96Blocks, { ...ctx, live: live.slice(0, 3), views: {} }, "home");
+  assert.deepEqual(r.map((x) => x.block.type), ["featured", "also"]);
+  const r2 = resolveBlocks(t96Blocks, { ...ctx, live: many.slice(0, 8), views: {} }, "home");
+  const river = r2.find((x) => x.block.type === "river");
+  assert.deepEqual(river?.rail, [], "no views → no rail, river goes full width");
+  assert.equal(r2.find((x) => x.block.type === "topicRows"), undefined, "rows need 3 unseen stories");
+});
+
+test("t96: homepage topics grid shows busiest non-empty topics first", () => {
+  const r = resolveBlocks([block("t", "topics", { count: 5 })], { ...ctx, categories: [...cats, { id: "c3", slug: "empty", label: "Empty", description: "" } as Category] }, "home");
+  assert.deepEqual(r[0]?.topics?.map((t) => t.category.id), ["c1", "c2"]);
+});
+
+test("t103: a ~29-story archive still fills every homepage section", () => {
+  const small = many.slice(0, 29);
+  const views = Object.fromEntries(small.map((a, i) => [a.id, 50 - i]));
+  const r = resolveBlocks(t96Blocks, { ...ctx, live: small, views }, "home");
+  assert.deepEqual(r.map((x) => x.block.type), ["featured", "also", "river", "topicRows", "quickReads", "related", "moreStories"]);
+  const ids = r.flatMap((x) => x.cards.map((c) => c.id));
+  assert.equal(new Set(ids).size, ids.length, "still no repeats");
+  assert.ok((r.find((x) => x.block.type === "river")?.rail?.length ?? 0) >= 3, "rail shows");
+});
