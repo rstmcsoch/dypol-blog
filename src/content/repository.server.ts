@@ -351,7 +351,12 @@ export async function readShell() {
   const live = published(data.articles);
   // t91 Phase 3: the public shell must not carry automation internals.
   // Admin Settings loads the real value separately via adminSettings().
-  return { site: { ...data.site, aiDailyPublishLimit: 0 }, trending: tickerEntries(data.site, live, await viewCounts(data.site)), pages };
+  // t96: topic counts for the menu (shortcuts hide while their topic is empty;
+  // the phone menu lists the busiest topics). Small: slug, label, count only.
+  const menuTopics = data.categories
+    .map((c) => ({ slug: c.slug, label: c.label, count: live.filter((a) => a.topicIds.includes(c.id)).length }))
+    .filter((t) => t.count > 0);
+  return { site: { ...data.site, aiDailyPublishLimit: 0 }, trending: tickerEntries(data.site, live, await viewCounts(data.site)), pages, menuTopics, storyCount: live.length };
 }
 
 // ---------- pages (t52: standard reader-facing pages, admin-only CMS) -----

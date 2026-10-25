@@ -94,3 +94,44 @@ test("ticker sources: latest, pinned, custom, count, disabled", () => {
   assert.deepEqual(custom, [{ id: "a", title: "Hello", slug: null, href: "/about" }]);
   assert.deepEqual(tickerEntries({ ...base, trending: { ...base.trending, enabled: false } }, live), []);
 });
+
+// ---- t96: menu ----
+const LEGACY_NAV = [
+  { id: "home", label: "Home", href: "/", visible: true },
+  { id: "index", label: "Index", href: "/articles", visible: true },
+  { id: "topics", label: "Topics", href: "/topics", visible: true },
+  { id: "about", label: "About", href: "/about", visible: true },
+];
+
+test("t96: the untouched legacy four-link menu upgrades to the new five-item default", () => {
+  const out = normalizeSite({ nav: LEGACY_NAV });
+  assert.deepEqual(out.nav, site.nav);
+  const visible = out.nav.filter((i) => i.visible).map((i) => i.label);
+  assert.deepEqual(visible, ["Latest", "AI", "Big Tech", "Topics", "About"]);
+});
+
+test("t96: owner labels and hidden items survive the menu upgrade", () => {
+  const out = normalizeSite({ nav: LEGACY_NAV.map((i) => (i.id === "about" ? { ...i, label: "Who we are" } : i.id === "topics" ? { ...i, visible: false } : i)) });
+  assert.equal(out.nav.find((i) => i.id === "about")?.label, "Who we are");
+  assert.equal(out.nav.find((i) => i.id === "topics")?.visible, false);
+  assert.equal(out.nav.find((i) => i.id === "index")?.label, "Latest");
+});
+
+test("t96: a menu saved with topic shortcuts is kept exactly as saved", () => {
+  const saved = [
+    { id: "about", label: "About", href: "/about", visible: true },
+    { id: "topic-startups", label: "Startups", href: "/topics/startups", visible: true },
+  ];
+  const out = normalizeSite({ nav: saved });
+  assert.deepEqual(out.nav, saved);
+  assert.deepEqual(parseSite(out).nav, saved);
+});
+
+test("t96: menu hrefs stay closed — only fixed pages or /topics/<slug>", () => {
+  for (const href of ["/topics/../admin", "https://evil.example", "/topics/", "/topics/Bad Slug", "/admin"]) {
+    assert.throws(() => parseSite({ ...normalizeSite({}), nav: [{ id: "x", label: "X", href, visible: true }] }), href);
+  }
+  for (const href of ["/topics/startups", "/articles", "/"]) {
+    assert.doesNotThrow(() => parseSite({ ...normalizeSite({}), nav: [{ id: "x", label: "X", href, visible: true }] }), href);
+  }
+});

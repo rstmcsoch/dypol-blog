@@ -56,7 +56,8 @@ export type Tag = {
   label: string;
 };
 
-export type NavHref = "/" | "/articles" | "/topics" | "/about";
+/** Fixed pages, or a topic shortcut ("/topics/<slug>", t96). */
+export type NavHref = "/" | "/articles" | "/topics" | "/about" | `/topics/${string}`;
 
 export type NavItem = {
   id: string;
@@ -99,6 +100,8 @@ export type SiteLabels = {
   notFoundBody: string;
   backHome: string;
   menu: string;
+  menuTopics: string;
+  menuAllTopics: string;
   close: string;
   day: string;
   night: string;

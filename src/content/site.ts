@@ -44,6 +44,8 @@ export const site = {
     notFoundBody: "We could not find that page. It may have moved, or the address may be wrong.",
     backHome: "Back to the homepage",
     menu: "Menu",
+    menuTopics: "Popular topics",
+    menuAllTopics: "All topics",
     close: "Close",
     day: "Day",
     night: "Night",
@@ -64,9 +66,13 @@ export const site = {
     tags: "Tags",
     popular: "Most read",
   },
+  // t96: about five items, like the big tech sites — the logo is the way home.
+  // Topic shortcuts only render while their topic has published stories.
   nav: [
-    { id: "home", label: "Home", href: "/", visible: true },
-    { id: "index", label: "Index", href: "/articles", visible: true },
+    { id: "home", label: "Home", href: "/", visible: false },
+    { id: "index", label: "Latest", href: "/articles", visible: true },
+    { id: "topic-ai", label: "AI", href: "/topics/artificial-intelligence-ai-tools", visible: true },
+    { id: "topic-big-tech", label: "Big Tech", href: "/topics/big-tech-companies", visible: true },
     { id: "topics", label: "Topics", href: "/topics", visible: true },
     { id: "about", label: "About", href: "/about", visible: true },
   ] satisfies NavItem[],
