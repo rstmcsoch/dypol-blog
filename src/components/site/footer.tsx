@@ -71,7 +71,7 @@ export function SiteFooter() {
     <footer className="site-footer">
       <div className="container footer-grid">
         <div className="footer-brand">
-          <p className="footer-mark">DYPOL</p>
+          <p className="footer-mark">DYPOL BLOG</p>
           <p className="footer-note">{site.description}</p>
           {socials.length > 0 ? (
             <div className="footer-socials">
