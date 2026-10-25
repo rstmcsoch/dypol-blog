@@ -714,6 +714,7 @@ export const adminStats = createServerFn({ method: "POST" })
       analyticsEngagementDistribution,
       analyticsRecirculation,
       analyticsPublishing,
+      analyticsExtras,
     } = await import("./analytics.server");
     type PeriodInput = Parameters<typeof analyticsOverview>[0];
     type LeaderboardSort = Parameters<typeof analyticsLeaderboard>[0]["sort"];
@@ -734,7 +735,7 @@ export const adminStats = createServerFn({ method: "POST" })
       from: inputData.from ?? "",
       to: inputData.to ?? "",
     };
-    const [overview, leaderboard, topics, sources, devices, distribution, recirculation, publishing] =
+    const [overview, leaderboard, topics, sources, devices, distribution, recirculation, publishing, extras] =
       await Promise.all([
         analyticsOverview(periodInput),
         analyticsLeaderboard({
@@ -752,6 +753,30 @@ export const adminStats = createServerFn({ method: "POST" })
         analyticsEngagementDistribution({ period: periodInput, articleId: inputData.articleId ?? null }),
         analyticsRecirculation({ period: periodInput }),
         analyticsPublishing({ period: periodInput }),
+        analyticsExtras({ period: periodInput }),
       ]);
-    return { overview, leaderboard, topics, sources, devices, distribution, recirculation, publishing };
+    return { overview, leaderboard, topics, sources, devices, distribution, recirculation, publishing, extras };
+  });
+
+/** Per-article stats drill-down. */
+export const adminArticleStats = createServerFn({ method: "POST" })
+  .validator((input: unknown) => input as { id: string; preset?: string; from?: string; to?: string })
+  .handler(async ({ data }) => {
+    await guard();
+    const { analyticsArticle } = await import("./analytics.server");
+    return analyticsArticle({
+      id: String(data.id ?? ""),
+      period: { preset: (data.preset ?? "last-28") as DatePreset, from: data.from ?? "", to: data.to ?? "" },
+    });
+  });
+
+/** Add or delete a manual chart annotation. */
+export const adminStatsAnnotation = createServerFn({ method: "POST" })
+  .validator((input: unknown) => input as { action: "add" | "delete"; id?: string; date?: string; note?: string })
+  .handler(async ({ data }) => {
+    await writeGuard();
+    const { addAnnotation, deleteAnnotation } = await import("./analytics.server");
+    if (data.action === "delete" && data.id) await deleteAnnotation(String(data.id));
+    else if (data.action === "add") await addAnnotation(String(data.date ?? ""), String(data.note ?? ""));
+    return { ok: true };
   });

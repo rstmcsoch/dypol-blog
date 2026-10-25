@@ -3646,3 +3646,18 @@ html.nav-open .reading-progress { display: none; }
 .adm-left { text-align: left; max-width: none; color: var(--a-muted); font-size: 0.9rem; }
 .adm-stat-grid--mini { grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); }
 @media (min-width: 640px) { .adm-donut { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+.adm-funnel { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.5rem; }
+.adm-funnel li { display: grid; grid-template-columns: 3rem minmax(0, 1fr) auto; align-items: center; gap: 0.6rem; font-size: 0.88rem; }
+.adm-funnel__track { height: 12px; border-radius: 6px; background: var(--a-bg); overflow: hidden; }
+.adm-funnel__track span { display: block; height: 100%; background: #2f5bea; border-radius: 6px; }
+.adm-funnel__val { font-variant-numeric: tabular-nums; }
+.adm-funnel__val small { color: var(--a-muted); }
+.adm-annot-form { display: grid; grid-template-columns: 1fr; gap: 0.5rem; }
+@media (min-width: 640px) { .adm-annot-form { grid-template-columns: 10rem minmax(0, 1fr) auto; } }
+.adm-annot-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.4rem; max-height: 16rem; overflow-y: auto; }
+.adm-annot-list li { display: grid; grid-template-columns: 4rem minmax(0, 1fr) auto; align-items: center; gap: 0.5rem; font-size: 0.86rem; }
+.adm-annot-date { color: var(--a-muted); font-variant-numeric: tabular-nums; }
+.adm-annot-note { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.adm-btn--sm { min-height: 1.9rem; padding: 0.2rem 0.6rem; font-size: 0.8rem; }
+.adm-zero { color: #8a1f1f; }
+.adm-article-head { display: grid; gap: 0.3rem; }

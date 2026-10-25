@@ -210,7 +210,7 @@ export function initArticleAnalytics(input: {
   const onScroll = () => {
     const depth = maxScrollDepth();
     if (depth > s.maxScroll) s.maxScroll = depth;
-    for (const m of [25, 50, 75, 90]) {
+    for (const m of [25, 50, 75, 90, 100]) {
       if (depth >= m && !s.milestones.has(m)) {
         s.milestones.add(m);
         if (m >= SCROLL_COMPLETION) s.completed = true;
@@ -266,4 +266,17 @@ export function initArticleAnalytics(input: {
       if (flushTimer) clearInterval(flushTimer);
     },
   };
+}
+
+/** Record a site-search term (aggregated counts only; no session id is sent). */
+export function trackSearch(q: string, results: number): void {
+  try {
+    const term = q.trim();
+    if (!term || typeof navigator === "undefined") return;
+    const body = JSON.stringify({ kind: "search", q: term.slice(0, 120), results });
+    if (typeof navigator.sendBeacon === "function" && navigator.sendBeacon(ENDPOINT, body)) return;
+    void fetch(ENDPOINT, { method: "POST", body, keepalive: true, headers: { "content-type": "application/json" } }).catch(() => {});
+  } catch {
+    /* never affect the page */
+  }
 }

@@ -1,4 +1,6 @@
+import { useEffect } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { trackSearch } from "@/lib/analytics-beacon";
 import { PagePending } from "@/components/site/states";
 import { useSite } from "@/components/site/use-site";
 import { getSearch } from "@/content/public-api";
@@ -38,6 +40,9 @@ export const Route = createFileRoute("/search")({
 function SearchPage() {
   const site = useSite();
   const { query, results, error } = Route.useLoaderData();
+  useEffect(() => {
+    if (query && !error) trackSearch(query, results.length);
+  }, [query, error, results.length]);
   return (
     <div className="page search-page">
       <div className="container">

@@ -4,7 +4,7 @@ import {
   Link,
   useRouter,
 } from "@tanstack/react-router";
-import { adminStats } from "@/content/admin-api";
+import { adminStats, adminStatsAnnotation } from "@/content/admin-api";
 import type { TopicRow, SourceRow, DeviceRow } from "@/content/analytics.server";
 import {
   formatCount,
@@ -31,6 +31,7 @@ import {
   Cell,
   PieChart,
   Pie,
+  ReferenceLine,
 } from "recharts";
 import { createColumnHelper, getCoreRowModel, useReactTable } from "@tanstack/react-table";
 
@@ -206,7 +207,9 @@ function LineTrendChart({
   height = 240,
   showPrevious = false,
   area = false,
+  annotations = [],
 }: {
+  annotations?: Array<{ date: string; note: string }>;
   series: SeriesPoint[];
   previousSeries?: SeriesPoint[] | null;
   valueKey: "pageViews" | "sessions" | "engagedSeconds";
@@ -260,6 +263,13 @@ function LineTrendChart({
               <Line type="monotone" dataKey="previous" name="Previous period" stroke="#9ca3af" strokeWidth={2} dot={false} strokeDasharray="4 4" />
             ) : null}
             <Line type="monotone" dataKey="current" name="This period" stroke={COLORS[0]} strokeWidth={2} dot={data.length <= 2} />
+            {annotations
+              .filter((a) => data.some((d) => d.date === a.date))
+              .map((a) => (
+                <ReferenceLine key={`${a.date}-${a.note}`} x={shortDate(a.date)} stroke="#b5891a" strokeDasharray="2 3" ifOverflow="extendDomain">
+                  <title>{a.note}</title>
+                </ReferenceLine>
+              ))}
           </LineChart>
         )}
       </ResponsiveContainer>
@@ -441,7 +451,7 @@ const columns = [
     cell: (info) => {
       const row = info.row.original;
       return (
-        <Link to="/admin/articles/$id" params={{ id: row.id }}>
+        <Link to="/admin/stats/article/$id" params={{ id: row.id }} title="Open article stats">
           {row.title}
         </Link>
       );
@@ -465,13 +475,121 @@ const columns = [
   columnHelper.accessor("completionRate", { header: () => <Abbr short="Compl. %" full="Read completion: reached ~90% scroll with ≥15s engaged" />, cell: (info) => formatPercent(info.getValue()) }),
   columnHelper.accessor("growth", { header: () => <Abbr short="Growth" full="Page views vs previous equivalent period" />, cell: (info) => info.row.original.growthLabel }),
   columnHelper.accessor("internalClicks", { header: () => <Abbr short="Int. clicks" full="Clicks from this article to another article" />, cell: (info) => formatCount(info.getValue()) }),
+  columnHelper.accessor("first24h", { header: () => <Abbr short="1st 24h" full="Views on the publication day and the next IST day (— = published before measurement started)" />, cell: (info) => (info.getValue() == null ? "—" : formatCount(info.getValue() ?? 0)) }),
+  columnHelper.accessor("first7d", { header: () => <Abbr short="1st 7d" full="Views in the first 7 IST days after publication (— = published before measurement started)" />, cell: (info) => (info.getValue() == null ? "—" : formatCount(info.getValue() ?? 0)) }),
   columnHelper.accessor("recirculation", { header: () => <Abbr short="Recirc. %" full="Per-article recirculation: share of this article's views followed by a click to another article" />, cell: (info) => formatPercent(info.getValue()) }),
 ];
 
 const sortableColumnIds = [
   "title", "categoryLabel", "publishedAt", "ageDays", "views", "allTimeViews",
   "sessions", "avgEngagementTime", "engagementRate", "completionRate", "growth", "internalClicks", "recirculation",
+  "first24h", "first7d",
 ];
+
+const regionNames = typeof Intl !== "undefined" && "DisplayNames" in Intl ? new Intl.DisplayNames(["en"], { type: "region" }) : null;
+function countryName(code: string): string {
+  try {
+    return regionNames?.of(code) ?? code;
+  } catch {
+    return code;
+  }
+}
+
+function FunnelBars({ funnel }: { funnel: Array<{ depth: number; reads: number; share: number | null }> }) {
+  if (funnel.every((f) => f.reads === 0)) return <p className="adm-empty__body adm-left">No scroll data yet for this period.</p>;
+  return (
+    <ul className="adm-funnel">
+      {funnel.map((f) => (
+        <li key={f.depth}>
+          <span className="adm-funnel__label">{f.depth}%</span>
+          <span className="adm-funnel__track"><span style={{ width: `${f.share ?? 0}%` }} /></span>
+          <span className="adm-funnel__val">{formatPercent(f.share)} <small>({formatCount(f.reads)})</small></span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function PageList({ title, rows, empty }: { title: string; rows: Array<{ id: string; title: string; sessions: number }>; empty: string }) {
+  return (
+    <div className="adm-panel adm-panel__body">
+      <h3 className="adm-card-title">{title}</h3>
+      {rows.length === 0 ? (
+        <p className="adm-empty__body adm-left">{empty}</p>
+      ) : (
+        <table className="adm-table--compact">
+          <thead><tr><th>Article</th><th className="text-right">Sessions</th></tr></thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.id}>
+                <td><Link to="/admin/stats/article/$id" params={{ id: r.id }}>{r.title}</Link></td>
+                <td className="text-right">{formatCount(r.sessions)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}
+
+function AnnotationsPanel({ annotations, defaultDate }: { annotations: Array<{ id: string; date: string; note: string; kind: "manual" | "publish" }>; defaultDate: string }) {
+  const router = useRouter();
+  const [date, setDate] = useState(defaultDate);
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const run = async (data: { action: "add" | "delete"; id?: string; date?: string; note?: string }) => {
+    setBusy(true);
+    setErr(null);
+    try {
+      await adminStatsAnnotation({ data });
+      setNote("");
+      await router.invalidate();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Could not save the note.");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="adm-panel adm-panel__body">
+      <h3 className="adm-card-title">Chart annotations</h3>
+      <p className="adm-panel__note">Publish dates are added automatically; add your own notes (campaigns, outages, shares). They appear as dotted lines on the page-views chart.</p>
+      <form
+        className="adm-annot-form"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (note.trim()) void run({ action: "add", date, note });
+        }}
+      >
+        <input type="date" className="adm-input" value={date} onChange={(e) => setDate(e.target.value)} aria-label="Annotation date" required />
+        <input type="text" className="adm-input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Note, e.g. Shared on X" maxLength={200} aria-label="Annotation note" required />
+        <button type="submit" className="adm-btn" disabled={busy}>Add note</button>
+      </form>
+      {err ? <p className="adm-banner adm-banner--bad">{err}</p> : null}
+      {annotations.length === 0 ? (
+        <p className="adm-empty__body adm-left">No annotations in this period.</p>
+      ) : (
+        <ul className="adm-annot-list">
+          {annotations.map((a) => (
+            <li key={a.id}>
+              <span className="adm-annot-date">{shortDate(a.date)}</span>
+              <span className="adm-annot-note">{a.note}</span>
+              {a.kind === "manual" ? (
+                <button type="button" className="adm-btn adm-btn--ghost adm-btn--sm" disabled={busy} onClick={() => void run({ action: "delete", id: a.id })} aria-label={`Delete note ${a.note}`}>
+                  Delete
+                </button>
+              ) : (
+                <span className="adm-chip adm-chip--subtle">auto</span>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
 
 function LeaderboardTable({
   rows,
@@ -735,6 +853,7 @@ function StatsPage() {
     distribution,
     recirculation,
     publishing,
+    extras,
   } = data;
   const period = overview.period;
 
@@ -814,6 +933,9 @@ function StatsPage() {
           </p>
         </div>
         <div className="adm-stats__actions">
+          <a href={exportUrl("overview")} className="adm-btn adm-btn--ghost" title="Download the overview metrics and daily series as CSV">
+            <Download size={16} /> Overview CSV
+          </a>
           <button type="button" className="adm-btn adm-btn--ghost" onClick={handleRefresh} disabled={refreshing}>
             {refreshing ? <Clock size={16} className="animate-spin" /> : <Clock size={16} />} Refresh
           </button>
@@ -956,6 +1078,7 @@ function StatsPage() {
             valueKey="pageViews"
             label="Page views over time"
             showPrevious={true}
+            annotations={extras.annotations}
           />
         </div>
         <div className="adm-panel">
@@ -1083,6 +1206,33 @@ function StatsPage() {
         </div>
       </section>
 
+      {/* Tags breakdown */}
+      <section className="adm-section">
+        <div className="adm-panel adm-panel__body">
+          <h3 className="adm-card-title">Tag (topic) breakdown</h3>
+          {topics.tags.length === 0 ? (
+            <p className="adm-empty__body adm-left">No tags yet.</p>
+          ) : (
+            <div className="adm-table-wrap">
+              <table className="adm-table">
+                <thead><tr><th>Tag</th><th className="text-right">Articles</th><th className="text-right">Views</th><th className="text-right"><abbr title="Engaged time ÷ page views">Avg eng.</abbr></th></tr></thead>
+                <tbody>
+                  {topics.tags.map((t) => (
+                    <tr key={t.id}>
+                      <td>{t.label}</td>
+                      <td className="text-right">{formatCount(t.articles)}</td>
+                      <td className="text-right">{formatCount(t.views)}</td>
+                      <td className="text-right">{t.avgEngagedTime == null ? "—" : formatDuration(t.avgEngagedTime)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          <p className="adm-panel__note">{topics.notes.join(" ")} Author breakdown will appear once articles carry bylines.</p>
+        </div>
+      </section>
+
       {/* Traffic acquisition */}
       <section className="adm-section adm-section--two-col">
         <div className="adm-panel">
@@ -1126,6 +1276,45 @@ function StatsPage() {
           </table>
           <p className="adm-panel__note">{sources.notes.join(" ")}</p>
         </div>
+      </section>
+
+      {/* Geography, scroll funnel, entry/exit, search */}
+      <section className="adm-section adm-section--two-col">
+        <div className="adm-panel">
+          <HorizontalBarChart
+            data={devices.countries.slice(0, 12).map((c) => ({ name: countryName(c.country), value: c.sessions }))}
+            label="Geography — sessions by country"
+            emptyMessage="No country data yet — recorded from this release onward (country code only, no IP)."
+          />
+        </div>
+        <div className="adm-panel adm-panel__body">
+          <h3 className="adm-card-title">Scroll-depth funnel</h3>
+          <FunnelBars funnel={extras.funnel} />
+          <p className="adm-panel__note">{extras.notes[0]}</p>
+        </div>
+        <PageList title="Entry pages" rows={extras.entryPages} empty="No entry-page data yet — recorded from this release onward." />
+        <PageList title="Exit pages" rows={extras.exitPages} empty="No exit-page data yet — recorded from this release onward." />
+        <div className="adm-panel adm-panel__body">
+          <h3 className="adm-card-title">Site search terms</h3>
+          {extras.searchTerms.length === 0 ? (
+            <p className="adm-empty__body adm-left">No searches recorded yet for this period.</p>
+          ) : (
+            <table className="adm-table--compact">
+              <thead><tr><th>Term</th><th className="text-right">Searches</th><th className="text-right">Results</th></tr></thead>
+              <tbody>
+                {extras.searchTerms.map((t) => (
+                  <tr key={t.term}>
+                    <td>{t.term}</td>
+                    <td className="text-right">{formatCount(t.count)}</td>
+                    <td className={`text-right${t.results === 0 ? " adm-zero" : ""}`}>{t.results === 0 ? "0 — content gap" : formatCount(t.results)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+          <p className="adm-panel__note">{extras.notes[2]}</p>
+        </div>
+        <AnnotationsPanel annotations={extras.annotations} defaultDate={period.to} />
       </section>
 
       {/* Recirculation */}
@@ -1246,8 +1435,8 @@ function StatsPage() {
             </tr>
             <tr>
               <td>Geography</td>
-              <td className="adm-status adm-status--off">Not collected</td>
-              <td>No IP addresses or locations are stored, so country/region reports are unavailable by design.</td>
+              <td className="adm-status adm-status--ok">Measuring (country only)</td>
+              <td>Two-letter country code from Cloudflare's edge; no IP address, city or region is stored.</td>
             </tr>
           </tbody>
         </table>
