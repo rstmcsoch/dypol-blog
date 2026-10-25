@@ -1,81 +1,57 @@
 import type { ReactNode } from "react";
+import { bodyToBlocks } from "@/lib/automation/body";
+import { isExternalHref, parseInline, type InlineNode } from "@/lib/inline-markdown";
+import { CANONICAL_ORIGIN } from "@/lib/seo";
+import { ProseBlocks } from "@/components/site/article-body";
 
-/** Tiny, safe markdown renderer for the built-in help (no HTML passthrough). */
-export function renderInline(text: string, keyBase: string): ReactNode[] {
-  const out: ReactNode[] = [];
-  const re = /(`[^`]+`)|(\*\*[^*]+\*\*)|(\[[^\]]+\]\([^)\s]+\))|(https?:\/\/[^\s<]+)/g;
-  let last = 0;
-  let m: RegExpExecArray | null;
-  let i = 0;
-  while ((m = re.exec(text))) {
-    if (m.index > last) out.push(text.slice(last, m.index));
-    const token = m[0];
-    const key = `${keyBase}-${i++}`;
-    if (token.startsWith("`")) out.push(<code key={key}>{token.slice(1, -1)}</code>);
-    else if (token.startsWith("**")) out.push(<strong key={key}>{token.slice(2, -2)}</strong>);
-    else if (/^https?:\/\//.test(token)) {
-      // Bare URL (the article Sources list is stored as plain URLs): link it,
-      // leaving trailing sentence punctuation outside the link.
-      const href = token.replace(/[.,;!?]+$/, "");
-      out.push(<a key={key} href={href} target="_blank" rel="noreferrer">{href}</a>);
-      if (href.length < token.length) out.push(token.slice(href.length));
-    } else {
-      const link = /^\[([^\]]+)\]\(([^)\s]+)\)$/.exec(token);
-      const href = link?.[2] ?? "";
-      const safe = /^(https?:\/\/|\/|#)/.test(href);
-      out.push(safe ? <a key={key} href={href} target={href.startsWith("http") ? "_blank" : undefined} rel="noreferrer">{link?.[1]}</a> : link?.[1]);
+/** Hosts known at render time (server and client alike, so hydration matches). */
+const RENDER_OWN_HOSTS = [new URL(CANONICAL_ORIGIN).host];
+
+function renderNodes(nodes: InlineNode[], keyBase: string): ReactNode[] {
+  return nodes.map((node, i) => {
+    const key = `${keyBase}-${i}`;
+    switch (node.t) {
+      case "text":
+        return node.v;
+      case "code":
+        return <code key={key}>{node.v}</code>;
+      case "br":
+        return <br key={key} />;
+      case "strong":
+        return <strong key={key}>{renderNodes(node.c, key)}</strong>;
+      case "em":
+        return <em key={key}>{renderNodes(node.c, key)}</em>;
+      case "del":
+        return <del key={key}>{renderNodes(node.c, key)}</del>;
+      case "link": {
+        // Absolute links to another host open in a new tab even without JS; with
+        // JS the ExternalLinkGuard asks first (and keeps own-host links in-tab).
+        const external = isExternalHref(node.href, RENDER_OWN_HOSTS);
+        return (
+          <a
+            key={key}
+            href={node.href}
+            className="prose-link"
+            title={node.title}
+            {...(external ? { target: "_blank", rel: "noopener noreferrer nofollow" } : {})}
+          >
+            {renderNodes(node.c, key)}
+          </a>
+        );
+      }
     }
-    last = m.index + token.length;
-  }
-  if (last < text.length) out.push(text.slice(last));
-  return out;
+  });
 }
 
+/**
+ * Safe inline markdown (t106): **bold**, *italic*, ***both***, ~~strike~~,
+ * `code`, [links](url), bare URLs, HTML entities. No HTML passthrough.
+ */
+export function renderInline(text: string, keyBase: string): ReactNode[] {
+  return renderNodes(parseInline(text ?? ""), keyBase);
+}
+
+/** Markdown for pages, sidebar text blocks and the built-in help: same parser and renderer as articles. */
 export function Markdown({ source }: { source: string }) {
-  const lines = source.replace(/\r/g, "").split("\n");
-  const blocks: ReactNode[] = [];
-  let i = 0;
-  let k = 0;
-  while (i < lines.length) {
-    const line = lines[i] ?? "";
-    if (!line.trim()) {
-      i += 1;
-      continue;
-    }
-    if (line.startsWith("```")) {
-      const code: string[] = [];
-      i += 1;
-      while (i < lines.length && !(lines[i] ?? "").startsWith("```")) code.push(lines[i++] ?? "");
-      i += 1;
-      blocks.push(<pre key={k++}><code>{code.join("\n")}</code></pre>);
-      continue;
-    }
-    const h = /^(#{1,4})\s+(.*)$/.exec(line);
-    if (h) {
-      const level = h[1].length;
-      const text = h[2];
-      const id = text.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-      const content = renderInline(text, `h${k}`);
-      blocks.push(level <= 2 ? <h2 key={k++} id={id}>{content}</h2> : <h3 key={k++} id={id}>{content}</h3>);
-      i += 1;
-      continue;
-    }
-    if (/^\s*([-*]|\d+\.)\s+/.test(line)) {
-      const ordered = /^\s*\d+\./.test(line);
-      const items: string[] = [];
-      while (i < lines.length && /^\s*([-*]|\d+\.)\s+/.test(lines[i] ?? "")) {
-        let item = (lines[i] ?? "").replace(/^\s*([-*]|\d+\.)\s+/, "");
-        i += 1;
-        while (i < lines.length && /^\s{2,}\S/.test(lines[i] ?? "") && !/^\s*([-*]|\d+\.)\s+/.test(lines[i] ?? "")) item += ` ${(lines[i++] ?? "").trim()}`;
-        items.push(item);
-      }
-      const lis = items.map((item, n) => <li key={n}>{renderInline(item, `l${k}-${n}`)}</li>);
-      blocks.push(ordered ? <ol key={k++}>{lis}</ol> : <ul key={k++}>{lis}</ul>);
-      continue;
-    }
-    const para: string[] = [];
-    while (i < lines.length && (lines[i] ?? "").trim() && !/^(#{1,4}\s|```|\s*([-*]|\d+\.)\s+)/.test(lines[i] ?? "")) para.push((lines[i++] ?? "").trim());
-    blocks.push(<p key={k++}>{renderInline(para.join(" "), `p${k}`)}</p>);
-  }
-  return <>{blocks}</>;
+  return <ProseBlocks blocks={bodyToBlocks(source ?? "")} />;
 }

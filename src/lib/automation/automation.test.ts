@@ -273,3 +273,83 @@ test("t91: 'At a glance' heading + list becomes a takeaways box and round-trips"
   const again = bodyToBlocks(blocksToBody(blocks));
   assert.deepEqual(again[0], blocks[0]);
 });
+
+test("t106: specs fence, specs heading + table, callouts, nested lists, divider, h4, alignment", async () => {
+  const { stripCreditsAndSources } = await import("./body.ts");
+  const body = [
+    "## At a glance",
+    "- **One** result",
+    "- Who",
+    "- Caveat",
+    "",
+    "```specs Pixel 11 Pro",
+    "Display: 6.3-inch OLED, **120Hz**",
+    "Battery: 5,000mAh",
+    "```",
+    "",
+    "### Key specs",
+    "| Spec | Value |",
+    "|---|---|",
+    "| Chip | Tensor G6 |",
+    "| RAM | 16GB |",
+    "",
+    "> **Key takeaway:** Prices stay flat.",
+    "",
+    "> **Note:** Vendor-reported.",
+    "",
+    "> Quote text",
+    "> — Sundar Pichai",
+    "",
+    "- Parent",
+    "  - Child a",
+    "  - Child b",
+    "- Second",
+    "",
+    "---",
+    "",
+    "#### Small head",
+    "",
+    "| Model | Score |",
+    "|:---|---:|",
+    "| A | 77.0 |",
+    "",
+    "Cover image: Image: DeepSeek (https://x.example)",
+    "",
+    "## Sources",
+    "- https://a.example",
+  ].join("\n");
+  const blocks = bodyToBlocks(body);
+  const types = blocks.map((b) => b.type);
+  assert.deepEqual(types, ["takeaways", "specs", "specs", "callout", "callout", "quote", "list", "divider", "heading", "table", "paragraph", "heading", "list"]);
+  const specs = blocks[1] as { title?: string; rows: string[][] };
+  assert.equal(specs.title, "Pixel 11 Pro");
+  assert.deepEqual(specs.rows[0], ["Display", "6.3-inch OLED, **120Hz**"]);
+  assert.deepEqual((blocks[2] as { rows: string[][] }).rows, [["Chip", "Tensor G6"], ["RAM", "16GB"]]);
+  assert.equal((blocks[3] as { tone: string }).tone, "takeaway");
+  assert.equal((blocks[3] as { text: string }).text, "Prices stay flat.");
+  assert.equal((blocks[5] as { attribution?: string }).attribution, "Sundar Pichai");
+  assert.deepEqual((blocks[6] as { children?: string[][] }).children, [["Child a", "Child b"], []]);
+  assert.equal((blocks[8] as { level: number }).level, 4);
+  assert.deepEqual((blocks[9] as { align?: string[] }).align, ["left", "right"]);
+  const cleaned = stripCreditsAndSources(blocks).map((b) => b.type);
+  assert.deepEqual(cleaned, types.slice(0, 10));
+  // Round trip keeps structure.
+  assert.deepEqual(bodyToBlocks(blocksToBody(blocks)), blocks);
+});
+
+test("t106: inline markdown — bold/italic/links/entities, unsafe links stay text", async () => {
+  const { parseInline, isExternalHref, inlinePlain } = await import("../inline-markdown.ts");
+  assert.deepEqual(parseInline("the **V4.1-Flash-1017** model"), [
+    { t: "text", v: "the " },
+    { t: "strong", c: [{ t: "text", v: "V4.1-Flash-1017" }] },
+    { t: "text", v: " model" },
+  ]);
+  assert.equal(inlinePlain("***x*** *y* _z_ ~~w~~ 5 * 3 snake_case &times; &#8594;"), "x y z w 5 * 3 snake_case × →");
+  const bad = parseInline("[x](javascript:alert(1)) <b>hi</b>");
+  assert.ok(bad.every((n) => n.t === "text"));
+  const link = parseInline("see https://a.example/b).")[1] as { t: string; href: string };
+  assert.equal(link.href, "https://a.example/b");
+  assert.equal(isExternalHref("https://www.dypol.example/x", ["dypol.example:443"]), false);
+  assert.equal(isExternalHref("https://other.example/x", ["dypol.example"]), true);
+  assert.equal(isExternalHref("/articles/x", ["dypol.example"]), false);
+});

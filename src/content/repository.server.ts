@@ -8,6 +8,9 @@ import { tickerEntries } from "./ticker";
 import { STANDARD_PAGES, standardPage } from "./pages-seed";
 import { resolveBlocks } from "./blocks";
 import type { Article, ArticleBlock, Category, PublicationStatus, SiteConfig, Tag } from "./types";
+import { blockPlainText, blocksPlainText } from "./block-text.ts";
+import { stripCreditsAndSources } from "../lib/automation/body.ts";
+import { inlinePlain } from "../lib/inline-markdown.ts";
 import {
   articleWriteSchema,
   categoryWriteSchema,
@@ -534,8 +537,8 @@ export async function readSitemap() {
 }
 
 function articleBodyText(article: Article): string {
-  return article.blocks
-    .map((b) => (b.type === "list" ? b.items.join("\n") : b.type === "code" ? b.code : b.text))
+  return stripCreditsAndSources(article.blocks)
+    .map((b) => (b.type === "code" ? b.code : inlinePlain(blockPlainText(b))))
     .filter((x) => x.trim())
     .join("\n\n");
 }
@@ -676,7 +679,7 @@ export async function siteHealth() {
 }
 
 export function articleWordCount(article: Article): number {
-  const text = article.blocks.map((b) => (b.type === "list" || b.type === "takeaways" ? b.items.join(" ") : b.type === "table" ? [...b.headers, ...b.rows.flat()].join(" ") : b.type === "code" ? "" : b.text)).join(" ");
+  const text = blocksPlainText(article.blocks);
   return text.split(/\s+/).filter(Boolean).length;
 }
 

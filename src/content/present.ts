@@ -1,4 +1,5 @@
 import type { ArticleBlock } from "./types";
+import { blocksPlainText } from "./block-text.ts";
 
 export function readingMinutes(article: { blocks: ArticleBlock[] }): number {
   const words = blockText(article.blocks).trim().split(/\s+/).filter(Boolean).length;
@@ -6,14 +7,7 @@ export function readingMinutes(article: { blocks: ArticleBlock[] }): number {
 }
 
 function blockText(blocks: ArticleBlock[]): string {
-  return blocks
-    .map((block) => {
-      if (block.type === "list" || block.type === "takeaways") return block.items.join(" ");
-      if (block.type === "table") return [...block.headers, ...block.rows.flat()].join(" ");
-      if (block.type === "code") return block.code;
-      return block.text;
-    })
-    .join(" ");
+  return blocksPlainText(blocks, { includeCode: true });
 }
 
 export type ArticleMeta = {
