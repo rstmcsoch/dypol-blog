@@ -1344,6 +1344,9 @@ html[data-theme="dark"] .theme-switch__btn[data-value="dark"] .theme-switch__mar
   letter-spacing: -0.032em;
   line-height: 1.04;
   overflow-wrap: break-word;
+  /* t105: the global h1 `text-wrap: balance` split long titles into two
+     half-width lines; article titles fill the full header width like the dek. */
+  text-wrap: wrap;
 }
 
 .article-plate {
