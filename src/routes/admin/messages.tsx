@@ -22,7 +22,7 @@ function MessagesDesk() {
         {messages.length === 0 ? (
           <p className="desk-note">No messages yet.</p>
         ) : (
-          <table className="table">
+          <div className="adm-scroll-x"><table className="table">
             <thead><tr><th>Received</th><th>From</th><th>Message</th></tr></thead>
             <tbody>
               {messages.map((m) => (
@@ -37,7 +37,7 @@ function MessagesDesk() {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         )}
       </section>
     </>

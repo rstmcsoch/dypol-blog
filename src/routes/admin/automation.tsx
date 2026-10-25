@@ -61,7 +61,7 @@ function Profiles() {
           <button type="button" className="btn btn--ghost" onClick={() => setShown(null)}>I&apos;ve saved it</button>
         </div>
       ) : null}
-      <table className="desk-table">
+      <div className="adm-scroll-x"><table className="desk-table">
         <thead><tr><th>Profile</th><th>Status</th><th>Token</th><th>Actions</th></tr></thead>
         <tbody>
           {data.profiles.map((p) => (
@@ -114,7 +114,7 @@ function Profiles() {
             </tr>
           ))}
         </tbody>
-      </table>
+      </table></div>
       <form
         className="filters"
         style={{ marginTop: "0.75rem", alignItems: "end" }}
@@ -365,7 +365,7 @@ function AutomationDesk() {
       {data.runs.length === 0 ? (
         <p className="desk-note">No automation runs yet.</p>
       ) : (
-        <table className="desk-table">
+        <div className="adm-scroll-x"><table className="desk-table">
           <thead><tr><th>When (UTC)</th><th>Tool</th><th>Outcome</th><th>Reason</th><th>Profile</th><th>Client</th><th>Article</th></tr></thead>
           <tbody>
             {data.runs.map((r) => (
@@ -380,7 +380,7 @@ function AutomationDesk() {
               </tr>
             ))}
           </tbody>
-        </table>
+        </table></div>
       )}
     </>
   );

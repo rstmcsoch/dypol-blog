@@ -13,7 +13,7 @@ import {
   kolkataDisplayDate,
   type DatePreset,
 } from "@/lib/analytics-dates";
-import { alignSeries, deltaPercent, insightsAllowed, INSIGHT_MIN_SESSIONS, niceMax, shortDate } from "@/lib/analytics-metrics";
+import { alignSeries, deltaPercent, insightsAllowed, INSIGHT_MIN_SESSIONS, niceMax, niceTicks, shortDate } from "@/lib/analytics-metrics";
 import { HelpCircle, Download, Clock, ArrowUpRight } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -228,7 +228,8 @@ function LineTrendChart({
     [series, previousSeries, valueKey, showPrevious],
   );
   const hasPrev = showPrevious && data.some((d) => (d.previous ?? 0) > 0);
-  const max = niceMax(data.flatMap((d) => [d.current, hasPrev ? d.previous ?? 0 : 0]));
+  const ticks = niceTicks(data.flatMap((d) => [d.current, hasPrev ? d.previous ?? 0 : 0]));
+  const max = ticks[ticks.length - 1];
   return (
     <div className="adm-chart-wrap">
       <div className="adm-chart__label">{label}</div>
@@ -249,20 +250,20 @@ function LineTrendChart({
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
             <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#6b7280" }} tickMargin={6} interval={tickInterval(data.length)} />
-            <YAxis domain={[0, max]} allowDecimals={false} tickFormatter={valueFormat} tick={{ fontSize: 11, fill: "#6b7280" }} width={40} />
+            <YAxis domain={[0, max]} ticks={ticks} interval={0} allowDecimals={false} allowDataOverflow={false} tickFormatter={valueFormat} tick={{ fontSize: 11, fill: "#6b7280" }} width={40} />
             <Tooltip content={(props: any) => <TrendTooltip {...props} format={valueFormat} />} />
-            <Area type="monotone" dataKey="current" name="This period" stroke={COLORS[1]} strokeWidth={2} fill={`url(#color-area-${valueKey})`} />
+            <Area type="monotoneX" dataKey="current" name="This period" stroke={COLORS[1]} strokeWidth={2} fill={`url(#color-area-${valueKey})`} connectNulls isAnimationActive={false} />
           </AreaChart>
         ) : (
           <LineChart data={data} margin={{ top: 10, right: 16, bottom: 8, left: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
             <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#6b7280" }} tickMargin={6} interval={tickInterval(data.length)} />
-            <YAxis domain={[0, max]} allowDecimals={false} tickFormatter={valueFormat} tick={{ fontSize: 11, fill: "#6b7280" }} width={40} />
+            <YAxis domain={[0, max]} ticks={ticks} interval={0} allowDecimals={false} allowDataOverflow={false} tickFormatter={valueFormat} tick={{ fontSize: 11, fill: "#6b7280" }} width={40} />
             <Tooltip content={(props: any) => <TrendTooltip {...props} format={valueFormat} />} />
             {hasPrev ? (
-              <Line type="monotone" dataKey="previous" name="Previous period" stroke="#9ca3af" strokeWidth={2} dot={false} strokeDasharray="4 4" />
+              <Line type="monotoneX" dataKey="previous" name="Previous period" stroke="#9ca3af" strokeWidth={2} dot={false} strokeDasharray="4 4" connectNulls isAnimationActive={false} />
             ) : null}
-            <Line type="monotone" dataKey="current" name="This period" stroke={COLORS[0]} strokeWidth={2} dot={data.length <= 2} />
+            <Line type="monotoneX" dataKey="current" name="This period" stroke={COLORS[0]} strokeWidth={2} dot={data.length <= 2} connectNulls isAnimationActive={false} />
             {annotations
               .filter((a) => data.some((d) => d.date === a.date))
               .map((a) => (
@@ -288,7 +289,7 @@ function ComparisonTable({
     <div className="adm-panel__body">
       <h3 className="adm-card-title">This period vs previous period</h3>
       {!hasPrior ? <p className="adm-empty__body adm-left">No prior data — the previous equivalent period has no measured traffic.</p> : null}
-      <table className="adm-table--compact">
+      <div className="adm-scroll-x"><table className="adm-table--compact">
         <thead>
           <tr><th>Metric</th><th className="text-right">This period</th><th className="text-right">Previous</th><th className="text-right">Change</th></tr>
         </thead>
@@ -302,7 +303,7 @@ function ComparisonTable({
             </tr>
           ))}
         </tbody>
-      </table>
+      </table></div>
     </div>
   );
 }
@@ -416,7 +417,8 @@ function HistogramChart({
 }: {
   buckets: { label: string; count: number }[];
 }) {
-  const max = useMemo(() => Math.max(1, ...buckets.map((b) => b.count)), [buckets]);
+  const ticks = useMemo(() => niceTicks(buckets.map((b) => b.count)), [buckets]);
+  const max = ticks[ticks.length - 1];
   return (
     <div className="adm-chart-wrap">
       <div className="adm-chart__label">Reading-time distribution (histogram)</div>
@@ -424,7 +426,7 @@ function HistogramChart({
         <BarChart data={buckets} margin={{ top: 10, right: 16, bottom: 8, left: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
           <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#6b7280" }} />
-          <YAxis type="number" domain={[0, max]} tickFormatter={formatter} tick={{ fontSize: 11, fill: "#6b7280" }} width={36} />
+          <YAxis type="number" domain={[0, max]} ticks={ticks} interval={0} allowDecimals={false} tickFormatter={formatter} tick={{ fontSize: 11, fill: "#6b7280" }} width={36} />
           <Tooltip cursor={{ fill: "transparent" }} />
           <Bar dataKey="count" name="Reads" fill="#2f5bea" radius={[6, 6, 0, 0]} />
         </BarChart>
@@ -517,7 +519,7 @@ function PageList({ title, rows, empty }: { title: string; rows: Array<{ id: str
       {rows.length === 0 ? (
         <p className="adm-empty__body adm-left">{empty}</p>
       ) : (
-        <table className="adm-table--compact">
+        <div className="adm-scroll-x"><table className="adm-table--compact">
           <thead><tr><th>Article</th><th className="text-right">Sessions</th></tr></thead>
           <tbody>
             {rows.map((r) => (
@@ -527,7 +529,7 @@ function PageList({ title, rows, empty }: { title: string; rows: Array<{ id: str
               </tr>
             ))}
           </tbody>
-        </table>
+        </table></div>
       )}
     </div>
   );
@@ -1114,7 +1116,7 @@ function StatsPage() {
           <div className="adm-panel">
             <div className="adm-panel__body">
               <h3 className="adm-card-title">Reading-time statistics</h3>
-              <table className="adm-table--compact">
+              <div className="adm-scroll-x"><table className="adm-table--compact">
                 <tbody>
                   <tr><td>Recorded session-article reads</td><td className="text-right">{formatCount(distribution.stats?.count ?? 0)}</td></tr>
                   <tr><td>Average engaged time</td><td className="text-right">{formatDuration(distribution.stats?.average ?? 0)}</td></tr>
@@ -1122,7 +1124,7 @@ function StatsPage() {
                   <tr><td>75th percentile</td><td className="text-right">{formatDuration(distribution.stats?.p75 ?? 0)}</td></tr>
                   <tr><td>90th percentile</td><td className="text-right">{formatDuration(distribution.stats?.p90 ?? 0)}</td></tr>
                 </tbody>
-              </table>
+              </table></div>
               <p className="adm-panel__note">
                 {distribution.notes.join(" ")}
               </p>
@@ -1259,7 +1261,7 @@ function StatsPage() {
         <div className="adm-panel adm-panel__body">
           <h3 className="adm-card-title">Source · medium performance</h3>
           {sources.rows.length === 0 ? <p className="adm-empty__body adm-left">No source data yet for this period.</p> : null}
-          <table className="adm-table--compact">
+          <div className="adm-scroll-x"><table className="adm-table--compact">
             <thead>
               <tr><th>Source · medium</th><th className="text-right">Sessions</th><th className="text-right">Engagement</th><th className="text-right">Views / session</th></tr>
             </thead>
@@ -1273,7 +1275,7 @@ function StatsPage() {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
           <p className="adm-panel__note">{sources.notes.join(" ")}</p>
         </div>
       </section>
@@ -1299,7 +1301,7 @@ function StatsPage() {
           {extras.searchTerms.length === 0 ? (
             <p className="adm-empty__body adm-left">No searches recorded yet for this period.</p>
           ) : (
-            <table className="adm-table--compact">
+            <div className="adm-scroll-x"><table className="adm-table--compact">
               <thead><tr><th>Term</th><th className="text-right">Searches</th><th className="text-right">Results</th></tr></thead>
               <tbody>
                 {extras.searchTerms.map((t) => (
@@ -1310,7 +1312,7 @@ function StatsPage() {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table></div>
           )}
           <p className="adm-panel__note">{extras.notes[2]}</p>
         </div>
@@ -1336,7 +1338,7 @@ function StatsPage() {
               <StatCard title="Avg articles / session" value={recirculation.avgArticlesPerSession != null ? recirculation.avgArticlesPerSession.toFixed(2) : "—"} />
             </div>
             {recirculation.topLinks.length > 0 ? (
-              <table className="adm-table--compact">
+              <div className="adm-scroll-x"><table className="adm-table--compact">
                 <thead>
                   <tr><th>From → to</th><th className="text-right">Internal clicks</th></tr>
                 </thead>
@@ -1348,7 +1350,7 @@ function StatsPage() {
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </table></div>
             ) : (
               <p className="adm-empty__body">No internal article clicks recorded yet.</p>
             )}
@@ -1362,7 +1364,7 @@ function StatsPage() {
               data={publishing.byMonth.map((m: { periodLabel: string; published: number; avgViewsFirst28Days: number | null }) => ({ name: m.periodLabel, value: m.published }))}
               label="Articles published by month"
             />
-            <table className="adm-table--compact adm-mt">
+            <div className="adm-scroll-x"><table className="adm-table--compact adm-mt">
               <thead>
                 <tr><th>Article age</th><th className="text-right">Articles</th><th className="text-right">Avg measured views</th></tr>
               </thead>
@@ -1375,7 +1377,7 @@ function StatsPage() {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table></div>
             <p className="adm-panel__note">{publishing.notes.join(" ")}</p>
           </div>
         </div>
@@ -1408,7 +1410,7 @@ function StatsPage() {
       {/* Data sources & availability */}
       <section className="adm-section adm-card--bordered">
         <h2>Data sources &amp; availability</h2>
-        <table className="adm-table--compact">
+        <div className="adm-scroll-x"><table className="adm-table--compact">
           <thead>
             <tr><th>Source</th><th>Status</th><th>What it feeds</th></tr>
           </thead>
@@ -1439,7 +1441,7 @@ function StatsPage() {
               <td>Two-letter country code from Cloudflare's edge; no IP address, city or region is stored.</td>
             </tr>
           </tbody>
-        </table>
+        </table></div>
         <p className="adm-panel__note adm-small">
           Nothing is fabricated: "no data" means nothing was measured, never zero substituted for an error. Period metrics require the first-party beacon,
           which only starts recording after this feature is deployed; historical data before deployment is not available.
