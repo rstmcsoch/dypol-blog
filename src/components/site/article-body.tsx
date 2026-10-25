@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type { ArticleBlock } from "@/content/types";
 import { renderInline } from "@/components/markdown";
 import { stripCreditsAndSources } from "@/lib/automation/body";
@@ -8,10 +9,12 @@ import { inlinePlain } from "@/lib/inline-markdown";
  * renderer (bold, italic, links, entities …) — including At a glance items,
  * table cells, spec rows and callouts. No HTML passthrough.
  */
-export function ArticleBody({ blocks }: { blocks: ArticleBlock[] }) {
+export function ArticleBody({ blocks, before, after }: { blocks: ArticleBlock[]; before?: ReactNode; after?: ReactNode }) {
   return (
     <div className="article-body">
+      {before}
       <ProseBlocks blocks={stripCreditsAndSources(blocks)} />
+      {after}
     </div>
   );
 }

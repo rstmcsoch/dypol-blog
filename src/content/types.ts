@@ -24,6 +24,8 @@ export type ArticleBlock =
 
 /** Canonical article. Public pages, a future editor, and automation all use this shape. */
 export type Article = {
+  /** t115: optional public corrections note, shown at the end of the article. */
+  corrections?: string | null;
   id: string;
   slug: string;
   title: string;

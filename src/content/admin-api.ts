@@ -687,6 +687,13 @@ export const adminRestoreRevision = createServerFn({ method: "POST" })
     return out;
   });
 
+/** t115: contact form submissions, newest first. */
+export const adminMessages = createServerFn({ method: "GET" }).handler(async () => {
+  await guard();
+  const { listContactMessages } = await import("./contact.server");
+  return { messages: await listContactMessages(200) };
+});
+
 export const adminActivity = createServerFn({ method: "GET" }).handler(async () => {
   await guard();
   const { activityFeed, listNotFounds } = await import("./repository.server");

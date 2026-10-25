@@ -24,6 +24,7 @@ type Draft = {
   featured: boolean;
   seoTitle: string;
   seoDescription: string;
+  corrections: string;
   coverMediaId: string | null;
   publishedAt: string;
   scheduledAt: string;
@@ -60,6 +61,7 @@ function fromArticle(article: Article): Draft {
     featured: article.featured,
     seoTitle: article.seoTitle ?? "",
     seoDescription: article.seoDescription ?? "",
+    corrections: article.corrections ?? "",
     coverMediaId: article.coverMediaId ?? null,
     publishedAt: toLocal(article.publishedAt),
     scheduledAt: toLocal(article.scheduledAt),
@@ -81,6 +83,7 @@ function blank(categoryId: string): Draft {
     featured: false,
     seoTitle: "",
     seoDescription: "",
+    corrections: "",
     coverMediaId: null,
     publishedAt: "",
     scheduledAt: "",
@@ -172,6 +175,7 @@ export function ArticleEditor({
           featured: draft.featured,
           seoTitle: draft.seoTitle,
           seoDescription: draft.seoDescription,
+          corrections: draft.corrections,
           coverMediaId: draft.coverMediaId,
           publishedAt: fromLocal(draft.publishedAt),
           scheduledAt: fromLocal(draft.scheduledAt),
@@ -451,6 +455,11 @@ export function ArticleEditor({
             <span>SEO description</span>
             <textarea value={draft.seoDescription} onChange={(event) => update({ seoDescription: event.target.value })} />
             <span className="field-help">{draft.seoDescription.trim().length}/160 characters</span>
+          </label>
+          <label className="field">
+            <span>Corrections note (optional)</span>
+            <textarea value={draft.corrections} maxLength={2000} onChange={(event) => update({ corrections: event.target.value })} />
+            <span className="field-help">Shown to readers as a “Correction” box at the end of the article. Leave empty for none.</span>
           </label>
           {draft.status !== "published" ? (
             <label className="field">

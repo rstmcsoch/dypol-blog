@@ -73,6 +73,8 @@ export const articleWriteSchema = z.object({
   coverMediaId: z.string().min(1).max(80).nullable(),
   publishedAt: z.string().datetime().nullable(),
   scheduledAt: z.string().datetime().nullable().optional(),
+  /** t115: absent = leave the stored note unchanged; "" clears it. */
+  corrections: z.string().trim().max(2000).optional(),
   blocks: z.array(blockSchema).max(80),
   intent: z.enum(["save", "publish", "unpublish"]),
 });
