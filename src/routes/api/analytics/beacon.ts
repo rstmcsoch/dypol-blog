@@ -69,16 +69,26 @@ async function count(request: Request): Promise<Response> {
         bounced = case when (page_views + excluded.page_views) <= 1 then 1 else 0 end
     `;
 
+    // Country: ISO code from Cloudflare's edge only (no IP stored).
+    const cf = (request as unknown as { cf?: { country?: string } }).cf;
+    const country = typeof cf?.country === "string" && /^[A-Z]{2}$/.test(cf.country) ? cf.country : null;
+    if (country) {
+      await sql`update analytics_sessions set country = ${country} where session_id = ${input.sessionId} and country is null`;
+    }
+
     if (input.articleId) {
+      // Key events (GA4 "engaged" signal): internal article-link clicks.
+      const keyEvents = input.linkClicks.filter((c) => c.to.startsWith("/articles/")).length;
       await sql`
-        insert into analytics_article_session (article_id, date, session_id, page_views, engaged_seconds, engaged_sessions, max_scroll, completed)
-        values (${input.articleId}, ${date}, ${input.sessionId}, ${input.pageViews}, ${input.engagedSeconds}, ${input.engagedSession ? 1 : 0}, ${input.maxScroll}, ${input.completed ? 1 : 0})
+        insert into analytics_article_session (article_id, date, session_id, page_views, engaged_seconds, engaged_sessions, max_scroll, completed, key_events)
+        values (${input.articleId}, ${date}, ${input.sessionId}, ${input.pageViews}, ${input.engagedSeconds}, ${input.engagedSession ? 1 : 0}, ${input.maxScroll}, ${input.completed ? 1 : 0}, ${keyEvents})
         on conflict (article_id, date, session_id) do update set
           page_views = page_views + excluded.page_views,
           engaged_seconds = engaged_seconds + excluded.engaged_seconds,
           engaged_sessions = engaged_sessions + excluded.engaged_sessions,
           max_scroll = max(max_scroll, excluded.max_scroll),
-          completed = max(completed, excluded.completed)
+          completed = max(completed, excluded.completed),
+          key_events = key_events + excluded.key_events
       `;
     }
 

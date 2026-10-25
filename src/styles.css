@@ -3615,3 +3615,34 @@ html.nav-open .reading-progress { display: none; }
   max-width: 100%;
   min-width: 0;
 }
+
+/* t116: stats UI fixes */
+.adm-tip { display: inline-flex; align-items: center; vertical-align: middle; margin-left: 0.25rem; color: var(--a-muted); cursor: help; }
+.adm-tip:hover { color: var(--a-primary); }
+.adm-stat__kicker { flex-wrap: nowrap; overflow-wrap: normal; }
+.adm-stat-card, .adm-panel, .adm-chart-wrap { overflow: hidden; }
+.adm-panel { min-height: 0; }
+.adm-panel--tall { min-height: 0; }
+.adm-chart-wrap { min-height: 0; padding-bottom: 0.5rem; }
+.adm-chart__label, .adm-card-title, .adm-panel__body h3 { font-size: 0.95rem; font-weight: 700; margin: 0; }
+.adm-table th { white-space: nowrap; overflow-wrap: normal; }
+.adm-table td { overflow-wrap: normal; }
+.adm-table td:first-child { min-width: 14rem; overflow-wrap: anywhere; }
+.adm-table abbr { text-decoration: none; border-bottom: 1px dotted currentColor; cursor: help; }
+.adm-table-wrap { -webkit-overflow-scrolling: touch; }
+.adm-table-wrap .adm-pagination { padding: 0 0.8rem 0.6rem; }
+.adm-legend { display: flex; flex-wrap: wrap; gap: 0.9rem; padding: 0 1rem 0.35rem; font-size: 0.8rem; color: var(--a-muted); }
+.adm-legend span { display: inline-flex; align-items: center; gap: 0.35rem; }
+.adm-legend i { display: inline-block; width: 14px; height: 3px; border-radius: 2px; }
+.adm-legend i.adm-legend__dash { background: repeating-linear-gradient(90deg, #9ca3af 0 4px, transparent 4px 7px); }
+.adm-legend__muted { font-style: italic; }
+.adm-donut { display: grid; grid-template-columns: 1fr; align-items: center; gap: 0.5rem; padding: 0 1rem 0.75rem; }
+.adm-donut__legend { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.3rem; font-size: 0.85rem; min-width: 0; }
+.adm-donut__legend li { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; align-items: center; gap: 0.45rem; }
+.adm-donut__legend i { width: 10px; height: 10px; border-radius: 2px; }
+.adm-donut__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.adm-donut__pct { font-variant-numeric: tabular-nums; color: var(--a-muted); }
+.adm-chart-empty { padding: 1.5rem 1rem 2rem; text-align: left; max-width: none; color: var(--a-muted); }
+.adm-left { text-align: left; max-width: none; color: var(--a-muted); font-size: 0.9rem; }
+.adm-stat-grid--mini { grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); }
+@media (min-width: 640px) { .adm-donut { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }

@@ -13,6 +13,7 @@ import {
   kolkataDisplayDate,
   type DatePreset,
 } from "@/lib/analytics-dates";
+import { alignSeries, deltaPercent, insightsAllowed, INSIGHT_MIN_SESSIONS, niceMax, shortDate } from "@/lib/analytics-metrics";
 import { HelpCircle, Download, Clock, ArrowUpRight } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -49,14 +50,21 @@ type Search = {
   articleId?: string | null;
 };
 
+const SORT_KEYS = [
+  "title", "categoryLabel", "publishedAt", "ageDays", "views", "allTimeViews", "sessions",
+  "avgEngagementTime", "engagementRate", "completionRate", "growth", "internalClicks", "recirculation",
+  "first24h", "first7d",
+];
+
 export const Route = createFileRoute("/admin/stats")({
   validateSearch: (search: Record<string, unknown>): Search => {
     const presets: DatePreset[] = [
       "today", "yesterday", "last-7", "last-28", "last-30", "last-90", "last-12-months", "custom",
     ];
+    const rawPreset = search.preset === "last-30" ? "last-28" : search.preset;
     const preset =
-      typeof search.preset === "string" && presets.includes(search.preset as DatePreset)
-        ? search.preset
+      typeof rawPreset === "string" && presets.includes(rawPreset as DatePreset)
+        ? rawPreset
         : undefined;
     // A custom range needs both bounds; otherwise fall back to the default.
     const finalPreset = preset === "custom" && (!search.from || !search.to) ? undefined : (preset as DatePreset);
@@ -66,9 +74,8 @@ export const Route = createFileRoute("/admin/stats")({
       to: typeof search.to === "string" ? search.to : undefined,
       compare: search.compare === "1" || search.compare === "true" ? "1" : undefined,
       sort:
-        search.sort === "views" || search.sort === "engagedTime" || search.sort === "completionRate" ||
-        search.sort === "growth" || search.sort === "published" || search.sort === "title"
-          ? (search.sort as Search["sort"])
+        typeof search.sort === "string" && SORT_KEYS.includes(search.sort.replace(/-$/, ""))
+          ? search.sort
           : undefined,
       categoryId: typeof search.categoryId === "string" ? search.categoryId : null,
       tagId: typeof search.tagId === "string" ? search.tagId : null,
@@ -111,9 +118,10 @@ function Minus({ size, strokeWidth }: { size: number; strokeWidth: number }) {
 function HelpTip({ text }: { text: string }) {
   return (
     <span
-      aria-describedby="help-tip"
-      className="adm-help"
+      className="adm-tip"
       title={text}
+      aria-label={text}
+      role="img"
     >
       <HelpCircle size={13} strokeWidth={1.6} />
     </span>
@@ -128,7 +136,9 @@ function StatCard({
   note,
   trend,
   help,
+  noPrior,
 }: {
+  noPrior?: boolean;
   title: string;
   value: ReactNode;
   delta?: string | null;
@@ -141,7 +151,9 @@ function StatCard({
     <div className="adm-stat-card">
       <p className="adm-stat__kicker">{title}{help ? <HelpTip text={help} /> : null}</p>
       <div className="adm-stat__value">{value}</div>
-      {delta !== undefined ? (
+      {noPrior ? (
+        <p className="adm-stat__delta adm-stat__delta--neutral">No prior data</p>
+      ) : delta !== undefined ? (
         <p className={`adm-stat__delta ${trend === "up" ? "adm-stat__delta--up" : trend === "down" ? "adm-stat__delta--down" : "adm-stat__delta--neutral"}`}>
           <TrendIcon trend={trend ?? "neutral"} />
           {delta}
@@ -165,162 +177,131 @@ function formatter(value: number): string {
 
 const COLORS = ["#2f5bea", "#1f7a4d", "#c53030", "#b5891a", "#5b6b7c", "#7aa2e6"];
 
+type SeriesPoint = { date: string; pageViews: number; sessions: number; engagedSeconds: number };
+
+function TrendTooltip({ active, payload, format }: { active?: boolean; payload?: any[]; format: (v: number) => string }) {
+  if (!active || !payload || payload.length === 0) return null;
+  const p = payload[0].payload as { date: string; current: number; previous: number | null; previousDate: string | null };
+  return (
+    <div className="adm-tooltip">
+      <div className="adm-tooltip__date">{shortDate(p.date)}</div>
+      <div className="adm-tooltip__value">This period: {format(p.current)}</div>
+      {p.previous !== null && p.previousDate ? (
+        <div className="adm-tooltip__date">Previous ({shortDate(p.previousDate)}): {format(p.previous)}</div>
+      ) : null}
+    </div>
+  );
+}
+
+function tickInterval(n: number): number {
+  return Math.max(0, Math.ceil(n / 7) - 1);
+}
+
 function LineTrendChart({
   series,
   previousSeries,
   valueKey,
   label,
   valueFormat = formatter,
-  height = 220,
+  height = 240,
   showPrevious = false,
+  area = false,
 }: {
-  series: { date: string; pageViews: number; sessions: number; engagedSeconds: number }[];
-  previousSeries?: { date: string; pageViews: number; sessions: number; engagedSeconds: number }[] | null;
+  series: SeriesPoint[];
+  previousSeries?: SeriesPoint[] | null;
   valueKey: "pageViews" | "sessions" | "engagedSeconds";
   label: string;
   valueFormat?: (v: number) => string;
   height?: number;
   showPrevious?: boolean;
-}) {
-  const data = useMemo<ChartPoint[]>(() => {
-    return series.map((p) => ({ name: p.date, [valueKey]: p[valueKey] }));
-  }, [series, valueKey]);
-  const prevData = useMemo<ChartPoint[]>(() => {
-    if (!showPrevious || !previousSeries) return [];
-    return previousSeries.map((p) => ({ name: p.date, [valueKey]: p[valueKey] }));
-  }, [previousSeries, valueKey, showPrevious]);
-
-  return (
-    <div className="adm-chart-wrap">
-      <div className="adm-chart__label">{label}</div>
-      <ResponsiveContainer width="100%" height={height}>
-        <LineChart data={data} margin={{ top: 20, right: 24, bottom: 30, left: 8 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
-          <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#6b7280" }} tickMargin={8} />
-          <YAxis tickFormatter={valueFormat} tick={{ fontSize: 11, fill: "#6b7280" }} width={40} />
-          <Tooltip
-            cursor={{ fill: "transparent" }}
-            content={({ active, payload }: any) => {
-              if (active && payload && payload.length) {
-                const entry = payload[0].payload as ChartPoint;
-                return (
-                  <div className="adm-tooltip">
-                    <div className="adm-tooltip__date">{entry.name}</div>
-                    <div className="adm-tooltip__value">{valueFormat(Number(entry[valueKey]))}</div>
-                  </div>
-                );
-              }
-              return null;
-            }}
-          />
-          <Legend verticalAlign="top" align="right" height={30} />
-          <Line
-            type="monotone"
-            dataKey={valueKey}
-            stroke={COLORS[0]}
-            strokeWidth={2}
-            dot={false}
-            strokeOpacity={0.9}
-          />
-          {showPrevious && prevData.length > 0 && (
-            <Line
-              type="monotone"
-              data={prevData}
-              dataKey={valueKey}
-              stroke="#9ca3af"
-              strokeWidth={2}
-              dot={false}
-              strokeDasharray="4 4"
-              opacity={0.6}
-            />
-          )}
-        </LineChart>
-      </ResponsiveContainer>
-    </div>
-  );
-}
-
-function AreaTrendChart({
-  series,
-  valueKey,
-  label,
-  color = COLORS[1],
-  height = 200,
-}: {
-  series: { date: string; pageViews: number; sessions: number; engagedSeconds: number }[];
-  valueKey: "pageViews" | "sessions" | "engagedSeconds";
-  label: string;
-  color?: string;
-  height?: number;
-}) {
-  const data = useMemo<ChartPoint[]>(
-    () => series.map((p) => ({ name: p.date, [valueKey]: p[valueKey] })),
-    [series, valueKey],
-  );
-  return (
-    <div className="adm-chart-wrap">
-      <div className="adm-chart__label">{label}</div>
-      <ResponsiveContainer width="100%" height={height}>
-        <AreaChart data={data} margin={{ top: 16, right: 16, bottom: 26, left: 8 }}>
-          <defs>
-            <linearGradient id={`color-area-${valueKey}`} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor={color} stopOpacity={0.55} />
-              <stop offset="95%" stopColor={color} stopOpacity={0.08} />
-            </linearGradient>
-          </defs>
-          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
-          <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#6b7280" }} tickMargin={8} />
-          <YAxis tickFormatter={formatter} tick={{ fontSize: 11, fill: "#6b7280" }} width={36} />
-          <Tooltip content={({ active, payload }: any) => {
-            if (active && payload && payload.length) {
-              const entry = payload[0].payload as ChartPoint;
-              return (
-                <div className="adm-tooltip">
-                  <div className="adm-tooltip__date">{entry.name}</div>
-                  <div className="adm-tooltip__value">{formatCount(Number(entry[valueKey]))}</div>
-                </div>
-              );
-            }
-            return null;
-          }} />
-          <Area type="monotone" dataKey={valueKey} stroke={color} strokeWidth={2} fillOpacity={1} fill={`url(#color-area-${valueKey})`} />
-        </AreaChart>
-      </ResponsiveContainer>
-    </div>
-  );
-}
-
-function ComparisonBars({
-  current,
-  previous,
-  metrics,
-}: {
-  current: Record<string, number | null>;
-  previous: Record<string, number | null>;
-  metrics: Array<{ key: string; label: string; format: (v: number) => string }>;
+  area?: boolean;
 }) {
   const data = useMemo(
     () =>
-      metrics.flatMap((m) => [
-        { category: m.label, series: "Current period", value: current[m.key] ?? 0 },
-        { category: m.label, series: "Previous period", value: previous[m.key] ?? 0 },
-      ]),
-    [current, previous, metrics],
+      alignSeries(
+        series.map((p) => ({ date: p.date, value: p[valueKey] })),
+        showPrevious && previousSeries ? previousSeries.map((p) => ({ date: p.date, value: p[valueKey] })) : null,
+      ),
+    [series, previousSeries, valueKey, showPrevious],
   );
+  const hasPrev = showPrevious && data.some((d) => (d.previous ?? 0) > 0);
+  const max = niceMax(data.flatMap((d) => [d.current, hasPrev ? d.previous ?? 0 : 0]));
   return (
     <div className="adm-chart-wrap">
-      <div className="adm-chart__label">Current vs previous period</div>
-      <ResponsiveContainer width="100%" height={260}>
-        <BarChart data={data} margin={{ top: 20, right: 20, bottom: 60, left: 10 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
-          <XAxis dataKey="category" tick={{ fontSize: 11, fill: "#6b7280" }} />
-          <YAxis tickFormatter={formatter} tick={{ fontSize: 11, fill: "#6b7280" }} width={36} />
-          <Tooltip />
-          <Legend />
-          <Bar dataKey="value" stackId="a" fill={COLORS[0]} radius={[4, 4, 0, 0]} />
-          <Bar dataKey="value" stackId="a" fill="#cbd5e0" radius={[4, 4, 0, 0]} />
-        </BarChart>
+      <div className="adm-chart__label">{label}</div>
+      {showPrevious ? (
+        <div className="adm-legend">
+          <span><i style={{ background: COLORS[0] }} /> This period</span>
+          {hasPrev ? <span><i className="adm-legend__dash" /> Previous period</span> : <span className="adm-legend__muted">Previous period: no prior data</span>}
+        </div>
+      ) : null}
+      <ResponsiveContainer width="100%" height={height}>
+        {area ? (
+          <AreaChart data={data} margin={{ top: 10, right: 16, bottom: 8, left: 0 }}>
+            <defs>
+              <linearGradient id={`color-area-${valueKey}`} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor={COLORS[1]} stopOpacity={0.45} />
+                <stop offset="95%" stopColor={COLORS[1]} stopOpacity={0.05} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
+            <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#6b7280" }} tickMargin={6} interval={tickInterval(data.length)} />
+            <YAxis domain={[0, max]} allowDecimals={false} tickFormatter={valueFormat} tick={{ fontSize: 11, fill: "#6b7280" }} width={40} />
+            <Tooltip content={(props: any) => <TrendTooltip {...props} format={valueFormat} />} />
+            <Area type="monotone" dataKey="current" name="This period" stroke={COLORS[1]} strokeWidth={2} fill={`url(#color-area-${valueKey})`} />
+          </AreaChart>
+        ) : (
+          <LineChart data={data} margin={{ top: 10, right: 16, bottom: 8, left: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
+            <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#6b7280" }} tickMargin={6} interval={tickInterval(data.length)} />
+            <YAxis domain={[0, max]} allowDecimals={false} tickFormatter={valueFormat} tick={{ fontSize: 11, fill: "#6b7280" }} width={40} />
+            <Tooltip content={(props: any) => <TrendTooltip {...props} format={valueFormat} />} />
+            {hasPrev ? (
+              <Line type="monotone" dataKey="previous" name="Previous period" stroke="#9ca3af" strokeWidth={2} dot={false} strokeDasharray="4 4" />
+            ) : null}
+            <Line type="monotone" dataKey="current" name="This period" stroke={COLORS[0]} strokeWidth={2} dot={data.length <= 2} />
+          </LineChart>
+        )}
       </ResponsiveContainer>
+    </div>
+  );
+}
+
+function ComparisonTable({
+  hasPrior,
+  rows,
+}: {
+  hasPrior: boolean;
+  rows: Array<{ label: string; current: string; previous: string; change: string }>;
+}) {
+  return (
+    <div className="adm-panel__body">
+      <h3 className="adm-card-title">This period vs previous period</h3>
+      {!hasPrior ? <p className="adm-empty__body adm-left">No prior data — the previous equivalent period has no measured traffic.</p> : null}
+      <table className="adm-table--compact">
+        <thead>
+          <tr><th>Metric</th><th className="text-right">This period</th><th className="text-right">Previous</th><th className="text-right">Change</th></tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.label}>
+              <td>{r.label}</td>
+              <td className="text-right">{r.current}</td>
+              <td className="text-right">{hasPrior ? r.previous : "—"}</td>
+              <td className="text-right">{hasPrior ? r.change : "No prior data"}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function EmptyChart({ label, message }: { label: string; message: string }) {
+  return (
+    <div className="adm-chart-wrap">
+      <div className="adm-chart__label">{label}</div>
+      <p className="adm-empty__body adm-chart-empty">{message}</p>
     </div>
   );
 }
@@ -329,76 +310,91 @@ function DonutChart({
   data,
   label,
   colors = COLORS,
-  height = 260,
+  height = 200,
+  emptyMessage = "No data yet for this period.",
 }: {
   data: { name: string; value: number }[];
   label: string;
   colors?: string[];
   height?: number;
+  emptyMessage?: string;
 }) {
-  const total = useMemo(() => data.reduce((sum, d) => sum + d.value, 0), [data]);
+  const slices = useMemo(() => data.filter((d) => d.value > 0), [data]);
+  const total = slices.reduce((sum, d) => sum + d.value, 0);
+  if (slices.length === 0) return <EmptyChart label={label} message={emptyMessage} />;
   return (
     <div className="adm-chart-wrap">
       <div className="adm-chart__label">{label}</div>
-      <ResponsiveContainer width="100%" height={height}>
-        <PieChart>
-          <Tooltip
-            content={({ active, payload }: any) => {
-              if (active && payload && payload.length) {
-                const entry = payload[0].payload as { name: string; value: number };
-                const share = total > 0 ? ((entry.value / total) * 100).toFixed(1) : 0;
-                return (
-                  <div className="adm-tooltip">
-                    <div className="adm-tooltip__date">{entry.name}</div>
-                    <div className="adm-tooltip__value">{formatCount(entry.value)} ({share}%)</div>
-                  </div>
-                );
-              }
-              return null;
-            }}
-          />
-          <Pie
-            dataKey="value"
-            nameKey="name"
-            data={data}
-            cx="50%"
-            cy="50%"
-            innerRadius={55}
-            outerRadius={75}
-            fill="#888"
-            paddingAngle={2}
-            labelLine={false}
-            label={{ fill: "#6b7280", fontSize: 11 }}
-          >
-            {data.map((entry, index) => (
-              <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />
-            ))}
-          </Pie>
-        </PieChart>
-      </ResponsiveContainer>
+      <div className="adm-donut">
+        <ResponsiveContainer width="100%" height={height}>
+          <PieChart>
+            <Tooltip
+              content={({ active, payload }: any) => {
+                if (active && payload && payload.length) {
+                  const entry = payload[0].payload as { name: string; value: number };
+                  return (
+                    <div className="adm-tooltip">
+                      <div className="adm-tooltip__date">{entry.name}</div>
+                      <div className="adm-tooltip__value">{formatCount(entry.value)} ({((entry.value / total) * 100).toFixed(1)}%)</div>
+                    </div>
+                  );
+                }
+                return null;
+              }}
+            />
+            <Pie dataKey="value" nameKey="name" data={slices} cx="50%" cy="50%" innerRadius={50} outerRadius={78} paddingAngle={slices.length > 1 ? 2 : 0} isAnimationActive={false}>
+              {slices.map((entry, index) => (
+                <Cell key={`cell-${entry.name}`} fill={colors[index % colors.length]} />
+              ))}
+            </Pie>
+          </PieChart>
+        </ResponsiveContainer>
+        <ul className="adm-donut__legend">
+          {slices.map((d, i) => (
+            <li key={d.name} title={d.name}>
+              <i style={{ background: colors[i % colors.length] }} />
+              <span className="adm-donut__name">{d.name}</span>
+              <span className="adm-donut__pct">{((d.value / total) * 100).toFixed(1)}%</span>
+            </li>
+          ))}
+        </ul>
+      </div>
     </div>
+  );
+}
+
+function TruncTick({ x, y, payload }: any) {
+  const full = String(payload?.value ?? "");
+  const short = full.length > 20 ? `${full.slice(0, 19)}…` : full;
+  return (
+    <g transform={`translate(${x},${y})`}>
+      <title>{full}</title>
+      <text x={-6} y={0} dy={4} textAnchor="end" fontSize={12} fill="#1d2330">{short}</text>
+    </g>
   );
 }
 
 function HorizontalBarChart({
   data,
   label,
-  height = 300,
+  emptyMessage = "No data yet for this period.",
 }: {
   data: { name: string; value: number }[];
   label: string;
-  height?: number;
+  emptyMessage?: string;
 }) {
-  const sorted = useMemo(() => [...data].sort((a, b) => b.value - a.value), [data]);
+  const sorted = useMemo(() => [...data].filter((d) => d.value > 0).sort((a, b) => b.value - a.value), [data]);
+  if (sorted.length === 0) return <EmptyChart label={label} message={emptyMessage} />;
+  const height = Math.max(160, sorted.length * 34 + 40);
   return (
     <div className="adm-chart-wrap">
       <div className="adm-chart__label">{label}</div>
       <ResponsiveContainer width="100%" height={height}>
-        <BarChart data={sorted} margin={{ top: 15, right: 15, bottom: 8, left: 65 }} layout="vertical">
-          <XAxis type="number" tickFormatter={formatter} tick={{ fontSize: 11, fill: "#6b7280" }} width={40} />
-          <YAxis dataKey="name" type="category" tick={{ fontSize: 12, fill: "#1d2330" }} />
-          <Tooltip cursor={{ fill: "transparent" }} />
-          <Bar dataKey="value" fill="#2f5bea" radius={[0, 6, 6, 0]} />
+        <BarChart data={sorted} margin={{ top: 8, right: 24, bottom: 8, left: 8 }} layout="vertical" barCategoryGap={8}>
+          <XAxis type="number" domain={[0, niceMax(sorted.map((d) => d.value))]} allowDecimals={false} tickFormatter={formatter} tick={{ fontSize: 11, fill: "#6b7280" }} />
+          <YAxis dataKey="name" type="category" width={150} tick={<TruncTick />} interval={0} />
+          <Tooltip cursor={{ fill: "rgba(47,91,234,0.06)" }} formatter={(v: number) => formatCount(v)} />
+          <Bar dataKey="value" name={label} fill="#2f5bea" radius={[0, 6, 6, 0]} maxBarSize={22} />
         </BarChart>
       </ResponsiveContainer>
     </div>
@@ -414,13 +410,13 @@ function HistogramChart({
   return (
     <div className="adm-chart-wrap">
       <div className="adm-chart__label">Reading-time distribution (histogram)</div>
-      <ResponsiveContainer width="100%" height={260}>
-        <BarChart data={buckets} margin={{ top: 15, right: 15, bottom: 30, left: 8 }}>
+      <ResponsiveContainer width="100%" height={240}>
+        <BarChart data={buckets} margin={{ top: 10, right: 16, bottom: 8, left: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
           <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#6b7280" }} />
           <YAxis type="number" domain={[0, max]} tickFormatter={formatter} tick={{ fontSize: 11, fill: "#6b7280" }} width={36} />
           <Tooltip cursor={{ fill: "transparent" }} />
-          <Bar dataKey="count" fill="#2f5bea" radius={[0, 6, 6, 0]} />
+          <Bar dataKey="count" name="Reads" fill="#2f5bea" radius={[6, 6, 0, 0]} />
         </BarChart>
       </ResponsiveContainer>
     </div>
@@ -435,9 +431,13 @@ type LeaderboardRow = AdminStats["leaderboard"]["rows"][number];
 
 const columnHelper = createColumnHelper<LeaderboardRow>();
 
+function Abbr({ short, full }: { short: string; full: string }) {
+  return <abbr title={full}>{short}</abbr>;
+}
+
 const columns = [
   columnHelper.accessor("title", {
-    header: "Article",
+    header: () => "Article",
     cell: (info) => {
       const row = info.row.original;
       return (
@@ -447,66 +447,30 @@ const columns = [
       );
     },
   }),
-  columnHelper.accessor("categoryLabel", {
-    header: "Category",
-    cell: (info) => info.getValue() || "—",
-  }),
-  columnHelper.accessor("tagLabels", {
-    header: "Tags",
-    cell: (info) => info.getValue().join(", ") || "—",
-  }),
+  columnHelper.accessor("categoryLabel", { header: () => "Category", cell: (info) => info.getValue() || "—" }),
+  columnHelper.accessor("tagLabels", { header: () => <Abbr short="Tags" full="Topics the article is filed under" />, cell: (info) => info.getValue().join(", ") || "—" }),
   columnHelper.accessor("publishedAt", {
-    header: "Published",
+    header: () => "Published",
     cell: (info) => {
       const published = info.getValue();
       return published ? kolkataDisplayDate(published) : "—";
     },
   }),
-  columnHelper.accessor("ageDays", {
-    header: "Age (days)",
-    cell: (info) => (info.getValue() ?? null) === null ? "—" : info.getValue(),
-  }),
-  columnHelper.accessor("views", {
-    header: "Page views",
-    cell: (info) => formatCount(info.getValue()),
-  }),
-  columnHelper.accessor("allTimeViews", {
-    header: "All-time views",
-    cell: (info) => formatCount(info.getValue()),
-  }),
-  columnHelper.accessor("sessions", {
-    header: "Reading sessions",
-    cell: (info) => formatCount(info.getValue()),
-  }),
-  columnHelper.accessor("avgEngagementTime", {
-    header: "Avg engaged time",
-    cell: (info) => formatDuration(info.getValue() ?? 0),
-  }),
-  columnHelper.accessor("engagementRate", {
-    header: "Engagement rate",
-    cell: (info) => formatPercent(info.getValue()),
-  }),
-  columnHelper.accessor("completionRate", {
-    header: "Read completion",
-    cell: (info) => formatPercent(info.getValue()),
-  }),
-  columnHelper.accessor("growth", {
-    header: "Growth vs prev.",
-    cell: (info) => {
-      const v = info.getValue();
-      if (v === null) return "—";
-      return `${v > 0 ? "+" : ""}${v}%`;
-    },
-  }),
-  columnHelper.accessor("internalClicks", {
-    header: "Internal clicks",
-    cell: (info) => formatCount(info.getValue()),
-  }),
+  columnHelper.accessor("ageDays", { header: () => <Abbr short="Age" full="Days since publication" />, cell: (info) => info.getValue() ?? "—" }),
+  columnHelper.accessor("views", { header: () => <Abbr short="Views" full="Page views in the period (beacon, bots excluded)" />, cell: (info) => formatCount(info.getValue()) }),
+  columnHelper.accessor("allTimeViews", { header: () => <Abbr short="Raw hits" full="Raw hits (all-time): cumulative server counter, includes bots and repeat loads" />, cell: (info) => formatCount(info.getValue()) }),
+  columnHelper.accessor("sessions", { header: () => <Abbr short="Sess." full="Reading sessions (reader × IST day)" />, cell: (info) => formatCount(info.getValue()) }),
+  columnHelper.accessor("avgEngagementTime", { header: () => <Abbr short="Avg eng." full="Average engaged time = engaged time ÷ page views" />, cell: (info) => (info.getValue() == null ? "—" : formatDuration(info.getValue() ?? 0)) }),
+  columnHelper.accessor("engagementRate", { header: () => <Abbr short="Eng. %" full="Engagement rate: reads with ≥10s engaged, 2+ views or an internal click" />, cell: (info) => formatPercent(info.getValue()) }),
+  columnHelper.accessor("completionRate", { header: () => <Abbr short="Compl. %" full="Read completion: reached ~90% scroll with ≥15s engaged" />, cell: (info) => formatPercent(info.getValue()) }),
+  columnHelper.accessor("growth", { header: () => <Abbr short="Growth" full="Page views vs previous equivalent period" />, cell: (info) => info.row.original.growthLabel }),
+  columnHelper.accessor("internalClicks", { header: () => <Abbr short="Int. clicks" full="Clicks from this article to another article" />, cell: (info) => formatCount(info.getValue()) }),
+  columnHelper.accessor("recirculation", { header: () => <Abbr short="Recirc. %" full="Per-article recirculation: share of this article's views followed by a click to another article" />, cell: (info) => formatPercent(info.getValue()) }),
 ];
 
 const sortableColumnIds = [
   "title", "categoryLabel", "publishedAt", "ageDays", "views", "allTimeViews",
-  "sessions", "avgEngagementTime", "engagementRate", "completionRate", "growth", "internalClicks",
+  "sessions", "avgEngagementTime", "engagementRate", "completionRate", "growth", "internalClicks", "recirculation",
 ];
 
 function LeaderboardTable({
@@ -566,7 +530,12 @@ function LeaderboardTable({
                     ? headerContent({ column: header.column, table } as any)
                     : headerContent;
                 return (
-                  <th key={id} onClick={() => sortable && onSort(id)} style={{ cursor: sortable ? "pointer" : "default" }}>
+                  <th
+                    key={id}
+                    onClick={() => sortable && onSort(id)}
+                    style={{ cursor: sortable ? "pointer" : "default" }}
+                    aria-sort={currentSort === id ? "descending" : currentSort === `${id}-` ? "ascending" : undefined}
+                  >
                     {header.isPlaceholder ? null : renderedHeader}
                     {sortable ? (
                       <span className="adm-sort-indicator">
@@ -647,7 +616,8 @@ function buildInsights(stats: AdminStats): Insight[] {
   const { overview, leaderboard, topics, sources, recirculation, publishing } = stats;
   const insights: Insight[] = [];
 
-  const pvChange = overview.prevPageViews > 0 ? Math.round(((overview.pageViews - overview.prevPageViews) / overview.prevPageViews) * 100) : null;
+  if (!insightsAllowed(overview.sessions)) return [];
+  const pvChange = deltaPercent(overview.pageViews, overview.prevPageViews, overview.prevHasData);
   if (pvChange !== null) {
     insights.push({
       kind: pvChange > 5 ? "up" : pvChange < -5 ? "down" : "neutral",
@@ -656,7 +626,7 @@ function buildInsights(stats: AdminStats): Insight[] {
     });
   }
 
-  if (overview.engagementRate !== null && overview.prevEngagementRate !== null) {
+  if (overview.prevHasData && overview.engagementRate !== null && overview.prevEngagementRate !== null) {
     const erChange = Math.round(overview.engagementRate - overview.prevEngagementRate);
     if (Math.abs(erChange) >= 1) {
       insights.push({
@@ -719,11 +689,11 @@ function buildInsights(stats: AdminStats): Insight[] {
     });
   }
 
-  if (recirculation.recirculationRate != null && recirculation.recirculationRate < 15 && recirculation.sessions > 10) {
+  if (recirculation.multiArticleRate != null && recirculation.multiArticleRate < 15 && recirculation.sessions > 10) {
     insights.push({
       kind: "down",
       title: "Weak article-to-article recirculation",
-      body: `Only ${formatPercent(recirculation.recirculationRate)} of sessions read more than one article. More related-article links could deepen visits.`,
+      body: `Only ${formatPercent(recirculation.multiArticleRate)} of sessions read more than one article. More related-article links could deepen visits.`,
     });
   }
 
@@ -732,7 +702,7 @@ function buildInsights(stats: AdminStats): Insight[] {
     insights.push({
       kind: "info",
       title: "Long tail is real",
-      body: `Articles older than 6 months average ${formatCount(declining[0].avgViews)} cumulative views — evergreen content keeps working after publication.`,
+      body: `Articles older than 6 months average ${formatCount(declining[0].avgViews)} measured views — evergreen content keeps working after publication.`,
     });
   }
 
@@ -805,8 +775,19 @@ function StatsPage() {
 
   const insights = buildInsights(data);
 
-  const pvDelta = overview.prevPageViews > 0 ? Math.round(((overview.pageViews - overview.prevPageViews) / overview.prevPageViews) * 100) : null;
-  const sessDelta = overview.prevSessions > 0 ? Math.round(((overview.sessions - overview.prevSessions) / overview.prevSessions) * 100) : null;
+  const prior = overview.prevHasData;
+  const pct = (v: number | null) => (v === null ? "—" : `${v > 0 ? "+" : ""}${v}%`);
+  const trendOf = (v: number | null, invert = false) => (v === null ? null : v === 0 ? "neutral" : (v > 0) !== invert ? "up" : "down");
+  const pvDelta = deltaPercent(overview.pageViews, overview.prevPageViews, prior);
+  const sessDelta = deltaPercent(overview.sessions, overview.prevSessions, prior);
+  const usersDelta = deltaPercent(overview.users, overview.prevUsers, prior);
+  const avgDelta = deltaPercent(overview.avgEngagementTime, overview.prevAvgEngagementTime, prior);
+  const engTotalDelta = deltaPercent(overview.totalEngagedTime, overview.prevTotalEngagedTime, prior);
+  const pts = (cur: number | null, prev: number | null) =>
+    prior && cur !== null && prev !== null ? Math.round((cur - prev) * 10) / 10 : null;
+  const erPts = pts(overview.engagementRate, overview.prevEngagementRate);
+  const brPts = pts(overview.bounceRate, overview.prevBounceRate);
+  const ptsLabel = (v: number | null) => (v === null ? "—" : `${v > 0 ? "+" : ""}${v.toFixed(1)} pts`);
 
   const pageCount = Math.max(1, Math.ceil(leaderboard.total / leaderboard.pageSize));
 
@@ -815,7 +796,6 @@ function StatsPage() {
     { id: "yesterday", label: "Yesterday" },
     { id: "last-7", label: "Last 7 days" },
     { id: "last-28", label: "Last 28 days" },
-    { id: "last-30", label: "Last 30 days" },
     { id: "last-90", label: "Last 90 days" },
     { id: "last-12-months", label: "Last 12 months" },
     { id: "custom", label: "Custom range" },
@@ -887,87 +867,82 @@ function StatsPage() {
         <div className="adm-section__head">
           <h2>Overview</h2>
           <p className="adm-section__desc">
-            Page views, sessions and engaged time in {period.label}{" "}
-            {overview.prevPageViews > 0 ? ` vs the previous equivalent period` : ""}.
+            Page views, sessions and engaged time in {period.label.toLowerCase()}
+            {prior ? " vs the previous equivalent period" : ""}.
           </p>
         </div>
         <div className="stat-grid adm-stat-grid">
           <StatCard
             title="Page views"
             value={formatCount(overview.pageViews)}
-            delta={pvDelta !== null ? `${pvDelta > 0 ? "+" : ""}${pvDelta}%` : "—"}
-            trend={pvDelta === null ? null : pvDelta > 0 ? "up" : pvDelta < 0 ? "down" : "neutral"}
+            noPrior={!prior}
+            delta={pct(pvDelta)}
+            trend={trendOf(pvDelta)}
             deltaLabel="vs previous period"
-            help="Article page views measured by the first-party beacon in the selected period."
+            help="Article page views measured by the first-party beacon (bots excluded) in the selected period."
           />
           <StatCard
             title="Sessions"
             value={formatCount(overview.sessions)}
-            delta={sessDelta !== null ? `${sessDelta > 0 ? "+" : ""}${sessDelta}%` : "—"}
-            trend={sessDelta === null ? null : sessDelta > 0 ? "up" : sessDelta < 0 ? "down" : "neutral"}
-            help="Sessions with at least one article view, session-based estimate (30-day cookie)."
+            noPrior={!prior}
+            delta={pct(sessDelta)}
+            trend={trendOf(sessDelta)}
+            help="One session = one reader on one IST day (same source as the charts)."
           />
           <StatCard
-            title="Users (estimate)"
+            title="Users"
             value={formatCount(overview.users)}
-            help="Session-based user estimate; not a census of real people."
+            noPrior={!prior}
+            delta={pct(usersDelta)}
+            trend={trendOf(usersDelta)}
+            help="Distinct readers (random first-party id, no IP stored) in the period."
           />
           <StatCard
             title="New / returning"
             value={`${formatCount(overview.newUsers)} / ${formatCount(overview.returningUsers)}`}
-            help="Sessions starting in the period vs sessions started earlier and seen again."
+            help="Returning = visited on more than one day within the last 30 days."
           />
           <StatCard
             title="Avg engaged time"
             value={overview.avgEngagementTime != null ? formatDuration(overview.avgEngagementTime) : "—"}
-            delta={
-              overview.prevAvgEngagementTime !== null
-                ? `${overview.avgEngagementTime != null && overview.prevAvgEngagementTime > 0
-                    ? Math.round(((overview.avgEngagementTime - overview.prevAvgEngagementTime) / overview.prevAvgEngagementTime) * 100)
-                    : 0
-                  }%`
-                : "—"
-            }
-            trend={overview.prevAvgEngagementTime === null ? null : overview.avgEngagementTime! > overview.prevAvgEngagementTime! ? "up" : "down"}
-            help="Total engaged time ÷ engaged sessions (≥10s visible/active or ≥2 page views)."
+            noPrior={!prior}
+            delta={pct(avgDelta)}
+            trend={trendOf(avgDelta)}
+            help="Total engaged time ÷ page views (visible, active time only)."
           />
           <StatCard
             title="Engagement rate"
             value={formatPercent(overview.engagementRate)}
-            delta={
-              overview.prevEngagementRate !== null
-                ? `${(overview.engagementRate ?? 0 - overview.prevEngagementRate).toFixed(1)} pts`
-                : "—"
-            }
-            trend={
-              overview.prevEngagementRate === null ? null : (overview.engagementRate ?? 0) > overview.prevEngagementRate ? "up" : "down"
-            }
-            help="Engaged sessions ÷ all sessions."
+            noPrior={!prior}
+            delta={ptsLabel(erPts)}
+            trend={trendOf(erPts)}
+            help="GA4 definition: engaged sessions (≥10s engaged, or 2+ page views, or an internal article click) ÷ sessions."
           />
           <StatCard
             title="Bounce rate"
             value={formatPercent(overview.bounceRate)}
-            delta={
-              overview.prevBounceRate !== null
-                ? `-${((overview.bounceRate ?? 0) - overview.prevBounceRate).toFixed(1)} pts`
-                : "—"
-            }
-            trend={overview.prevBounceRate === null ? null : overview.bounceRate! < overview.prevBounceRate! ? "up" : "down"}
-            help="Single-page-view sessions ÷ all sessions."
+            noPrior={!prior}
+            delta={ptsLabel(brPts)}
+            trend={trendOf(brPts, true)}
+            help="100% − engagement rate (GA4 definition)."
           />
           <StatCard
             title="Total engaged time"
             value={formatDuration(overview.totalEngagedTime)}
-            help="Sum of visible, active reading time across all article sessions in the period."
+            noPrior={!prior}
+            delta={pct(engTotalDelta)}
+            trend={trendOf(engTotalDelta)}
+            help="Sum of visible, active reading time across all article reads in the period."
           />
           <StatCard
             title="Published articles"
             value={formatCount(overview.publishedArticles)}
+            help="All currently published articles."
           />
           <StatCard
             title="Published in period"
             value={formatCount(overview.publishedInPeriod)}
-            help="Articles with a publication date inside the selected period."
+            help="Articles whose publication date (IST) falls inside the selected period."
           />
         </div>
       </section>
@@ -984,30 +959,18 @@ function StatsPage() {
           />
         </div>
         <div className="adm-panel">
-          <AreaTrendChart series={overview.series} valueKey="sessions" label="Sessions over time" />
+          <LineTrendChart series={overview.series} valueKey="sessions" label="Sessions over time" area />
         </div>
         <div className="adm-panel">
-          <ComparisonBars
-            current={{
-              pageViews: overview.pageViews,
-              sessions: overview.sessions,
-              engagementRate: overview.engagementRate ?? 0,
-              bounceRate: overview.bounceRate ?? 0,
-              avgEngagementTime: overview.avgEngagementTime ?? 0,
-            }}
-            previous={{
-              pageViews: overview.prevPageViews,
-              sessions: overview.prevSessions,
-              engagementRate: overview.prevEngagementRate ?? 0,
-              bounceRate: overview.prevBounceRate ?? 0,
-              avgEngagementTime: overview.prevAvgEngagementTime ?? 0,
-            }}
-            metrics={[
-              { key: "pageViews", label: "Page views", format: formatter },
-              { key: "sessions", label: "Sessions", format: formatter },
-              { key: "engagementRate", label: "Engagement rate (%)", format: (v) => `${v.toFixed(1)}` },
-              { key: "bounceRate", label: "Bounce rate (%)", format: (v) => `${v.toFixed(1)}` },
-              { key: "avgEngagementTime", label: "Avg engaged time (s)", format: (v) => `${v.toFixed(0)}` },
+          <ComparisonTable
+            hasPrior={prior}
+            rows={[
+              { label: "Page views", current: formatCount(overview.pageViews), previous: formatCount(overview.prevPageViews), change: pct(pvDelta) },
+              { label: "Sessions", current: formatCount(overview.sessions), previous: formatCount(overview.prevSessions), change: pct(sessDelta) },
+              { label: "Users", current: formatCount(overview.users), previous: formatCount(overview.prevUsers), change: pct(usersDelta) },
+              { label: "Engagement rate", current: formatPercent(overview.engagementRate), previous: formatPercent(overview.prevEngagementRate), change: ptsLabel(erPts) },
+              { label: "Bounce rate", current: formatPercent(overview.bounceRate), previous: formatPercent(overview.prevBounceRate), change: ptsLabel(brPts) },
+              { label: "Avg engaged time", current: overview.avgEngagementTime != null ? formatDuration(overview.avgEngagementTime) : "—", previous: overview.prevAvgEngagementTime != null ? formatDuration(overview.prevAvgEngagementTime) : "—", change: pct(avgDelta) },
             ]}
           />
         </div>
@@ -1022,12 +985,12 @@ function StatsPage() {
           </p>
         </div>
         <div className="adm-panel-grid adm-panel-grid--engagement">
-          <div className="adm-panel adm-panel--tall">
+          <div className="adm-panel">
             <HistogramChart buckets={distribution.buckets} />
           </div>
           <div className="adm-panel">
             <div className="adm-panel__body">
-              <h3>Reading-time statistics</h3>
+              <h3 className="adm-card-title">Reading-time statistics</h3>
               <table className="adm-table--compact">
                 <tbody>
                   <tr><td>Recorded session-article reads</td><td className="text-right">{formatCount(distribution.stats?.count ?? 0)}</td></tr>
@@ -1050,8 +1013,8 @@ function StatsPage() {
         <div className="adm-section__head">
           <h2>Article leaderboard</h2>
           <p className="adm-section__desc">
-            Searchable, sortable ranking of published articles. Sorting is editorial: views, engagement,
-            completion and growth all count — not views alone.
+            Searchable ranking of published articles, sorted by page views by default. Click a column
+            header to sort by it (▼ high → low, ▲ low → high).
           </p>
           <div className="adm-table-actions">
             <input
@@ -1070,8 +1033,8 @@ function StatsPage() {
                 ))}
               </select>
             </label>
-            <a href={exportUrl("articles")} className="adm-btn">
-              <Download size={16} /> CSV
+            <a href={exportUrl("articles")} className="adm-btn adm-btn--ghost" title="Download the leaderboard as CSV" aria-label="Export leaderboard as CSV">
+              <Download size={16} /> Export CSV
             </a>
           </div>
         </div>
@@ -1094,24 +1057,28 @@ function StatsPage() {
           <HorizontalBarChart
             data={topics.categories.slice(0, 10).map((c: TopicRow) => ({ name: c.label, value: c.views }))}
             label="Page views by category"
+            emptyMessage="No category views yet for this period."
           />
         </div>
         <div className="adm-panel">
           <HorizontalBarChart
             data={topics.categories.slice(0, 10).map((c: TopicRow) => ({ name: c.label, value: c.sessions }))}
             label="Reading sessions by category"
+            emptyMessage="No category sessions yet for this period."
           />
         </div>
         <div className="adm-panel">
           <DonutChart
             data={topics.categories.slice(0, 8).map((c: TopicRow) => ({ name: c.label, value: c.views }))}
-            label="Share of article traffic by topic"
+            label="Share of article traffic by category"
+            emptyMessage="No article traffic yet for this period."
           />
         </div>
         <div className="adm-panel">
           <HorizontalBarChart
             data={topics.tags.slice(0, 10).map((t: { id: string; label: string; views: number; articles: number }) => ({ name: t.label, value: t.views }))}
-            label="Top tags by views"
+            label="Top tags (topics) by views"
+            emptyMessage="No tagged article views yet for this period."
           />
         </div>
       </section>
@@ -1122,21 +1089,26 @@ function StatsPage() {
           <DonutChart
             data={sources.rows.map((s: SourceRow) => ({ name: `${s.source} · ${s.medium}`, value: s.sessions }))}
             label="Sessions by source · medium"
+            emptyMessage="No source data yet for this period."
           />
         </div>
         <div className="adm-panel">
           <HorizontalBarChart
             data={sources.referrers.map((r: { domain: string; sessions: number }) => ({ name: r.domain, value: r.sessions }))}
             label="Top referring websites"
+            emptyMessage="No referrer data yet — visits so far are direct or internal."
           />
         </div>
         <div className="adm-panel">
           <DonutChart
             data={devices.rows.map((d: DeviceRow) => ({ name: d.device, value: d.sessions }))}
             label="Sessions by device"
+            emptyMessage="No device data yet for this period."
           />
         </div>
-        <div className="adm-panel">
+        <div className="adm-panel adm-panel__body">
+          <h3 className="adm-card-title">Source · medium performance</h3>
+          {sources.rows.length === 0 ? <p className="adm-empty__body adm-left">No source data yet for this period.</p> : null}
           <table className="adm-table--compact">
             <thead>
               <tr><th>Source · medium</th><th className="text-right">Sessions</th><th className="text-right">Engagement</th><th className="text-right">Views / session</th></tr>
@@ -1160,13 +1132,17 @@ function StatsPage() {
       <section className="adm-section adm-section--two-col">
         <div className="adm-panel">
           <div className="adm-panel__body">
-            <h3>Article recirculation</h3>
-            <div className="adm-stat-grid--mini">
-              <StatCard title="Sessions" value={formatCount(recirculation.sessions)} />
+            <h3 className="adm-card-title">Article recirculation</h3>
+            <div className="adm-stat-grid adm-stat-grid--mini">
               <StatCard
-                title="Recirculation rate"
-                value={formatPercent(recirculation.recirculationRate)}
-                help="Sessions reading more than one article ÷ all sessions."
+                title="Site click-through"
+                value={formatPercent(recirculation.clickThroughRate)}
+                help="Site-level recirculation: internal article clicks ÷ article page views. Per-article values are in the leaderboard (Recirc. %)."
+              />
+              <StatCard
+                title="Multi-article sessions"
+                value={formatPercent(recirculation.multiArticleRate)}
+                help="Site-level: sessions that read 2+ different articles ÷ all sessions."
               />
               <StatCard title="Avg articles / session" value={recirculation.avgArticlesPerSession != null ? recirculation.avgArticlesPerSession.toFixed(2) : "—"} />
             </div>
@@ -1192,14 +1168,14 @@ function StatsPage() {
         </div>
         <div className="adm-panel">
           <div className="adm-panel__body">
-            <h3>Publishing performance</h3>
+            <h3 className="adm-card-title">Publishing performance</h3>
             <HorizontalBarChart
               data={publishing.byMonth.map((m: { periodLabel: string; published: number; avgViewsFirst28Days: number | null }) => ({ name: m.periodLabel, value: m.published }))}
               label="Articles published by month"
             />
             <table className="adm-table--compact adm-mt">
               <thead>
-                <tr><th>Article age</th><th className="text-right">Articles</th><th className="text-right">Avg all-time views</th></tr>
+                <tr><th>Article age</th><th className="text-right">Articles</th><th className="text-right">Avg measured views</th></tr>
               </thead>
               <tbody>
                 {publishing.ageCohorts.map((c: { label: string; articles: number; avgViews: number | null }) => (
@@ -1220,8 +1196,12 @@ function StatsPage() {
       <section className="adm-section">
         <h2>Editorial insights</h2>
         <div className="adm-insight-grid">
-          {insights.length === 0 ? (
-            <p className="adm-empty__body">No significant observations for this period yet.</p>
+          {!insightsAllowed(overview.sessions) ? (
+            <p className="adm-empty__body adm-left">
+              Insights are suppressed until the period has at least {INSIGHT_MIN_SESSIONS} sessions (n = {formatCount(overview.sessions)}) — smaller samples are noise.
+            </p>
+          ) : insights.length === 0 ? (
+            <p className="adm-empty__body adm-left">No significant observations for this period yet.</p>
           ) : (
             insights.map((insight, i) => (
               <div key={i} className={`adm-insight adm-insight--${insight.kind}`}>
@@ -1252,7 +1232,7 @@ function StatsPage() {
             <tr>
               <td>Cumulative article view counter</td>
               <td className="adm-status adm-status--ok">Active</td>
-              <td>All-time views in the leaderboard</td>
+              <td>Raw hits (all-time) in the leaderboard — includes bots and repeat loads</td>
             </tr>
             <tr>
               <td>Google Analytics 4 (G-T1R0QJ2F0Z)</td>
