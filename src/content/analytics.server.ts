@@ -24,6 +24,7 @@ import {
   completionQualifies,
   growth,
   isEngagedRead,
+  scrollFunnel,
   sessionsFromReads,
   summarize,
   type ReadRow,
@@ -932,7 +933,7 @@ export async function analyticsPublishing(input: { period: PeriodInput }): Promi
 /** ------------------------------------------------------------------ */
 
 export async function analyticsExportCsv(input: {
-  table: "articles" | "categories" | "sources" | "devices";
+  table: "articles" | "categories" | "sources" | "devices" | "overview";
   period: PeriodInput;
   categoryId?: string | null;
   tagId?: string | null;
@@ -946,15 +947,38 @@ export async function analyticsExportCsv(input: {
       period: input.period, page: 1, pageSize: 10000,
       categoryId: input.categoryId, tagId: input.tagId, q: input.q,
     });
-    const lines = ["Article,Slug,Category,Published,Age (days),Page views,Sessions,Avg engagement time (s),Engagement rate (%),Completion rate (%),Growth vs previous period (%)"];
+    const lines = ["Article,Slug,Category,Tags,Published,Age (days),Page views,Raw hits (all-time),Sessions,Avg engaged time (s),Engagement rate (%),Completion rate (%),Growth,Internal clicks,Recirculation (%),First 24h views,First 7d views"];
     for (const row of data.rows) {
       lines.push([
-        csvEscape(row.title), csvEscape(row.slug), csvEscape(row.categoryLabel),
-        row.publishedAt ?? "", row.ageDays ?? "", row.views, row.sessions,
-        row.avgEngagementTime ?? "", row.engagementRate ?? "", row.completionRate ?? "", row.growth ?? "",
+        csvEscape(row.title), csvEscape(row.slug), csvEscape(row.categoryLabel), csvEscape(row.tagLabels.join("; ")),
+        row.publishedAt ?? "", row.ageDays ?? "", row.views, row.allTimeViews, row.sessions,
+        row.avgEngagementTime ?? "", row.engagementRate ?? "", row.completionRate ?? "", csvEscape(row.growthLabel),
+        row.internalClicks, row.recirculation ?? "", row.first24h ?? "", row.first7d ?? "",
       ].join(","));
     }
     return { csv: lines.join("\n") + "\n", filename: `dypol-articles-${period.from}-to-${period.to}-${stamp}.csv` };
+  }
+
+  if (input.table === "overview") {
+    const o = await analyticsOverview(input.period);
+    const lines = [
+      "Metric,This period,Previous period",
+      `Period,${o.period.from} to ${o.period.to},${o.period.previousFrom} to ${o.period.previousTo}`,
+      `Page views,${o.pageViews},${o.prevHasData ? o.prevPageViews : ""}`,
+      `Sessions,${o.sessions},${o.prevHasData ? o.prevSessions : ""}`,
+      `Users,${o.users},${o.prevHasData ? o.prevUsers : ""}`,
+      `New users,${o.newUsers},`,
+      `Returning users,${o.returningUsers},`,
+      `Engagement rate (%),${o.engagementRate ?? ""},${o.prevEngagementRate ?? ""}`,
+      `Bounce rate (%),${o.bounceRate ?? ""},${o.prevBounceRate ?? ""}`,
+      `Avg engaged time (s),${o.avgEngagementTime ?? ""},${o.prevAvgEngagementTime ?? ""}`,
+      `Total engaged time (s),${o.totalEngagedTime},${o.prevHasData ? o.prevTotalEngagedTime : ""}`,
+      `Published in period,${o.publishedInPeriod},`,
+      "",
+      "Date,Page views,Sessions,Engaged seconds,Published",
+      ...o.series.map((p) => `${p.date},${p.pageViews},${p.sessions},${p.engagedSeconds},${p.published}`),
+    ];
+    return { csv: lines.join("\n") + "\n", filename: `dypol-overview-${period.from}-to-${period.to}-${stamp}.csv` };
   }
 
   if (input.table === "categories") {
@@ -987,4 +1011,182 @@ function csvEscape(value: unknown): string {
   const text = String(value ?? "");
   if (/[",\n]/.test(text)) return `"` + text.replace(/"/g, '""') + `"`;
   return text;
+}
+
+/** ------------------------------------------------------------------ */
+/** t116 PR 2: scroll funnel, entry/exit, search terms, annotations     */
+/** ------------------------------------------------------------------ */
+
+export type PageCount = { id: string; title: string; slug: string; sessions: number };
+
+function entryExit(rows: Array<{ session_id: string; date: string; article_id: string; first_at: string | null; last_at: string | null }>) {
+  const byVisit = new Map<string, typeof rows>();
+  for (const r of rows) {
+    const key = `${r.session_id}|${r.date}`;
+    const list = byVisit.get(key) ?? [];
+    list.push(r);
+    byVisit.set(key, list);
+  }
+  const entries = new Map<string, number>();
+  const exits = new Map<string, number>();
+  for (const list of byVisit.values()) {
+    const timed = list.filter((r) => r.first_at);
+    if (timed.length === 0) continue;
+    const first = timed.reduce((a, b) => ((a.first_at ?? "") <= (b.first_at ?? "") ? a : b));
+    const last = timed.reduce((a, b) => ((a.last_at ?? "") >= (b.last_at ?? "") ? a : b));
+    entries.set(first.article_id, (entries.get(first.article_id) ?? 0) + 1);
+    exits.set(last.article_id, (exits.get(last.article_id) ?? 0) + 1);
+  }
+  return { entries, exits };
+}
+
+export async function analyticsExtras(input: { period: PeriodInput }): Promise<{
+  period: Period;
+  funnel: Array<{ depth: number; reads: number; share: number | null }>;
+  entryPages: PageCount[];
+  exitPages: PageCount[];
+  searchTerms: Array<{ term: string; count: number; results: number }>;
+  annotations: Array<{ id: string; date: string; note: string; kind: "manual" | "publish" }>;
+  notes: string[];
+}> {
+  const sql = await guardedSql();
+  const period = resolvePeriod(input.period);
+  const [reads, timed, articles, terms, manual] = await Promise.all([
+    readsInRange(sql, period.from, period.to),
+    sql<{ session_id: string; date: string; article_id: string; first_at: string | null; last_at: string | null }>`
+      select session_id, date, article_id, first_at, last_at from analytics_article_session
+      where date between ${period.from} and ${period.to}
+    `,
+    catalogArticles(sql),
+    sql<{ term: string; count: number; results: number }>`
+      select term, sum(count)::int as count, max(results)::int as results from analytics_search_terms
+      where date between ${period.from} and ${period.to}
+      group by term order by count desc limit 25
+    `,
+    sql<{ id: string; date: string; note: string }>`
+      select id, date, note from analytics_annotations where date between ${period.from} and ${period.to} order by date
+    `,
+  ]);
+  const byId = new Map(articles.map((a) => [a.id, a]));
+  const toList = (m: Map<string, number>): PageCount[] =>
+    Array.from(m.entries())
+      .map(([id, sessions]) => ({ id, title: byId.get(id)?.title ?? id, slug: byId.get(id)?.slug ?? "", sessions }))
+      .sort((a, b) => b.sessions - a.sessions)
+      .slice(0, 10);
+  const { entries, exits } = entryExit(timed);
+  const publishNotes = articles
+    .filter((a) => a.publishedAt)
+    .map((a) => ({ id: `pub-${a.id}`, date: kolkataDateOfZone(a.publishedAt!), note: `Published: ${a.title}`, kind: "publish" as const }))
+    .filter((a) => a.date >= period.from && a.date <= period.to);
+  return {
+    period,
+    funnel: scrollFunnel(reads.map((r) => r.max_scroll ?? 0)),
+    entryPages: toList(entries),
+    exitPages: toList(exits),
+    searchTerms: terms.map((t) => ({ term: t.term, count: Number(t.count ?? 0), results: Number(t.results ?? 0) })),
+    annotations: [...publishNotes, ...manual.map((m) => ({ ...m, kind: "manual" as const }))].sort((a, b) => a.date.localeCompare(b.date)),
+    notes: [
+      "Scroll funnel = share of reads reaching each depth (100% = bottom of the article).",
+      "Entry/exit = first/last article a reader viewed in a day (articles only; recorded from this release onward).",
+      "Search terms are normalised (lower-case) and stored as daily counts only — no reader id.",
+    ],
+  };
+}
+
+export async function addAnnotation(date: string, note: string): Promise<void> {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error("Date must be YYYY-MM-DD.");
+  const text = note.trim().slice(0, 200);
+  if (!text) throw new Error("Note is required.");
+  const sql = await guardedSql();
+  await sql`insert into analytics_annotations (id, date, note, created_at) values (${crypto.randomUUID()}, ${date}, ${text}, ${new Date().toISOString()})`;
+}
+
+export async function deleteAnnotation(id: string): Promise<void> {
+  const sql = await guardedSql();
+  await sql`delete from analytics_annotations where id = ${id}`;
+}
+
+/** Per-article drill-down. */
+export async function analyticsArticle(input: { id: string; period: PeriodInput }) {
+  const sql = await guardedSql();
+  const period = resolvePeriod(input.period);
+  const articles = await catalogArticles(sql);
+  const article = articles.find((a) => a.id === input.id);
+  if (!article) return null;
+  const since = article.publishedAt ? kolkataDateOfZone(article.publishedAt) : period.from;
+  const [allRows, attrs, next, early, raw] = await Promise.all([
+    readsInRange(sql, since < period.from ? since : period.from, period.to),
+    visitorAttributes(sql, since < period.from ? since : period.from, period.to),
+    sql<{ to_article_id: string; clicks: number }>`
+      select to_article_id, sum(clicks)::int as clicks from analytics_link_clicks
+      where from_article_id = ${article.id} and date between ${period.from} and ${period.to}
+      group by to_article_id order by clicks desc limit 10
+    `,
+    earlyViews(sql, articles),
+    allTimeViews(sql),
+  ]);
+  const mine = allRows.filter((r) => r.article_id === article.id);
+  const inPeriod = mine.filter((r) => r.date >= period.from && r.date <= period.to);
+  const sinceRows = mine.filter((r) => r.date >= since);
+  const byId = new Map(articles.map((a) => [a.id, a]));
+  const daily = new Map<string, number>();
+  for (const r of sinceRows) daily.set(r.date, (daily.get(r.date) ?? 0) + r.page_views);
+  const sources = Array.from(sessionsByAttr(inPeriod, attrs, (a) => a.source).entries())
+    .map(([source, b]) => ({ source, sessions: b.sessions.length }))
+    .sort((a, b) => b.sessions - a.sessions);
+  const sum = summarize(sessionsFromReads(inPeriod));
+  const reads = inPeriod.length;
+  return {
+    period,
+    article: { id: article.id, title: article.title, slug: article.slug, categoryLabel: article.categoryLabel, tagLabels: article.topicLabels, publishedAt: article.publishedAt },
+    viewsInPeriod: sum.pageViews,
+    viewsSincePublish: sinceRows.reduce((n, r) => n + r.page_views, 0),
+    rawHits: raw[article.id] ?? 0,
+    first24h: early.get(article.id)?.first24h ?? 0,
+    first7d: early.get(article.id)?.first7d ?? 0,
+    sessions: sum.sessions,
+    avgEngagedTime: sum.avgEngagedTime,
+    completionRate: reads > 0 ? Math.round((inPeriod.filter(completionQualifies).length / reads) * 1000) / 10 : null,
+    series: daysBetween(since, period.to).slice(-120).map((date) => ({ date, views: daily.get(date) ?? 0 })),
+    sources,
+    funnel: scrollFunnel(inPeriod.map((r) => r.max_scroll ?? 0)),
+    nextPages: next.map((n) => ({ id: n.to_article_id, title: byId.get(n.to_article_id)?.title ?? n.to_article_id, clicks: Number(n.clicks ?? 0) })),
+  };
+}
+
+/** Weekly digest (last 7 IST days vs the 7 before) — JSON for external delivery. */
+export async function analyticsDigest() {
+  const period: PeriodInput = { preset: "last-7", from: "", to: "" };
+  const [overview, leaderboard, sources, extras] = await Promise.all([
+    analyticsOverview(period),
+    analyticsLeaderboard({ period, page: 1, pageSize: 5 }),
+    analyticsSources({ period }),
+    analyticsExtras({ period }),
+  ]);
+  const o = overview;
+  const pct = (cur: number, prev: number) => (o.prevHasData && prev > 0 ? Math.round(((cur - prev) / prev) * 100) : null);
+  const summary = [
+    `DYPOL Blog — ${o.period.from} to ${o.period.to} (IST)`,
+    `Page views: ${o.pageViews}${pct(o.pageViews, o.prevPageViews) !== null ? ` (${pct(o.pageViews, o.prevPageViews)}% vs previous 7 days)` : " (no prior data)"}`,
+    `Sessions: ${o.sessions}; users: ${o.users} (${o.returningUsers} returning)`,
+    `Engagement rate: ${o.engagementRate ?? "—"}%; avg engaged time: ${o.avgEngagementTime ?? "—"}s`,
+    `Top articles: ${leaderboard.rows.filter((r) => r.views > 0).map((r) => `${r.title} (${r.views})`).join("; ") || "none"}`,
+    `Top sources: ${sources.rows.slice(0, 3).map((r) => `${r.source} (${r.sessions})`).join("; ") || "none"}`,
+    `Top searches: ${extras.searchTerms.slice(0, 5).map((t) => `${t.term} (${t.count})`).join("; ") || "none"}`,
+  ].join("\n");
+  return {
+    period: o.period,
+    pageViews: o.pageViews,
+    prevPageViews: o.prevHasData ? o.prevPageViews : null,
+    sessions: o.sessions,
+    prevSessions: o.prevHasData ? o.prevSessions : null,
+    users: o.users,
+    returningUsers: o.returningUsers,
+    engagementRate: o.engagementRate,
+    avgEngagedTime: o.avgEngagementTime,
+    topArticles: leaderboard.rows.filter((r) => r.views > 0).map((r) => ({ title: r.title, slug: r.slug, views: r.views, growth: r.growthLabel })),
+    topSources: sources.rows.slice(0, 5).map((r) => ({ source: r.source, sessions: r.sessions })),
+    topSearchTerms: extras.searchTerms.slice(0, 10),
+    summary,
+  };
 }

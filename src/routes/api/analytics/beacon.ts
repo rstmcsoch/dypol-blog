@@ -18,9 +18,20 @@ const BeaconPayload = z.object({
   maxScroll: z.number().int().min(0).max(100).default(0),
   completed: z.boolean().default(false),
   linkClicks: z.array(z.object({ to: z.string().max(200) })).max(50).default([]),
-  milestones: z.array(z.number().int().min(0).max(100)).max(4).default([]),
+  milestones: z.array(z.number().int().min(0).max(100)).max(5).default([]),
   final: z.boolean().default(false),
 });
+
+/** Site-search event: aggregated term counts only (no session, no IP). */
+const SearchPayload = z.object({
+  kind: z.literal("search"),
+  q: z.string().min(1).max(120),
+  results: z.number().int().min(0).max(1000).default(0),
+});
+
+function normalizeSearchTerm(q: string): string {
+  return q.toLowerCase().normalize("NFKC").replace(/\s+/g, " ").trim().slice(0, 80);
+}
 
 type BeaconInput = z.infer<typeof BeaconPayload>;
 
@@ -47,8 +58,32 @@ async function count(request: Request): Promise<Response> {
   }
 
   let input: BeaconInput;
+  let body: unknown;
   try {
-    input = BeaconPayload.parse(await request.json());
+    body = await request.json();
+  } catch {
+    return new Response(null, { status: 400 });
+  }
+  if (body && typeof body === "object" && (body as { kind?: unknown }).kind === "search") {
+    const parsed = SearchPayload.safeParse(body);
+    if (!parsed.success) return new Response(null, { status: 400 });
+    const term = normalizeSearchTerm(parsed.data.q);
+    if (term) {
+      try {
+        const sqlS = await getSql();
+        await sqlS`
+          insert into analytics_search_terms (term, date, count, results)
+          values (${term}, ${kolkataDate(new Date().toISOString())}, 1, ${parsed.data.results})
+          on conflict (term, date) do update set count = count + 1, results = excluded.results
+        `;
+      } catch (error) {
+        console.error("[analytics/beacon] search not recorded", error instanceof Error ? error.message : "unknown");
+      }
+    }
+    return none();
+  }
+  try {
+    input = BeaconPayload.parse(body);
   } catch {
     return new Response(null, { status: 400 });
   }
@@ -80,15 +115,17 @@ async function count(request: Request): Promise<Response> {
       // Key events (GA4 "engaged" signal): internal article-link clicks.
       const keyEvents = input.linkClicks.filter((c) => c.to.startsWith("/articles/")).length;
       await sql`
-        insert into analytics_article_session (article_id, date, session_id, page_views, engaged_seconds, engaged_sessions, max_scroll, completed, key_events)
-        values (${input.articleId}, ${date}, ${input.sessionId}, ${input.pageViews}, ${input.engagedSeconds}, ${input.engagedSession ? 1 : 0}, ${input.maxScroll}, ${input.completed ? 1 : 0}, ${keyEvents})
+        insert into analytics_article_session (article_id, date, session_id, page_views, engaged_seconds, engaged_sessions, max_scroll, completed, key_events, first_at, last_at)
+        values (${input.articleId}, ${date}, ${input.sessionId}, ${input.pageViews}, ${input.engagedSeconds}, ${input.engagedSession ? 1 : 0}, ${input.maxScroll}, ${input.completed ? 1 : 0}, ${keyEvents}, ${now}, ${now})
         on conflict (article_id, date, session_id) do update set
           page_views = page_views + excluded.page_views,
           engaged_seconds = engaged_seconds + excluded.engaged_seconds,
           engaged_sessions = engaged_sessions + excluded.engaged_sessions,
           max_scroll = max(max_scroll, excluded.max_scroll),
           completed = max(completed, excluded.completed),
-          key_events = key_events + excluded.key_events
+          key_events = key_events + excluded.key_events,
+          first_at = coalesce(first_at, excluded.first_at),
+          last_at = excluded.last_at
       `;
     }
 

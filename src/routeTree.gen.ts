@@ -59,6 +59,8 @@ import { Route as AdminArticlesNewRouteImport } from './routes/admin/articles/ne
 import { Route as ApiAnalyticsBeaconRouteImport } from './routes/api/analytics/beacon'
 import { Route as ApiAnalyticsExportRouteImport } from './routes/api/analytics/export'
 import { Route as ApiViewsSlugRouteImport } from './routes/api/views/$slug'
+import { Route as AdminApiStatsDigestRouteImport } from './routes/admin/api/stats/digest'
+import { Route as AdminStatsArticleIdRouteImport } from './routes/admin/stats_.article.$id'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -313,6 +315,16 @@ const ApiViewsSlugRoute = ApiViewsSlugRouteImport.update({
   path: '/api/views/$slug',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminApiStatsDigestRoute = AdminApiStatsDigestRouteImport.update({
+  id: '/api/stats/digest',
+  path: '/api/stats/digest',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminStatsArticleIdRoute = AdminStatsArticleIdRouteImport.update({
+  id: '/stats_/article/$id',
+  path: '/stats/article/$id',
+  getParentRoute: () => AdminRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -365,6 +377,8 @@ export interface FileRoutesByFullPath {
   '/api/analytics/export': typeof ApiAnalyticsExportRoute
   '/api/views/$slug': typeof ApiViewsSlugRoute
   '/admin/articles/': typeof AdminArticlesIndexRoute
+  '/admin/api/stats/digest': typeof AdminApiStatsDigestRoute
+  '/admin/stats/article/$id': typeof AdminStatsArticleIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -416,6 +430,8 @@ export interface FileRoutesByTo {
   '/api/analytics/export': typeof ApiAnalyticsExportRoute
   '/api/views/$slug': typeof ApiViewsSlugRoute
   '/admin/articles': typeof AdminArticlesIndexRoute
+  '/admin/api/stats/digest': typeof AdminApiStatsDigestRoute
+  '/admin/stats/article/$id': typeof AdminStatsArticleIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -469,6 +485,8 @@ export interface FileRoutesById {
   '/api/analytics/export': typeof ApiAnalyticsExportRoute
   '/api/views/$slug': typeof ApiViewsSlugRoute
   '/admin/articles/': typeof AdminArticlesIndexRoute
+  '/admin/api/stats/digest': typeof AdminApiStatsDigestRoute
+  '/admin/stats_/article/$id': typeof AdminStatsArticleIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -523,6 +541,8 @@ export interface FileRouteTypes {
     | '/api/analytics/export'
     | '/api/views/$slug'
     | '/admin/articles/'
+    | '/admin/api/stats/digest'
+    | '/admin/stats/article/$id'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -574,6 +594,8 @@ export interface FileRouteTypes {
     | '/api/analytics/export'
     | '/api/views/$slug'
     | '/admin/articles'
+    | '/admin/api/stats/digest'
+    | '/admin/stats/article/$id'
   id:
     | '__root__'
     | '/'
@@ -626,6 +648,8 @@ export interface FileRouteTypes {
     | '/api/analytics/export'
     | '/api/views/$slug'
     | '/admin/articles/'
+    | '/admin/api/stats/digest'
+    | '/admin/stats_/article/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -1013,6 +1037,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiViewsSlugRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/api/stats/digest': {
+      id: '/admin/api/stats/digest'
+      path: '/api/stats/digest'
+      fullPath: '/admin/api/stats/digest'
+      preLoaderRoute: typeof AdminApiStatsDigestRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/stats_/article/$id': {
+      id: '/admin/stats_/article/$id'
+      path: '/stats/article/$id'
+      fullPath: '/admin/stats/article/$id'
+      preLoaderRoute: typeof AdminStatsArticleIdRouteImport
+      parentRoute: typeof AdminRoute
+    }
   }
 }
 
@@ -1036,6 +1074,8 @@ interface AdminRouteChildren {
   AdminArticlesIdRoute: typeof AdminArticlesIdRoute
   AdminArticlesNewRoute: typeof AdminArticlesNewRoute
   AdminArticlesIndexRoute: typeof AdminArticlesIndexRoute
+  AdminApiStatsDigestRoute: typeof AdminApiStatsDigestRoute
+  AdminStatsArticleIdRoute: typeof AdminStatsArticleIdRoute
 }
 
 const AdminRouteChildren: AdminRouteChildren = {
@@ -1058,6 +1098,8 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminArticlesIdRoute: AdminArticlesIdRoute,
   AdminArticlesNewRoute: AdminArticlesNewRoute,
   AdminArticlesIndexRoute: AdminArticlesIndexRoute,
+  AdminApiStatsDigestRoute: AdminApiStatsDigestRoute,
+  AdminStatsArticleIdRoute: AdminStatsArticleIdRoute,
 }
 
 const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)

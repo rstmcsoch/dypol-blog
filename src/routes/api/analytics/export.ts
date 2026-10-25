@@ -4,7 +4,7 @@ import { requireAdmin } from "@/lib/auth/admin.server";
 import { analyticsExportCsv } from "@/content/analytics.server";
 
 const ExportQuery = z.object({
-  table: z.enum(["articles", "categories", "sources", "devices"]),
+  table: z.enum(["articles", "categories", "sources", "devices", "overview"]),
   preset: z.enum(["today", "yesterday", "last-7", "last-28", "last-30", "last-90", "last-12-months", "custom"]).optional(),
   from: z.string().max(20).optional(),
   to: z.string().max(20).optional(),
