@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Search } from "lucide-react";
 import type { NavItem } from "@/content/types";
 import { NavLink } from "./nav-link";
 import { ThemeToggle } from "./theme-toggle";
@@ -170,6 +170,11 @@ export function SiteHeader() {
         </NavLink>
         <nav id="site-nav" className={open ? "site-nav is-open" : "site-nav"} aria-label={site.labels.primaryNav}>
           <div className="site-nav__inner" ref={panel}>
+            <form className="search-form site-nav__search" action="/search" method="get" role="search" onSubmit={() => setOpen(false)}>
+              <label htmlFor="menu-q" className="sr-only">Search stories</label>
+              <input id="menu-q" name="q" type="search" placeholder="Search stories…" autoComplete="off" required maxLength={120} />
+              <button type="submit" className="btn btn--accent grain">Search</button>
+            </form>
             <ul className="site-nav__list">
               {items.map((item) => {
                 const topic = item.href.startsWith(TOPIC_PREFIX);
@@ -213,6 +218,9 @@ export function SiteHeader() {
           </div>
         </nav>
         <div className="bar-tools">
+          <Link to="/search" className="search-btn" aria-label="Search" title="Search" onClick={() => setOpen(false)}>
+            <Search aria-hidden="true" strokeWidth={2.5} />
+          </Link>
           <ThemeToggle />
           <button
             ref={button}

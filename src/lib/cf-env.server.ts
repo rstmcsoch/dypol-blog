@@ -32,6 +32,9 @@ export type WorkerBindings = {
   OPENROUTER_API_KEY?: string;
   /** Cloudflare Images binding (t60 image pipeline). */
   IMAGES?: unknown;
+  /** t115 contact form: Cloudflare Turnstile keys (site key may be a plain var; secret via `wrangler secret put`). */
+  TURNSTILE_SITE_KEY?: string;
+  TURNSTILE_SECRET_KEY?: string;
   MCP_LIMITER?: { limit(options: { key: string }): Promise<{ success: boolean }> };
   SIGNIN_LIMITER?: { limit(options: { key: string }): Promise<{ success: boolean }> };
 };

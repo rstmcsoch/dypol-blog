@@ -63,6 +63,43 @@ export const getArticle = createServerFn({ method: "GET" })
     return { ...result, origin: await requestOrigin() };
   });
 
+/** t115: /search?q= — ranked FTS5 results with highlighted snippets (light payload). */
+export const getSearch = createServerFn({ method: "GET" })
+  .validator((input: { q?: string }) => ({ q: typeof input?.q === "string" ? input.q.slice(0, 120) : "" }))
+  .handler(async ({ data }) => {
+    const { searchArticles } = await import("./repository.server");
+    try {
+      const { query, results, meta } = await searchArticles(data.q);
+      return {
+        query,
+        error: false,
+        results: results.map(({ article, snippet }) => ({
+          id: article.id,
+          slug: article.slug,
+          title: article.title,
+          publishedAt: article.publishedAt,
+          coverMediaId: article.coverMediaId ?? null,
+          coverAlt: article.coverAlt ?? null,
+          snippet,
+          topics: meta[article.id]?.topicLabels ?? [],
+          minutes: meta[article.id]?.minutes ?? 1,
+        })),
+      };
+    } catch (error) {
+      console.error("[search]", error);
+      return { query: data.q, error: true, results: [] };
+    }
+  });
+
+/** t115: the contact form's Turnstile site key (null = not configured: the form fails closed). */
+export const getContactConfig = createServerFn({ method: "GET" }).handler(async () => {
+  const { getRequest } = await import("@tanstack/react-start/server");
+  const { turnstileConfig } = await import("./contact.server");
+  const host = new URL(getRequest().url).host;
+  const cfg = await turnstileConfig(host);
+  return { siteKey: cfg.siteKey };
+});
+
 export const getSitemapEntries = createServerFn({ method: "GET" }).handler(async () => {
   const { readSitemap } = await import("./repository.server");
   return readSitemap();

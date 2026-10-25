@@ -52,6 +52,7 @@ type ArticleRow = {
   seo_description: string | null;
   cover_media_id: string | null;
   scheduled_at?: string | null;
+  corrections?: string | null;
   blocks: ArticleBlock[] | string;
 };
 
@@ -130,6 +131,7 @@ function mapArticle(row: ArticleRow, tagIds: string[], topicIds: string[], cover
     seoDescription: row.seo_description ?? undefined,
     coverMediaId: row.cover_media_id,
     scheduledAt: iso(row.scheduled_at ?? null),
+    corrections: row.corrections ?? null,
     coverAlt,
     blocks,
   };
@@ -216,7 +218,7 @@ async function loadArticles(sql: Sql, where = "", params: unknown[] = []): Promi
   try {
     rows = await sql.query<ArticleRow>(
       `select id, slug, title, excerpt, status, published_at, updated_at, category_id, motif, featured,
-              seo_title, seo_description, cover_media_id, scheduled_at, blocks
+              seo_title, seo_description, cover_media_id, scheduled_at, corrections, blocks
        from articles ${where}`,
       params,
     );
@@ -560,6 +562,11 @@ async function articlePayload(
   const sidebar = data.site.articleSidebar.enabled
     ? resolveBlocks(data.site.articleSidebar.blocks, { site: data.site, live, categories: data.categories, tags: data.tags, ...(await viewCountsWindowed(data.site)), current: article, used }, "sidebar")
     : [];
+  // t115: "Related" at the end of the body: 2–3 stories sharing a topic.
+  const sharesTopic = (a: Article) => a.topicIds.some((id) => article.topicIds.includes(id));
+  let inlineRelated = relatedArticles(article, live).filter((a) => !used.has(a.id) && sharesTopic(a)).slice(0, 3);
+  if (inlineRelated.length < 2) inlineRelated = [];
+  for (const a of inlineRelated) used.add(a.id);
   const newer = index > 0 ? live.slice(0, index).reverse().find((a) => !used.has(a.id)) : undefined;
   if (newer) used.add(newer.id);
   const older = index >= 0 ? live.slice(index + 1).find((a) => !used.has(a.id)) : undefined;
@@ -577,6 +584,7 @@ async function articlePayload(
       .filter((tag): tag is Tag => Boolean(tag)),
     related,
     neighbors: { newer, older },
+    inlineRelated: inlineRelated.map((a) => ({ id: a.id, slug: a.slug, title: a.title, publishedAt: a.publishedAt })),
     rank: index === -1 ? 0 : index + 1,
     sidebar,
     meta: metaFor(related, live, data.categories),
@@ -1075,6 +1083,9 @@ export async function saveArticle(raw: unknown): Promise<{ id: string; slug: str
     if (input.featured) {
       await sql`update articles set featured = false where id <> ${id} and featured = true`;
     }
+    if (input.corrections !== undefined) {
+      await sql`update articles set corrections = ${input.corrections || null} where id = ${id}`;
+    }
     await sql`delete from article_tags where article_id = ${id}`;
     for (const tagId of input.tagIds) {
       await sql`insert into article_tags (article_id, tag_id) values (${id}, ${tagId})`;
@@ -1556,4 +1567,67 @@ export async function readMediaFile(
 ): Promise<{ mime: string; bytes: Uint8Array } | null> {
   const library = await openMediaStore();
   return library.read(id, variant);
+}
+
+// ---------- search (t115): D1 FTS5 over published stories ----------
+const SNIP_OPEN = "\u0001";
+const SNIP_CLOSE = "\u0002";
+
+/** Turns free text into a safe FTS5 query: quoted prefix terms, all required. */
+export function ftsQuery(raw: string): string | null {
+  const terms = raw
+    .toLowerCase()
+    .normalize("NFKC")
+    .replace(/["*^:()]/g, " ")
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter((t) => t.length > 0)
+    .slice(0, 8);
+  if (!terms.length) return null;
+  return terms.map((t) => `"${t}"*`).join(" ");
+}
+
+async function ensureSearchIndex(sql: Sql, live: Article[], categories: Category[]): Promise<void> {
+  const signature = `${live.length}:${live.reduce((m, a) => (a.updatedAt > m ? a.updatedAt : m), "")}:${live.map((a) => a.id.slice(0, 4)).join("")}`;
+  const meta = await sql<{ signature: string }>`select signature from search_meta where id = 'articles'`;
+  if (meta[0]?.signature === signature) return;
+  const label = new Map(categories.map((c) => [c.id, c.label]));
+  await sql`delete from articles_fts`;
+  for (const a of live) {
+    const topics = a.topicIds.map((id) => label.get(id) ?? "").filter(Boolean).join(" ");
+    await sql`insert into articles_fts (article_id, title, excerpt, body, topics) values (${a.id}, ${a.title}, ${a.excerpt}, ${articleBodyText(a)}, ${topics})`;
+  }
+  const now = new Date().toISOString();
+  await sql`insert into search_meta (id, signature, built_at) values ('articles', ${signature}, ${now})
+    on conflict (id) do update set signature = excluded.signature, built_at = excluded.built_at`;
+}
+
+export type SearchHit = { article: Article; snippet: string };
+
+/** Ranked results (bm25: title > topics > excerpt > body) with a highlighted body/excerpt snippet. */
+export async function searchArticles(q: string, limit = 30): Promise<{ query: string; results: SearchHit[]; meta: Record<string, ArticleMeta> }> {
+  const query = q.trim().slice(0, 120);
+  const match = ftsQuery(query);
+  if (!match) return { query, results: [], meta: {} };
+  const data = await publicCatalog();
+  const live = published(data.articles);
+  const sql = await getSql();
+  await ensureSearchIndex(sql, live, data.categories);
+  const rows = await sql.query<{ article_id: string; snip: string; esnip: string }>(
+    `select article_id,
+            snippet(articles_fts, 3, '${SNIP_OPEN}', '${SNIP_CLOSE}', '…', 24) as snip,
+            snippet(articles_fts, 2, '${SNIP_OPEN}', '${SNIP_CLOSE}', '…', 24) as esnip
+       from articles_fts where articles_fts match $1
+       order by bm25(articles_fts, 0.0, 10.0, 4.0, 1.0, 6.0) limit $2`,
+    [match, limit],
+  );
+  const byId = new Map(live.map((a) => [a.id, a]));
+  const results: SearchHit[] = [];
+  for (const r of rows) {
+    const article = byId.get(r.article_id);
+    if (!article) continue;
+    const snippet = r.snip?.includes(SNIP_OPEN) ? r.snip : r.esnip?.includes(SNIP_OPEN) ? r.esnip : article.excerpt;
+    results.push({ article, snippet });
+  }
+  const list = results.map((r) => r.article);
+  return { query, results, meta: metaFor(list, live, data.categories) };
 }

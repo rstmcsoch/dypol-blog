@@ -1,3 +1,4 @@
+import { ContactForm } from "./contact-form";
 import { Markdown } from "@/components/markdown";
 
 export type PageView = {
@@ -28,6 +29,7 @@ export function StaticPage({ page }: { page: PageView }) {
         <div className="about-body page-body">
           <Markdown source={page.body} />
         </div>
+        {page.slug === "contact" ? <ContactForm /> : null}
        </div>
       </div>
     </div>

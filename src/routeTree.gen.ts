@@ -20,6 +20,7 @@ import { Route as ManifestDotwebmanifestRouteImport } from './routes/manifest[.]
 import { Route as McpRouteImport } from './routes/mcp'
 import { Route as NewsSitemapDotxmlRouteImport } from './routes/news-sitemap[.]xml'
 import { Route as RobotsDottxtRouteImport } from './routes/robots[.]txt'
+import { Route as SearchRouteImport } from './routes/search'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as DotwellKnownOauthAuthorizationServerRouteImport } from './routes/[.]well-known/oauth-authorization-server'
 import { Route as DotwellKnownOauthProtectedResourceRouteImport } from './routes/[.]well-known/oauth-protected-resource'
@@ -31,6 +32,7 @@ import { Route as AdminHealthRouteImport } from './routes/admin/health'
 import { Route as AdminHelpRouteImport } from './routes/admin/help'
 import { Route as AdminHomepageRouteImport } from './routes/admin/homepage'
 import { Route as AdminMediaRouteImport } from './routes/admin/media'
+import { Route as AdminMessagesRouteImport } from './routes/admin/messages'
 import { Route as AdminPagesRouteImport } from './routes/admin/pages'
 import { Route as AdminSecurityRouteImport } from './routes/admin/security'
 import { Route as AdminSettingsRouteImport } from './routes/admin/settings'
@@ -38,6 +40,7 @@ import { Route as AdminSiteTextRouteImport } from './routes/admin/site-text'
 import { Route as AdminStatsRouteImport } from './routes/admin/stats'
 import { Route as AdminTickerRouteImport } from './routes/admin/ticker'
 import { Route as AdminTopicsRouteImport } from './routes/admin/topics'
+import { Route as ApiContactRouteImport } from './routes/api/contact'
 import { Route as ApiNotFoundRouteImport } from './routes/api/not-found'
 import { Route as ArticlesIndexRouteImport } from './routes/articles/index'
 import { Route as ArticlesSlugRouteImport } from './routes/articles/$slug'
@@ -112,6 +115,11 @@ const RobotsDottxtRoute = RobotsDottxtRouteImport.update({
   path: '/robots.txt',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SearchRoute = SearchRouteImport.update({
+  id: '/search',
+  path: '/search',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
   id: '/sitemap.xml',
   path: '/sitemap.xml',
@@ -169,6 +177,11 @@ const AdminMediaRoute = AdminMediaRouteImport.update({
   path: '/media',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminMessagesRoute = AdminMessagesRouteImport.update({
+  id: '/messages',
+  path: '/messages',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminPagesRoute = AdminPagesRouteImport.update({
   id: '/pages',
   path: '/pages',
@@ -203,6 +216,11 @@ const AdminTopicsRoute = AdminTopicsRouteImport.update({
   id: '/topics',
   path: '/topics',
   getParentRoute: () => AdminRoute,
+} as any)
+const ApiContactRoute = ApiContactRouteImport.update({
+  id: '/api/contact',
+  path: '/api/contact',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const ApiNotFoundRoute = ApiNotFoundRouteImport.update({
   id: '/api/not-found',
@@ -308,6 +326,7 @@ export interface FileRoutesByFullPath {
   '/mcp': typeof McpRoute
   '/news-sitemap.xml': typeof NewsSitemapDotxmlRoute
   '/robots.txt': typeof RobotsDottxtRoute
+  '/search': typeof SearchRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/.well-known/oauth-authorization-server': typeof DotwellKnownOauthAuthorizationServerRoute
   '/.well-known/oauth-protected-resource': typeof DotwellKnownOauthProtectedResourceRouteWithChildren
@@ -318,6 +337,7 @@ export interface FileRoutesByFullPath {
   '/admin/help': typeof AdminHelpRoute
   '/admin/homepage': typeof AdminHomepageRoute
   '/admin/media': typeof AdminMediaRoute
+  '/admin/messages': typeof AdminMessagesRoute
   '/admin/pages': typeof AdminPagesRoute
   '/admin/security': typeof AdminSecurityRoute
   '/admin/settings': typeof AdminSettingsRoute
@@ -325,6 +345,7 @@ export interface FileRoutesByFullPath {
   '/admin/stats': typeof AdminStatsRoute
   '/admin/ticker': typeof AdminTickerRoute
   '/admin/topics': typeof AdminTopicsRoute
+  '/api/contact': typeof ApiContactRoute
   '/api/not-found': typeof ApiNotFoundRoute
   '/articles/$slug': typeof ArticlesSlugRoute
   '/media/$id': typeof MediaIdRoute
@@ -356,6 +377,7 @@ export interface FileRoutesByTo {
   '/mcp': typeof McpRoute
   '/news-sitemap.xml': typeof NewsSitemapDotxmlRoute
   '/robots.txt': typeof RobotsDottxtRoute
+  '/search': typeof SearchRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/.well-known/oauth-authorization-server': typeof DotwellKnownOauthAuthorizationServerRoute
   '/.well-known/oauth-protected-resource': typeof DotwellKnownOauthProtectedResourceRouteWithChildren
@@ -366,6 +388,7 @@ export interface FileRoutesByTo {
   '/admin/help': typeof AdminHelpRoute
   '/admin/homepage': typeof AdminHomepageRoute
   '/admin/media': typeof AdminMediaRoute
+  '/admin/messages': typeof AdminMessagesRoute
   '/admin/pages': typeof AdminPagesRoute
   '/admin/security': typeof AdminSecurityRoute
   '/admin/settings': typeof AdminSettingsRoute
@@ -373,6 +396,7 @@ export interface FileRoutesByTo {
   '/admin/stats': typeof AdminStatsRoute
   '/admin/ticker': typeof AdminTickerRoute
   '/admin/topics': typeof AdminTopicsRoute
+  '/api/contact': typeof ApiContactRoute
   '/api/not-found': typeof ApiNotFoundRoute
   '/articles/$slug': typeof ArticlesSlugRoute
   '/media/$id': typeof MediaIdRoute
@@ -406,6 +430,7 @@ export interface FileRoutesById {
   '/mcp': typeof McpRoute
   '/news-sitemap.xml': typeof NewsSitemapDotxmlRoute
   '/robots.txt': typeof RobotsDottxtRoute
+  '/search': typeof SearchRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/.well-known/oauth-authorization-server': typeof DotwellKnownOauthAuthorizationServerRoute
   '/.well-known/oauth-protected-resource': typeof DotwellKnownOauthProtectedResourceRouteWithChildren
@@ -416,6 +441,7 @@ export interface FileRoutesById {
   '/admin/help': typeof AdminHelpRoute
   '/admin/homepage': typeof AdminHomepageRoute
   '/admin/media': typeof AdminMediaRoute
+  '/admin/messages': typeof AdminMessagesRoute
   '/admin/pages': typeof AdminPagesRoute
   '/admin/security': typeof AdminSecurityRoute
   '/admin/settings': typeof AdminSettingsRoute
@@ -423,6 +449,7 @@ export interface FileRoutesById {
   '/admin/stats': typeof AdminStatsRoute
   '/admin/ticker': typeof AdminTickerRoute
   '/admin/topics': typeof AdminTopicsRoute
+  '/api/contact': typeof ApiContactRoute
   '/api/not-found': typeof ApiNotFoundRoute
   '/articles/$slug': typeof ArticlesSlugRoute
   '/media/$id': typeof MediaIdRoute
@@ -457,6 +484,7 @@ export interface FileRouteTypes {
     | '/mcp'
     | '/news-sitemap.xml'
     | '/robots.txt'
+    | '/search'
     | '/sitemap.xml'
     | '/.well-known/oauth-authorization-server'
     | '/.well-known/oauth-protected-resource'
@@ -467,6 +495,7 @@ export interface FileRouteTypes {
     | '/admin/help'
     | '/admin/homepage'
     | '/admin/media'
+    | '/admin/messages'
     | '/admin/pages'
     | '/admin/security'
     | '/admin/settings'
@@ -474,6 +503,7 @@ export interface FileRouteTypes {
     | '/admin/stats'
     | '/admin/ticker'
     | '/admin/topics'
+    | '/api/contact'
     | '/api/not-found'
     | '/articles/$slug'
     | '/media/$id'
@@ -505,6 +535,7 @@ export interface FileRouteTypes {
     | '/mcp'
     | '/news-sitemap.xml'
     | '/robots.txt'
+    | '/search'
     | '/sitemap.xml'
     | '/.well-known/oauth-authorization-server'
     | '/.well-known/oauth-protected-resource'
@@ -515,6 +546,7 @@ export interface FileRouteTypes {
     | '/admin/help'
     | '/admin/homepage'
     | '/admin/media'
+    | '/admin/messages'
     | '/admin/pages'
     | '/admin/security'
     | '/admin/settings'
@@ -522,6 +554,7 @@ export interface FileRouteTypes {
     | '/admin/stats'
     | '/admin/ticker'
     | '/admin/topics'
+    | '/api/contact'
     | '/api/not-found'
     | '/articles/$slug'
     | '/media/$id'
@@ -554,6 +587,7 @@ export interface FileRouteTypes {
     | '/mcp'
     | '/news-sitemap.xml'
     | '/robots.txt'
+    | '/search'
     | '/sitemap.xml'
     | '/.well-known/oauth-authorization-server'
     | '/.well-known/oauth-protected-resource'
@@ -564,6 +598,7 @@ export interface FileRouteTypes {
     | '/admin/help'
     | '/admin/homepage'
     | '/admin/media'
+    | '/admin/messages'
     | '/admin/pages'
     | '/admin/security'
     | '/admin/settings'
@@ -571,6 +606,7 @@ export interface FileRouteTypes {
     | '/admin/stats'
     | '/admin/ticker'
     | '/admin/topics'
+    | '/api/contact'
     | '/api/not-found'
     | '/articles/$slug'
     | '/media/$id'
@@ -604,9 +640,11 @@ export interface RootRouteChildren {
   McpRoute: typeof McpRoute
   NewsSitemapDotxmlRoute: typeof NewsSitemapDotxmlRoute
   RobotsDottxtRoute: typeof RobotsDottxtRoute
+  SearchRoute: typeof SearchRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   DotwellKnownOauthAuthorizationServerRoute: typeof DotwellKnownOauthAuthorizationServerRoute
   DotwellKnownOauthProtectedResourceRoute: typeof DotwellKnownOauthProtectedResourceRouteWithChildren
+  ApiContactRoute: typeof ApiContactRoute
   ApiNotFoundRoute: typeof ApiNotFoundRoute
   ArticlesSlugRoute: typeof ArticlesSlugRoute
   MediaIdRoute: typeof MediaIdRoute
@@ -702,6 +740,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RobotsDottxtRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/search': {
+      id: '/search'
+      path: '/search'
+      fullPath: '/search'
+      preLoaderRoute: typeof SearchRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/sitemap.xml': {
       id: '/sitemap.xml'
       path: '/sitemap.xml'
@@ -779,6 +824,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminMediaRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/messages': {
+      id: '/admin/messages'
+      path: '/messages'
+      fullPath: '/admin/messages'
+      preLoaderRoute: typeof AdminMessagesRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/pages': {
       id: '/admin/pages'
       path: '/pages'
@@ -827,6 +879,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/admin/topics'
       preLoaderRoute: typeof AdminTopicsRouteImport
       parentRoute: typeof AdminRoute
+    }
+    '/api/contact': {
+      id: '/api/contact'
+      path: '/api/contact'
+      fullPath: '/api/contact'
+      preLoaderRoute: typeof ApiContactRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/api/not-found': {
       id: '/api/not-found'
@@ -965,6 +1024,7 @@ interface AdminRouteChildren {
   AdminHelpRoute: typeof AdminHelpRoute
   AdminHomepageRoute: typeof AdminHomepageRoute
   AdminMediaRoute: typeof AdminMediaRoute
+  AdminMessagesRoute: typeof AdminMessagesRoute
   AdminPagesRoute: typeof AdminPagesRoute
   AdminSecurityRoute: typeof AdminSecurityRoute
   AdminSettingsRoute: typeof AdminSettingsRoute
@@ -986,6 +1046,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminHelpRoute: AdminHelpRoute,
   AdminHomepageRoute: AdminHomepageRoute,
   AdminMediaRoute: AdminMediaRoute,
+  AdminMessagesRoute: AdminMessagesRoute,
   AdminPagesRoute: AdminPagesRoute,
   AdminSecurityRoute: AdminSecurityRoute,
   AdminSettingsRoute: AdminSettingsRoute,
@@ -1028,11 +1089,13 @@ const rootRouteChildren: RootRouteChildren = {
   McpRoute: McpRoute,
   NewsSitemapDotxmlRoute: NewsSitemapDotxmlRoute,
   RobotsDottxtRoute: RobotsDottxtRoute,
+  SearchRoute: SearchRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   DotwellKnownOauthAuthorizationServerRoute:
     DotwellKnownOauthAuthorizationServerRoute,
   DotwellKnownOauthProtectedResourceRoute:
     DotwellKnownOauthProtectedResourceRouteWithChildren,
+  ApiContactRoute: ApiContactRoute,
   ApiNotFoundRoute: ApiNotFoundRoute,
   ArticlesSlugRoute: ArticlesSlugRoute,
   MediaIdRoute: MediaIdRoute,
