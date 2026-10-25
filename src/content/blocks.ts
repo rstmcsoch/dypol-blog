@@ -19,10 +19,16 @@ export type Card = {
   rank: number;
 };
 
+export type TopicRow = { category: Category; count: number; cards: Card[] };
+
 export type ResolvedBlock = {
   block: ContentBlock;
   title: string;
   cards: Card[];
+  /** river: the "Most read" rail beside the latest stories */
+  rail?: Card[];
+  /** topicRows: one row per busy topic */
+  rows?: TopicRow[];
   topics?: { category: Category; count: number }[];
   ticker?: TickerEntry[];
   tags?: Tag[];
@@ -52,6 +58,14 @@ export function defaultTitle(block: ContentBlock, labels: SiteLabels, categories
       return labels.alsoLike;
     case "popular":
       return labels.popular;
+    case "river":
+      return labels.latest;
+    case "topicRows":
+      return labels.topicRows;
+    case "quickReads":
+      return labels.quickReads;
+    case "moreStories":
+      return labels.moreStories;
     case "topics":
       return labels.topics;
     case "ticker":
@@ -103,19 +117,39 @@ function related(current: Article | null | undefined, live: Article[]): Article[
   return [...same, ...others.filter((a) => !same.includes(a))];
 }
 
+/** t96: stories per topic row (1 large + 3 small) and the fewest worth a row. */
+export const TOPIC_ROW_SIZE = 4;
+export const TOPIC_ROW_MIN = 3;
+const RAIL_SIZE = 5;
+const RAIL_MIN = 3;
+
 /**
  * Turns configured blocks into data. Pure: unit-tested, used by the homepage,
- * the article sidebar and the admin live preview. Disabled blocks are dropped;
- * article lists never repeat the lead on the homepage.
+ * the article sidebar and the admin live preview. Disabled blocks are dropped.
+ *
+ * On the homepage every article list skips stories already shown by a block
+ * above it (t96 dedupe), so a long sectioned page never repeats itself; a
+ * section with nothing left is dropped. The "Most read" rail is the one
+ * exception: a ranking may repeat a story when too few unseen ones have views.
  */
 export function resolveBlocks(blocks: ContentBlock[], ctx: BlockContext, where: "home" | "sidebar"): ResolvedBlock[] {
   const { site, live, categories, tags, views } = ctx;
-  const lead = where === "home" ? leadOf(live) : null;
-  const pool = live.filter((a) => a.id !== lead?.id && a.id !== ctx.current?.id);
-  // On the homepage "also" takes the first stories and "latest" continues after it, as before.
-  const alsoBlock = where === "home" ? blocks.find((b) => b.type === "also" && b.enabled) : undefined;
-  const alsoCount = alsoBlock?.count ?? 0;
+  const home = where === "home";
+  const lead = home ? leadOf(live) : null;
+  const used = new Set<string>();
+  if (lead) used.add(lead.id);
+  if (ctx.current) used.add(ctx.current.id);
+  const pool = () => live.filter((a) => !used.has(a.id));
+  /** Take up to `n` stories and, on the homepage, mark them shown. */
+  const take = (list: Article[], n: number): Article[] => {
+    const picked = list.slice(0, n);
+    if (home) for (const a of picked) used.add(a.id);
+    return picked;
+  };
   const card = (a: Article) => toCard(a, live, categories);
+  const viewsOf = (a: Article) => views[a.id] ?? 0;
+  const byViews = (list: Article[]) => list.filter((a) => viewsOf(a) > 0).sort((a, b) => viewsOf(b) - viewsOf(a));
+  const countIn = (id: string) => live.filter((a) => a.topicIds.includes(id)).length;
   const out: ResolvedBlock[] = [];
   for (const block of blocks) {
     if (!block.enabled) continue;
@@ -126,30 +160,62 @@ export function resolveBlocks(blocks: ContentBlock[], ctx: BlockContext, where: 
         if (lead) out.push({ ...base, cards: [card(lead)] });
         break;
       case "also":
-        out.push({ ...base, cards: pool.slice(0, block.count).map(card) });
-        break;
       case "latest":
       case "newStories":
-        out.push({ ...base, cards: pool.slice(block.type === "latest" ? alsoCount : 0).slice(0, block.count).map(card) });
+      case "moreStories":
+        out.push({ ...base, cards: take(pool(), block.count).map(card) });
         break;
       case "related":
-        out.push({ ...base, cards: related(ctx.current ?? lead, live).filter((a) => a.id !== lead?.id).slice(0, block.count).map(card) });
+        out.push({ ...base, cards: take(related(ctx.current ?? lead, live).filter((a) => !used.has(a.id)), block.count).map(card) });
         break;
-      case "popular": {
-        const ranked = [...pool].filter((a) => (views[a.id] ?? 0) > 0).sort((a, b) => (views[b.id] ?? 0) - (views[a.id] ?? 0));
-        out.push({ ...base, cards: ranked.slice(0, block.count).map(card) });
+      case "popular":
+        out.push({ ...base, cards: take(byViews(pool()), block.count).map(card) });
         break;
-      }
       case "category":
-        out.push({ ...base, cards: pool.filter((a) => a.topicIds.includes(block.categoryId)).slice(0, block.count).map(card) });
+        out.push({ ...base, cards: take(pool().filter((a) => a.topicIds.includes(block.categoryId)), block.count).map(card) });
         break;
       case "tag":
-        out.push({ ...base, cards: pool.filter((a) => a.tagIds.includes(block.tagId)).slice(0, block.count).map(card) });
+        out.push({ ...base, cards: take(pool().filter((a) => a.tagIds.includes(block.tagId)), block.count).map(card) });
         break;
+      case "river": {
+        const cards = take(pool(), block.count).map(card);
+        // Rail: most-read stories not shown yet; topped up with shown ones (never the lead) so it is never thin.
+        const fresh = byViews(pool()).slice(0, RAIL_SIZE);
+        const topUp = byViews(live.filter((a) => a.id !== lead?.id && !fresh.includes(a))).slice(0, RAIL_SIZE - fresh.length);
+        const rail = [...fresh, ...topUp].sort((a, b) => viewsOf(b) - viewsOf(a));
+        const showRail = rail.length >= RAIL_MIN;
+        if (showRail) take(fresh, fresh.length);
+        out.push({ ...base, cards, rail: showRail ? rail.map(card) : [] });
+        break;
+      }
+      case "topicRows": {
+        const busiest = [...categories].sort((a, b) => countIn(b.id) - countIn(a.id));
+        const rows: TopicRow[] = [];
+        for (const category of busiest) {
+          if (rows.length >= block.count) break;
+          const stories = pool().filter((a) => a.topicIds.includes(category.id));
+          if (stories.length < TOPIC_ROW_MIN) continue;
+          rows.push({ category, count: countIn(category.id), cards: take(stories, TOPIC_ROW_SIZE).map(card) });
+        }
+        out.push({ ...base, rows, cards: rows.flatMap((r) => r.cards) });
+        break;
+      }
+      case "quickReads": {
+        const short = pool()
+          .map((a) => ({ a, m: readingMinutes(a) }))
+          .sort((x, y) => x.m - y.m)
+          .map((x) => x.a);
+        out.push({ ...base, cards: short.length >= 2 ? take(short, block.count).map(card) : [] });
+        break;
+      }
       case "topics":
         out.push({
           ...base,
-          topics: categories.slice(0, block.count).map((category) => ({ category, count: live.filter((a) => a.topicIds.includes(category.id)).length })),
+          topics: categories
+            .map((category) => ({ category, count: countIn(category.id) }))
+            .filter((t) => !home || t.count > 0)
+            .sort((a, b) => (home ? b.count - a.count : 0))
+            .slice(0, block.count),
         });
         break;
       case "ticker":
@@ -165,7 +231,7 @@ export function resolveBlocks(blocks: ContentBlock[], ctx: BlockContext, where: 
         out.push(base); // text, cta, share render from the block itself
     }
   }
-  // Drop article blocks that came out empty, so no empty headings appear.
+  // Drop blocks that came out empty, so no empty headings appear.
   return out.filter((r) => {
     const t = r.block.type;
     if (t === "text") return r.block.body.trim().length > 0;

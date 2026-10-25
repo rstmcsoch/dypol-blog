@@ -5,6 +5,13 @@ export function block(id: string, type: BlockType, over: Partial<ContentBlock> =
   return { id, type, enabled: true, title: "", count: 5, layout: "list", categoryId: "", tagId: "", body: "", ctaLabel: "", ctaHref: "", ...over };
 }
 
+/** t96: the sections inserted after the coloured band (also used to upgrade saved homepages). */
+export const T96_HOME_BLOCKS: ContentBlock[] = [
+  block("home-river", "river", { count: 6 }),
+  block("home-topic-rows", "topicRows", { count: 4 }),
+  block("home-quick", "quickReads", { count: 4 }),
+];
+
 /**
  * Public site configuration.
  * Routine labels, navigation, trending, and footer copy live here
@@ -65,6 +72,10 @@ export const site = {
     linkCopied: "Link copied",
     tags: "Tags",
     popular: "Most read",
+    topicRows: "In focus",
+    quickReads: "Quick reads",
+    moreStories: "More stories",
+    moreIn: "More in",
   },
   // t96: about five items, like the big tech sites — the logo is the way home.
   // Topic shortcuts only render while their topic has published stories.
@@ -92,9 +103,14 @@ export const site = {
     blocks: [
       block("home-featured", "featured", { count: 1 }),
       block("home-also", "also", { count: 3 }),
-      block("home-latest", "latest", { count: 6, layout: "cards", title: "Our new articles" }),
+      // t96: a long, sectioned front page like the big tech sites. Every
+      // section dedupes against the ones above it and hides when empty.
+      ...T96_HOME_BLOCKS,
+      // Superseded by the river above; kept (off) so the owner can bring it back.
+      block("home-latest", "latest", { count: 6, layout: "cards", title: "Our new articles", enabled: false }),
       block("home-related", "related", { count: 3, layout: "cards", title: "You may also like" }),
       block("home-topics", "topics", { count: 12, title: "Browse by topics" }),
+      block("home-more", "moreStories", { count: 9, layout: "grid" }),
       block("home-tags", "tags", { count: 12, title: "Tags" }),
     ],
   },

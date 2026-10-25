@@ -121,6 +121,11 @@ export type SiteLabels = {
   linkCopied: string;
   tags: string;
   popular: string;
+  /** t96 homepage sections */
+  topicRows: string;
+  quickReads: string;
+  moreStories: string;
+  moreIn: string;
 };
 
 export const BLOCK_TYPES = [
@@ -138,6 +143,11 @@ export const BLOCK_TYPES = [
   "tags",
   "newStories",
   "share",
+  // t96: richer homepage sections
+  "river",
+  "topicRows",
+  "quickReads",
+  "moreStories",
 ] as const;
 export type BlockType = (typeof BLOCK_TYPES)[number];
 export type BlockLayout = "list" | "grid" | "cards";

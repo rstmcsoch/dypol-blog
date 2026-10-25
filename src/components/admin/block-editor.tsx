@@ -18,6 +18,10 @@ export const BLOCK_INFO: Record<BlockType, { name: string; help: string; count?:
   tags: { name: "Tags of this article", help: "The article's tags." },
   newStories: { name: "New stories", help: "The newest other articles.", count: "Stories" },
   share: { name: "Share buttons", help: "X, LinkedIn, Facebook, email and copy link." },
+  river: { name: "Latest river + Most read", help: "Newest stories not shown above, with dates, beside a numbered Most-read rail (the rail appears once stories have views).", count: "Stories" },
+  topicRows: { name: "Topic rows (automatic)", help: "One row for each of your busiest topics: a big story, three small ones and a “More in …” button. A topic needs at least 3 stories not shown above.", count: "Topics" },
+  quickReads: { name: "Quick reads", help: "The shortest stories not shown above, with their reading time.", count: "Stories" },
+  moreStories: { name: "More stories", help: "Everything not shown above as a grid, with a button to the full index. Put it near the end.", count: "Stories", layout: true },
 };
 
 type Option = { id: string; label: string };
