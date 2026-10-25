@@ -4,7 +4,7 @@ import { getSql } from "@/lib/db";
 import { workerEnv } from "@/lib/cf-env.server";
 import { writesAllowed } from "@/lib/write-guard.server";
 import { automationActive, type AutomationSettings } from "@/lib/automation/settings";
-import { bodyToBlocks, contentHash, wordCount } from "@/lib/automation/body";
+import { bodyToBlocks, contentHash, stripCreditsAndSources, wordCount } from "@/lib/automation/body";
 import { draftFlags, publishDecision, sourceProblems, type DraftFlag } from "@/lib/automation/policy";
 import { effectiveRun, limitVerdict, type EffectiveRun } from "@/lib/automation/publish-limits";
 import { assertUsableCover, decodeBase64Image, fetchImage, ImageIntakeError, MAX_IMAGE_BYTES, type ImageMime } from "@/lib/automation/image-fetch";
@@ -39,7 +39,7 @@ const submitSchema = z.object({
     .string()
     .min(1)
     .max(MAX_BODY_CHARS)
-    .describe("Article body. Paragraphs separated by blank lines; '## ' / '### ' headings; '- ' lists; '> ' quotes; ``` code. No HTML."),
+    .describe("Article body in markdown (no HTML). Paragraphs separated by blank lines (1-3 sentences each); '## ' / '### ' / '#### ' headings; '- ' or '1. ' lists (indent 2 spaces for a sub-item); **bold**, *italic*, ~~strike~~, `code`; [descriptive anchor](https://url) links; GFM pipe tables (| A | B | / |---|---:|); a key-specs card as a ```specs fence of 'Label: Value' lines (or a '### Key specs' heading + 2-column table); callouts '> **Note:** …' / '> **Key takeaway:** …'; '## At a glance' + 3 bullets = summary box; '---' divider. Do NOT add a Sources/References section or 'Cover image:'/credit lines: sources go in source_urls, credits in the cover credit field; such sections are removed automatically."),
   topics: z
     .array(z.string().trim().min(1).max(120))
     .min(1)
@@ -85,7 +85,7 @@ const updateDraftSchema = z
     title: z.string().trim().min(5).max(200).optional(),
     slug: z.string().trim().max(80).regex(/^[a-z0-9-]*$/, "lowercase letters, digits, hyphens").optional(),
     excerpt: z.string().trim().min(20).max(500).optional(),
-    body: z.string().min(1).max(MAX_BODY_CHARS).optional().describe("Full replacement body, same format as submit_article_draft. The Sources section is rebuilt from source_urls."),
+    body: z.string().min(1).max(MAX_BODY_CHARS).optional().describe("Full replacement body, same format as submit_article_draft. Sources/credit sections in the body are removed (sources live in source_urls)."),
     category: z.string().trim().min(1).max(80).optional().describe("Legacy: set the single main topic. Prefer `topics`."),
     topics: z.array(z.string().trim().min(1).max(120)).min(1).max(MAX_TOPICS_PER_ARTICLE).optional().describe("Replace the full topic set (1-" + MAX_TOPICS_PER_ARTICLE + " topic slugs or exact names from get_blog_settings). The first is the main topic."),
     add_topics: refList.optional().describe("Add topics (slugs or exact names). Unknown topics are rejected with the valid list."),
@@ -95,7 +95,7 @@ const updateDraftSchema = z
     remove_tags: refList.optional(),
     seo_title: z.string().trim().max(200).optional(),
     seo_description: z.string().trim().max(300).optional(),
-    source_urls: z.array(z.string().trim().max(500)).max(20).optional().describe("Replace the source list; the Sources section of the body is rebuilt."),
+    source_urls: z.array(z.string().trim().max(500)).max(20).optional().describe("Replace the source list (stored as metadata; never shown in the public body)."),
   })
   .refine((v) => Object.keys(v).length > 1, "Provide at least one field to change.");
 
@@ -396,13 +396,13 @@ function pick<T extends { id: string; slug: string; label: string }>(items: T[],
   return items.find((i) => i.id.toLowerCase() === needle || i.slug === needle || i.label.toLowerCase() === needle);
 }
 
-function sourcesBlocks(urls: string[]): ArticleBlock[] {
-  return urls.length ? [{ type: "heading", level: 2, text: "Sources" }, { type: "list", items: urls }] : [];
+/** t106: sources are metadata (source_urls), never a public "Sources" list in the body. */
+function sourcesBlocks(_urls: string[]): ArticleBlock[] {
+  return [];
 }
 
 function stripSourcesSection(blocks: ArticleBlock[]): ArticleBlock[] {
-  const idx = blocks.findIndex((b) => b.type === "heading" && b.text === "Sources");
-  return idx === -1 ? blocks : blocks.slice(0, idx);
+  return stripCreditsAndSources(blocks);
 }
 
 export function buildTools(ctx: Ctx): ToolDefinition[] {
@@ -609,7 +609,7 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
           else if (!tag) dropped += 1;
         }
         const { valid: sources } = sourceProblems(input.source_urls);
-        const bodyBlocks = bodyToBlocks(input.body);
+        const bodyBlocks = stripCreditsAndSources(bodyToBlocks(input.body));
         if (bodyBlocks.length === 0) return { ok: false, error: "The body is empty." };
         const blocks = [...bodyBlocks, ...sourcesBlocks(sources)];
         if (blocks.length > 80) return { ok: false, error: "The body has too many blocks (max 78 plus sources)." };
@@ -1006,7 +1006,7 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
           const effectiveSources = input.source_urls ?? submission?.sourceUrls ?? [];
           const { valid: validSources } = sourceProblems(effectiveSources);
           if (input.body !== undefined) {
-            const bodyBlocks = bodyToBlocks(input.body);
+            const bodyBlocks = stripCreditsAndSources(bodyToBlocks(input.body));
             if (bodyBlocks.length === 0) return { ok: false, error: "The body is empty." };
             const blocks = [...bodyBlocks, ...sourcesBlocks(validSources)];
             if (blocks.length > 80) return { ok: false, error: "The body has too many blocks (max 78 plus sources)." };

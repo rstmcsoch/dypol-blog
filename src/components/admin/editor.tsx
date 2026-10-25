@@ -3,6 +3,7 @@ import { Link, useBlocker, useNavigate, useRouter } from "@tanstack/react-router
 import { adminRestoreRevision, adminRevisions, adminSaveArticle, adminSetAiEditAllowed } from "@/content/admin-api";
 import { DeleteArticleButton } from "./delete-article";
 import { readingMinutes } from "@/content/present";
+import { blockPlainText } from "@/content/block-text";
 import type { Article, ArticleBlock, Category, CoverMotif, PublicationStatus, Tag } from "@/content/types";
 import { slugify } from "@/content/validate";
 import { errorText } from "./gate";
@@ -293,6 +294,9 @@ export function ArticleEditor({
               <option value="code">Code</option>
               <option value="table">Table</option>
               <option value="takeaways">At a glance (takeaways)</option>
+              <option value="specs">Key specs card</option>
+              <option value="callout">Callout (note / key takeaway)</option>
+              <option value="divider">Divider</option>
             </select>
           </label>
         </div>
@@ -568,6 +572,9 @@ function emptyBlock(type: string): ArticleBlock {
   if (type === "code") return { type: "code", code: "" };
   if (type === "table") return { type: "table", headers: ["", ""], rows: [["", ""]] };
   if (type === "takeaways") return { type: "takeaways", items: [""] };
+  if (type === "specs") return { type: "specs", title: "Key specs", rows: [["", ""]] };
+  if (type === "callout") return { type: "callout", tone: "note", text: "" };
+  if (type === "divider") return { type: "divider" };
   return { type: "paragraph", text: "" };
 }
 
@@ -579,10 +586,14 @@ function BlockFields({ block, onChange }: { block: ArticleBlock; onChange: (bloc
           <span>Level</span>
           <select
             value={block.level}
-            onChange={(event) => onChange({ ...block, level: Number(event.target.value) === 3 ? 3 : 2 })}
+            onChange={(event) => {
+              const n = Number(event.target.value);
+              onChange({ ...block, level: n === 4 ? 4 : n === 3 ? 3 : 2 });
+            }}
           >
             <option value={2}>Heading 2</option>
             <option value={3}>Heading 3</option>
+            <option value={4}>Heading 4</option>
           </select>
         </label>
         <label className="field">
@@ -639,7 +650,7 @@ function BlockFields({ block, onChange }: { block: ArticleBlock; onChange: (bloc
           value={text}
           onChange={(event) => {
             const lines = event.target.value.split("\n");
-            onChange({ type: "table", headers: (lines[0] ?? "").split("|").map((c) => c.trim()), rows: lines.slice(1).map((l) => l.split("|").map((c) => c.trim())) });
+            onChange({ ...block, type: "table", headers: (lines[0] ?? "").split("|").map((c) => c.trim()), rows: lines.slice(1).map((l) => l.split("|").map((c) => c.trim())) });
           }}
         />
       </label>
@@ -653,6 +664,51 @@ function BlockFields({ block, onChange }: { block: ArticleBlock; onChange: (bloc
       </label>
     );
   }
+  if (block.type === "specs") {
+    return (
+      <>
+        <label className="field">
+          <span>Card title</span>
+          <input value={block.title ?? ""} onChange={(event) => onChange({ ...block, title: event.target.value })} />
+        </label>
+        <label className="field">
+          <span>Specs — one per line as Label: Value</span>
+          <textarea
+            value={block.rows.map((r) => `${r[0] ?? ""}: ${r[1] ?? ""}`).join("\n")}
+            onChange={(event) =>
+              onChange({
+                ...block,
+                rows: event.target.value.split("\n").map((line) => {
+                  const at = line.indexOf(":");
+                  return at === -1 ? [line.trim(), ""] : [line.slice(0, at).trim(), line.slice(at + 1).trim()];
+                }),
+              })
+            }
+          />
+        </label>
+      </>
+    );
+  }
+  if (block.type === "callout") {
+    return (
+      <>
+        <label className="field">
+          <span>Kind</span>
+          <select value={block.tone} onChange={(event) => onChange({ ...block, tone: event.target.value as typeof block.tone })}>
+            <option value="note">Note</option>
+            <option value="takeaway">Key takeaway</option>
+            <option value="tip">Tip</option>
+            <option value="warning">Warning</option>
+          </select>
+        </label>
+        <label className="field">
+          <span>Text</span>
+          <textarea value={block.text} onChange={(event) => onChange({ ...block, text: event.target.value })} />
+        </label>
+      </>
+    );
+  }
+  if (block.type === "divider") return <p className="muted">Horizontal divider — no settings.</p>;
   if (block.type === "code") {
     return (
       <>
@@ -680,11 +736,11 @@ function BlockFields({ block, onChange }: { block: ArticleBlock; onChange: (bloc
 
 function SeoChecklist({ draft }: { draft: Draft }) {
   const words = draft.blocks
-    .map((b) => (b.type === "list" || b.type === "takeaways" ? b.items.join(" ") : b.type === "table" ? [...b.headers, ...b.rows.flat()].join(" ") : b.type === "code" ? "" : b.text))
+    .map((b) => blockPlainText(b))
     .join(" ")
     .split(/\s+/)
     .filter(Boolean).length;
-  const bodyStrings = draft.blocks.flatMap((b) => (b.type === "list" ? b.items : b.type === "code" ? [] : [b.text]));
+  const bodyStrings = draft.blocks.map((b) => blockPlainText(b));
   const linkCount = bodyStrings.reduce((n, s) => n + (s.match(/\[[^\]]+\]\(https?:\/\/[^)\s]+\)|https?:\/\/[^\s)]+/g) ?? []).length, 0);
   const items = seoChecklist({
     title: draft.title,

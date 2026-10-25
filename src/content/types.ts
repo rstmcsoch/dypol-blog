@@ -6,12 +6,19 @@ export type CoverMotif = "corner" | "band" | "split" | "stamp" | "stack" | "edge
 
 export type ArticleBlock =
   | { type: "paragraph"; text: string }
-  | { type: "heading"; level: 2 | 3; text: string }
-  | { type: "list"; ordered?: boolean; items: string[] }
+  | { type: "heading"; level: 2 | 3 | 4; text: string }
+  /** t106: `children[i]` holds the nested sub-items of `items[i]` (one level). */
+  | { type: "list"; ordered?: boolean; items: string[]; children?: string[][] }
   | { type: "quote"; text: string; attribution?: string }
   | { type: "code"; language?: string; code: string }
   /** t91 Phase 2: comparison/data table (markdown pipe table in automation bodies). */
-  | { type: "table"; headers: string[]; rows: string[][] }
+  | { type: "table"; headers: string[]; rows: string[][]; align?: ("left" | "center" | "right" | "")[] }
+  /** t106: key-specs card (two columns: label, value). */
+  | { type: "specs"; title?: string; rows: string[][] }
+  /** t106: callout box (Note / Key takeaway / Tip / Warning). */
+  | { type: "callout"; tone: "note" | "takeaway" | "tip" | "warning"; title?: string; text: string }
+  /** t106: horizontal rule. */
+  | { type: "divider" }
   /** t91 Phase 2: "At a glance" key-takeaways box (2-4 bullets). */
   | { type: "takeaways"; items: string[] };
 

@@ -17,13 +17,14 @@ const blockSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("paragraph"), text: z.string().max(20000) }),
   z.object({
     type: z.literal("heading"),
-    level: z.union([z.literal(2), z.literal(3)]),
+    level: z.union([z.literal(2), z.literal(3), z.literal(4)]),
     text: z.string().max(300),
   }),
   z.object({
     type: z.literal("list"),
     ordered: z.boolean().optional(),
     items: z.array(z.string().max(2000)).max(40),
+    children: z.array(z.array(z.string().max(2000)).max(20)).max(40).optional(),
   }),
   z.object({
     type: z.literal("quote"),
@@ -34,7 +35,20 @@ const blockSchema = z.discriminatedUnion("type", [
     type: z.literal("table"),
     headers: z.array(z.string().max(200)).max(8),
     rows: z.array(z.array(z.string().max(2000)).max(8)).max(40),
+    align: z.array(z.enum(["left", "center", "right", ""])).max(8).optional(),
   }),
+  z.object({
+    type: z.literal("specs"),
+    title: z.string().max(200).optional(),
+    rows: z.array(z.array(z.string().max(1000)).max(2)).max(40),
+  }),
+  z.object({
+    type: z.literal("callout"),
+    tone: z.enum(["note", "takeaway", "tip", "warning"]),
+    title: z.string().max(200).optional(),
+    text: z.string().max(5000),
+  }),
+  z.object({ type: z.literal("divider") }),
   z.object({ type: z.literal("takeaways"), items: z.array(z.string().max(2000)).max(6) }),
   z.object({
     type: z.literal("code"),
