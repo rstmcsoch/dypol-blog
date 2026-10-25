@@ -184,18 +184,24 @@ export function resolveBlocks(blocks: ContentBlock[], ctx: BlockContext, where: 
         const topUp = byViews(live.filter((a) => a.id !== lead?.id && !fresh.includes(a))).slice(0, RAIL_SIZE - fresh.length);
         const rail = [...fresh, ...topUp].sort((a, b) => viewsOf(b) - viewsOf(a));
         const showRail = rail.length >= RAIL_MIN;
-        if (showRail) take(fresh, fresh.length);
+        // t103: the rail is a ranking beside the river, not a story list, so it
+        // does not consume stories; small archives keep enough for the sections below.
         out.push({ ...base, cards, rail: showRail ? rail.map(card) : [] });
         break;
       }
       case "topicRows": {
         const busiest = [...categories].sort((a, b) => countIn(b.id) - countIn(a.id));
         const rows: TopicRow[] = [];
+        // t103: rows use at most half the unseen stories, so Quick reads,
+        // related and More stories still have something to show on a small archive.
+        let budget = home ? Math.floor(pool().length / 2) : Infinity;
         for (const category of busiest) {
-          if (rows.length >= block.count) break;
+          if (rows.length >= block.count || budget < TOPIC_ROW_MIN) break;
           const stories = pool().filter((a) => a.topicIds.includes(category.id));
           if (stories.length < TOPIC_ROW_MIN) continue;
-          rows.push({ category, count: countIn(category.id), cards: take(stories, TOPIC_ROW_SIZE).map(card) });
+          const picked = take(stories, Math.min(TOPIC_ROW_SIZE, budget));
+          budget -= picked.length;
+          rows.push({ category, count: countIn(category.id), cards: picked.map(card) });
         }
         out.push({ ...base, rows, cards: rows.flatMap((r) => r.cards) });
         break;

@@ -88,3 +88,13 @@ test("t96: homepage topics grid shows busiest non-empty topics first", () => {
   const r = resolveBlocks([block("t", "topics", { count: 5 })], { ...ctx, categories: [...cats, { id: "c3", slug: "empty", label: "Empty", description: "" } as Category] }, "home");
   assert.deepEqual(r[0]?.topics?.map((t) => t.category.id), ["c1", "c2"]);
 });
+
+test("t103: a ~29-story archive still fills every homepage section", () => {
+  const small = many.slice(0, 29);
+  const views = Object.fromEntries(small.map((a, i) => [a.id, 50 - i]));
+  const r = resolveBlocks(t96Blocks, { ...ctx, live: small, views }, "home");
+  assert.deepEqual(r.map((x) => x.block.type), ["featured", "also", "river", "topicRows", "quickReads", "related", "moreStories"]);
+  const ids = r.flatMap((x) => x.cards.map((c) => c.id));
+  assert.equal(new Set(ids).size, ids.length, "still no repeats");
+  assert.ok((r.find((x) => x.block.type === "river")?.rail?.length ?? 0) >= 3, "rail shows");
+});
