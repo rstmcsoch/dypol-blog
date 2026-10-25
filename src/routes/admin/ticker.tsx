@@ -1,9 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { adminPending } from "@/components/admin/pending";
 import { FormShell, useSiteForm } from "@/components/admin/site-form";
 import { adminSettings } from "@/content/admin-api";
 import type { SiteConfig } from "@/content/types";
 
 export const Route = createFileRoute("/admin/ticker")({
+  ...adminPending,
   loader: () => adminSettings(),
   component: TickerAdmin,
 });

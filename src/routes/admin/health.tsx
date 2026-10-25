@@ -1,10 +1,12 @@
 import { useState } from "react";
+import { adminPending } from "@/components/admin/pending";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { errorText } from "@/components/admin/gate";
 import { adminHealth, adminImportSettings } from "@/content/admin-api";
 import { formatDate } from "@/lib/format";
 
 export const Route = createFileRoute("/admin/health")({
+  ...adminPending,
   loader: () => adminHealth(),
   component: HealthDesk,
 });

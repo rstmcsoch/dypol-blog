@@ -1,7 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { adminPending } from "@/components/admin/pending";
 import { adminActivity } from "@/content/admin-api";
 
 export const Route = createFileRoute("/admin/activity")({
+  ...adminPending,
   loader: () => adminActivity(),
   component: ActivityDesk,
 });

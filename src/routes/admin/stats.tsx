@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { adminPending } from "@/components/admin/pending";
 import {
   createFileRoute,
   Link,
@@ -58,6 +59,7 @@ const SORT_KEYS = [
 ];
 
 export const Route = createFileRoute("/admin/stats")({
+  ...adminPending,
   validateSearch: (search: Record<string, unknown>): Search => {
     const presets: DatePreset[] = [
       "today", "yesterday", "last-7", "last-28", "last-30", "last-90", "last-12-months", "custom",

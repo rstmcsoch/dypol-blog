@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { adminPending } from "@/components/admin/pending";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { errorText } from "@/components/admin/gate";
 import { adminAutomation, adminProfileAction, adminSaveAutomation } from "@/content/admin-api";
@@ -7,6 +8,7 @@ import { PROVIDER_KEY_SECRETS, PROVIDER_LABELS } from "@/lib/automation/provider
 import { nextExpectedRun } from "@/lib/automation/schedule";
 
 export const Route = createFileRoute("/admin/automation")({
+  ...adminPending,
   validateSearch: (search: Record<string, unknown>): { profile?: string } =>
     typeof search.profile === "string" && /^(default|p[0-9a-f]{8})$/.test(search.profile) ? { profile: search.profile } : {},
   loaderDeps: ({ search }) => ({ profile: search.profile }),

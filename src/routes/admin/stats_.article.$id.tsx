@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { adminPending } from "@/components/admin/pending";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from "recharts";
 import { adminArticleStats } from "@/content/admin-api";
 import { formatCount, formatDuration, formatPercent, kolkataDisplayDate } from "@/lib/analytics-dates";
@@ -7,6 +8,7 @@ import { niceTicks, shortDate } from "@/lib/analytics-metrics";
 type Search = { preset?: string; from?: string; to?: string };
 
 export const Route = createFileRoute("/admin/stats_/article/$id")({
+  ...adminPending,
   validateSearch: (search: Record<string, unknown>): Search => ({
     preset: typeof search.preset === "string" ? search.preset : undefined,
     from: typeof search.from === "string" ? search.from : undefined,

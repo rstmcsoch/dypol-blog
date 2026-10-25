@@ -675,12 +675,19 @@ export async function adminOverview() {
     topics: data.categories.length,
     tags: data.tags.length,
   };
-  const library = await openMediaStore().catch((error: unknown) => {
-    if (error instanceof MediaBindingError) return null;
-    throw error;
-  });
-  const media = library ? await library.stats() : { files: 0, bytes: 0 };
-  const views = await viewCounts(data.site).catch(() => ({}) as Record<string, number>);
+  // Independent reads run in parallel instead of one D1/R2 round trip after another.
+  const [media, views, runs] = await Promise.all([
+    openMediaStore()
+      .catch((error: unknown) => {
+        if (error instanceof MediaBindingError) return null;
+        throw error;
+      })
+      .then((library) => (library ? library.stats() : { files: 0, bytes: 0 })),
+    viewCounts(data.site).catch(() => ({}) as Record<string, number>),
+    import("./automation.server")
+      .then(({ recentRuns: loadRuns }) => loadRuns(6))
+      .catch(() => []),
+  ]);
   const totalViews = Object.values(views).reduce((sum, n) => sum + n, 0);
   const weekAgo = Date.now() - 7 * 24 * 3600 * 1000;
   const publishedThisWeek = data.articles.filter((a) => a.status === "published" && a.publishedAt && Date.parse(a.publishedAt) >= weekAgo).length;
@@ -698,13 +705,13 @@ export async function adminOverview() {
     .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))
     .slice(0, 6)
     .map((article) => summarize(article, data.categories, new Set(), views[article.id] ?? 0));
-  let recentRuns: { id: string; tool: string; outcome: string; createdAt: string; profileId: string }[] = [];
-  try {
-    const { recentRuns: loadRuns } = await import("./automation.server");
-    recentRuns = (await loadRuns(6)).map((r) => ({ id: r.id, tool: r.tool, outcome: r.outcome, createdAt: r.createdAt, profileId: r.profileId }));
-  } catch {
-    recentRuns = [];
-  }
+  const recentRuns: { id: string; tool: string; outcome: string; createdAt: string; profileId: string }[] = runs.map((r) => ({
+    id: r.id,
+    tool: r.tool,
+    outcome: r.outcome,
+    createdAt: r.createdAt,
+    profileId: r.profileId,
+  }));
   return {
     counts,
     media: { files: media.files, bytes: media.bytes },
