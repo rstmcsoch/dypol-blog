@@ -76,7 +76,7 @@ function ArticleStatsPage() {
                 <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#6b7280" }} interval={Math.max(0, Math.ceil(series.length / 7) - 1)} />
                 <YAxis domain={[0, max]} ticks={yTicks} interval={0} allowDecimals={false} tick={{ fontSize: 11, fill: "#6b7280" }} width={36} />
                 <Tooltip />
-                <Bar dataKey="views" name="Views" fill="#2f5bea" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="views" name="Views" fill="#ff4d00" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>

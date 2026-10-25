@@ -1,6 +1,17 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { adminDashboard } from "@/content/admin-api";
 import { formatDate } from "@/lib/format";
+import { CalendarCheck, Clock, Eye, FileCheck2, FilePen, Image as ImageIcon, type LucideIcon } from "lucide-react";
+
+function Kpi({ value, label, icon: Icon, tone }: { value: string | number; label: string; icon: LucideIcon; tone: string }) {
+  return (
+    <p className="stat stat--kpi">
+      <span>{label}</span>
+      <strong>{value}</strong>
+      <span className={`adm-chipicon adm-chipicon--${tone}`} aria-hidden="true"><Icon size={20} /></span>
+    </p>
+  );
+}
 
 export const Route = createFileRoute("/admin/")({
   // Without a desk session the /admin layout renders the sign-in form and
@@ -28,34 +39,22 @@ function DeskHome() {
   const data = Route.useLoaderData();
   return (
     <>
-      <p className="desk-kicker">Overview</p>
-      <h1 className="desk-title">Dashboard</h1>
-      <p className="desk-note">Live counts from your site.</p>
+      <section className="adm-hero">
+        <p className="desk-kicker">Overview</p>
+        <h1 className="desk-title">Dashboard</h1>
+        <p>Live counts from your site. {data.counts.draft > 0 ? `${data.counts.draft} draft${data.counts.draft === 1 ? "" : "s"} waiting for review.` : "No drafts waiting."}</p>
+        <p className="adm-hero__actions">
+          <Link to="/admin/articles/new" className="btn">New article</Link>
+          <Link to="/admin/stats" className="btn btn--ghost">View stats</Link>
+        </p>
+      </section>
       <div className="stat-grid">
-        <p className="stat">
-          <strong>{data.counts.published}</strong>
-          <span>Published</span>
-        </p>
-        <p className="stat">
-          <strong>{data.counts.draft}</strong>
-          <span>Drafts</span>
-        </p>
-        <p className="stat">
-          <strong>{data.totalViews.toLocaleString()}</strong>
-          <span>Total article views</span>
-        </p>
-        <p className="stat">
-          <strong>{data.publishedThisWeek}</strong>
-          <span>Published this week</span>
-        </p>
-        <p className="stat">
-          <strong>{data.counts.scheduled}</strong>
-          <span>Scheduled</span>
-        </p>
-        <p className="stat">
-          <strong>{data.media.files}</strong>
-          <span>{formatBytes(data.media.bytes)} in the library</span>
-        </p>
+        <Kpi value={data.counts.published} label="Published" icon={FileCheck2} tone="primary" />
+        <Kpi value={data.counts.draft} label="Drafts" icon={FilePen} tone="warn" />
+        <Kpi value={data.totalViews.toLocaleString()} label="Total article views" icon={Eye} tone="info" />
+        <Kpi value={data.publishedThisWeek} label="Published this week" icon={CalendarCheck} tone="ok" />
+        <Kpi value={data.counts.scheduled} label="Scheduled" icon={Clock} tone="muted" />
+        <Kpi value={data.media.files} label={`${formatBytes(data.media.bytes)} in the library`} icon={ImageIcon} tone="danger" />
       </div>
       <p className="adm-row-actions" style={{ marginTop: "1rem" }}>
         <Link to="/admin/articles/new" className="btn">New article</Link>
@@ -156,7 +155,7 @@ function ArticleTable({
                 </Link>
               </td>
               <td>
-                <span className={row.status === "published" ? "desk-status desk-status--published" : "desk-status"}>
+                <span className={`desk-status desk-status--${row.status}`}>
                   {row.status}
                 </span>
               </td>

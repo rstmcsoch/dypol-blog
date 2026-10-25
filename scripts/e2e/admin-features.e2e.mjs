@@ -81,7 +81,7 @@ await check("admin look is independent of the public night theme", async () => {
   await page.evaluate(() => localStorage.setItem("dypol-theme", "dark"));
   await page.goto(BASE + "/admin");
   const bg = await page.$eval(".desk", (el) => getComputedStyle(el).backgroundColor);
-  assert.equal(bg, "rgb(246, 247, 249)");
+  assert.equal(bg, "rgb(244, 246, 251)");
 });
 
 await check("appearance: darkness slider changes the public night background; contrast shown", async () => {
@@ -221,17 +221,17 @@ await check("admin dark mode: toggle persists and does not touch the public site
   assert.equal((await toggle.innerText()).trim(), "");
   if ((await toggle.getAttribute("data-theme-value")) !== "dark") await toggle.click();
   const bg = await page.$eval(".desk", (e) => getComputedStyle(e).backgroundColor);
-  assert.equal(bg, "rgb(18, 20, 23)");
+  assert.equal(bg, "rgb(17, 20, 24)");
   await page.reload();
   await page.waitForLoadState("networkidle");
   assert.equal(await page.$eval(".desk", (e) => e.getAttribute("data-theme")), "dark");
   await page.locator('[data-testid="admin-theme-toggle"]').click();
-  assert.equal(await page.$eval(".desk", (e) => getComputedStyle(e).backgroundColor), "rgb(246, 247, 249)");
+  assert.equal(await page.$eval(".desk", (e) => getComputedStyle(e).backgroundColor), "rgb(244, 246, 251)");
   // Sidebar: every nav option is its own boxed item, current page highlighted.
   await page.waitForTimeout(400); // let the 120ms hover/theme transition settle
   const activeBox = await page.$eval(".adm-nav__item.is-active", (e) => { const s = getComputedStyle(e); return { r: s.borderRadius, bg: s.backgroundColor }; });
   assert.notEqual(activeBox.r, "0px");
-  assert.equal(activeBox.bg, "rgb(47, 91, 234)");
+  assert.equal(activeBox.bg, "rgb(230, 69, 0)");
 });
 await check("invalid settings are refused with a readable message", async () => {
   await page.goto(BASE + "/admin/appearance");
