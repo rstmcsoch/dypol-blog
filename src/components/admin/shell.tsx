@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, useRouter, useRouterState } from "@tanstack/react-router";
+import { forgetDesk } from "@/components/admin/desk-cache";
 import {
   Activity, BarChart3, Bell, Bot, ChevronRight, ExternalLink, FileText, HelpCircle, Image, Inbox, LayoutDashboard, LayoutTemplate,
   LogOut, Megaphone, Menu, Monitor, Moon, Palette, PanelLeft, ScrollText, Search, Settings, ShieldCheck, SlidersHorizontal, Sun, Tags,
@@ -190,6 +191,7 @@ export function AdminShell({
   const signOut = () => {
     void (async () => {
       await adminSignOut();
+      forgetDesk();
       await router.invalidate();
       await router.navigate({ to: "/admin", search: { denied: false } });
     })();

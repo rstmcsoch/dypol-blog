@@ -1,8 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { adminPending } from "@/components/admin/pending";
 import { Markdown } from "@/components/markdown";
 import guide from "../../../docs/ADMIN-GUIDE.md?raw";
 
 export const Route = createFileRoute("/admin/help")({
+  ...adminPending,
   component: HelpAdmin,
 });
 

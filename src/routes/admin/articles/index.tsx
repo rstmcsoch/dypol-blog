@@ -1,4 +1,5 @@
 import { createFileRoute, Link, useNavigate, useRouter } from "@tanstack/react-router";
+import { adminPending } from "@/components/admin/pending";
 import { DeleteArticleButton } from "@/components/admin/delete-article";
 import { DeleteOldArticles } from "@/components/admin/delete-old-articles";
 import { adminArticles, adminDuplicateArticle, adminSetAiEditAllowed } from "@/content/admin-api";
@@ -14,6 +15,7 @@ type Search = {
 };
 
 export const Route = createFileRoute("/admin/articles/")({
+  ...adminPending,
   validateSearch: (search: Record<string, unknown>): Search => ({
     q: typeof search.q === "string" && search.q ? search.q : undefined,
     status: publicationStatuses.find((status) => status === search.status),

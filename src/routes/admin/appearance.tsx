@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { adminPending } from "@/components/admin/pending";
 import { FormShell, useSiteForm } from "@/components/admin/site-form";
 import { adminSettings } from "@/content/admin-api";
 import { site as defaults } from "@/content/site";
@@ -6,6 +7,7 @@ import type { Appearance, CoverFallback } from "@/content/types";
 import { accentInk, contrast, themeColors } from "@/lib/appearance";
 
 export const Route = createFileRoute("/admin/appearance")({
+  ...adminPending,
   loader: () => adminSettings(),
   component: AppearanceAdmin,
 });

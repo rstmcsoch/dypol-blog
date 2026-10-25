@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { adminPending } from "@/components/admin/pending";
 import { createFileRoute } from "@tanstack/react-router";
 import { FormShell, move, useSiteForm } from "@/components/admin/site-form";
 import { adminSettings, adminTaxonomy } from "@/content/admin-api";
@@ -6,6 +7,7 @@ import { site as defaults } from "@/content/site";
 import type { NavHref, SiteConfig } from "@/content/types";
 
 export const Route = createFileRoute("/admin/site-text")({
+  ...adminPending,
   loader: async () => {
     const [settings, taxonomy] = await Promise.all([adminSettings(), adminTaxonomy()]);
     return { ...settings, categories: taxonomy.categories.map((c) => ({ slug: c.slug, label: c.label })) };

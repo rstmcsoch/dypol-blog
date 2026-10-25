@@ -1,9 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { adminPending } from "@/components/admin/pending";
 import { FormShell, useSiteForm } from "@/components/admin/site-form";
 import { adminSettings } from "@/content/admin-api";
 import { SOCIAL_LABELS, SOCIAL_PLATFORMS, type SocialLink } from "@/lib/social-links";
 
 export const Route = createFileRoute("/admin/settings")({
+  ...adminPending,
   loader: () => adminSettings(),
   component: SettingsAdmin,
 });

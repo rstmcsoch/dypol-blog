@@ -4057,3 +4057,14 @@ html.nav-open .reading-progress { display: none; }
 .desk .block-card { grid-template-columns: minmax(0, 1fr); }
 .desk .block-card > * { min-width: 0; max-width: 100%; }
 .desk select { max-width: 100%; text-overflow: ellipsis; }
+
+/* t126: instant admin section skeleton */
+.desk .adm-pending { display: grid; gap: 16px; min-width: 0; }
+.desk .adm-skel { border-radius: 12px; background: linear-gradient(90deg, var(--a-line) 25%, color-mix(in srgb, var(--a-line) 45%, transparent) 50%, var(--a-line) 75%); background-size: 200% 100%; animation: adm-skel 1.1s ease-in-out infinite; }
+.desk .adm-skel--title { height: 30px; width: min(320px, 70%); }
+.desk .adm-skel--line { height: 14px; width: min(520px, 90%); }
+.desk .adm-skel-grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 165px), 1fr)); }
+.desk .adm-skel--card { height: 104px; border-radius: 14px; }
+.desk .adm-skel--block { height: 280px; border-radius: 14px; }
+@keyframes adm-skel { to { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) { .desk .adm-skel { animation: none; } }

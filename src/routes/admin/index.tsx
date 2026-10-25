@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { adminPending } from "@/components/admin/pending";
 import { adminDashboard } from "@/content/admin-api";
 import { formatDate } from "@/lib/format";
 import { CalendarCheck, Clock, Eye, FileCheck2, FilePen, Image as ImageIcon, type LucideIcon } from "lucide-react";
@@ -14,6 +15,7 @@ function Kpi({ value, label, icon: Icon, tone }: { value: string | number; label
 }
 
 export const Route = createFileRoute("/admin/")({
+  ...adminPending,
   // Without a desk session the /admin layout renders the sign-in form and
   // this component is never shown, so skip the guarded dashboard call
   // (it would throw Unauthorized) and return empty placeholder data.

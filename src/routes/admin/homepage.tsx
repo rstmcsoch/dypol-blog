@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { adminPending } from "@/components/admin/pending";
 import { createFileRoute } from "@tanstack/react-router";
 import { BlockEditor } from "@/components/admin/block-editor";
 import { FormShell, useSiteForm } from "@/components/admin/site-form";
@@ -7,6 +8,7 @@ import { defaultTitle } from "@/content/blocks";
 import { HOME_BLOCK_TYPES, SIDEBAR_BLOCK_TYPES } from "@/content/validate";
 
 export const Route = createFileRoute("/admin/homepage")({
+  ...adminPending,
   loader: async () => {
     const [settings, taxonomy] = await Promise.all([adminSettings(), adminTaxonomy()]);
     return { site: settings.site, categories: taxonomy.categories, tags: taxonomy.tags };

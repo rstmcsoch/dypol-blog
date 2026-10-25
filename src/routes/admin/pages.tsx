@@ -1,10 +1,12 @@
 import { useState } from "react";
+import { adminPending } from "@/components/admin/pending";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { errorText } from "@/components/admin/gate";
 import { adminDeletePageFn, adminPages, adminSavePageFn } from "@/content/admin-api";
 import { slugifyPageTitle } from "@/lib/pages";
 
 export const Route = createFileRoute("/admin/pages")({
+  ...adminPending,
   loader: () => adminPages(),
   component: PagesDesk,
 });

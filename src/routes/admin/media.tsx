@@ -1,9 +1,11 @@
 import { useState } from "react";
+import { adminPending } from "@/components/admin/pending";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { errorText } from "@/components/admin/gate";
 import { adminBackfillMedia, adminDeleteMedia, adminMedia, adminUploadMedia } from "@/content/admin-api";
 
 export const Route = createFileRoute("/admin/media")({
+  ...adminPending,
   loader: () => adminMedia(),
   component: MediaDesk,
 });

@@ -1,7 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { adminPending } from "@/components/admin/pending";
 import { adminMessages } from "@/content/admin-api";
 
 export const Route = createFileRoute("/admin/messages")({
+  ...adminPending,
   loader: () => adminMessages(),
   component: MessagesDesk,
 });
