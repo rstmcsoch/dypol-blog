@@ -8,19 +8,22 @@ export function IndexList({
   articles,
   meta,
   minRead,
+  start = 0,
 }: {
   articles: Article[];
   meta: Record<string, ArticleMeta>;
   minRead: string;
+  /** t115: numbers count 1..N within this list (plus the page offset), never a global rank. */
+  start?: number;
 }) {
   return (
     <ol className="index-list">
-      {articles.map((article) => {
+      {articles.map((article, i) => {
         const row = meta[article.id];
         return (
           <li key={article.id}>
             <Link to="/articles/$slug" params={{ slug: article.slug }} className="index-row">
-              <span className="index-row__num">{padIndex(row?.rank ?? 0)}</span>
+              <span className="index-row__num">{padIndex(start + i + 1)}</span>
               {article.coverMediaId ? (
                 <span className="index-row__thumb"><img src={thumbUrl(article.coverMediaId)} alt={article.coverAlt?.trim() ? article.coverAlt : article.title} loading="lazy" decoding="async" width={480} height={360} /></span>
               ) : (

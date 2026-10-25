@@ -179,6 +179,25 @@ async function taxonomy() {
  * concurrent automations cannot both slip under a cap unnoticed; the
  * claim is settled to the final outcome or released on abort.
  */
+/** t115: the most recent near-duplicate (similar title or shared source) from the last 14 days, if any. */
+async function recentNearDuplicate(title: string, sourceUrls: string[]): Promise<{ id: string; slug: string; error: string } | null> {
+  const { findNearDuplicate, nearDuplicateError, NEAR_DUP_DAYS } = await import("@/lib/automation/near-duplicate");
+  const sql = await getSql();
+  const since = new Date(Date.now() - NEAR_DUP_DAYS * 86_400_000).toISOString();
+  const rows = await sql<{ id: string; slug: string; title: string; source_urls: string | null }>`
+    select a.id, a.slug, a.title, s.source_urls from articles a
+    left join automation_submissions s on s.article_id = a.id
+    where a.status in ('published', 'draft') and coalesce(a.published_at, a.updated_at) >= ${since}
+    order by coalesce(a.published_at, a.updated_at) desc`;
+  const recent = rows.map((r) => {
+    let urls: string[] = [];
+    try { urls = JSON.parse(r.source_urls || "[]"); } catch { urls = []; }
+    return { id: r.id, slug: r.slug, title: r.title, sourceUrls: Array.isArray(urls) ? urls : [] };
+  });
+  const hit = findNearDuplicate({ title, sourceUrls }, recent);
+  return hit ? { id: hit.story.id, slug: hit.story.slug, error: nearDuplicateError(hit) } : null;
+}
+
 async function publishLimitContext(profileId: string, policy: AutomationSettings["policy"], runId?: string | null) {
   const store = await import("@/content/automation.server");
   const [all, mine, websiteCap] = await Promise.all([
@@ -609,6 +628,14 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
           else if (!tag) dropped += 1;
         }
         const { valid: sources } = sourceProblems(input.source_urls);
+        // t115: reject near-duplicates of a story from the last 14 days.
+        {
+          const nearDup = await recentNearDuplicate(input.title, sources);
+          if (nearDup) {
+            await store.recordRun({ profileId, tool: "submit_article_draft", outcome: "rejected", reason: nearDup.error, auth });
+            return { ok: false, error: nearDup.error, data: { near_duplicate_of: { article_id: nearDup.id, slug: nearDup.slug } } };
+          }
+        }
         const bodyBlocks = stripCreditsAndSources(bodyToBlocks(input.body));
         if (bodyBlocks.length === 0) return { ok: false, error: "The body is empty." };
         const blocks = [...bodyBlocks, ...sourcesBlocks(sources)];

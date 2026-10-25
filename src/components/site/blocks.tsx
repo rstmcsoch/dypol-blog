@@ -30,10 +30,10 @@ function CardList({ cards, layout, minRead }: { cards: Card[]; layout: "list" | 
   if (layout === "list") {
     return (
       <ol className="index-list">
-        {cards.map((c) => (
+        {cards.map((c, i) => (
           <li key={c.id}>
             <Link to="/articles/$slug" params={{ slug: c.slug }} className="index-row">
-              <span className="index-row__num">{padIndex(c.rank)}</span>
+              <span className="index-row__num">{padIndex(i + 1)}</span>
               {c.coverMediaId ? (
                 <span className="index-row__thumb"><img src={thumbUrl(c.coverMediaId)} alt={c.coverAlt?.trim() ? c.coverAlt : c.title} loading="lazy" decoding="async" width={480} height={360} /></span>
               ) : (
@@ -169,7 +169,7 @@ function River({ r, site, id }: { r: ResolvedBlock; site: SiteConfig; id: string
         {rail.length ? (
           <aside className="rail" aria-labelledby={railId}>
             <h2 id={railId} className="rail__head">
-              {site.labels.popular}
+              {r.railTitle ?? site.labels.popular}
             </h2>
             <ol className="rail__list">
               {rail.map((c, i) => (
@@ -210,7 +210,7 @@ function TopicRows({ r, site, id }: { r: ResolvedBlock; site: SiteConfig; id: st
                   </Link>
                 </h2>
                 <Link to="/topics/$slug" params={{ slug: row.category.slug }} className="btn btn--accent btn--sm grain">
-                  {site.labels.moreIn} {row.category.label}
+                  <span>{`${site.labels.moreIn} ${row.category.label}`}</span>
                   <span className="sr-only"> ({row.count})</span>
                   <ArrowRight aria-hidden="true" />
                 </Link>

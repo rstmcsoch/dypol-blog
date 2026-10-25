@@ -37,7 +37,12 @@ export function NotFoundState() {
           <p className="kicker">{site.labels.notFoundKicker}</p>
           <h1 className="state-panel__title">{site.labels.notFoundTitle}</h1>
           <p className="state-panel__body">{site.labels.notFoundBody}</p>
-          <Link to="/" className="btn">
+          <form className="search-form state-panel__search" action="/search" method="get" role="search">
+            <label htmlFor="notfound-q" className="sr-only">Search the journal</label>
+            <input id="notfound-q" name="q" type="search" placeholder="Search stories…" autoComplete="off" required maxLength={120} />
+            <button type="submit" className="btn btn--accent grain">Search</button>
+          </form>
+          <Link to="/articles" className="btn">
             {site.labels.backHome}
           </Link>
         </div>

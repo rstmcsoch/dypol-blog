@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { createFileRoute, notFound } from "@tanstack/react-router";
+import { createFileRoute, notFound, redirect } from "@tanstack/react-router";
 import { initArticleAnalytics } from "@/lib/analytics-beacon";
 import { ArticleView } from "@/components/site/article-view";
 import { ArticlePagePending, NotFoundState } from "@/components/site/states";
@@ -11,10 +11,12 @@ export const Route = createFileRoute("/articles/$slug")({
   loader: async ({ params }) => {
     const data = await getArticle({ data: { slug: params.slug } });
     if (!data) throw notFound();
+    if ("redirectTo" in data && data.redirectTo) throw redirect({ to: "/articles/$slug", params: { slug: data.redirectTo }, statusCode: 301 });
+    if (!("article" in data) || !data.article) throw notFound();
     return data;
   },
   head: ({ loaderData }) => {
-    if (!loaderData) return { meta: [{ title: sitePageTitle("Article") }] };
+    if (!loaderData) return { meta: [{ title: sitePageTitle("Not found") }, { name: "robots", content: "noindex" }] };
     const { article } = loaderData;
     const origin = loaderData.origin ?? "";
     const title = sitePageTitle(article.seoTitle ?? article.title);

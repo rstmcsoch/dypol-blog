@@ -29,10 +29,13 @@ export const getHome = createServerFn({ method: "GET" }).handler(async () => {
   return { ...(await readHome()), origin: await requestOrigin() };
 });
 
-export const getIndex = createServerFn({ method: "GET" }).handler(async () => {
-  const { readIndex } = await import("./repository.server");
-  return { ...(await readIndex()), origin: await requestOrigin() };
-});
+export const getIndex = createServerFn({ method: "GET" })
+  .validator((input: { page?: number } | undefined) => ({ page: input?.page ?? 1 }))
+  .handler(async ({ data }) => {
+    const { readIndex } = await import("./repository.server");
+    const result = await readIndex(data.page);
+    return result ? { ...result, origin: await requestOrigin() } : null;
+  });
 
 export const getTopics = createServerFn({ method: "GET" }).handler(async () => {
   const { readTopics } = await import("./repository.server");
@@ -40,19 +43,24 @@ export const getTopics = createServerFn({ method: "GET" }).handler(async () => {
 });
 
 export const getTopic = createServerFn({ method: "GET" })
-  .validator((input: { slug: string }) => input)
+  .validator((input: { slug: string; page?: number }) => input)
   .handler(async ({ data }) => {
     const { readTopic } = await import("./repository.server");
-    const result = await readTopic(data.slug);
+    const result = await readTopic(data.slug, data.page ?? 1);
     return result ? { ...result, origin: await requestOrigin() } : result;
   });
 
 export const getArticle = createServerFn({ method: "GET" })
   .validator((input: { slug: string }) => input)
   .handler(async ({ data }) => {
-    const { readArticle } = await import("./repository.server");
+    const { readArticle, resolveRedirect } = await import("./repository.server");
     const result = await readArticle(data.slug);
-    return result ? { ...result, origin: await requestOrigin() } : result;
+    if (!result) {
+      // t115: an old or merged slug answers with a 301 to its canonical story.
+      const to = await resolveRedirect(data.slug);
+      return to ? { redirectTo: to } : null;
+    }
+    return { ...result, origin: await requestOrigin() };
   });
 
 export const getSitemapEntries = createServerFn({ method: "GET" }).handler(async () => {

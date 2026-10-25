@@ -49,7 +49,7 @@ export const site = {
     notFoundKicker: "404",
     notFoundTitle: "This page is not in the index.",
     notFoundBody: "We could not find that page. It may have moved, or the address may be wrong.",
-    backHome: "Back to the homepage",
+    backHome: "Back to the journal",
     menu: "Menu",
     menuTopics: "Popular topics",
     menuAllTopics: "All topics",

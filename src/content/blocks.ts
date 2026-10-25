@@ -27,6 +27,7 @@ export type ResolvedBlock = {
   cards: Card[];
   /** river: the "Most read" rail beside the latest stories */
   rail?: Card[];
+  railTitle?: string;
   /** topicRows: one row per busy topic */
   rows?: TopicRow[];
   topics?: { category: Category; count: number }[];
@@ -41,8 +42,12 @@ export type BlockContext = {
   tags: Tag[];
   /** article id -> views (may be empty) */
   views: Record<string, number>;
+  /** t115: the window the view counts cover, so "Most read" says what it ranks. */
+  viewsWindow?: "week" | "all";
   /** the article being read (sidebar) */
   current?: Article | null;
+  /** t115: shared "already shown" set, so later sections on the page skip these. */
+  used?: Set<string>;
 };
 
 /** Default headings come from Site text, so renaming a label still works. */
@@ -107,13 +112,15 @@ export function leadOf(live: Article[]): Article | null {
   return live.find((a) => a.featured) ?? live[0] ?? null;
 }
 
-function related(current: Article | null | undefined, live: Article[]): Article[] {
+/** t115: ranked by topic overlap (then shared tags), newest first within a score; recent stories fill the rest. */
+export function related(current: Article | null | undefined, live: Article[]): Article[] {
   if (!current) return [];
   const others = live.filter((a) => a.id !== current.id);
-  const shared = (a: Article) => a.tagIds.filter((t) => current.tagIds.includes(t)).length;
-  const sameTopic = (a: Article) => a.topicIds.some((id) => current.topicIds.includes(id));
-  const same = others.filter((a) => sameTopic(a) || shared(a) > 0);
-  same.sort((a, b) => shared(b) - shared(a));
+  const score = (a: Article) =>
+    a.topicIds.filter((id) => current.topicIds.includes(id)).length * 2 + a.tagIds.filter((t) => current.tagIds.includes(t)).length;
+  const same = others.filter((a) => score(a) > 0);
+  const order = new Map(live.map((a, i) => [a.id, i]));
+  same.sort((a, b) => score(b) - score(a) || (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
   return [...same, ...others.filter((a) => !same.includes(a))];
 }
 
@@ -136,16 +143,19 @@ export function resolveBlocks(blocks: ContentBlock[], ctx: BlockContext, where: 
   const { site, live, categories, tags, views } = ctx;
   const home = where === "home";
   const lead = home ? leadOf(live) : null;
-  const used = new Set<string>();
+  const used = ctx.used ?? new Set<string>();
   if (lead) used.add(lead.id);
   if (ctx.current) used.add(ctx.current.id);
   const pool = () => live.filter((a) => !used.has(a.id));
-  /** Take up to `n` stories and, on the homepage, mark them shown. */
+  /** Take up to `n` stories and mark them shown (t115: the article sidebar dedupes too). */
   const take = (list: Article[], n: number): Article[] => {
     const picked = list.slice(0, n);
-    if (home) for (const a of picked) used.add(a.id);
+    for (const a of picked) used.add(a.id);
     return picked;
   };
+  const mostRead = site.labels.popular;
+  const windowed = (t: string) =>
+    t === mostRead ? `${t}${ctx.viewsWindow === "week" ? " this week" : ctx.viewsWindow === "all" ? " (all time)" : ""}` : t;
   const card = (a: Article) => toCard(a, live, categories);
   const viewsOf = (a: Article) => views[a.id] ?? 0;
   const byViews = (list: Article[]) => list.filter((a) => viewsOf(a) > 0).sort((a, b) => viewsOf(b) - viewsOf(a));
@@ -169,7 +179,7 @@ export function resolveBlocks(blocks: ContentBlock[], ctx: BlockContext, where: 
         out.push({ ...base, cards: take(related(ctx.current ?? lead, live).filter((a) => !used.has(a.id)), block.count).map(card) });
         break;
       case "popular":
-        out.push({ ...base, cards: take(byViews(pool()), block.count).map(card) });
+        out.push({ ...base, title: windowed(title), cards: take(byViews(pool()), block.count).map(card) });
         break;
       case "category":
         out.push({ ...base, cards: take(pool().filter((a) => a.topicIds.includes(block.categoryId)), block.count).map(card) });
@@ -186,7 +196,7 @@ export function resolveBlocks(blocks: ContentBlock[], ctx: BlockContext, where: 
         const showRail = rail.length >= RAIL_MIN;
         // t103: the rail is a ranking beside the river, not a story list, so it
         // does not consume stories; small archives keep enough for the sections below.
-        out.push({ ...base, cards, rail: showRail ? rail.map(card) : [] });
+        out.push({ ...base, cards, rail: showRail ? rail.map(card) : [], railTitle: windowed(mostRead) });
         break;
       }
       case "topicRows": {
@@ -219,7 +229,7 @@ export function resolveBlocks(blocks: ContentBlock[], ctx: BlockContext, where: 
           ...base,
           topics: categories
             .map((category) => ({ category, count: countIn(category.id) }))
-            .filter((t) => !home || t.count > 0)
+            .filter((t) => t.count > 0)
             .sort((a, b) => (home ? b.count - a.count : 0))
             .slice(0, block.count),
         });

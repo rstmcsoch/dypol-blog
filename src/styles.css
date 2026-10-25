@@ -2213,13 +2213,23 @@ html[data-theme="dark"] .theme-switch__btn[data-value="dark"] .theme-switch__mar
 }
 
 .footer-col-title {
+  /* t115: a plain heading, never link-like: no pointer, hover or underline. */
   margin: 0 0 0.55rem;
+  padding-bottom: 0.4rem;
+  width: 100%;
+  border-bottom: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+  font-family: inherit;
   font-size: 0.72rem;
   font-weight: 700;
+  line-height: 1.2;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  opacity: 0.65;
+  text-decoration: none;
+  opacity: 0.6;
+  cursor: default;
+  user-select: none;
 }
+.footer-col-title:hover { text-decoration: none; opacity: 0.6; }
 
 .footer-link {
   color: inherit;
@@ -3453,3 +3463,67 @@ iframe, embed {
   justify-content: center;
   margin: 1.75rem 0 0;
 }
+
+/* t115: pagination */
+.pager {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin: 2.5rem 0 1rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+}
+.pager__pages {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.pager__link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.5rem;
+  min-height: 2.5rem;
+  padding: 0 0.75rem;
+  border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+  border-radius: 999px;
+  color: inherit;
+  font-weight: 600;
+  text-decoration: none;
+}
+.pager__link:hover { border-color: currentColor; }
+.pager__link.is-current { background: var(--accent, currentColor); border-color: var(--accent, currentColor); color: var(--accent-ink, #fff); }
+.pager__link.is-disabled { opacity: 0.35; pointer-events: none; }
+.pager__gap { display: inline-flex; align-items: center; padding: 0 0.25rem; opacity: 0.6; }
+@media (max-width: 480px) {
+  .pager { justify-content: center; }
+  .pager__step { flex: 1 1 40%; }
+  .pager__pages { order: -1; width: 100%; justify-content: center; }
+}
+
+/* t115: search box (404 page, /search) */
+.search-form {
+  display: flex;
+  gap: 0.5rem;
+  width: 100%;
+  max-width: 32rem;
+  margin: 1.25rem 0;
+}
+.search-form input[type="search"] {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 2.75rem;
+  padding: 0 1rem;
+  border: 1px solid color-mix(in srgb, currentColor 30%, transparent);
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+.search-form input[type="search"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.state-panel__search { margin-inline: auto; }
