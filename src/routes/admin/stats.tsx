@@ -176,7 +176,7 @@ function formatter(value: number): string {
   return formatCount(value);
 }
 
-const COLORS = ["#2f5bea", "#1f7a4d", "#c53030", "#b5891a", "#5b6b7c", "#7aa2e6"];
+const COLORS = ["#ff4d00", "#ff8a50", "#1d6fd1", "#f5a524", "#12805c", "#8a94a6"];
 
 type SeriesPoint = { date: string; pageViews: number; sessions: number; engagedSeconds: number };
 
@@ -244,15 +244,15 @@ function LineTrendChart({
           <AreaChart data={data} margin={{ top: 10, right: 16, bottom: 8, left: 0 }}>
             <defs>
               <linearGradient id={`color-area-${valueKey}`} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor={COLORS[1]} stopOpacity={0.45} />
-                <stop offset="95%" stopColor={COLORS[1]} stopOpacity={0.05} />
+                <stop offset="5%" stopColor={COLORS[0]} stopOpacity={0.45} />
+                <stop offset="95%" stopColor={COLORS[0]} stopOpacity={0.05} />
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
             <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#6b7280" }} tickMargin={6} interval={tickInterval(data.length)} />
             <YAxis domain={[0, max]} ticks={ticks} interval={0} allowDecimals={false} allowDataOverflow={false} tickFormatter={valueFormat} tick={{ fontSize: 11, fill: "#6b7280" }} width={40} />
             <Tooltip content={(props: any) => <TrendTooltip {...props} format={valueFormat} />} />
-            <Area type="monotoneX" dataKey="current" name="This period" stroke={COLORS[1]} strokeWidth={2} fill={`url(#color-area-${valueKey})`} connectNulls isAnimationActive={false} />
+            <Area type="monotoneX" dataKey="current" name="This period" stroke={COLORS[0]} strokeWidth={2.5} fill={`url(#color-area-${valueKey})`} connectNulls isAnimationActive={false} />
           </AreaChart>
         ) : (
           <LineChart data={data} margin={{ top: 10, right: 16, bottom: 8, left: 0 }}>
@@ -380,7 +380,7 @@ function TruncTick({ x, y, payload }: any) {
   return (
     <g transform={`translate(${x},${y})`}>
       <title>{full}</title>
-      <text x={-6} y={0} dy={4} textAnchor="end" fontSize={12} fill="#1d2330">{short}</text>
+      <text x={-6} y={0} dy={4} textAnchor="end" fontSize={12} fill="currentColor">{short}</text>
     </g>
   );
 }
@@ -405,7 +405,7 @@ function HorizontalBarChart({
           <XAxis type="number" domain={[0, niceMax(sorted.map((d) => d.value))]} allowDecimals={false} tickFormatter={formatter} tick={{ fontSize: 11, fill: "#6b7280" }} />
           <YAxis dataKey="name" type="category" width={150} tick={<TruncTick />} interval={0} />
           <Tooltip cursor={{ fill: "rgba(47,91,234,0.06)" }} formatter={(v: number) => formatCount(v)} />
-          <Bar dataKey="value" name={label} fill="#2f5bea" radius={[0, 6, 6, 0]} maxBarSize={22} />
+          <Bar dataKey="value" name={label} fill="#ff4d00" radius={[0, 6, 6, 0]} maxBarSize={22} />
         </BarChart>
       </ResponsiveContainer>
     </div>
@@ -428,7 +428,7 @@ function HistogramChart({
           <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#6b7280" }} />
           <YAxis type="number" domain={[0, max]} ticks={ticks} interval={0} allowDecimals={false} tickFormatter={formatter} tick={{ fontSize: 11, fill: "#6b7280" }} width={36} />
           <Tooltip cursor={{ fill: "transparent" }} />
-          <Bar dataKey="count" name="Reads" fill="#2f5bea" radius={[6, 6, 0, 0]} />
+          <Bar dataKey="count" name="Reads" fill="#ff4d00" radius={[6, 6, 0, 0]} />
         </BarChart>
       </ResponsiveContainer>
     </div>
