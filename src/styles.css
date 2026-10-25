@@ -4068,3 +4068,53 @@ html.nav-open .reading-progress { display: none; }
 .desk .adm-skel--block { height: 280px; border-radius: 14px; }
 @keyframes adm-skel { to { background-position: -200% 0; } }
 @media (prefers-reduced-motion: reduce) { .desk .adm-skel { animation: none; } }
+
+/* t129: grainy gradient footer (footer only — explicit exception to the
+   "grain only on orange" rule). Pure CSS + a ~0.4KB inline SVG noise tile;
+   no images, no JS. One fixed look in day and night (fixed colours, no theme
+   variables). Ranges are clamped so text keeps WCAG AA everywhere. */
+.site-footer {
+  --ft-fg: #111111;
+  --ft-muted: color-mix(in srgb, #111111 82%, transparent);
+  --ft-top: #efefef;
+  --ft-mid: #c9c9c9;
+  --ft-bottom: #a3a3a3;
+  --ft-blob: rgba(0, 0, 0, 0.18);
+  --ft-sheen: rgba(255, 255, 255, 0.45);
+  --ft-noise-opacity: 0.45;
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  color: var(--ft-fg);
+  border-top: 0;
+  background-color: var(--ft-mid);
+  background-image:
+    radial-gradient(60% 70% at 100% 0%, var(--ft-blob), transparent 70%),
+    radial-gradient(55% 75% at 0% 100%, var(--ft-blob), transparent 70%),
+    radial-gradient(45% 55% at 30% 15%, var(--ft-sheen), transparent 70%),
+    linear-gradient(180deg, var(--ft-top) 0%, var(--ft-mid) 55%, var(--ft-bottom) 100%);
+}
+.site-footer::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: var(--ft-noise-opacity);
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1.6 -.3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 180px 180px;
+}
+.site-footer > * { position: relative; z-index: 1; }
+.site-footer .footer-col-title,
+.site-footer .footer-col-title:hover { opacity: 1; color: var(--ft-muted); }
+.site-footer .footer-note,
+.site-footer .footer-sign,
+.site-footer .footer-link,
+.site-footer .footer-social { color: var(--ft-fg); }
+.site-footer .footer-social { border-color: color-mix(in srgb, var(--ft-fg) 45%, transparent); background: color-mix(in srgb, var(--ft-top) 35%, transparent); }
+.site-footer .footer-social:hover { border-color: var(--ft-fg); background: color-mix(in srgb, var(--ft-fg) 10%, transparent); }
+.site-footer a:focus-visible { outline: 2px solid var(--ft-fg); outline-offset: 3px; border-radius: 4px; }
+.site-footer .footer-col-title,
+.site-footer .footer-sign { border-color: color-mix(in srgb, var(--ft-fg) 28%, transparent); }
+
