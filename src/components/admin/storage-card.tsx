@@ -87,11 +87,7 @@ export function ArticleStorageCard({
   reading: ArticleStorageReading | null;
   error: string | null;
 }) {
-  const frame = (
-    <style href="article-storage" precedence="default">
-      {STORAGE_CSS}
-    </style>
-  );
+  const frame = <style>{STORAGE_CSS}</style>;
 
   if (error || !reading) {
     return (
