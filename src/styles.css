@@ -4118,3 +4118,23 @@ html.nav-open .reading-progress { display: none; }
 .site-footer .footer-col-title,
 .site-footer .footer-sign { border-color: color-mix(in srgb, var(--ft-fg) 28%, transparent); }
 
+
+/* t135: social embeds — responsive, no overflow on phones, both themes */
+.social-embed { margin: 1.75rem auto; max-width: 100%; width: 100%; overflow: hidden; }
+.social-embed iframe { max-width: 100% !important; border: 0; }
+.social-embed__frame { position: relative; width: 100%; background: color-mix(in srgb, currentColor 6%, transparent); border-radius: 12px; overflow: hidden; }
+.social-embed__frame iframe { position: absolute; inset: 0; width: 100%; height: 100%; }
+.social-embed--16x9 .social-embed__frame { aspect-ratio: 16 / 9; }
+.social-embed--9x16 { max-width: 360px; }
+.social-embed--9x16 .social-embed__frame { aspect-ratio: 9 / 16; }
+.social-embed--audio .social-embed__frame { height: 152px; }
+.social-embed--audio-lg .social-embed__frame { height: 352px; }
+.social-embed--facebook.social-embed--post { max-width: 500px; }
+.social-embed--facebook.social-embed--post .social-embed__frame { height: 560px; }
+.social-embed figcaption { margin-top: .5rem; font-size: .85rem; text-align: center; }
+.social-embed--x, .social-embed--instagram, .social-embed--tiktok, .social-embed--threads { max-width: 550px; display: flex; flex-direction: column; align-items: center; }
+.social-embed blockquote { margin: 0 auto !important; max-width: 100% !important; min-width: 0 !important; width: 100%; padding: 1rem 1.25rem; border: 1px solid color-mix(in srgb, currentColor 18%, transparent); border-radius: 12px; background: color-mix(in srgb, currentColor 4%, transparent); quotes: none; font-style: normal; }
+.social-embed blockquote::before, .social-embed blockquote::after { content: none !important; }
+.social-embed blockquote p, .social-embed blockquote section { margin: 0; }
+.social-embed .twitter-tweet, .social-embed .instagram-media, .social-embed .tiktok-embed { max-width: 100% !important; min-width: 0 !important; }
+.social-embed .twitter-tweet-rendered, .social-embed .instagram-media-rendered { border: 0; padding: 0; background: none; }

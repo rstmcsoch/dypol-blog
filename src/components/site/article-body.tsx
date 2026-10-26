@@ -3,6 +3,8 @@ import type { ArticleBlock } from "@/content/types";
 import { renderInline } from "@/components/markdown";
 import { stripCreditsAndSources } from "@/lib/automation/body";
 import { inlinePlain } from "@/lib/inline-markdown";
+import { parseEmbed } from "@/lib/social-embed";
+import { SocialEmbed } from "@/components/site/social-embed";
 
 /**
  * Article prose (t106). Every text field goes through the safe inline
@@ -42,8 +44,11 @@ export function ProseBlocks({ blocks }: { blocks: ArticleBlock[] }) {
       {blocks.map((block, index) => {
         const key = `${block.type}-${index}`;
         switch (block.type) {
-          case "paragraph":
+          case "paragraph": {
+            const embed = parseEmbed(block.text);
+            if (embed) return <SocialEmbed key={key} embed={embed} />;
             return <p key={key}>{renderInline(block.text, key)}</p>;
+          }
           case "heading": {
             const Tag = block.level === 4 ? "h4" : block.level === 3 ? "h3" : "h2";
             return (
