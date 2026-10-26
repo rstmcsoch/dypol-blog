@@ -1,0 +1,89 @@
+--- a/src/routes/admin/stats.tsx
++++ b/src/routes/admin/stats.tsx
+@@ -6,6 +6,8 @@
+   useRouter,
+ } from "@tanstack/react-router";
+ import { adminStats, adminStatsAnnotation } from "@/content/admin-api";
++import { adminArticleStorage } from "@/content/storage-api";
++import { ArticleStorageCard } from "@/components/admin/storage-card";
+ import type { TopicRow, SourceRow, DeviceRow } from "@/content/analytics.server";
+ import {
+   formatCount,
+@@ -91,9 +93,17 @@
+   loader: async ({ context, deps }) => {
+     const desk = (context as { desk?: { session: unknown } }).desk;
+     if (!desk?.session) return { error: "not-signed-in" as const };
++    const storageTask = adminArticleStorage()
++      .then((storage) => ({ storage, storageError: null as string | null }))
++      .catch((error: unknown) => ({
++        storage: null,
++        storageError: error instanceof Error ? error.message : "Could not count article storage.",
++      }));
+     try {
+-      return { data: await adminStats({ data: deps as Search }), error: null as string | null };
++      const data = await adminStats({ data: deps as Search });
++      return { data, error: null as string | null, ...(await storageTask) };
+     } catch (error) {
++      await storageTask;
+       return { data: null, error: error instanceof Error ? error.message : "Failed to load stats." };
+     }
+   },
+@@ -859,6 +869,8 @@
+     publishing,
+     extras,
+   } = data;
++  const storage = "storage" in routeData ? routeData.storage : null;
++  const storageError = "storageError" in routeData ? routeData.storageError : null;
+   const period = overview.period;
+ 
+   const handlePreset = (next: DatePreset) => {
+@@ -998,6 +1010,7 @@
+           </p>
+         </div>
+         <div className="stat-grid adm-stat-grid">
++          <ArticleStorageCard reading={storage} error={storageError} />
+           <StatCard
+             title="Page views"
+             value={formatCount(overview.pageViews)}
+--- a/src/styles.css
++++ b/src/styles.css
+@@ -3894,20 +3894,20 @@
+ .desk code { background: var(--a-primary-soft); color: var(--a-primary-text); border-radius: 6px; }
+ 
+ /* Cards: one look for every admin surface. */
+-.desk .stat, .desk .block-card, .desk .adm-panel, .desk .adm-stat-card, .desk .desk-table-wrap, .desk .adm-table-wrap,
++.desk .stat, .desk .block-card, .desk .adm-panel, .desk .adm-stat-card, .desk .adm-storage, .desk .desk-table-wrap, .desk .adm-table-wrap,
+ .desk .adm-filters, .desk .adm-insight, .desk .media-card, .desk .panel, .desk .adm-card--bordered, .desk .adm-preview__pane {
+   border: 1px solid transparent; border-radius: var(--a-radius); background: var(--a-surface); box-shadow: var(--a-shadow);
+ }
+-.desk[data-cards="border"] :is(.stat, .block-card, .adm-panel, .adm-stat-card, .desk-table-wrap, .adm-table-wrap, .adm-filters, .adm-insight, .media-card, .panel, .adm-card--bordered, .adm-preview__pane, .adm-hero) {
++.desk[data-cards="border"] :is(.stat, .block-card, .adm-panel, .adm-stat-card, .adm-storage, .desk-table-wrap, .adm-table-wrap, .adm-filters, .adm-insight, .media-card, .panel, .adm-card--bordered, .adm-preview__pane, .adm-hero) {
+   border-color: var(--a-line); box-shadow: none;
+ }
+-.desk[data-theme="dark"] :is(.stat, .block-card, .adm-panel, .adm-stat-card, .desk-table-wrap, .adm-table-wrap, .adm-filters, .adm-insight, .media-card, .panel, .adm-card--bordered) { border-color: var(--a-line); }
++.desk[data-theme="dark"] :is(.stat, .block-card, .adm-panel, .adm-stat-card, .adm-storage, .desk-table-wrap, .adm-table-wrap, .adm-filters, .adm-insight, .media-card, .panel, .adm-card--bordered) { border-color: var(--a-line); }
+ .desk .panel { padding: 1.1rem 1.25rem; }
+ .desk .block-card { padding: 1.25rem 1.35rem; }
+ .desk .block-card legend { font-weight: 700; font-size: 1.02rem; }
+ .desk .stat { padding: 1.15rem 1.25rem; gap: 0.25rem; }
+ .desk .stat strong { font-size: 1.65rem; font-weight: 750; letter-spacing: -0.02em; }
+-.desk .adm-stat-card { padding: 1rem 1.1rem; }
++.desk .adm-stat-card, .desk .adm-storage { padding: 1rem 1.1rem; }
+ .desk .adm-stat__value { font-weight: 750; }
+ .desk .adm-stat__kicker { color: var(--a-muted); }
+ .desk .adm-panel__body { padding: 1.15rem 1.25rem; }
+@@ -4138,3 +4138,14 @@
+ .social-embed blockquote p, .social-embed blockquote section { margin: 0; }
+ .social-embed .twitter-tweet, .social-embed .instagram-media, .social-embed .tiktok-embed { max-width: 100% !important; min-width: 0 !important; }
+ .social-embed .twitter-tweet-rendered, .social-embed .instagram-media-rendered { border: 0; padding: 0; background: none; }
++
++/* Article storage meter on the admin stats overview. */
++.adm-storage { grid-column: 1 / -1; border: 1px solid var(--a-line); border-radius: var(--a-radius); background: var(--a-surface); box-shadow: var(--a-shadow); padding: 0.85rem 0.95rem 0.95rem; display: grid; gap: 0.55rem; min-width: 0; }
++.adm-storage__top { display: flex; justify-content: space-between; gap: 1rem; align-items: flex-end; flex-wrap: wrap; }
++.adm-storage__value { margin: 0; font-size: 1.5rem; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
++.adm-storage__of { color: var(--a-muted); font-weight: 600; font-size: 0.95rem; }
++.adm-storage__share { margin: 0; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--a-primary); }
++.adm-storage__track { height: 10px; border: 1px solid var(--a-line); border-radius: 999px; background: color-mix(in srgb, var(--a-muted) 16%, transparent); overflow: hidden; }
++.adm-storage__fill { height: 100%; background: var(--a-primary); border-radius: inherit; }
++.adm-storage__meta { margin: 0; color: var(--a-muted); font-size: 0.78rem; line-height: 1.45; }
++
