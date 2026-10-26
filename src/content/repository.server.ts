@@ -11,6 +11,7 @@ import type { Article, ArticleBlock, Category, PublicationStatus, SiteConfig, Ta
 import { blockPlainText, blocksPlainText } from "./block-text.ts";
 import { stripCreditsAndSources } from "../lib/automation/body.ts";
 import { inlinePlain } from "../lib/inline-markdown.ts";
+import { scrubCitations, scrubCitationsDeep } from "../lib/citation-scrub.ts";
 import {
   articleWriteSchema,
   categoryWriteSchema,
@@ -113,12 +114,12 @@ function iso(value: string | Date | null | undefined): string | null {
 }
 
 function mapArticle(row: ArticleRow, tagIds: string[], topicIds: string[], coverAlt: string | null = null): Article {
-  const blocks = typeof row.blocks === "string" ? (JSON.parse(row.blocks) as ArticleBlock[]) : row.blocks;
+  const blocks = scrubCitationsDeep(typeof row.blocks === "string" ? (JSON.parse(row.blocks) as ArticleBlock[]) : row.blocks);
   return {
     id: row.id,
     slug: row.slug,
-    title: row.title,
-    excerpt: row.excerpt,
+    title: scrubCitations(row.title),
+    excerpt: scrubCitations(row.excerpt),
     status: row.status,
     publishedAt: iso(row.published_at),
     updatedAt: iso(row.updated_at) ?? new Date(0).toISOString(),
@@ -1002,7 +1003,7 @@ export async function listNotFounds(limit = 12): Promise<Array<{ path: string; h
 }
 
 export async function saveArticle(raw: unknown): Promise<{ id: string; slug: string; status: PublicationStatus }> {
-  const input: ArticleWrite = articleWriteSchema.parse(raw);
+  const input: ArticleWrite = scrubCitationsDeep(articleWriteSchema.parse(raw));
   if (input.intent === "publish") {
     const problem = publishProblems(input);
     if (problem) throw new ContentError(problem);
