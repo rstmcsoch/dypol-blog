@@ -168,7 +168,36 @@ You can fully edit **draft / unpublished** articles over MCP — never published
    its slug — those stay owner-only, and the tools refuse them.
 7. Record what you changed with `record_run_result`.
 
-
 ## Social media embeds
 
-Social embeds: put a YouTube (watch/youtu.be/shorts/live), X/Twitter post or video (/status/), Instagram post/reel, TikTok video, Threads post, Facebook post/video, Vimeo or Spotify URL ALONE on its own line (blank line before and after, bare URL or [label](url)) and it renders as an embed; a link inside a sentence stays a normal link. Never paste embed HTML or scripts.
+```text
+SOCIAL MEDIA EMBEDS
+
+Use an embed only when the post itself is part of the story. Examples:
+- the original announcement or statement (a CEO's X post, an official company account)
+- a launch video, trailer, demo or keynote clip (YouTube, X video)
+- a viral post, reel or TikTok that the article is about
+- a direct quote you are reporting from a social post
+
+Don't embed when:
+- the post only repeats what the article already says
+- it's a random reaction, a meme or a fan account
+- the account isn't the original or official source
+- the post was deleted, is private or is age-restricted
+
+Rules:
+1. Use at most 1–2 embeds per article, placed right after the paragraph that discusses them.
+2. Put the post URL alone on its own line, with a blank line before and after. Any of these works:
+   https://x.com/user/status/1234567890
+   https://www.youtube.com/watch?v=VIDEOID
+   https://www.instagram.com/reel/CODE/
+   https://www.tiktok.com/@user/video/1234567890
+3. Never paste embed HTML, iframes, blockquotes or scripts. Only the plain URL.
+4. Use the direct post link, not a profile, search, shortened (t.co, bit.ly) or tracking link. Remove tracking parameters like ?utm_ or ?igsh=.
+5. Introduce the embed in your own words in the sentence before it, e.g. "Musk shared the clip on X:". Don't write "Source:" or credit lines.
+6. Only embed a post you have actually found and confirmed exists. Never guess or invent a post URL or ID.
+7. The embed doesn't count toward the 400–500 word body, and the article must still read fully without it.
+8. To mention a post without embedding it, put the link inside a sentence instead.
+
+Supported: YouTube (videos, Shorts, live), X/Twitter posts and videos, Instagram posts and reels, TikTok, Threads, Facebook posts and videos, Vimeo, Spotify.
+```

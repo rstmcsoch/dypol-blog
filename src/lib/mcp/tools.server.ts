@@ -1,4 +1,5 @@
 import type { KeyEnv } from "@/lib/automation/provider";
+import { SOCIAL_EMBED_GUIDANCE } from "@/lib/automation/embed-guidance";
 import { z } from "zod";
 import { getSql } from "@/lib/db";
 import { workerEnv } from "@/lib/cf-env.server";
@@ -528,6 +529,7 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
               "(3) tech-news is a last resort only, never the sole topic when a subject topic fits. (4) The order of the `topics` list here is NOT a priority order. " +
               "The server checks content signals: a single-topic filing whose text strongly signals other topics is flagged topic_review, will not auto-publish, and the submit reply's `topic_advice.suggested_missing` names the likely topics — re-file with update_article_draft if they fit. Unknown topics are rejected with the valid list. The legacy single `category` field still works and is merged into `topics`. " +
               "To change topics later use update_article_draft with `topics`, `add_topics` or `remove_topics`.",
+            socialEmbedInstructions: SOCIAL_EMBED_GUIDANCE,
             limits: { maxBodyChars: MAX_BODY_CHARS, maxImageBytes: MAX_IMAGE_BYTES, imageTypes: ["image/jpeg", "image/png", "image/webp"] },
           },
         };
