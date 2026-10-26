@@ -167,3 +167,8 @@ You can fully edit **draft / unpublished** articles over MCP — never published
    grant you must never delete a published article, change its status, or change
    its slug — those stay owner-only, and the tools refuse them.
 7. Record what you changed with `record_run_result`.
+
+
+## Social media embeds
+
+Social embeds: put a YouTube (watch/youtu.be/shorts/live), X/Twitter post or video (/status/), Instagram post/reel, TikTok video, Threads post, Facebook post/video, Vimeo or Spotify URL ALONE on its own line (blank line before and after, bare URL or [label](url)) and it renders as an embed; a link inside a sentence stays a normal link. Never paste embed HTML or scripts.
