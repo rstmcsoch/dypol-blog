@@ -46,7 +46,8 @@ export const SERVER_INSTRUCTIONS =
   "idempotency_key). Pick one run_id per execution and pass it on submit/publish calls: the owner's per-run " +
   "and whole-website daily publish caps count every publish (automatic or explicit). Publishing only happens " +
   "through publish_article_if_allowed when the owner's policy allows it; otherwise the piece stays a draft. " +
-  "If nothing is good enough, call record_run_result with outcome 'skipped'.";
+  "If nothing is good enough, call record_run_result with outcome 'skipped'. " +
+  "Social media embeds: follow get_blog_settings.socialEmbedInstructions (post URL alone on its own line, at most 1–2, never HTML/scripts, never invented URLs).";
 
 async function handleOne(message: unknown, tools: ToolDefinition[]): Promise<object | null> {
   if (!isRequest(message)) return error(null, RPC.INVALID_REQUEST, "Invalid JSON-RPC request.");
