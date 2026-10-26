@@ -8,6 +8,78 @@ import {
   type ArticleStorageReading,
 } from "@/lib/r2-usage";
 
+/** Same tokens as the other admin desk cards (surface, line, radius, shadow, primary). */
+const STORAGE_CSS = `
+.adm-storage {
+  grid-column: 1 / -1;
+  border: 1px solid var(--a-line);
+  border-radius: var(--a-radius);
+  background: var(--a-surface);
+  box-shadow: var(--a-shadow);
+  padding: 1rem 1.1rem;
+  display: grid;
+  gap: 0.55rem;
+  min-width: 0;
+}
+.desk .adm-storage {
+  border: 1px solid transparent;
+  border-radius: var(--a-radius);
+  background: var(--a-surface);
+  box-shadow: var(--a-shadow);
+  padding: 1rem 1.1rem;
+}
+.desk[data-cards="border"] .adm-storage {
+  border-color: var(--a-line);
+  box-shadow: none;
+}
+.desk[data-theme="dark"] .adm-storage {
+  border-color: var(--a-line);
+}
+.adm-storage__top {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+.adm-storage__value {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.adm-storage__of {
+  color: var(--a-muted);
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+.adm-storage__share {
+  margin: 0;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--a-primary);
+}
+.adm-storage__track {
+  height: 10px;
+  border: 1px solid var(--a-line);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--a-muted) 16%, transparent);
+  overflow: hidden;
+}
+.adm-storage__fill {
+  height: 100%;
+  background: var(--a-primary);
+  border-radius: inherit;
+}
+.adm-storage__meta {
+  margin: 0;
+  color: var(--a-muted);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+`;
+
 export function ArticleStorageCard({
   reading,
   error,
@@ -15,9 +87,16 @@ export function ArticleStorageCard({
   reading: ArticleStorageReading | null;
   error: string | null;
 }) {
+  const frame = (
+    <style href="article-storage" precedence="default">
+      {STORAGE_CSS}
+    </style>
+  );
+
   if (error || !reading) {
     return (
       <article className="adm-storage" aria-label="Article storage">
+        {frame}
         <p className="adm-stat__kicker">
           <HardDrive size={13} strokeWidth={1.8} aria-hidden /> Article storage
         </p>
@@ -37,6 +116,7 @@ export function ArticleStorageCard({
 
   return (
     <article className="adm-storage" aria-label="Article storage">
+      {frame}
       <div className="adm-storage__top">
         <div>
           <p className="adm-stat__kicker">
