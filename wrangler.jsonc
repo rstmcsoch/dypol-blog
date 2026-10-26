@@ -8,7 +8,13 @@
   "compatibility_date": "2026-10-06",
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true },
-  "vars": { "DYPOL_ENV": "production", "TURNSTILE_SITE_KEY": "0x4AAAAAAFlLpRi1oxJjYWY3" },
+  "vars": {
+    "DYPOL_ENV": "production",
+    "TURNSTILE_SITE_KEY": "0x4AAAAAAFlLpRi1oxJjYWY3",
+    "MEDIA_BUCKET_NAME": "dypol-blog-media",
+    "R2_STORAGE_QUOTA_BYTES": "10000000000",
+    "CLOUDFLARE_ACCOUNT_ID": "b006dbecdf366ee0b2c21b378049d50a"
+  },
   "images": { "binding": "IMAGES" },
   "d1_databases": [
     {
@@ -33,7 +39,12 @@
   // `wrangler preview` (Workers Builds on non-production branches) uses these
   // instead, so previews can never read or write production content.
   "previews": {
-    "vars": { "DYPOL_ENV": "preview" },
+    "vars": {
+      "DYPOL_ENV": "preview",
+      "MEDIA_BUCKET_NAME": "dypol-blog-media-preview",
+      "R2_STORAGE_QUOTA_BYTES": "10000000000",
+      "CLOUDFLARE_ACCOUNT_ID": "b006dbecdf366ee0b2c21b378049d50a"
+    },
     "images": { "binding": "IMAGES" },
     "d1_databases": [
       {
@@ -63,5 +74,7 @@
   //   AI key secrets        server-api mode only (no scheduler yet; never called):
   //                         XAI_API_KEY, OPENAI_API_KEY, ANTHROPIC_API_KEY,
   //                         GEMINI_API_KEY, OPENROUTER_API_KEY, or generic AI_API_KEY
+  //   CLOUDFLARE_API_TOKEN  optional. If set, the daily article-storage count is
+  //                         also checked against R2 GraphQL payloadSize.
   // Var (optional): MCP_OAUTH_REDIRECT_HOSTS  comma list of extra MCP client hosts
 }

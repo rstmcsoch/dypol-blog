@@ -37,6 +37,13 @@ export type WorkerBindings = {
   TURNSTILE_SECRET_KEY?: string;
   MCP_LIMITER?: { limit(options: { key: string }): Promise<{ success: boolean }> };
   SIGNIN_LIMITER?: { limit(options: { key: string }): Promise<{ success: boolean }> };
+  /** Bound article bucket. Production: dypol-blog-media. Preview overrides this. */
+  MEDIA_BUCKET_NAME?: string;
+  /** Decimal bytes of the fixed allowance. Unset means the included 10 GB. */
+  R2_STORAGE_QUOTA_BYTES?: string;
+  /** Optional. Together with CLOUDFLARE_API_TOKEN, stamps the daily count against R2 analytics. */
+  CLOUDFLARE_ACCOUNT_ID?: string;
+  CLOUDFLARE_API_TOKEN?: string;
 };
 
 // No promise is cached across requests: workerd hangs a request that awaits a
