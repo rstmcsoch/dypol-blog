@@ -5,7 +5,6 @@ import { PreviewHostBridge } from "@/components/preview-host-bridge";
 import { SiteFooter } from "@/components/site/footer";
 import { SiteHeader } from "@/components/site/header";
 import { ExternalLinkGuard } from "@/components/site/external-link-guard";
-import { KitNewsletterEmbed } from "@/components/site/kit-newsletter";
 import { ThemeSync } from "@/components/site/theme-sync";
 import { themeBootScript } from "@/components/site/theme";
 import { TrendingBar } from "@/components/site/trending-bar";
@@ -112,7 +111,6 @@ function RootLayout() {
         <Outlet />
       </main>
       <SiteFooter />
-      <KitNewsletterEmbed />
       <ExternalLinkGuard />
     </div>
     </>
