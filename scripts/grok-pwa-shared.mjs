@@ -455,7 +455,7 @@ export function injectGrokPwaHead(html, ctx = {}) {
         // /manifest.webmanifest). Inject the platform fallback only when no
         // manifest link exists. Two manifests can make browsers keep the
         // stale/platform app name in the install prompt.
-        return !/<link\\b[^>]*\\brel=["']manifest["'][^>]*>/i.test(next);
+        return !/<link\b[^>]*\brel=["']manifest["'][^>]*>/i.test(next);
       }
       if (key === "apple-touch-icon") return !next.includes('href="/__grok/icon-180.png"');
       return !next.includes(`name="${key}"`);

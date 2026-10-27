@@ -35,9 +35,9 @@ test("respects the app-owned manifest and does not inject a second PWA manifest"
     appName: "DYPOL BLOG",
     site: { title: "DYPOL BLOG" },
   });
-  assert.match(out, /href="\\/manifest\\.webmanifest\\?v=2"/);
-  assert.doesNotMatch(out, /href="\\/__grok\\/manifest\\.webmanifest"/);
-  assert.equal((out.match(/<link\\b[^>]*\\brel="manifest"/gi) ?? []).length, 1);
+  assert.match(out, /href="\/manifest\.webmanifest\?v=2"/);
+  assert.doesNotMatch(out, /href="\/__grok\/manifest\.webmanifest"/);
+  assert.equal((out.match(/<link\b[^>]*\brel="manifest"/gi) ?? []).length, 1);
 });
 
 test("injects the extensions script without a project id", () => {
