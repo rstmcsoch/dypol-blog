@@ -85,20 +85,20 @@ await check("google analytics: exactly one gtag loader + one config in <head> on
 const home = await get("/");
 await check("homepage: exact title, shared brand meta, WebSite JSON-LD + feed discovery", async () => {
   assert.equal(home.status, 200);
-  assert.match(home.text, /<title>DYPOL Blog<\/title>/);
+  assert.match(home.text, /<title>DYPOL BLOG<\/title>/);
   assert.match(home.text, /property="og:title"/);
   assert.match(home.text, /property="og:image"/);
-  assert.match(home.text, /property="og:site_name" content="DYPOL Blog"/);
-  assert.match(home.text, /name="application-name" content="DYPOL Blog"/);
-  assert.match(home.text, /name="apple-mobile-web-app-title" content="DYPOL Blog"/);
+  assert.match(home.text, /property="og:site_name" content="DYPOL BLOG"/);
+  assert.match(home.text, /name="application-name" content="DYPOL BLOG"/);
+  assert.match(home.text, /name="apple-mobile-web-app-title" content="DYPOL BLOG"/);
   assert.equal((home.text.match(/property="og:site_name"/g) ?? []).length, 1, "one shared site name");
   assert.match(home.text, /application\/rss\+xml/);
   const blocks = jsonLdBlocks(home.text);
   assert.equal(blocks.length, 1, "homepage has exactly one JSON-LD block");
   assert.equal(blocks[0]["@type"], "WebSite");
-  assert.equal(blocks[0].name, "DYPOL Blog");
-  assert.deepEqual(blocks[0].alternateName, ["dypolblog.rstmcsoch.workers.dev", "DYPOL"]);
-  assert.equal(blocks[0].url, "https://dypolblog.rstmcsoch.workers.dev/");
+  assert.equal(blocks[0].name, "DYPOL BLOG");
+  assert.deepEqual(blocks[0].alternateName, [new URL(BASE).host, "DYPOL"]);
+  assert.equal(blocks[0].url, `${new URL(BASE).origin}/`);
   assert.match(home.text, /max-image-preview:large/);
 });
 
@@ -123,8 +123,8 @@ await check("article: absolute canonical, OG article meta, valid NewsArticle + B
   const news = blocks.find((b) => b["@type"] === "NewsArticle");
   assert.ok(news, "NewsArticle present");
   assert.ok(news.headline && news.datePublished, "headline+date");
-  assert.equal(news.publisher?.name, "DYPOL Blog", "publisher name");
-  assert.match(articlePage.text, /<title>[^<]+ \| DYPOL Blog<\/title>/, "branded article title");
+  assert.equal(news.publisher?.name, "DYPOL BLOG", "publisher name");
+  assert.match(articlePage.text, /<title>[^<]+ \| DYPOL BLOG<\/title>/, "branded article title");
   assert.ok(blocks.some((b) => b["@type"] === "BreadcrumbList"), "BreadcrumbList");
 });
 
@@ -137,17 +137,17 @@ await check("article: cover/thumbnail images carry descriptive alt text", async 
 
 await check("inner pages use the consistent title suffix and remain indexable", async () => {
   const pages = [
-    ["/about", "About Us | DYPOL Blog"],
-    ["/articles", "Index | DYPOL Blog"],
-    ["/topics", "Topics | DYPOL Blog"],
+    ["/about", "About Us | DYPOL BLOG"],
+    ["/articles", "Index | DYPOL BLOG"],
+    ["/topics", "Topics | DYPOL BLOG"],
   ];
   for (const [path, title] of pages) {
     const page = await get(path);
     assert.equal(page.status, 200, path);
     assert.ok(page.text.includes("<title>" + title + "</title>"), path + " title: " + title);
-    assert.ok(page.text.includes('property="og:site_name" content="DYPOL Blog"'), path + " site name");
-    assert.ok(page.text.includes('name="application-name" content="DYPOL Blog"'), path + " application name");
-    assert.ok(page.text.includes('name="apple-mobile-web-app-title" content="DYPOL Blog"'), path + " mobile title");
+    assert.ok(page.text.includes('property="og:site_name" content="DYPOL BLOG"'), path + " site name");
+    assert.ok(page.text.includes('name="application-name" content="DYPOL BLOG"'), path + " application name");
+    assert.ok(page.text.includes('name="apple-mobile-web-app-title" content="DYPOL BLOG"'), path + " mobile title");
     assert.doesNotMatch(page.text, /name="robots" content="noindex/i, path + " stays indexable");
   }
 });
