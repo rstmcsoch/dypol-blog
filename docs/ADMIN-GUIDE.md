@@ -136,8 +136,8 @@ Admin → **Pages** manages the standard reader-facing pages: **About Us** (`/ab
 
 ## Preview vs production
 
-- **Production** is the live site visitors see (`dypolblog.rstmcsoch.workers.dev`). It uses the production database and storage.
-- A **preview** is a test copy built automatically for every code branch / pull request (an address like `<branch>-dypolblog.rstmcsoch.workers.dev`). Previews use a separate test database and storage, so nothing you do there touches the live site. Previews have their own secrets.
+- **Production** is the live site visitors see (`blog.dypol.workers.dev`). It uses the production database and storage.
+- A **preview** is a test copy built automatically for every code branch / pull request (an address like `<branch>-blog.dypol.workers.dev`). Previews use a separate test database and storage, so nothing you do there touches the live site. Previews have their own secrets.
 - Code changes reach production only when a pull request is merged into `main`.
 
 ## When the database is down

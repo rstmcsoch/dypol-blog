@@ -97,8 +97,8 @@ await check("homepage: exact title, shared brand meta, WebSite JSON-LD + feed di
   assert.equal(blocks.length, 1, "homepage has exactly one JSON-LD block");
   assert.equal(blocks[0]["@type"], "WebSite");
   assert.equal(blocks[0].name, "DYPOL Blog");
-  assert.deepEqual(blocks[0].alternateName, ["dypolblog.rstmcsoch.workers.dev", "DYPOL"]);
-  assert.equal(blocks[0].url, "https://dypolblog.rstmcsoch.workers.dev/");
+  assert.deepEqual(blocks[0].alternateName, [new URL(BASE).host, "DYPOL"]);
+  assert.equal(blocks[0].url, `${new URL(BASE).origin}/`);
   assert.match(home.text, /max-image-preview:large/);
 });
 
