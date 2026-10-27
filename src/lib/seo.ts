@@ -61,9 +61,10 @@ export type SeoArticle = {
   bodyText?: string;
 };
 
-/** The one public host. Both Worker names (and version-preview URLs) serve
- * the same content on workers.dev, so SEO URLs must consolidate here. */
-export const CANONICAL_ORIGIN = "https://dypolblog.rstmcsoch.workers.dev";
+/** The one public host. Any workers.dev hostname (production, the retired
+ * alias, or a version preview) serves the same content, so SEO URLs
+ * consolidate here. A real custom domain keeps its own origin. */
+export const CANONICAL_ORIGIN = "https://blog.dypol.workers.dev";
 
 export function canonicalOriginFrom(requestUrl: string): string {
   try {
