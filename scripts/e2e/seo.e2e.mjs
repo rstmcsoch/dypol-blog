@@ -1,1 +1,251 @@
-PLACEHOLDER_SEO
+#!/usr/bin/env node
+/**
+ * SEO surface e2e (t48): robots, sitemaps (incl. news), RSS feed, manifest,
+ * OG/Twitter meta, JSON-LD validity, canonical absoluteness, image alts,
+ * noindex on login, immutable media caching. Read-only HTTP checks against
+ * a local `wrangler dev`. Safe anywhere read-only, but written for local.
+ *   BASE=http://127.0.0.1:8787 npm run test:e2e:seo
+ */
+import assert from "node:assert/strict";
+
+const BASE = process.env.BASE ?? "http://127.0.0.1:8787";
+let failures = 0;
+async function check(name, fn) {
+  try { await fn(); console.log(`ok - ${name}`); }
+  catch (e) { failures++; console.log(`not ok - ${name}\n  ${e instanceof Error ? e.message.split("\n")[0] : e}`); }
+}
+const get = async (path) => {
+  const r = await fetch(BASE + path);
+  return { status: r.status, headers: r.headers, text: await r.text() };
+};
+function jsonLdBlocks(html) {
+  const blocks = [...html.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)].map((m) => m[1]);
+  return blocks.map((b) => JSON.parse(b.replaceAll("&quot;", '"')));
+}
+
+// Find a published article slug from the public index.
+const index = await get("/articles");
+const slugMatch = /href="\/articles\/([a-z0-9-]+)"/.exec(index.text);
+assert.ok(slugMatch, "need at least one published article locally");
+const slug = slugMatch[1];
+
+await check("robots.txt: public allowed, private paths disallowed, sitemaps listed", async () => {
+  const { status, text } = await get("/robots.txt");
+  assert.equal(status, 200);
+  for (const line of ["Allow: /", "User-agent: Googlebot", "Disallow: /admin", "Disallow: /mcp", "Disallow: /api/", "Sitemap: ", "/news-sitemap.xml", "User-agent: OAI-SearchBot", "User-agent: Claude-SearchBot", "User-agent: Claude-User"]) assert.ok(text.includes(line), line);
+  assert.ok(/^Disallow: \/admin$/m.test(text), "/admin (the only admin entry) is disallowed");
+});
+
+await check("sitemap.xml: absolute URLs with lastmod for articles and topics", async () => {
+  const { status, headers, text } = await get("/sitemap.xml");
+  assert.equal(status, 200);
+  assert.match(headers.get("content-type") ?? "", /xml/);
+  assert.ok(text.includes(`${BASE}/articles/${slug}`), "article loc");
+  assert.ok(text.includes("<lastmod>"), "lastmod present");
+  assert.ok(text.includes(`${BASE}/topics/`), "topic loc");
+});
+
+await check("news-sitemap.xml: valid news urlset", async () => {
+  const { status, text } = await get("/news-sitemap.xml");
+  assert.equal(status, 200);
+  assert.match(text, /xmlns:news="http:\/\/www\.google\.com\/schemas\/sitemap-news\/0\.9"/);
+  if (text.includes("<news:news>")) assert.match(text, /<news:publication_date>/);
+});
+
+await check("feed.xml: RSS with the latest published article", async () => {
+  const { status, headers, text } = await get("/feed.xml");
+  assert.equal(status, 200);
+  assert.match(headers.get("content-type") ?? "", /rss\+xml/);
+  assert.match(text, /<rss version="2\.0"/);
+  assert.ok(text.includes(`${BASE}/articles/${slug}`), "item link");
+  assert.match(text, /<pubDate>/);
+});
+
+await check("manifest.webmanifest: valid JSON with name + theme color", async () => {
+  const { status, text } = await get("/manifest.webmanifest");
+  assert.equal(status, 200);
+  const m = JSON.parse(text);
+  assert.ok(m.name && m.theme_color, "fields");
+});
+
+await check("google analytics: exactly one gtag loader + one config in <head> on every page type (t95)", async () => {
+  const pages = ["/", `/articles/${slug}`, "/topics/tech-news", "/about", "/admin"];
+  for (const path of pages) {
+    const { status, text } = await get(path);
+    assert.ok([200, 302, 307, 308].includes(status), `${path} status ${status}`);
+    const head = text.slice(text.indexOf("<head>"), text.indexOf("</head>"));
+    assert.ok(head.length > 0, `${path}: has head`);
+    assert.equal((head.match(/googletagmanager\.com\/gtag\/js\?id=G-T1R0QJ2F0Z/g) ?? []).length, 1, `${path}: one GA loader`);
+    assert.equal((head.match(/gtag\('config', 'G-T1R0QJ2F0Z'\)/g) ?? []).length, 1, `${path}: one GA config`);
+    assert.equal((head.match(/G-T1R0QJ2F0Z/g) ?? []).length, 2, `${path}: id only in loader+config`);
+    assert.match(head, /<script[^>]*src="https:\/\/www\.googletagmanager\.com\/gtag\/js\?id=G-T1R0QJ2F0Z"[^>]*async/, `${path}: async loader`);
+  }
+});
+
+const home = await get("/");
+await check("homepage: exact title, shared brand meta, WebSite JSON-LD + feed discovery", async () => {
+  assert.equal(home.status, 200);
+  assert.match(home.text, /<title>DYPOL BLOG<\/title>/);
+  assert.match(home.text, /property="og:title"/);
+  assert.match(home.text, /property="og:image"/);
+  assert.match(home.text, /property="og:site_name" content="DYPOL BLOG"/);
+  assert.match(home.text, /name="application-name" content="DYPOL BLOG"/);
+  assert.match(home.text, /name="apple-mobile-web-app-title" content="DYPOL BLOG"/);
+  assert.equal((home.text.match(/property="og:site_name"/g) ?? []).length, 1, "one shared site name");
+  assert.match(home.text, /application\/rss\+xml/);
+  const blocks = jsonLdBlocks(home.text);
+  assert.equal(blocks.length, 1, "homepage has exactly one JSON-LD block");
+  assert.equal(blocks[0]["@type"], "WebSite");
+  assert.equal(blocks[0].name, "DYPOL BLOG");
+  assert.deepEqual(blocks[0].alternateName, [new URL(BASE).host, "DYPOL"]);
+  assert.equal(blocks[0].url, `${new URL(BASE).origin}/`);
+  assert.match(home.text, /max-image-preview:large/);
+});
+
+// Find a published article that actually has media images (for alt/cache checks).
+async function findArticleWithMedia() {
+  const sm = await get("/sitemap.xml");
+  const paths = [...sm.text.matchAll(/<loc>[^<]*(\/articles\/[a-z0-9-]+)<\/loc>/g)].map((m) => m[1]).slice(0, 12);
+  for (const path of paths) {
+    const page = await get(path);
+    if (/src="\/media\//.test(page.text)) return page;
+  }
+  return null;
+}
+const articlePage = await get(`/articles/${slug}`);
+await check("article: absolute canonical, OG article meta, valid NewsArticle + Breadcrumb JSON-LD", async () => {
+  assert.equal(articlePage.status, 200);
+  const canonical = /<link rel="canonical" href="([^"]+)"/.exec(articlePage.text)?.[1];
+  assert.ok(canonical?.startsWith(BASE), `canonical absolute: ${canonical}`);
+  assert.match(articlePage.text, /property="og:type" content="article"/);
+  assert.match(articlePage.text, /property="article:published_time"/);
+  const blocks = jsonLdBlocks(articlePage.text);
+  const news = blocks.find((b) => b["@type"] === "NewsArticle");
+  assert.ok(news, "NewsArticle present");
+  assert.ok(news.headline && news.datePublished, "headline+date");
+  assert.equal(news.publisher?.name, "DYPOL BLOG", "publisher name");
+  assert.match(articlePage.text, /<title>[^<]+ \| DYPOL BLOG<\/title>/, "branded article title");
+  assert.ok(blocks.some((b) => b["@type"] === "BreadcrumbList"), "BreadcrumbList");
+});
+
+await check("article: cover/thumbnail images carry descriptive alt text", async () => {
+  const page = (await findArticleWithMedia()) ?? articlePage;
+  const imgs = [...page.text.matchAll(/<img[^>]+src="\/media\/[^"]+"[^>]*>/g)].map((m) => m[0]);
+  assert.ok(imgs.length > 0, "has media images");
+  for (const img of imgs) assert.match(img, /alt="[^"]+"/, img.slice(0, 90));
+});
+
+await check("inner pages use the consistent title suffix and remain indexable", async () => {
+  const pages = [
+    ["/about", "About Us | DYPOL BLOG"],
+    ["/articles", "Index | DYPOL BLOG"],
+    ["/topics", "Topics | DYPOL BLOG"],
+  ];
+  for (const [path, title] of pages) {
+    const page = await get(path);
+    assert.equal(page.status, 200, path);
+    assert.ok(page.text.includes("<title>" + title + "</title>"), path + " title: " + title);
+    assert.ok(page.text.includes('property="og:site_name" content="DYPOL BLOG"'), path + " site name");
+    assert.ok(page.text.includes('name="application-name" content="DYPOL BLOG"'), path + " application name");
+    assert.ok(page.text.includes('name="apple-mobile-web-app-title" content="DYPOL BLOG"'), path + " mobile title");
+    assert.doesNotMatch(page.text, /name="robots" content="noindex/i, path + " stays indexable");
+  }
+});
+
+await check("static page: BreadcrumbList JSON-LD + sitemap image/lastmod (t89)", async () => {
+  const about = await get("/about");
+  assert.ok(jsonLdBlocks(about.text).some((b) => b["@type"] === "BreadcrumbList"), "about breadcrumb");
+  const sm = await get("/sitemap.xml");
+  assert.match(sm.text, /xmlns:image=/, "image sitemap namespace when covers exist");
+  assert.match(sm.text, /\/about<\/loc><lastmod>/, "static page lastmod");
+  const topic = await get("/topics/tech-news");
+  const desc = /name="description" content="([^"]+)"/.exec(topic.text)?.[1] ?? "";
+  assert.ok(desc.length >= 80, `topic description enriched: ${desc.length}`);
+});
+
+await check("perf (t88): homepage LCP cover is eager/high-priority, cards use thumb variant + dimensions", async () => {
+  assert.match(home.text, /class="article-cover"[^>]*loading="eager"[^>]*fetchpriority="high"/i, "lead cover eager + high priority");
+  assert.match(home.text, /rel="preload" as="image"[^>]*fetchpriority="high"/i, "LCP preload");
+  assert.match(home.text, /variant=thumb/, "card/list images use the thumb variant, not the hero/original");
+  for (const img of [...home.text.matchAll(/<img[^>]+src="\/media\/[^"]+"[^>]*>/g)].map((m) => m[0])) {
+    if (img.includes("wordmark__logo")) continue; // fixed-height CSS, aspect is owner-uploaded
+    assert.match(img, /width="\d+" height="\d+"/, `sized img (CLS): ${img.slice(0, 80)}`);
+  }
+});
+
+await check("topics index: ItemList JSON-LD of the topics", async () => {
+  const { status, text } = await get("/topics");
+  assert.equal(status, 200);
+  const blocks = jsonLdBlocks(text);
+  assert.ok(blocks.some((b) => b["@type"] === "ItemList"), "ItemList");
+});
+
+await check("admin entry stays noindex; media files are immutable-cached", async () => {
+  const login = await get("/admin");
+  assert.match(login.text, /name="robots" content="noindex/);
+  const page = (await findArticleWithMedia()) ?? articlePage;
+  const mediaSrc = /src="(\/media\/[a-z0-9-]+)"/.exec(page.text)?.[1];
+  assert.ok(mediaSrc, "media src");
+  const media = await fetch(BASE + mediaSrc, { method: "HEAD" });
+  assert.match(media.headers.get("cache-control") ?? "", /immutable/);
+});
+
+await check("not AMP by design: no amphtml/AMP markup, no AMP URLs in sitemaps, /amp is 404 (t86)", async () => {
+  // The site has no AMP edition (responsive design instead). If any page
+  // ever advertised AMP while serving normal HTML, Google Search Console
+  // would correctly report it under "Why AMP pages are invalid". Guard
+  // the whole live surface so that can never happen silently.
+  for (const [label, page] of [["home", home], ["article", articlePage]]) {
+    assert.doesNotMatch(page.text, /rel="amphtml"/i, `${label}: amphtml link`);
+    assert.doesNotMatch(page.text, /<html[^>]*\s(amp|\u26a1)[\s>]/i, `${label}: <html amp>`);
+    assert.doesNotMatch(page.text, /<amp-[a-z]/i, `${label}: amp-* element`);
+    assert.doesNotMatch(page.text, /cdn\.ampproject\.org/i, `${label}: AMP runtime`);
+  }
+  for (const path of ["/sitemap.xml", "/news-sitemap.xml", "/robots.txt", "/feed.xml"]) {
+    const { text } = await get(path);
+    assert.doesNotMatch(text, /amphtml|\/amp(?:[/?#"<]|$)/i, `${path}: AMP claim`);
+  }
+  for (const path of ["/amp", `/articles/${slug}/amp`, "/articles/amp/" + slug]) {
+    const { status } = await get(path);
+    assert.equal(status, 404, `${path} must not serve an AMP (or any) page`);
+  }
+});
+
+console.log(failures === 0 ? "ALL PASS" : `${failures} FAILURES`);
+process.exit(failures === 0 ? 0 : 1);
+
+// t74 favicon set: stable root paths, real files, correct types (Google fetches /favicon.ico directly).
+{
+  const icons = [
+    ["/favicon.ico", /icon/],
+    ["/favicon.svg", /svg/],
+    ["/favicon-16x16.png", /png/],
+    ["/favicon-32x32.png", /png/],
+    ["/apple-touch-icon.png", /png/],
+    ["/android-chrome-192x192.png", /png/],
+    ["/android-chrome-512x512.png", /png/],
+    ["/logo.png", /png/],
+    ["/logo.svg", /svg/],
+  ];
+  for (const [path, type] of icons) {
+    const r = await fetch(BASE + path);
+    assert.equal(r.status, 200, `${path} status`);
+    assert.match(r.headers.get("content-type") ?? "", type, `${path} content-type`);
+    const buf = Buffer.from(await r.arrayBuffer());
+    assert.ok(buf.length > 100, `${path} non-trivial bytes`);
+    if (path.endsWith(".ico")) assert.ok(buf.readUInt32LE(0) === 0x00010000 || (buf[0] === 0 && buf[1] === 0), "ico header");
+    if (path.endsWith(".png")) assert.equal(buf.subarray(1, 4).toString(), "PNG", `${path} png magic`);
+  }
+  const html = await (await fetch(BASE + "/")).text();
+  for (const tag of ['href="/favicon.ico"', 'href="/favicon.svg"', 'href="/favicon-32x32.png"', 'href="/favicon-16x16.png"', 'href="/apple-touch-icon.png"', 'rel="manifest"']) {
+    assert.ok(html.includes(tag), `home head includes ${tag}`);
+  }
+  const loginHtml = await (await fetch(BASE + "/admin")).text();
+  assert.ok(loginHtml.includes('href="/favicon.ico"'), "admin sign-in head includes favicon.ico");
+  const nf = await (await fetch(BASE + "/no-such-page-favicon")).text();
+  assert.ok(nf.includes('href="/favicon.ico"'), "404 head includes favicon.ico");
+  const manifest = await (await fetch(BASE + "/manifest.webmanifest")).json();
+  assert.ok(manifest.icons.some((i) => i.sizes === "512x512"), "manifest has 512 icon");
+  assert.ok(manifest.icons.some((i) => i.sizes === "192x192"), "manifest has 192 icon");
+  console.log("ok - favicon set: ico/svg/png sizes + apple-touch + manifest + head tags (t74)");
+}
