@@ -227,10 +227,12 @@ export function AdminShell({
     >
       <aside className={open ? "adm-side is-open" : "adm-side"} aria-label="Admin sidebar">
         <div className="adm-brand">
-          <Link to="/admin" onClick={() => setOpen(false)} title="DYPOL Blog admin">
-            <span className="adm-logo" aria-hidden="true">D</span>
+          <Link to="/admin" onClick={() => setOpen(false)} title="DYPOL BLOG admin">
+            <span className="adm-logo" aria-hidden="true" style={{ background: "transparent", boxShadow: "none", overflow: "hidden", display: "block" }}>
+              <img src="/favicon.svg" alt="" width={37} height={37} style={{ width: "100%", height: "100%", display: "block", objectFit: "cover" }} />
+            </span>
             <span className="adm-brand__text">
-              DYPOL Blog
+              DYPOL BLOG
               <small>Admin</small>
             </span>
           </Link>
