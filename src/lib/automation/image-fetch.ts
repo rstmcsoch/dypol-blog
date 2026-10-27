@@ -8,6 +8,8 @@
  * WebP by magic number regardless of the declared Content-Type. (Workers
  * cannot reach private networks; the host rules are defence in depth.)
  */
+import { CANONICAL_ORIGIN } from "../seo.ts";
+
 export const MAX_IMAGE_BYTES = 10_000_000;
 export type ImageMime = "image/jpeg" | "image/png" | "image/webp";
 
@@ -122,7 +124,7 @@ export async function fetchImage(
         redirect: "manual",
         signal: controller.signal,
         // A descriptive UA: Wikimedia and many CDNs refuse requests without one (403).
-        headers: { accept: "image/jpeg,image/png,image/webp", "user-agent": "DYPOL-Blog-ImageFetcher/1.0 (+https://dypolblog.rstmcsoch.workers.dev)" },
+        headers: { accept: "image/jpeg,image/png,image/webp", "user-agent": `DYPOL-Blog-ImageFetcher/1.0 (+${CANONICAL_ORIGIN})` },
       });
       if (response.status >= 300 && response.status < 400) {
         const location = response.headers.get("location");
