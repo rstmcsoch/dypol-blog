@@ -12,12 +12,12 @@ export const Route = createFileRoute("/")({
     const origin = loaderData?.origin ?? "";
     const url = absoluteUrl(origin, "/");
     const current = loaderData?.site ?? fallbackSite;
-    const title = "DYPOL Blog";
+    const title = "DYPOL BLOG";
     return {
       meta: [
         { title },
         { name: "description", content: current.description },
-        ...socialMeta({ title, description: current.description, url, type: "website", siteName: "DYPOL Blog", image: absoluteUrl(origin, "/og.jpg") }),
+        ...socialMeta({ title, description: current.description, url, type: "website", siteName: "DYPOL BLOG", image: absoluteUrl(origin, "/og.jpg") }),
       ],
       links: [
         { rel: "canonical", href: url },
@@ -35,7 +35,7 @@ export const Route = createFileRoute("/")({
           children: JSON.stringify({
             "@context": "https://schema.org",
             "@type": "WebSite",
-            name: "DYPOL Blog",
+            name: "DYPOL BLOG",
             alternateName: ["dypolblog.rstmcsoch.workers.dev", "DYPOL"],
             url: "https://dypolblog.rstmcsoch.workers.dev/",
           }),
@@ -54,7 +54,7 @@ function Home() {
     return (
       <div className="page">
         <div className="container">
-          <h1 className="page-title">DYPOL Blog</h1>
+          <h1 className="page-title">DYPOL BLOG</h1>
           <p className="lede">{site.labels.emptyBody}</p>
         </div>
       </div>

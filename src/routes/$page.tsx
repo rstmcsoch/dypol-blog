@@ -25,7 +25,7 @@ export const Route = createFileRoute("/$page")({
       meta: [
         { title },
         { name: "description", content: description },
-        ...socialMeta({ title, description, url: absoluteUrl(origin, `/${loaderData.slug}`), type: "website", siteName: "DYPOL Blog", image: absoluteUrl(origin, "/og.jpg") }),
+        ...socialMeta({ title, description, url: absoluteUrl(origin, `/${loaderData.slug}`), type: "website", siteName: "DYPOL BLOG", image: absoluteUrl(origin, "/og.jpg") }),
       ],
       links: [{ rel: "canonical", href: absoluteUrl(origin, `/${loaderData.slug}`) }],
       scripts: [{ type: "application/ld+json", children: JSON.stringify(breadcrumbJsonLd({ origin, items: [{ name: "Home", path: "/" }, { name: loaderData.title, path: `/${loaderData.slug}` }] })) }],

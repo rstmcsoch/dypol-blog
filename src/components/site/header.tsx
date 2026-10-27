@@ -165,7 +165,7 @@ export function SiteHeader() {
           {site.logoMediaId ? <img className="wordmark__logo" src={`/media/${site.logoMediaId}`} alt="" /> : null}
           <span className="wordmark__name">DYPOL</span>
           <span className="wordmark__stamp grain">
-            <span>Blog</span>
+            <span>BLOG</span>
           </span>
         </NavLink>
         <nav id="site-nav" className={open ? "site-nav is-open" : "site-nav"} aria-label={site.labels.primaryNav}>

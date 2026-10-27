@@ -20,7 +20,7 @@ export const Route = createFileRoute("/about")({
       meta: [
         { title },
         { name: "description", content: description },
-        ...socialMeta({ title, description, url: absoluteUrl(origin, "/about"), type: "website", siteName: "DYPOL Blog", image: absoluteUrl(origin, "/og.jpg") }),
+        ...socialMeta({ title, description, url: absoluteUrl(origin, "/about"), type: "website", siteName: "DYPOL BLOG", image: absoluteUrl(origin, "/og.jpg") }),
       ],
       links: [{ rel: "canonical", href: absoluteUrl(origin, "/about") }],
       scripts: [{ type: "application/ld+json", children: JSON.stringify(breadcrumbJsonLd({ origin, items: [{ name: "Home", path: "/" }, { name: "About Us", path: "/about" }] })) }],

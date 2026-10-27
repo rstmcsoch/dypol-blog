@@ -32,8 +32,8 @@ export function metaDescription(text: string | null | undefined, fallback = ""):
 
 /** Consistent brand suffix for every non-home page title. */
 export function sitePageTitle(pageTitle: string): string {
-  const clean = pageTitle.trim().replace(/\s*(?:\||—|-)\s*DYPOL Blog\s*$/i, "").trim();
-  return `${clean || "Page"} | DYPOL Blog`;
+  const clean = pageTitle.trim().replace(/\s*(?:\||—|-)\s*DYPOL BLOG\s*$/i, "").trim();
+  return `${clean || "Page"} | DYPOL BLOG`;
 }
 
 /** Topic pages seeded with a one-line description get a fuller, still
@@ -42,8 +42,8 @@ export function topicMetaDescription(label: string, description: string | null |
   const base = (description ?? "").replace(/\s+/g, " ").trim().replace(/\.$/, "");
   if (base.length >= 90) return metaDescription(base);
   const enriched = base
-    ? `${base}. Latest ${label} news, reviews and explainers from DYPOL Blog.`
-    : `Latest ${label} news, reviews and explainers from DYPOL Blog.`;
+    ? `${base}. Latest ${label} news, reviews and explainers from DYPOL BLOG.`
+    : `Latest ${label} news, reviews and explainers from DYPOL BLOG.`;
   return metaDescription(enriched);
 }
 

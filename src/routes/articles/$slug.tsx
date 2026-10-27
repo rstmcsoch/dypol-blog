@@ -26,8 +26,8 @@ export const Route = createFileRoute("/articles/$slug")({
     const cover = article.coverMediaId ? absoluteUrl(origin, `/media/${article.coverMediaId}`) : null;
     const newsLd = articleJsonLd({
       origin,
-      siteName: "DYPOL Blog",
-      publisher: "DYPOL Blog",
+      siteName: "DYPOL BLOG",
+      publisher: "DYPOL BLOG",
       authorName: "DYPOL Labs",
       article: {
         slug: article.slug, title: article.title, excerpt: article.excerpt, description,
@@ -49,7 +49,7 @@ export const Route = createFileRoute("/articles/$slug")({
         { title },
         { name: "description", content: description },
         ...socialMeta({
-          title, description, url, type: "article", siteName: "DYPOL Blog", image: cover,
+          title, description, url, type: "article", siteName: "DYPOL BLOG", image: cover,
           publishedAt: article.publishedAt, modifiedAt: article.updatedAt, section: topics[0], imageAlt: article.coverAlt ?? article.title,
         }),
       ],

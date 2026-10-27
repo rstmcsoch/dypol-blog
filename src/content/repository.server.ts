@@ -378,7 +378,19 @@ export async function readShell() {
   const menuTopics = data.categories
     .map((c) => ({ slug: c.slug, label: c.label, count: live.filter((a) => a.topicIds.includes(c.id)).length }))
     .filter((t) => t.count > 0);
-  return { site: { ...data.site, aiDailyPublishLimit: 0 }, trending: tickerEntries(data.site, live, await viewCounts(data.site)), pages, menuTopics, storyCount: live.length };
+  const publicSite = {
+    ...data.site,
+    name: "DYPOL BLOG",
+    title: "DYPOL BLOG",
+    labels: { ...data.site.labels, indexKicker: "DYPOL BLOG", aboutKicker: "DYPOL BLOG" },
+    footer: { ...data.site.footer, note: data.site.footer.note.replaceAll("DYPOL Blog", "DYPOL BLOG") },
+    about: {
+      ...data.site.about,
+      paragraphs: data.site.about.paragraphs.map((paragraph) => paragraph.replaceAll("DYPOL Blog", "DYPOL BLOG")),
+    },
+    aiDailyPublishLimit: 0,
+  };
+  return { site: publicSite, trending: tickerEntries(publicSite, live, await viewCounts(publicSite)), pages, menuTopics, storyCount: live.length };
 }
 
 // ---------- pages (t52: standard reader-facing pages, admin-only CMS) -----
@@ -398,7 +410,13 @@ export async function readPage(slug: string): Promise<PageRow | null> {
   const rows = await dbPages();
   if (rows) {
     const row = rows.find((r) => r.slug === slug);
-    return row && row.status === "published" ? row : null;
+    if (!row || row.status !== "published") return null;
+    // The publication name is a fixed brand, independent of legacy saved page copy.
+    return {
+      ...row,
+      title: row.title.replaceAll("DYPOL Blog", "DYPOL BLOG"),
+      body: row.body.replaceAll("DYPOL Blog", "DYPOL BLOG"),
+    };
   }
   const seed = standardPage(slug);
   return seed ? { slug: seed.slug, title: seed.title, body: seed.body, status: "published", updated_at: "2026-10-18T00:00:00.000Z" } : null;

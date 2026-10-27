@@ -6,8 +6,8 @@ export const Route = createFileRoute("/manifest.webmanifest")({
       GET: async () => {
         const { site } = await import("@/content/site");
         const body = JSON.stringify({
-          name: "DYPOL Blog",
-          short_name: "DYPOL Blog",
+          name: "DYPOL BLOG",
+          short_name: "DYPOL BLOG",
           description: site.description,
           start_url: "/",
           scope: "/",

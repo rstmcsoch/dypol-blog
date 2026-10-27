@@ -24,12 +24,12 @@ export const Route = createFileRoute("/articles/")({
     const pages = loaderData.pages ?? 1;
     const path = pageHref("/articles", page);
     const title = sitePageTitle(page > 1 ? `Index — Page ${page}` : "Index");
-    const description = "Every published DYPOL Blog piece, newest first — tech news, reviews and explainers across AI, smartphones, cybersecurity, startups and more.";
+    const description = "Every published DYPOL BLOG piece, newest first — tech news, reviews and explainers across AI, smartphones, cybersecurity, startups and more.";
     return {
       meta: [
         { title },
         { name: "description", content: description },
-        ...socialMeta({ title, description, url: absoluteUrl(origin, path), type: "website", siteName: "DYPOL Blog", image: absoluteUrl(origin, "/og.jpg") }),
+        ...socialMeta({ title, description, url: absoluteUrl(origin, path), type: "website", siteName: "DYPOL BLOG", image: absoluteUrl(origin, "/og.jpg") }),
       ],
       links: [
         { rel: "canonical", href: absoluteUrl(origin, path) },

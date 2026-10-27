@@ -20,7 +20,7 @@ test("absoluteUrl joins and passes through absolute URLs", () => {
 });
 
 test("article JSON-LD is NewsArticle with image, dates, author, sections", () => {
-  const ld = articleJsonLd({ origin: "https://example.com", siteName: "DYPOL Blog", publisher: "DYPOL Labs", article });
+  const ld = articleJsonLd({ origin: "https://example.com", siteName: "DYPOL BLOG", publisher: "DYPOL Labs", article });
   assert.equal(ld["@type"], "NewsArticle");
   assert.deepEqual(ld.image, ["https://example.com/media/media-1"]);
   assert.equal(ld.datePublished, "2026-10-18T08:00:00.000Z");
@@ -50,14 +50,14 @@ test("sitemap emits absolute loc + ISO lastmod, skips bad dates", () => {
 test("news sitemap only includes the last 48 hours", () => {
   const now = new Date("2026-10-18T12:00:00Z");
   const old = { ...article, slug: "old", publishedAt: "2026-10-15T12:00:00Z" };
-  const xml = newsSitemapXml({ origin: "https://e.com", publicationName: "DYPOL Blog", articles: [article, old], now });
+  const xml = newsSitemapXml({ origin: "https://e.com", publicationName: "DYPOL BLOG", articles: [article, old], now });
   assert.match(xml, /hello-world/);
   assert.doesNotMatch(xml, /articles\/old/);
   assert.match(xml, /<news:title>Hello &amp; &lt;World&gt;<\/news:title>/);
 });
 
 test("RSS is well-formed-ish, escaped, with categories and guid", () => {
-  const xml = rssXml({ origin: "https://e.com", siteTitle: "DYPOL Blog", description: "Desc", articles: [article] });
+  const xml = rssXml({ origin: "https://e.com", siteTitle: "DYPOL BLOG", description: "Desc", articles: [article] });
   assert.match(xml, /<rss version="2\.0"/);
   assert.match(xml, /<title>Hello &amp; &lt;World&gt;<\/title>/);
   assert.match(xml, /<category>Tech News<\/category>/);
@@ -74,9 +74,9 @@ test("social meta: article times only for articles, large card with image", () =
 });
 
 test("publisher logo uses the dedicated raster brand asset, not the favicon (t58/t74)", () => {
-  const ld = articleJsonLd({ origin: "https://example.com", siteName: "DYPOL Blog", publisher: "DYPOL Labs", article });
+  const ld = articleJsonLd({ origin: "https://example.com", siteName: "DYPOL BLOG", publisher: "DYPOL Labs", article });
   assert.equal(ld.publisher.logo.url, "https://example.com/logo.png");
-  const site = websiteJsonLd({ origin: "https://example.com", siteName: "DYPOL Blog", title: "DYPOL Blog", description: "d", publisher: "DYPOL Labs" });
+  const site = websiteJsonLd({ origin: "https://example.com", siteName: "DYPOL BLOG", title: "DYPOL BLOG", description: "d", publisher: "DYPOL Labs" });
   const org = site["@graph"].find((n) => n["@type"] === "Organization") as unknown as { logo: string };
   assert.ok(org);
   assert.equal(org.logo, "https://example.com/logo.png");
@@ -98,7 +98,7 @@ test("metaDescription caps at 160 on a word boundary, collapses whitespace (t89)
 
 test("topicMetaDescription enriches short seeded descriptions, keeps full ones (t89)", () => {
   const short = topicMetaDescription("Chips & Gaming", "Processors, graphics and the games industry.");
-  assert.ok(short.length >= 90 && short.includes("Chips & Gaming") && short.includes("DYPOL Blog"));
+  assert.ok(short.length >= 90 && short.includes("Chips & Gaming") && short.includes("DYPOL BLOG"));
   const full = "A".repeat(100);
   assert.equal(topicMetaDescription("X", full), full);
 });
@@ -113,7 +113,7 @@ test("sitemap includes image namespace only when an image is present (t89)", () 
 });
 
 test("site is intentionally not AMP: sitemaps/RSS/JSON-LD never claim AMP (t86)", () => {
-  // DYPOL Blog is a responsive site with no AMP edition. Google's AMP
+  // DYPOL BLOG is a responsive site with no AMP edition. Google's AMP
   // report ("Why AMP pages are invalid") is only actionable if a page
   // advertises AMP (rel="amphtml", <html amp>, /amp URLs, amp URLs in a
   // sitemap). These builders must therefore never emit an AMP claim;
@@ -122,9 +122,9 @@ test("site is intentionally not AMP: sitemaps/RSS/JSON-LD never claim AMP (t86)"
   const recent = { ...article, publishedAt: "2026-10-18T08:00:00.000Z" };
   const outputs = [
     sitemapXml({ origin: "https://e.com", urls: [{ path: "/", lastmod: null }, { path: "/articles/hello-world", lastmod: null }] }),
-    newsSitemapXml({ origin: "https://e.com", publicationName: "DYPOL Blog", articles: [recent], now }),
-    rssXml({ origin: "https://e.com", siteTitle: "DYPOL Blog", description: "Desc", articles: [recent] }),
-    JSON.stringify(articleJsonLd({ origin: "https://e.com", siteName: "DYPOL Blog", publisher: "DYPOL Labs", article: recent })),
+    newsSitemapXml({ origin: "https://e.com", publicationName: "DYPOL BLOG", articles: [recent], now }),
+    rssXml({ origin: "https://e.com", siteTitle: "DYPOL BLOG", description: "Desc", articles: [recent] }),
+    JSON.stringify(articleJsonLd({ origin: "https://e.com", siteName: "DYPOL BLOG", publisher: "DYPOL Labs", article: recent })),
   ];
   for (const out of outputs) {
     assert.doesNotMatch(out, /amphtml/i);
