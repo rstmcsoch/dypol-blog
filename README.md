@@ -12,11 +12,13 @@ https://blog.dypol.workers.dev
 
 ## Develop
 
+```bash
 npm install
 npm run dev        # local dev
 npm run build      # production build (regenerates the route tree)
 npm run typecheck
 npm test           # unit + script tests
+```
 
 Local D1 migrations live in `migrations/d1/` and are applied with
 `wrangler d1 migrations apply DB --local` (production: `--remote`, or the

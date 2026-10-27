@@ -4,12 +4,12 @@ import { PagePending } from "@/components/site/states";
 import { useSite } from "@/components/site/use-site";
 import { getHome } from "@/content/public-api";
 import { site as fallbackSite } from "@/content/site";
-import { absoluteUrl, socialMeta } from "@/lib/seo";
+import { absoluteUrl, CANONICAL_ORIGIN, socialMeta } from "@/lib/seo";
 
 export const Route = createFileRoute("/")({
   loader: () => getHome(),
   head: ({ loaderData }) => {
-    const origin = loaderData?.origin ?? "";
+    const origin = loaderData?.origin || CANONICAL_ORIGIN;
     const url = absoluteUrl(origin, "/");
     const current = loaderData?.site ?? fallbackSite;
     const title = "DYPOL Blog";
@@ -36,8 +36,8 @@ export const Route = createFileRoute("/")({
             "@context": "https://schema.org",
             "@type": "WebSite",
             name: "DYPOL Blog",
-            alternateName: ["dypolblog.rstmcsoch.workers.dev", "DYPOL"],
-            url: "https://dypolblog.rstmcsoch.workers.dev/",
+            alternateName: [new URL(origin).host, "DYPOL"],
+            url,
           }),
         },
       ],

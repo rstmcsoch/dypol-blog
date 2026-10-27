@@ -5,11 +5,13 @@ import { isVersionPreviewHost, sameOriginRequest, writesAllowedFor } from "./wri
 test("version-preview hosts of the production Worker are detected", () => {
   assert.equal(isVersionPreviewHost("4718b35c-dypolblog.rstmcsoch.workers.dev"), true);
   assert.equal(isVersionPreviewHost("dypolblog.rstmcsoch.workers.dev"), false);
+  assert.equal(isVersionPreviewHost("blog.dypol.workers.dev"), false);
   assert.equal(isVersionPreviewHost("blog.dypollabs.com"), false);
 });
 
 test("writes are blocked on production-bound version previews and when forced off", () => {
   assert.equal(writesAllowedFor({ env: "production", host: "dypolblog.rstmcsoch.workers.dev" }), true);
+  assert.equal(writesAllowedFor({ env: "production", host: "blog.dypol.workers.dev" }), true);
   assert.equal(writesAllowedFor({ env: "production", host: "4718b35c-dypolblog.rstmcsoch.workers.dev" }), false);
   assert.equal(writesAllowedFor({ env: undefined, host: "5c785677-dypol-blog.rstmcsoch.workers.dev" }), false);
   assert.equal(writesAllowedFor({ env: "preview", host: "admin-panel-d1-dypolblog.rstmcsoch.workers.dev" }), true);

@@ -1,9 +1,11 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  // One config for both Workers (dypolblog and dypol-blog). Workers Builds
-  // overrides "name" per Worker, so both get the same bindings below.
+  // Production script is "blog" on account subdomain "dypol"
+  // (https://blog.dypol.workers.dev). Workers Builds deploys this file onto
+  // that existing Worker. Keep the name: a different script would be a new
+  // Worker without the production secrets, D1 database, or R2 bucket.
   // Workers Builds must run `npm run build` before the deploy/preview command.
-  "name": "dypolblog",
+  "name": "blog",
   "main": "@tanstack/react-start/server-entry",
   "compatibility_date": "2026-10-06",
   "compatibility_flags": ["nodejs_compat"],
