@@ -1,12 +1,12 @@
 # DYPOL Blog
 
 Technology news and explainers from DYPOL Labs — live at
-https://dypolblog.rstmcsoch.workers.dev
+https://blog.dypol.workers.dev
 
 ## Stack
 
 - **Frontend/server:** React + TanStack Router/Start (SSR), built with Vite (vinext)
-- **Hosting:** Cloudflare Workers (`dypolblog`), D1 (`dypol-blog-db`) for content/settings, R2 (`dypol-blog-media`) for images
+- **Hosting:** Cloudflare Workers (`blog` on the `dypol` workers.dev subdomain), D1 (`dypol-blog-db`) for content/settings, R2 (`dypol-blog-media`) for images
 - **Content:** articles in D1 with a 25-topic taxonomy, admin panel at `/admin`, AI publishing via the blog's MCP tools (see `docs/automation/`)
 - **SEO:** dynamic sitemap + news sitemap, RSS feed, OG/Twitter cards, NewsArticle/WebSite/Organization JSON-LD (see `SEO-REPORT.md`)
 

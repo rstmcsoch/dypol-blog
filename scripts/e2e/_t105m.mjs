@@ -2,7 +2,7 @@ import { chromium } from "playwright-core";
 const b = await chromium.launch({ executablePath: "/opt/google/chrome/chrome", args: ["--no-sandbox"] });
 const p = await b.newPage({ viewport: { width: 1440, height: 900 } });
 for (let i = 0; i < 25; i++) {
-  await p.goto("https://dypolblog.rstmcsoch.workers.dev/articles/amazon-aws-capacity-sold-out-through-2027-jassy?v=" + Date.now(), { waitUntil: "load" });
+  await p.goto("https://blog.dypol.workers.dev/articles/amazon-aws-capacity-sold-out-through-2027-jassy?v=" + Date.now(), { waitUntil: "load" });
   const m = await p.evaluate(() => {
     const h = document.querySelector(".article-title"), l = document.querySelector(".article-top .lede");
     const r = document.createRange(); r.selectNodeContents(h);
