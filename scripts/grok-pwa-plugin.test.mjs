@@ -254,6 +254,13 @@ test("site title Grok App is a real name, not a sentinel", () => {
   assert.match(out, /property="og:title" content="Grok App"/);
 });
 
+test("uses the hardcoded DYPOL BLOG identity for the production Workers host", () => {
+  assert.equal(appNameFromHost("blog.dypol.workers.dev"), "DYPOL BLOG");
+  const manifest = JSON.parse(renderWebManifest("blog.dypol.workers.dev"));
+  assert.equal(manifest.name, "DYPOL BLOG");
+  assert.equal(manifest.short_name, "DYPOL BLOG");
+});
+
 test("published grok.me slug is still a title fallback", () => {
   const out = injectGrokPwaHead("<html><head></head></html>", {
     host: "wild-race.grok.me",
@@ -495,14 +502,14 @@ test("strips install params from the app link", () => {
 });
 
 test("names the install page from host slug", () => {
-  assert.equal(appNameFromHost("localhost:8080"), "Grok App");
-  assert.equal(appNameFromHost("172.17.154.217:8080"), "Grok App");
+  assert.equal(appNameFromHost("localhost:8080"), "DYPOL BLOG");
+  assert.equal(appNameFromHost("172.17.154.217:8080"), "DYPOL BLOG");
   assert.equal(appNameFromHost("wild-race.grok.me"), "Wild Race");
 });
 
 test("rejects hosts that are not plain slugs", () => {
-  assert.equal(appNameFromHost("<script>alert(1)</script>"), "Grok App");
-  assert.equal(appNameFromHost('"><img src=x onerror=1>.grok.me'), "Grok App");
+  assert.equal(appNameFromHost("<script>alert(1)</script>"), "DYPOL BLOG");
+  assert.equal(appNameFromHost('"><img src=x onerror=1>.grok.me'), "DYPOL BLOG");
 });
 
 test("renders install page markup", () => {
