@@ -93,7 +93,7 @@ test("canonical origin consolidates workers.dev aliases, keeps custom domains (t
 test("metaDescription caps at 160 on a word boundary, collapses whitespace (t89)", () => {
   const long = "word ".repeat(60).trim();
   const out = metaDescription(long);
-  assert.ok(out.length <= 160 && out.endsWith("\u2026"));
+  assert.ok(out.length <= 160 && out.endsWith("…"));
   assert.equal(metaDescription("  a  b\n c "), "a b c");
   assert.equal(metaDescription("", "Fallback title"), "Fallback title");
 });
