@@ -447,7 +447,12 @@ export async function readPageLinks(): Promise<{ slug: string; title: string; up
 export async function adminListPages() {
   const rows = await dbPages();
   if (!rows) throw new Error("The pages table is missing. Apply migration 0008 first.");
-  return rows.map((row) => ({ ...row, standard: STANDARD_PAGES.some((p) => p.slug === row.slug) }));
+  return rows.map((row) => ({
+    ...row,
+    title: row.title.replaceAll("DYPOL Blog", "DYPOL BLOG"),
+    body: row.body.replaceAll("DYPOL Blog", "DYPOL BLOG"),
+    standard: STANDARD_PAGES.some((p) => p.slug === row.slug),
+  }));
 }
 
 export async function adminSavePage(input: import("@/lib/pages").PageWrite & { actor: string }) {
