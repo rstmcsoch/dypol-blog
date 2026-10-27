@@ -22,7 +22,9 @@ export const Route = createFileRoute("/manifest.webmanifest")({
           ],
         });
         return new Response(body, {
-          headers: { "content-type": "application/manifest+json; charset=utf-8", "cache-control": "public, max-age=86400" },
+          // PWA names can remain cached in browser install prompts. Always revalidate
+          // this identity document so a branding change reaches the install UI.
+          headers: { "content-type": "application/manifest+json; charset=utf-8", "cache-control": "no-cache, max-age=0, must-revalidate" },
         });
       },
     },

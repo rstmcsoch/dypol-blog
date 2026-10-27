@@ -450,7 +450,13 @@ export function injectGrokPwaHead(html, ctx = {}) {
 
   const missing = grokPwaHeadTags(appName)
     .filter(([key]) => {
-      if (key === "manifest") return !next.includes('href="/__grok/manifest.webmanifest"');
+      if (key === "manifest") {
+        // Respect a manifest explicitly declared by the app (for example,
+        // /manifest.webmanifest). Inject the platform fallback only when no
+        // manifest link exists. Two manifests can make browsers keep the
+        // stale/platform app name in the install prompt.
+        return !/<link\\b[^>]*\\brel=["']manifest["'][^>]*>/i.test(next);
+      }
       if (key === "apple-touch-icon") return !next.includes('href="/__grok/icon-180.png"');
       return !next.includes(`name="${key}"`);
     })

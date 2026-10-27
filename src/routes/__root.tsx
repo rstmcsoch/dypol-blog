@@ -63,7 +63,7 @@ export const Route = createRootRoute({
         { rel: "apple-touch-icon", sizes: "180x180", href: "/apple-touch-icon.png" },
         { rel: "preload", as: "font", type: "font/woff2", href: familjenLatin, crossOrigin: "anonymous" },
         { rel: "stylesheet", href: appCss },
-        { rel: "manifest", href: "/manifest.webmanifest" },
+        { rel: "manifest", href: "/manifest.webmanifest?v=2" },
         { rel: "alternate", type: "application/rss+xml", title: "DYPOL BLOG feed", href: "/feed.xml" },
       ],
     };
