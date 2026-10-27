@@ -278,7 +278,19 @@ async function catalog(): Promise<{ articles: Article[]; categories: Category[];
     sql<{ data: SiteConfig | string }>`select data from site_settings where id = 'site'`,
   ]);
   const raw = settings[0]?.data;
-  const siteConfig = normalizeSite(typeof raw === "string" ? JSON.parse(raw) : raw);
+  const normalizedSite = normalizeSite(typeof raw === "string" ? JSON.parse(raw) : raw);
+  // The publication wordmark is intentionally fixed in code, not controlled by saved settings.
+  const siteConfig = {
+    ...normalizedSite,
+    name: "DYPOL BLOG",
+    title: "DYPOL BLOG",
+    labels: { ...normalizedSite.labels, indexKicker: "DYPOL BLOG", aboutKicker: "DYPOL BLOG" },
+    footer: { ...normalizedSite.footer, note: normalizedSite.footer.note.replaceAll("DYPOL Blog", "DYPOL BLOG") },
+    about: {
+      ...normalizedSite.about,
+      paragraphs: normalizedSite.about.paragraphs.map((paragraph) => paragraph.replaceAll("DYPOL Blog", "DYPOL BLOG")),
+    },
+  };
   return { articles, categories, tags, site: siteConfig };
 }
 
