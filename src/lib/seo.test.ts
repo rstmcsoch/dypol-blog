@@ -83,15 +83,17 @@ test("publisher logo uses the dedicated raster brand asset, not the favicon (t58
 });
 
 test("canonical origin consolidates workers.dev aliases, keeps custom domains (t58)", () => {
-  assert.equal(canonicalOriginFrom("https://dypol-blog.rstmcsoch.workers.dev/articles/x"), "https://dypolblog.rstmcsoch.workers.dev");
-  assert.equal(canonicalOriginFrom("https://abc123-dypolblog.rstmcsoch.workers.dev/"), "https://dypolblog.rstmcsoch.workers.dev");
+  assert.equal(canonicalOriginFrom("https://blog.dypol.workers.dev/"), "https://blog.dypol.workers.dev");
+  assert.equal(canonicalOriginFrom("https://dypolblog.rstmcsoch.workers.dev/articles/x"), "https://blog.dypol.workers.dev");
+  assert.equal(canonicalOriginFrom("https://dypol-blog.rstmcsoch.workers.dev/articles/x"), "https://blog.dypol.workers.dev");
+  assert.equal(canonicalOriginFrom("https://abc123-blog.dypol.workers.dev/"), "https://blog.dypol.workers.dev");
   assert.equal(canonicalOriginFrom("https://blog.example.com/articles/x"), "https://blog.example.com");
 });
 
 test("metaDescription caps at 160 on a word boundary, collapses whitespace (t89)", () => {
   const long = "word ".repeat(60).trim();
   const out = metaDescription(long);
-  assert.ok(out.length <= 160 && out.endsWith("…"));
+  assert.ok(out.length <= 160 && out.endsWith("\u2026"));
   assert.equal(metaDescription("  a  b\n c "), "a b c");
   assert.equal(metaDescription("", "Fallback title"), "Fallback title");
 });

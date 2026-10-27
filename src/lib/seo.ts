@@ -27,17 +27,17 @@ export function metaDescription(text: string | null | undefined, fallback = ""):
   if (clean.length <= 160) return clean;
   const cut = clean.slice(0, 157);
   const lastSpace = cut.lastIndexOf(" ");
-  return `${(lastSpace > 80 ? cut.slice(0, lastSpace) : cut).trimEnd()}…`;
+  return `${(lastSpace > 80 ? cut.slice(0, lastSpace) : cut).trimEnd()}\u2026`;
 }
 
 /** Consistent brand suffix for every non-home page title. */
 export function sitePageTitle(pageTitle: string): string {
-  const clean = pageTitle.trim().replace(/\s*(?:\||—|-)\s*DYPOL BLOG\s*$/i, "").trim();
+  const clean = pageTitle.trim().replace(/\s*(?:\||\u2014|-)\s*DYPOL BLOG\s*$/i, "").trim();
   return `${clean || "Page"} | DYPOL BLOG`;
 }
 
 /** Topic pages seeded with a one-line description get a fuller, still
- * accurate snippet instead of a 44–61 char fragment (live audit t89). */
+ * accurate snippet instead of a 44\u201361 char fragment (live audit t89). */
 export function topicMetaDescription(label: string, description: string | null | undefined): string {
   const base = (description ?? "").replace(/\s+/g, " ").trim().replace(/\.$/, "");
   if (base.length >= 90) return metaDescription(base);
@@ -61,9 +61,10 @@ export type SeoArticle = {
   bodyText?: string;
 };
 
-/** The one public host. Both Worker names (and version-preview URLs) serve
- * the same content on workers.dev, so SEO URLs must consolidate here. */
-export const CANONICAL_ORIGIN = "https://dypolblog.rstmcsoch.workers.dev";
+/** The one public host. Any workers.dev hostname (production, the retired
+ * alias, or a version preview) serves the same content, so SEO URLs
+ * consolidate here. A real custom domain keeps its own origin. */
+export const CANONICAL_ORIGIN = "https://blog.dypol.workers.dev";
 
 export function canonicalOriginFrom(requestUrl: string): string {
   try {
