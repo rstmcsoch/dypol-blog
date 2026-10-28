@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  todayKolkata,
   computePeriod,
   kolkataDate,
   kolkataAddDays,
@@ -67,8 +68,8 @@ test("computePeriod: last-7 spans 7 days inclusive", () => {
   const period = computePeriod("last-7", null);
   assert.equal(period.days, 7);
   assert.equal(period.label, "Last 7 days");
-  assert.equal(period.from, "2026-10-16");
-  assert.equal(period.to, "2026-10-22");
+  assert.equal(period.from, kolkataAddDays(todayKolkata(), -6));
+  assert.equal(period.to, todayKolkata());
 });
 
 test("computePeriod: custom range", () => {
