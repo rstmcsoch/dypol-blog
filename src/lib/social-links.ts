@@ -58,11 +58,19 @@ export function normalizeSocials(input: unknown): SocialLink[] {
 }
 
 /** What the footer actually renders: URL set + toggled on. */
-export function visibleSocials(socials: SocialLink[] | undefined): SocialLink[] {
-  return normalizeSocials(socials).filter((s) => s.visible && s.url.length > 0);
+export function isRootSocialUrl(platform: SocialPlatform, value: string): boolean {
+  if (platform === "rss" || platform === "email" || !value.trim()) return false;
+  try {
+    const url = new URL(value);
+    return url.pathname.replaceAll("/", "") === "" && !url.search && !url.hash;
+  } catch { return false; }
 }
 
-export type FooterColumn = { heading: string; links: { label: string; href: string }[] };
+export function visibleSocials(socials: SocialLink[] | undefined): SocialLink[] {
+  return normalizeSocials(socials).filter((s) => s.visible && s.url.length > 0 && !isRootSocialUrl(s.platform, s.url));
+}
+
+export type FooterColumn = { heading: string; links: { label: string; href: string; newTab?: boolean }[] };
 
 /**
  * Footer columns from OUR pages only (t65). Page links are gated on

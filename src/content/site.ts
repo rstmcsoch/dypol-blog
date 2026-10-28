@@ -120,7 +120,7 @@ export const site = {
   },
   appearance: { darkness: 92, whiteness: 100, accent: "#ff4d00", coverFallback: "minimal" },
   footer: {
-    note: "DYPOL BLOG · DYPOL Labs",
+    note: "© {year} DYPOL BLOG · DYPOL Labs",
     links: [],
   },
   about: {
@@ -133,6 +133,11 @@ export const site = {
   },
   logoMediaId: null,
   faviconMediaId: null,
+  defaultOgMediaId: null,
   socials: [],
   aiDailyPublishLimit: 0,
+  analytics: { enabled: true, measurementId: "G-T1R0QJ2F0Z", consentText: "Allow anonymous Google Analytics cookies to help us understand how this site is used?" },
 } satisfies SiteConfig;
+
+/** Stable bundled asset fallbacks, used only when Media has no selection. */
+export const DEFAULT_ASSETS = { og: "/og.jpg", logo: "/logo.png" };

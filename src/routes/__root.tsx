@@ -11,8 +11,8 @@ import { TrendingBar } from "@/components/site/trending-bar";
 import { NotFoundState } from "@/components/site/states";
 import { useSite } from "@/components/site/use-site";
 import { getShell } from "@/content/public-api";
+import { themeColors } from "@/lib/appearance";
 import { appearanceCss } from "@/lib/appearance";
-import { GA_SCRIPT_URL, gtagInitScript } from "@/lib/analytics";
 import { GoogleAnalytics } from "@/components/site/google-analytics";
 import { site as fallbackSite } from "@/content/site";
 import appCss from "../styles.css?url";
@@ -26,45 +26,34 @@ export const Route = createRootRoute({
   loader: () => getShell(),
   head: ({ loaderData }) => {
     const current = loaderData?.site ?? fallbackSite;
+    const colors = themeColors(current.appearance);
     return {
       meta: [
         { charSet: "utf-8" },
         { name: "viewport", content: "width=device-width, initial-scale=1" },
-        { title: "DYPOL BLOG" },
+        { title: current.title },
         { name: "description", content: current.description },
-        { property: "og:site_name", content: "DYPOL BLOG" },
-        { name: "application-name", content: "DYPOL BLOG" },
-        { name: "apple-mobile-web-app-title", content: "DYPOL BLOG" },
-        { name: "theme-color", media: "(prefers-color-scheme: light)", content: "#ffffff" },
-        { name: "theme-color", media: "(prefers-color-scheme: dark)", content: "#0a0a0a" },
+        { property: "og:site_name", content: current.name },
+        { name: "application-name", content: current.name },
+        { name: "apple-mobile-web-app-title", content: current.name },
+        { name: "theme-color", media: "(prefers-color-scheme: light)", content: colors.light.paper },
+        { name: "theme-color", media: "(prefers-color-scheme: dark)", content: colors.dark.paper },
         { name: "robots", content: "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" },
       ],
-      // t95: Google Analytics 4 - ONE site-wide gtag in the document head,
-      // rendered by the root route so every page (public + admin) gets it
-      // exactly once. Async loader (never blocks rendering) + inline
-      // bootstrap; the initial config sends the landing page_view, and
-      // <GoogleAnalytics /> in RootLayout sends later SPA navigations.
-      // No CSP exists on HTML responses (see src/start.ts), so
-      // googletagmanager.com needs no header change.
-      scripts: [
-        { src: GA_SCRIPT_URL, async: true },
-        { children: gtagInitScript },
-      ],
       links: [
-        // t74: hardcoded favicon set at STABLE root paths (never hashed, never
-        // admin-overridable) so Google/Bing/browsers always find real files:
-        // /favicon.ico was previously a 404 HTML fallback — the Search Console
-        // "no favicon" cause. Files live in public/ (scripts/generate-favicons.mjs).
+        ...(current.faviconMediaId ? [{ rel: "icon", href: `/media/${current.faviconMediaId}` }] : [
+        // Stable built-in assets are used only when no favicon is selected.
         { rel: "icon", href: "/favicon.ico", sizes: "48x48" },
         { rel: "shortcut icon", href: "/favicon.ico" },
         { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" },
         { rel: "icon", type: "image/png", sizes: "32x32", href: "/favicon-32x32.png" },
         { rel: "icon", type: "image/png", sizes: "16x16", href: "/favicon-16x16.png" },
         { rel: "apple-touch-icon", sizes: "180x180", href: "/apple-touch-icon.png" },
+        ]),
         { rel: "preload", as: "font", type: "font/woff2", href: familjenLatin, crossOrigin: "anonymous" },
         { rel: "stylesheet", href: appCss },
         { rel: "manifest", href: "/manifest.webmanifest?v=2" },
-        { rel: "alternate", type: "application/rss+xml", title: "DYPOL BLOG feed", href: "/feed.xml" },
+        { rel: "alternate", type: "application/rss+xml", title: `${current.name} feed`, href: "/feed.xml" },
       ],
     };
   },
@@ -95,7 +84,7 @@ function RootLayout() {
   const desk = pathname === "/admin" || pathname.startsWith("/admin/");
   // GoogleAnalytics stays the first child of a stable fragment so switching
   // between the public shell and the admin desk never remounts its tracker.
-  if (desk) return (<><GoogleAnalytics /><Outlet /></>);
+  if (desk) return <Outlet />;
   return (
     <>
     <GoogleAnalytics />

@@ -3,19 +3,19 @@ import { PagePending } from "@/components/site/states";
 import { TopicGrid } from "@/components/site/topic-grid";
 import { useSite } from "@/components/site/use-site";
 import { getTopics } from "@/content/public-api";
-import { absoluteUrl, itemListJsonLd, sitePageTitle, socialMeta } from "@/lib/seo";
+import { defaultOgPath, absoluteUrl, itemListJsonLd, sitePageTitle, socialMeta } from "@/lib/seo";
 
 export const Route = createFileRoute("/topics/")({
   loader: () => getTopics(),
   head: ({ loaderData }) => {
     const origin = loaderData?.origin ?? "";
-    const title = sitePageTitle("Topics");
+    const title = sitePageTitle(loaderData?.site.labels.topicsTitle ?? "Topics", loaderData?.site.name);
     const description = "Pieces are filed by subject: AI, smartphones, cybersecurity, startups, product reviews, tech news and more.";
     return {
       meta: [
         { title },
         { name: "description", content: description },
-        ...socialMeta({ title, description, url: absoluteUrl(origin, "/topics"), type: "website", siteName: "DYPOL BLOG", image: absoluteUrl(origin, "/og.jpg") }),
+        ...socialMeta({ title, description, url: absoluteUrl(origin, "/topics"), type: "website", siteName: loaderData?.site.name ?? "", image: absoluteUrl(origin, defaultOgPath(loaderData?.site ?? {})) }),
       ],
       links: [{ rel: "canonical", href: absoluteUrl(origin, "/topics") }],
       scripts: [

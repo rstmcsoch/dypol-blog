@@ -13,6 +13,8 @@ const securityHeaders = createMiddleware().server(async ({ next }) => {
   const headers = result.response.headers;
   const type = headers.get("content-type") ?? "";
   if (type.includes("text/html")) {
+    headers.set("cache-control", "no-store");
+    if (!headers.has("strict-transport-security")) headers.set("strict-transport-security", "max-age=31536000");
     if (!headers.has("x-content-type-options")) headers.set("x-content-type-options", "nosniff");
     if (!headers.has("x-frame-options")) headers.set("x-frame-options", "SAMEORIGIN");
     if (!headers.has("referrer-policy")) headers.set("referrer-policy", "strict-origin-when-cross-origin");

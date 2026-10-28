@@ -4138,3 +4138,18 @@ html.nav-open .reading-progress { display: none; }
 .social-embed blockquote p, .social-embed blockquote section { margin: 0; }
 .social-embed .twitter-tweet, .social-embed .instagram-media, .social-embed .tiktok-embed { max-width: 100% !important; min-width: 0 !important; }
 .social-embed .twitter-tweet-rendered, .social-embed .instagram-media-rendered { border: 0; padding: 0; background: none; }
+
+/* Native consent UI follows the public editorial tokens, not admin styling. */
+.consent-bar {
+  position: fixed;
+  inset: auto 1rem 1rem;
+  z-index: 100;
+  max-width: 42rem;
+  margin-inline: auto;
+  padding: 1rem;
+  border: var(--line) solid var(--ink);
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: var(--shadow-hard);
+}
+.consent-bar p { margin: 0 0 0.75rem; }

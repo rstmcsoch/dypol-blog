@@ -279,18 +279,7 @@ async function catalog(): Promise<{ articles: Article[]; categories: Category[];
   ]);
   const raw = settings[0]?.data;
   const normalizedSite = normalizeSite(typeof raw === "string" ? JSON.parse(raw) : raw);
-  // The publication wordmark is intentionally fixed in code, not controlled by saved settings.
-  const siteConfig = {
-    ...normalizedSite,
-    name: "DYPOL BLOG",
-    title: "DYPOL BLOG",
-    labels: { ...normalizedSite.labels, indexKicker: "DYPOL BLOG", aboutKicker: "DYPOL BLOG" },
-    footer: { ...normalizedSite.footer, note: normalizedSite.footer.note.replaceAll("DYPOL Blog", "DYPOL BLOG") },
-    about: {
-      ...normalizedSite.about,
-      paragraphs: normalizedSite.about.paragraphs.map((paragraph) => paragraph.replaceAll("DYPOL Blog", "DYPOL BLOG")),
-    },
-  };
+  const siteConfig = normalizedSite;
   return { articles, categories, tags, site: siteConfig };
 }
 
@@ -392,14 +381,6 @@ export async function readShell() {
     .filter((t) => t.count > 0);
   const publicSite = {
     ...data.site,
-    name: "DYPOL BLOG",
-    title: "DYPOL BLOG",
-    labels: { ...data.site.labels, indexKicker: "DYPOL BLOG", aboutKicker: "DYPOL BLOG" },
-    footer: { ...data.site.footer, note: data.site.footer.note.replaceAll("DYPOL Blog", "DYPOL BLOG") },
-    about: {
-      ...data.site.about,
-      paragraphs: data.site.about.paragraphs.map((paragraph) => paragraph.replaceAll("DYPOL Blog", "DYPOL BLOG")),
-    },
     aiDailyPublishLimit: 0,
   };
   return { site: publicSite, trending: tickerEntries(publicSite, live, await viewCounts(publicSite)), pages, menuTopics, storyCount: live.length };
@@ -505,13 +486,14 @@ export async function readIndex(page = 1) {
   const live = published(data.articles);
   const p = paginate(live, page);
   if (!p) return null;
-  return { articles: p.items, meta: metaFor(p.items, live, data.categories), page: p.page, pages: p.pages, total: p.total, start: p.start };
+  return { site: data.site, articles: p.items, meta: metaFor(p.items, live, data.categories), page: p.page, pages: p.pages, total: p.total, start: p.start };
 }
 
 export async function readTopics() {
   const data = await publicCatalog();
   const live = published(data.articles);
   return {
+    site: data.site,
     // t115: topics with no published stories are hidden everywhere.
     topics: data.categories
       .map((category) => ({
@@ -530,7 +512,7 @@ export async function readTopic(slug: string, page = 1) {
   const all = published(data.articles);
   const p = paginate(live, page);
   if (!p) return null;
-  return { category, articles: p.items, meta: metaFor(p.items, all, data.categories), page: p.page, pages: p.pages, total: p.total, start: p.start };
+  return { site: data.site, category, articles: p.items, meta: metaFor(p.items, all, data.categories), page: p.page, pages: p.pages, total: p.total, start: p.start };
 }
 
 export async function readArticle(slug: string) {
@@ -619,6 +601,7 @@ async function articlePayload(
       .map((id) => data.tags.find((tag) => tag.id === id))
       .filter((tag): tag is Tag => Boolean(tag)),
     related,
+    site: { ...data.site, aiDailyPublishLimit: 0 },
     neighbors: { newer, older },
     inlineRelated: inlineRelated.map((a) => ({ id: a.id, slug: a.slug, title: a.title, publishedAt: a.publishedAt })),
     rank: index === -1 ? 0 : index + 1,

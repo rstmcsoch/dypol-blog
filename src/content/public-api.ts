@@ -108,13 +108,14 @@ export const getSitemapEntries = createServerFn({ method: "GET" }).handler(async
 export const getPage = createServerFn({ method: "GET" })
   .validator((input: { slug: string }) => input)
   .handler(async ({ data }) => {
-    const { readPage } = await import("./repository.server");
+    const { readPage, readShell } = await import("./repository.server");
     const { standardPage } = await import("./pages-seed");
     const { pageExcerpt } = await import("@/lib/pages");
     const row = await readPage(data.slug);
     if (!row) return null;
     const seed = standardPage(row.slug);
     return {
+      site: (await readShell()).site,
       slug: row.slug,
       title: row.title,
       body: row.body,

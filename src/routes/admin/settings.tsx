@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { adminPending } from "@/components/admin/pending";
 import { FormShell, useSiteForm } from "@/components/admin/site-form";
 import { adminSettings } from "@/content/admin-api";
-import { SOCIAL_LABELS, SOCIAL_PLATFORMS, type SocialLink } from "@/lib/social-links";
+import { isRootSocialUrl, SOCIAL_LABELS, SOCIAL_PLATFORMS, type SocialLink } from "@/lib/social-links";
 
 export const Route = createFileRoute("/admin/settings")({
   ...adminPending,
@@ -42,6 +42,12 @@ function SettingsAdmin() {
           </label>
         </fieldset>
         <fieldset className="block-card">
+          <legend>Analytics and consent</legend>
+          <label className="check-row"><input type="checkbox" checked={site.analytics.enabled} onChange={(e) => patch({ analytics: { ...site.analytics, enabled: e.target.checked } })} />Enable Google Analytics (requires visitor consent)</label>
+          <label className="field"><span>GA4 Measurement ID</span><input value={site.analytics.measurementId} placeholder="G-…" onChange={(e) => patch({ analytics: { ...site.analytics, measurementId: e.target.value } })} /></label>
+          <p className="field-help">No Google script or request is sent before Accept. Admin pages never load Google Analytics.</p>
+        </fieldset>
+        <fieldset className="block-card">
           <legend>Social links</legend>
           <p className="field-help">
             Shown as icons under the logo and description in the footer. Leave a URL empty (or untick Show) and
@@ -62,6 +68,7 @@ function SettingsAdmin() {
                     placeholder={platform === "email" ? "mailto:hello@example.com" : platform === "rss" ? "/feed.xml" : "https://…"}
                     onChange={(e) => update({ url: e.target.value })}
                   />
+                  {isRootSocialUrl(platform, current.url) ? <span className="field-help" role="status">This is a platform homepage, not a profile. It will remain hidden until you enter your account URL.</span> : null}
                 </label>
                 <label className="field">
                   <span>Show</span>
@@ -112,6 +119,12 @@ function SettingsAdmin() {
                   {item.filename}
                 </option>
               ))}
+            </select>
+          </label>
+          <label className="field"><span>Default social-sharing image</span>
+            <select value={site.defaultOgMediaId ?? ""} onChange={(e) => patch({ defaultOgMediaId: e.target.value || null })}>
+              <option value="">Built-in share image</option>
+              {data.media.map((item) => <option key={item.id} value={item.id}>{item.filename}</option>)}
             </select>
           </label>
           <p className="field-help">Upload images under Media first.</p>

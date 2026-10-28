@@ -1,3 +1,4 @@
+import { site as defaults, DEFAULT_ASSETS } from "../content/site.ts";
 /**
  * Pure SEO builders (t48): absolute URLs, JSON-LD (NewsArticle,
  * BreadcrumbList, WebSite/Organization, ItemList), RSS, sitemaps.
@@ -31,19 +32,20 @@ export function metaDescription(text: string | null | undefined, fallback = ""):
 }
 
 /** Consistent brand suffix for every non-home page title. */
-export function sitePageTitle(pageTitle: string): string {
-  const clean = pageTitle.trim().replace(/\s*(?:\||—|-)\s*DYPOL BLOG\s*$/i, "").trim();
-  return `${clean || "Page"} | DYPOL BLOG`;
+export function sitePageTitle(pageTitle: string, siteName = defaults.name): string {
+  const escaped = siteName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const clean = pageTitle.trim().replace(new RegExp(`\\s*(?:\\||—|-)\\s*${escaped}\\s*$`, "i"), "").trim();
+  return `${clean || "Page"} | ${siteName}`;
 }
 
 /** Topic pages seeded with a one-line description get a fuller, still
  * accurate snippet instead of a 44–61 char fragment (live audit t89). */
-export function topicMetaDescription(label: string, description: string | null | undefined): string {
+export function topicMetaDescription(label: string, description: string | null | undefined, siteName = defaults.name): string {
   const base = (description ?? "").replace(/\s+/g, " ").trim().replace(/\.$/, "");
   if (base.length >= 90) return metaDescription(base);
   const enriched = base
-    ? `${base}. Latest ${label} news, reviews and explainers from DYPOL BLOG.`
-    : `Latest ${label} news, reviews and explainers from DYPOL BLOG.`;
+    ? `${base}. Latest ${label} news, reviews and explainers from ${siteName}.`
+    : `Latest ${label} news, reviews and explainers from ${siteName}.`;
   return metaDescription(enriched);
 }
 
@@ -83,7 +85,7 @@ function isoOrNull(value: string | null | undefined): string | null {
 }
 
 /** NewsArticle JSON-LD for an article page (Google Article rich results + Discover). */
-export function articleJsonLd(input: { origin: string; siteName: string; publisher: string; authorName?: string; article: SeoArticle }) {
+export function articleJsonLd(input: { origin: string; siteName: string; publisher: string; authorName?: string; logoMediaId?: string | null; article: SeoArticle }) {
   const { origin, publisher, authorName, article } = input;
   const url = absoluteUrl(origin, `/articles/${article.slug}`);
   const published = isoOrNull(article.publishedAt);
@@ -101,7 +103,7 @@ export function articleJsonLd(input: { origin: string; siteName: string; publish
       "@type": "Organization",
       name: publisher,
       url: absoluteUrl(origin, "/"),
-      logo: { "@type": "ImageObject", url: absoluteUrl(origin, "/logo.png"), width: 1056, height: 256 },
+      ...(input.logoMediaId ? { logo: { "@type": "ImageObject", url: absoluteUrl(origin, `/media/${input.logoMediaId}`) } } : {}),
     },
     mainEntityOfPage: { "@type": "WebPage", "@id": url },
     isAccessibleForFree: true,
@@ -123,7 +125,7 @@ export function breadcrumbJsonLd(input: { origin: string; items: { name: string;
 }
 
 /** WebSite + Organization graph for the homepage. */
-export function websiteJsonLd(input: { origin: string; siteName: string; title: string; description: string; publisher: string; sameAs?: string[] }) {
+export function websiteJsonLd(input: { origin: string; siteName: string; title: string; description: string; publisher: string; logoMediaId?: string | null; sameAs?: string[] }) {
   const home = absoluteUrl(input.origin, "/");
   return {
     "@context": "https://schema.org",
@@ -142,7 +144,7 @@ export function websiteJsonLd(input: { origin: string; siteName: string; title: 
         "@id": `${home}#organization`,
         name: input.publisher,
         url: home,
-        logo: absoluteUrl(input.origin, "/logo.png"),
+        logo: absoluteUrl(input.origin, input.logoMediaId ? `/media/${input.logoMediaId}` : DEFAULT_ASSETS.logo),
         ...(input.sameAs?.length ? { sameAs: input.sameAs } : {}),
       },
     ],
@@ -283,4 +285,8 @@ export function socialMeta(input: {
     if (input.section) meta.push({ property: "article:section", content: input.section });
   }
   return meta;
+}
+
+export function defaultOgPath(site: { defaultOgMediaId?: string | null }): string {
+  return site.defaultOgMediaId ? `/media/${site.defaultOgMediaId}` : DEFAULT_ASSETS.og;
 }
