@@ -26,7 +26,7 @@ try {
   assert.match(home, /Preview extra link/);
   assert.match(home, new RegExp(`Preview footer ${new Date().getFullYear()}`));
   assert.doesNotMatch(home, /<script[^>]+src="https:\/\/www.googletagmanager.com/);
-  assert.equal(response.headers.get("cache-control"), "no-store");
+  assert.match(response.headers.get("cache-control") ?? "", /max-age=60/);
   const page = await (await fetch(`${origin}/about`)).text();
   assert.match(page, /<p class="kicker">Wiring Preview Journal<\/p>/);
   const manifest = await (await fetch(`${origin}/manifest.webmanifest`)).json();
