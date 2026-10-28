@@ -1,19 +1,5 @@
-/** t115: numbered pagination for /articles and /topics/$slug (?page=N). */
-export function pageHref(basePath: string, page: number): string {
-  return page <= 1 ? basePath : `${basePath}?page=${page}`;
-}
-
-/** Visible page numbers: first, last, current ±1, with gaps. */
-function windowPages(page: number, pages: number): (number | "gap")[] {
-  const set = new Set([1, pages, page - 1, page, page + 1].filter((n) => n >= 1 && n <= pages));
-  const sorted = [...set].sort((a, b) => a - b);
-  const out: (number | "gap")[] = [];
-  sorted.forEach((n, i) => {
-    if (i > 0 && n - sorted[i - 1] > 1) out.push("gap");
-    out.push(n);
-  });
-  return out;
-}
+import { pageHref, windowPages } from "@/lib/pagination";
+export { pageHref, parsePage } from "@/lib/pagination";
 
 export function Pager({ basePath, page, pages }: { basePath: string; page: number; pages: number }) {
   if (pages <= 1) return null;
@@ -42,11 +28,4 @@ export function Pager({ basePath, page, pages }: { basePath: string; page: numbe
       {page < pages ? item(page + 1, "Older →", "next", "pager__step") : <span className="pager__link pager__step is-disabled" aria-hidden="true">Older →</span>}
     </nav>
   );
-}
-
-/** ?page= → a positive integer; anything else that is present → -1 (404). */
-export function parsePage(value: unknown): number | undefined {
-  if (value === undefined || value === null || value === "") return undefined;
-  const n = Number(value);
-  return Number.isInteger(n) && n >= 1 ? n : -1;
 }
