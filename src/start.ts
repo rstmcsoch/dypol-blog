@@ -8,12 +8,18 @@ import { createMiddleware, createStart } from "@tanstack/react-start";
  * (OAuth consent and /media already set their own stricter headers —
  * `set` here only fills the gaps, it does not weaken existing values.)
  */
-const securityHeaders = createMiddleware().server(async ({ next }) => {
+const securityHeaders = createMiddleware().server(async ({ request, next }) => {
   const result = await next();
   const headers = result.response.headers;
   const type = headers.get("content-type") ?? "";
   if (type.includes("text/html")) {
-    headers.set("cache-control", "no-store");
+    // Admin, preview and auth pages must never be cached. Public pages get a
+    // short shared cache so they stay fast while settings changes still show
+    // within about a minute.
+    const path = new URL(request.url).pathname;
+    const privatePath = /^\/(admin|preview|oauth|api|auth)(\/|$)/.test(path);
+    if (privatePath) headers.set("cache-control", "no-store");
+    else if (!headers.has("cache-control")) headers.set("cache-control", "public, max-age=60, s-maxage=60, stale-while-revalidate=300");
     if (!headers.has("strict-transport-security")) headers.set("strict-transport-security", "max-age=31536000");
     if (!headers.has("x-content-type-options")) headers.set("x-content-type-options", "nosniff");
     if (!headers.has("x-frame-options")) headers.set("x-frame-options", "SAMEORIGIN");
