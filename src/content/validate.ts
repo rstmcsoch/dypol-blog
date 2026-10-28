@@ -220,6 +220,10 @@ const siteSchema = z.object({
     coverFallback: z.enum(["plate", "minimal", "none"]),
   }),
   footer: z.object({
+    columns: z.array(z.object({
+      heading: labelText,
+      links: z.array(z.object({ label: labelText, href: hrefSchema, newTab: z.boolean().optional() })).max(20),
+    })).max(6).optional(),
     note: z.string().trim().min(1).max(160),
     links: z
       .array(
@@ -236,6 +240,12 @@ const siteSchema = z.object({
   }),
   logoMediaId: z.string().min(1).max(80).nullable(),
   faviconMediaId: z.string().min(1).max(80).nullable(),
+  defaultOgMediaId: z.string().min(1).max(80).nullable().default(null),
+  analytics: z.object({
+    enabled: z.boolean(),
+    measurementId: z.string().trim().regex(/^(?:G-[A-Z0-9]+)?$/, "Use a GA4 ID such as G-ABC123, or leave empty."),
+    consentText: z.string().trim().min(1).max(500),
+  }).default(site.analytics),
   socials: z
     .array(
       z
@@ -409,6 +419,7 @@ function normalizeCore(input: unknown): SiteConfig {
     },
     logoMediaId: raw.logoMediaId ?? null,
     faviconMediaId: raw.faviconMediaId ?? null,
+    analytics: { ...site.analytics, ...(raw.analytics ?? {}) },
     socials: normalizeSocials(raw.socials),
     aiDailyPublishLimit: typeof raw.aiDailyPublishLimit === "number" ? raw.aiDailyPublishLimit : 0,
   });

@@ -227,14 +227,17 @@ export type SiteConfig = {
   footer: {
     note: string;
     links: FooterLink[];
+    columns?: import("../lib/social-links.ts").FooterColumn[];
   };
   about: {
     paragraphs: string[];
   };
   logoMediaId: string | null;
   faviconMediaId: string | null;
+  defaultOgMediaId: string | null;
   /** Footer social links (t65); only entries with a URL + visible render. */
   socials: import("../lib/social-links.ts").SocialLink[];
   /** t64: whole-website daily cap on AI/MCP publishes (auto + explicit, all profiles). 0 = no limit. Admin manual publishing is never counted. */
   aiDailyPublishLimit: number;
+  analytics: { enabled: boolean; measurementId: string; consentText: string };
 };

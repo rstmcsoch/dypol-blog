@@ -17,6 +17,7 @@ export default defineConfig(() => ({
     host: "0.0.0.0",
     port: 8080,
     strictPort: true,
+    allowedHosts: [".e2b.app"],
   },
   preview: {
     host: "127.0.0.1",

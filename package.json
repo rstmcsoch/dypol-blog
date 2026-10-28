@@ -38,7 +38,9 @@
     "test:e2e:cleanup": "node scripts/e2e/admin-cleanup.e2e.mjs",
     "test:e2e:multi-topics": "node scripts/e2e/topics-multi.e2e.mjs",
     "test:e2e:seo": "node scripts/e2e/seo.e2e.mjs",
-    "test:e2e:menu": "node scripts/e2e/menu-overlay.e2e.mjs"
+    "test:e2e:menu": "node scripts/e2e/menu-overlay.e2e.mjs",
+    "test:admin-wiring": "node --experimental-strip-types --test tests/admin-wiring/settings.test.ts",
+    "test:admin-wiring:local": "node tests/admin-wiring/local-preview.mjs"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.4",

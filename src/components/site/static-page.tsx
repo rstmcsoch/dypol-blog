@@ -1,3 +1,4 @@
+import { useSite } from "./use-site";
 import { ContactForm } from "./contact-form";
 import { Markdown } from "@/components/markdown";
 
@@ -16,13 +17,14 @@ function updatedLabel(iso: string): string {
 
 /** A standard reader-facing page (About, policies, contact…). */
 export function StaticPage({ page }: { page: PageView }) {
+  const site = useSite();
   const updated = updatedLabel(page.updatedAt);
   return (
     <div className="page">
       <div className="container">
        <div className="static-column">
         <header className="page-header">
-          <p className="kicker">DYPOL Blog</p>
+          <p className="kicker">{site.name}</p>
           <h1 className="page-title">{page.title}</h1>
           {updated && page.slug !== "about" && page.slug !== "contact" ? <p className="page-updated">Last updated {updated}</p> : null}
         </header>

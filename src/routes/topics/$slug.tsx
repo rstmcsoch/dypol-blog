@@ -4,7 +4,7 @@ import { EmptyState, NotFoundState, PagePending } from "@/components/site/states
 import { useSite } from "@/components/site/use-site";
 import { getTopic } from "@/content/public-api";
 import { Pager, pageHref, parsePage } from "@/components/site/pager";
-import { absoluteUrl, breadcrumbJsonLd, itemListJsonLd, sitePageTitle, socialMeta, topicMetaDescription } from "@/lib/seo";
+import { defaultOgPath, absoluteUrl, breadcrumbJsonLd, itemListJsonLd, sitePageTitle, socialMeta, topicMetaDescription } from "@/lib/seo";
 
 export const Route = createFileRoute("/topics/$slug")({
   validateSearch: (search: Record<string, unknown>): { page?: number } => {
@@ -23,13 +23,13 @@ export const Route = createFileRoute("/topics/$slug")({
     const page = loaderData.page ?? 1;
     const pages = loaderData.pages ?? 1;
     const base = `/topics/${loaderData.category.slug}`;
-    const title = sitePageTitle(page > 1 ? `${loaderData.category.label} — Page ${page}` : loaderData.category.label);
-    const description = topicMetaDescription(loaderData.category.label, loaderData.category.description);
+    const title = sitePageTitle(page > 1 ? `${loaderData.category.label} — Page ${page}` : loaderData.category.label, loaderData.site.name);
+    const description = topicMetaDescription(loaderData.category.label, loaderData.category.description, loaderData.site.name);
     return {
       meta: [
         { title },
         { name: "description", content: description },
-        ...socialMeta({ title, description, url: absoluteUrl(origin, pageHref(base, page)), type: "website", siteName: "DYPOL BLOG", image: absoluteUrl(origin, "/og.jpg") }),
+        ...socialMeta({ title, description, url: absoluteUrl(origin, pageHref(base, page)), type: "website", siteName: loaderData.site.name, image: absoluteUrl(origin, defaultOgPath(loaderData?.site ?? {})) }),
       ],
       links: [
         { rel: "canonical", href: absoluteUrl(origin, pageHref(base, page)) },

@@ -65,13 +65,17 @@ function SocialIcon({ platform }: { platform: SocialPlatform }) {
 export function SiteFooter() {
   const site = useSite();
   const pages = usePages();
-  const columns = footerColumns(pages);
+  const publishedPaths = new Set(pages.map((p) => `/${p.slug}`));
+  const standardPaths = new Set(["/about", "/contact", "/editorial-policy", "/corrections-policy", "/privacy-policy", "/terms", "/dmca", "/cookie-policy", "/disclaimer"]);
+  const columns = (site.footer.columns ?? footerColumns(pages)).map((column) => ({
+    ...column, links: column.links.filter((link) => !standardPaths.has(link.href) || publishedPaths.has(link.href)),
+  })).filter((column) => column.links.length);
   const socials = visibleSocials(site.socials);
   return (
     <footer className="site-footer">
       <div className="container footer-grid">
         <div className="footer-brand">
-          <p className="footer-mark">DYPOL BLOG</p>
+          <p className="footer-mark">{site.name}</p>
           <p className="footer-note">{site.description}</p>
           {socials.length > 0 ? (
             <div className="footer-socials">
@@ -94,14 +98,17 @@ export function SiteFooter() {
             <nav key={column.heading} className="footer-col" aria-label={column.heading}>
               <h2 className="footer-col-title">{column.heading}</h2>
               {column.links.map((link) => (
-                <a key={link.href} href={link.href} className="footer-link">
+                <a key={link.href} href={link.href} className="footer-link" {...(link.newTab ? { target: "_blank", rel: "noopener noreferrer" } : {})}>
                   {link.label}
                 </a>
               ))}
             </nav>
           ))}
         </div>
-        <p className="footer-sign">{site.footer.note}</p>
+        {site.footer.links.length > 0 ? <nav aria-label={site.labels.footerNav} className="footer-socials">
+          {site.footer.links.map((link) => <a key={link.id} className="footer-link" href={link.href}>{link.label}</a>)}
+        </nav> : null}
+        <p className="footer-sign">{site.footer.note.replaceAll("{year}", String(new Date().getFullYear()))}</p>
       </div>
     </footer>
   );

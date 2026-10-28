@@ -73,9 +73,9 @@ test("social meta: article times only for articles, large card with image", () =
   assert.equal(xmlEscape(`a & "b" <c>`), "a &amp; &quot;b&quot; &lt;c&gt;");
 });
 
-test("publisher logo uses the dedicated raster brand asset, not the favicon (t58/t74)", () => {
-  const ld = articleJsonLd({ origin: "https://example.com", siteName: "DYPOL BLOG", publisher: "DYPOL Labs", article });
-  assert.equal(ld.publisher.logo.url, "https://example.com/logo.png");
+test("publisher logo uses the selected media asset", () => {
+  const ld = articleJsonLd({ origin: "https://example.com", siteName: "DYPOL BLOG", publisher: "DYPOL Labs", logoMediaId: "brand-logo", article });
+  assert.equal(ld.publisher.logo?.url, "https://example.com/media/brand-logo");
   const site = websiteJsonLd({ origin: "https://example.com", siteName: "DYPOL BLOG", title: "DYPOL BLOG", description: "d", publisher: "DYPOL Labs" });
   const org = site["@graph"].find((n) => n["@type"] === "Organization") as unknown as { logo: string };
   assert.ok(org);

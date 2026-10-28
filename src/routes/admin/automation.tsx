@@ -339,7 +339,7 @@ function AutomationDesk() {
           </div>
           <div className="filters">
             <label className="field"><span>Minimum words</span><input type="number" min={100} max={10000} value={policy.minWords} onChange={(e) => setPolicy({ minWords: Number(e.target.value) })} /></label>
-            <label className="field"><span>Minimum sources</span><input type="number" min={0} max={20} value={policy.minSources} onChange={(e) => setPolicy({ minSources: Number(e.target.value) })} /></label>
+            <label className="field"><span>Minimum sources</span><input type="number" min={0} max={20} disabled={!policy.requireSources} aria-describedby="sources-help" value={policy.minSources} onChange={(e) => setPolicy({ minSources: Number(e.target.value) })} /></label>
             <label className="field"><span>Maximum articles per run</span><input type="number" min={0} max={20} value={policy.maxPublishedPerRun} onChange={(e) => setPolicy({ maxPublishedPerRun: Number(e.target.value) })} /></label>
           </div>
           <p className="desk-note">
@@ -358,6 +358,7 @@ function AutomationDesk() {
             On: any profile may also edit drafts created by other profiles or by you. Published articles are never editable
             unless you grant one article in its editor (“Allow AI to edit this article”), and AI can never delete a published article.
           </p>
+          <p id="sources-help" className="field-help">Minimum sources is enforced only when Require sources is on.</p>
           <Check checked={policy.requireSources} onChange={(e) => setPolicy({ requireSources: e.target.checked })} label="Require sources" />
           <Check checked={policy.requireFeaturedImage} onChange={(e) => setPolicy({ requireFeaturedImage: e.target.checked })} label="Require a featured image" />
         </fieldset>

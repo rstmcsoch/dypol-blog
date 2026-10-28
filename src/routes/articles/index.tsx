@@ -4,7 +4,7 @@ import { NotFoundState, PagePending } from "@/components/site/states";
 import { Pager, pageHref, parsePage } from "@/components/site/pager";
 import { useSite } from "@/components/site/use-site";
 import { getIndex } from "@/content/public-api";
-import { absoluteUrl, itemListJsonLd, sitePageTitle, socialMeta } from "@/lib/seo";
+import { defaultOgPath, absoluteUrl, itemListJsonLd, sitePageTitle, socialMeta } from "@/lib/seo";
 
 export const Route = createFileRoute("/articles/")({
   validateSearch: (search: Record<string, unknown>): { page?: number } => {
@@ -23,13 +23,13 @@ export const Route = createFileRoute("/articles/")({
     const page = loaderData.page ?? 1;
     const pages = loaderData.pages ?? 1;
     const path = pageHref("/articles", page);
-    const title = sitePageTitle(page > 1 ? `Index — Page ${page}` : "Index");
-    const description = "Every published DYPOL BLOG piece, newest first — tech news, reviews and explainers across AI, smartphones, cybersecurity, startups and more.";
+    const title = sitePageTitle(page > 1 ? `${loaderData.site.labels.indexTitle} — Page ${page}` : loaderData.site.labels.indexTitle, loaderData.site.name);
+    const description = loaderData.site.labels.indexLede;
     return {
       meta: [
         { title },
         { name: "description", content: description },
-        ...socialMeta({ title, description, url: absoluteUrl(origin, path), type: "website", siteName: "DYPOL BLOG", image: absoluteUrl(origin, "/og.jpg") }),
+        ...socialMeta({ title, description, url: absoluteUrl(origin, path), type: "website", siteName: loaderData?.site.name, image: absoluteUrl(origin, defaultOgPath(loaderData?.site ?? {})) }),
       ],
       links: [
         { rel: "canonical", href: absoluteUrl(origin, path) },

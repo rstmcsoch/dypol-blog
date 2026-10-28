@@ -307,7 +307,7 @@ function Cta({ r }: { r: ResolvedBlock }) {
 export function HomeBlocks({ blocks, site }: { blocks: ResolvedBlock[]; site: SiteConfig }) {
   return (
     <>
-      <h1 className="sr-only">DYPOL Blog</h1>
+      <h1 className="sr-only">{site.name}</h1>
       {blocks.map((r, i) => {
         const id = `blk-${r.block.id}`;
         const t = r.block.type;

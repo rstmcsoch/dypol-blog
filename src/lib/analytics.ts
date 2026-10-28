@@ -1,21 +1,8 @@
-/**
- * Google Analytics 4 (gtag.js) — single site-wide installation (t95).
- *
- * The measurement ID is a public identifier (it is visible in every page's
- * HTML), so it is kept here as a plain site-config constant rather than an
- * env var / secret. This module is the ONE place the ID lives; the root
- * route renders the loader + init script from it, and the route-change
- * tracker below reuses it. Never add a second gtag snippet elsewhere.
- */
-export const GA_MEASUREMENT_ID = "G-T1R0QJ2F0Z";
-
+/** Legacy pure tracking helpers. Runtime loading and consent are handled by
+ * components/site/google-analytics.tsx using saved site settings. */
+import { site } from "../content/site.ts";
+export const GA_MEASUREMENT_ID = site.analytics.measurementId;
 export const GA_SCRIPT_URL = `https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`;
-
-/**
- * Inline bootstrap, exactly as Google instructs (dataLayer + gtag shim,
- * then a single `config`). That initial `config` sends the first page_view,
- * so the route-change tracker must NOT send another for the landing path.
- */
 export const gtagInitScript = [
   "window.dataLayer = window.dataLayer || [];",
   "function gtag(){dataLayer.push(arguments);}",

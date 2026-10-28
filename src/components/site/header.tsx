@@ -163,10 +163,10 @@ export function SiteHeader() {
       <div className="container bar">
         <NavLink href="/" className="wordmark">
           {site.logoMediaId ? <img className="wordmark__logo" src={`/media/${site.logoMediaId}`} alt="" /> : null}
-          <span className="wordmark__name">DYPOL</span>
-          <span className="wordmark__stamp grain">
-            <span>BLOG</span>
-          </span>
+          <span className="wordmark__name">{site.name.split(/\s+/).slice(0, -1).join(" ") || site.name}</span>
+          {site.name.trim().includes(" ") ? <span className="wordmark__stamp grain">
+            <span>{site.name.trim().split(/\s+/).at(-1)}</span>
+          </span> : null}
         </NavLink>
         <nav id="site-nav" className={open ? "site-nav is-open" : "site-nav"} aria-label={site.labels.primaryNav}>
           <div className="site-nav__inner" ref={panel}>

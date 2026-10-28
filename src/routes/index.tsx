@@ -4,7 +4,7 @@ import { PagePending } from "@/components/site/states";
 import { useSite } from "@/components/site/use-site";
 import { getHome } from "@/content/public-api";
 import { site as fallbackSite } from "@/content/site";
-import { absoluteUrl, CANONICAL_ORIGIN, socialMeta } from "@/lib/seo";
+import { defaultOgPath, absoluteUrl, CANONICAL_ORIGIN, socialMeta } from "@/lib/seo";
 
 export const Route = createFileRoute("/")({
   loader: () => getHome(),
@@ -12,12 +12,12 @@ export const Route = createFileRoute("/")({
     const origin = loaderData?.origin || CANONICAL_ORIGIN;
     const url = absoluteUrl(origin, "/");
     const current = loaderData?.site ?? fallbackSite;
-    const title = "DYPOL BLOG";
+    const title = current.title;
     return {
       meta: [
         { title },
         { name: "description", content: current.description },
-        ...socialMeta({ title, description: current.description, url, type: "website", siteName: "DYPOL BLOG", image: absoluteUrl(origin, "/og.jpg") }),
+        ...socialMeta({ title, description: current.description, url, type: "website", siteName: current.name, image: absoluteUrl(origin, defaultOgPath(current)) }),
       ],
       links: [
         { rel: "canonical", href: url },
@@ -35,8 +35,8 @@ export const Route = createFileRoute("/")({
           children: JSON.stringify({
             "@context": "https://schema.org",
             "@type": "WebSite",
-            name: "DYPOL BLOG",
-            alternateName: [new URL(origin).host, "DYPOL"],
+            name: current.name,
+            alternateName: [new URL(origin).host],
             url,
           }),
         },
@@ -54,7 +54,7 @@ function Home() {
     return (
       <div className="page">
         <div className="container">
-          <h1 className="page-title">DYPOL BLOG</h1>
+          <h1 className="page-title">{site.name}</h1>
           <p className="lede">{site.labels.emptyBody}</p>
         </div>
       </div>

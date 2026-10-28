@@ -1,7 +1,9 @@
+import { FooterEditor } from "@/components/admin/footer-editor";
 import { useState } from "react";
 import { adminPending } from "@/components/admin/pending";
 import { createFileRoute } from "@tanstack/react-router";
 import { FormShell, move, useSiteForm } from "@/components/admin/site-form";
+import { getShell } from "@/content/public-api";
 import { adminSettings, adminTaxonomy } from "@/content/admin-api";
 import { site as defaults } from "@/content/site";
 import type { NavHref, SiteConfig } from "@/content/types";
@@ -9,8 +11,8 @@ import type { NavHref, SiteConfig } from "@/content/types";
 export const Route = createFileRoute("/admin/site-text")({
   ...adminPending,
   loader: async () => {
-    const [settings, taxonomy] = await Promise.all([adminSettings(), adminTaxonomy()]);
-    return { ...settings, categories: taxonomy.categories.map((c) => ({ slug: c.slug, label: c.label })) };
+    const [settings, taxonomy, shell] = await Promise.all([adminSettings(), adminTaxonomy(), getShell()]);
+    return { ...settings, pages: shell.pages, categories: taxonomy.categories.map((c) => ({ slug: c.slug, label: c.label })) };
   },
   component: SiteTextAdmin,
 });
@@ -112,7 +114,7 @@ function SiteTextAdmin() {
   const other = (Object.keys(site.labels) as LabelKey[]).filter((k) => !covered.has(k));
 
   return (
-    <FormShell kicker="Site" title="Site text" intro="Every word visitors see outside your articles: menu, headings, buttons, footer and the About page. Empty or reset fields go back to the default text." form={form}>
+    <FormShell kicker="Site" title="Site text" intro="Every word visitors see outside your articles: menu, headings, buttons, and footer. About content is managed in Pages. Empty or reset fields go back to the default text." form={form}>
       <fieldset className="block-card">
         <legend>Main menu</legend>
         <p className="field-help">About five visible items reads best. Topic shortcuts link straight to one topic page and only show while that topic has published stories.</p>
@@ -151,7 +153,7 @@ function SiteTextAdmin() {
       <fieldset className="block-card">
         <legend>Footer</legend>
         <label className="field">
-          <span>Footer line</span>
+          <span>Footer line (use {"{year}"} for the current year)</span>
           <input value={site.footer.note} onChange={(e) => patch({ footer: { ...site.footer, note: e.target.value } })} />
         </label>
         {site.footer.links.map((link, index) => (
@@ -181,18 +183,19 @@ function SiteTextAdmin() {
         </p>
       </fieldset>
 
+      <FooterEditor site={site} pages={data.pages ?? []} patch={patch} />
       <fieldset className="block-card">
-        <legend>About page text</legend>
-        <label className="field">
-          <span>One paragraph per block; leave a blank line between paragraphs.</span>
-          <textarea
-            rows={10}
-            value={site.about.paragraphs.join("\n\n")}
-            onChange={(e) => patch({ about: { paragraphs: e.target.value.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean) } })}
-          />
-        </label>
+        <legend>About page</legend>
+        <p className="field-help">The public About page is managed in <a href="/admin/pages">Pages → About Us</a>. The earlier Site text copy is preserved below for comparison; it does not appear publicly.</p>
+        <details><summary>Earlier About copy (preserved)</summary>
+          {site.about.paragraphs.map((paragraph, i) => <p key={i}>{paragraph}</p>)}
+        </details>
       </fieldset>
 
+      <fieldset className="block-card">
+        <legend>Cookie consent</legend>
+        <label className="field"><span>Consent message</span><textarea value={site.analytics.consentText} onChange={(e) => patch({ analytics: { ...site.analytics, consentText: e.target.value } })} required maxLength={500} /></label>
+      </fieldset>
       {groups.map((group) => (
         <fieldset className="block-card" key={group.title}>
           <legend>{group.title}</legend>
