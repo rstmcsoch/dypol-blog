@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import type { DatePreset } from "@/lib/analytics-dates";
+import { parseAdminRedirects } from "@/lib/automation/oauth-client";
 
 async function guard() {
   const { requireAdmin } = await import("@/lib/auth/admin.server");
@@ -602,27 +603,66 @@ export const adminSaveAutomation = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-type ProfileAction = { action: "create"; name: string } | { action: "rename"; profileId: string; name: string } | { action: "delete" | "token" | "revoke"; profileId: string };
+type ProfileAction =
+  | { action: "create"; name: string; connect?: "api-key" | "oauth"; redirectUris?: string[] }
+  | { action: "rename"; profileId: string; name: string }
+  | { action: "delete" | "token" | "revoke" | "oauth-revoke"; profileId: string }
+  | { action: "oauth-create" | "oauth-redirects"; profileId: string; redirectUris: string[] };
 
-/** Create / rename / delete profiles and issue / revoke their tokens. A new token is returned once. */
+/** Create / rename / delete profiles and issue / revoke API keys or OAuth clients. A new secret is returned once. */
 export const adminProfileAction = createServerFn({ method: "POST" })
   .validator((input: unknown): ProfileAction => {
     const v = (input ?? {}) as Record<string, unknown>;
     const name = typeof v.name === "string" ? v.name.slice(0, 200) : "";
-    if (v.action === "create") return { action: "create", name };
+    const connect = v.connect === "oauth" || v.connect === "api-key" ? v.connect : undefined;
+    if (v.action === "create") {
+      if (connect === "oauth") return { action: "create", name, connect, redirectUris: parseAdminRedirects(v.redirectUris) };
+      return { action: "create", name, connect };
+    }
     if (v.action === "rename") return { action: "rename", profileId: profileIdOf(v), name };
-    if (v.action === "delete" || v.action === "token" || v.action === "revoke") return { action: v.action, profileId: profileIdOf(v) };
+    if (v.action === "delete" || v.action === "token" || v.action === "revoke" || v.action === "oauth-revoke") return { action: v.action, profileId: profileIdOf(v) };
+    if (v.action === "oauth-create" || v.action === "oauth-redirects") {
+      return { action: v.action, profileId: profileIdOf(v), redirectUris: parseAdminRedirects(v.redirectUris) };
+    }
     throw new Error("Unknown action.");
   })
   .handler(async ({ data }) => {
     await writeGuard();
     const store = await import("./automation.server");
     try {
-      if (data.action === "create") return { ok: true as const, profile: await store.createProfile(data.name) };
+      if (data.action === "create") {
+        const profile = await store.createProfile(data.name);
+        try {
+          if (data.connect === "api-key") {
+            const issued = await store.issueProfileToken(profile.id);
+            return { ok: true as const, profile: { ...profile, hasToken: true, tokenHint: issued.hint }, token: issued.token, hint: issued.hint };
+          }
+          if (data.connect === "oauth") {
+            const issued = await store.issueOauthClient(profile.id, data.redirectUris, data.name);
+            return {
+              ok: true as const,
+              profile: { ...profile, oauth: { clientId: issued.clientId, secretHint: issued.secretHint, redirectUris: issued.redirectUris, createdAt: new Date().toISOString() } },
+              oauth: { clientId: issued.clientId, clientSecret: issued.clientSecret, secretHint: issued.secretHint, redirectUris: issued.redirectUris },
+            };
+          }
+        } catch (error) {
+          await store.deleteProfile(profile.id).catch(() => undefined);
+          throw error;
+        }
+        return { ok: true as const, profile };
+      }
       if (data.action === "rename") await store.renameProfile(data.profileId, data.name);
       if (data.action === "delete") await store.deleteProfile(data.profileId);
       if (data.action === "revoke") await store.revokeProfileToken(data.profileId);
       if (data.action === "token") return { ok: true as const, ...(await store.issueProfileToken(data.profileId)) };
+      if (data.action === "oauth-revoke") await store.revokeOauthClient(data.profileId);
+      if (data.action === "oauth-redirects") return { ok: true as const, redirectUris: await store.updateOauthRedirects(data.profileId, data.redirectUris) };
+      if (data.action === "oauth-create") {
+        const profiles = await store.listProfiles();
+        const name = profiles.find((p) => p.id === data.profileId)?.name ?? "MCP client";
+        const issued = await store.issueOauthClient(data.profileId, data.redirectUris, name);
+        return { ok: true as const, oauth: { clientId: issued.clientId, clientSecret: issued.clientSecret, secretHint: issued.secretHint, redirectUris: issued.redirectUris } };
+      }
       return { ok: true as const };
     } catch (error) {
       if (error instanceof store.ProfileError) throw new Error(error.message);

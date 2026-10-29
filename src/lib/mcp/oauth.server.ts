@@ -1,3 +1,4 @@
+import { OAUTH_CLIENT_ID_RE } from "@/lib/automation/oauth-client";
 import { workerEnv } from "@/lib/cf-env.server";
 import { PUBLIC_CORS } from "./cors";
 import {
@@ -18,9 +19,13 @@ import {
 import { extraClientHosts } from "./hosts.server";
 
 /**
- * OAuth 2.1 (authorization code + S256 PKCE, public clients, RFC 7591 dynamic
- * registration) for any MCP connector client (Claude, ChatGPT, Grok, Cursor, ...). Stateless: codes and tokens are HMACs keyed by MCP_TOKEN. The owner
- * approves a connection by entering MCP_TOKEN on /oauth/authorize.
+ * OAuth 2.1 (authorization code + S256 PKCE) for any MCP connector.
+ * Public clients: RFC 7591 dynamic registration, no client secret (`none`).
+ * Confidential clients: a client id + secret created in Desk → Automation and
+ * bound to one profile. Gemini and other apps that reject a bearer API key
+ * use that second path. Codes and tokens are HMACs keyed by MCP_TOKEN.
+ * The owner approves on /oauth/authorize with the desk session, MCP_TOKEN, or
+ * that profile's API key.
  */
 type Env = { MCP_TOKEN?: string; MCP_LIMITER?: Limiter; SIGNIN_LIMITER?: Limiter; MCP_OAUTH_REDIRECT_HOSTS?: string };
 type Limiter = { limit(o: { key: string }): Promise<{ success: boolean }> };
@@ -57,7 +62,7 @@ export function authorizationServerMetadata(request: Request): Response {
     response_types_supported: ["code"],
     grant_types_supported: ["authorization_code", "refresh_token"],
     code_challenge_methods_supported: ["S256"],
-    token_endpoint_auth_methods_supported: ["none"],
+    token_endpoint_auth_methods_supported: ["none", "client_secret_post", "client_secret_basic"],
     scopes_supported: [SCOPE],
   });
 }
@@ -128,7 +133,8 @@ function esc(value: string): string {
   return value.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] as string);
 }
 
-type AuthorizeParams = { clientId: string; clientName: string | null; redirectUri: string; challenge: string; state: string; scope: string };
+type ConfidentialRef = { profileId: string; name: string; clientId: string };
+type AuthorizeParams = { clientId: string; clientName: string | null; redirectUri: string; challenge: string; state: string; scope: string; confidential: ConfidentialRef | null };
 
 async function readParams(get: (k: string) => string | null, env: Env): Promise<AuthorizeParams | string> {
   const p = {
@@ -142,39 +148,58 @@ async function readParams(get: (k: string) => string | null, env: Env): Promise<
   };
   if (p.responseType !== "code") return "response_type must be code.";
   if (!p.clientId) return "client_id is required.";
-  if (!redirectAllowed(p.redirectUri, await extraClientHosts(env))) return "redirect_uri is not allowed.";
   let clientName: string | null = null;
-  if (isSignedClientId(p.clientId)) {
-    // Registered via /oauth/register: the redirect must be one it registered (loopback port-agnostic).
-    const client = await readClient(env.MCP_TOKEN as string, p.clientId);
-    if (!client) return "client_id is not registered here (or MCP_TOKEN was rotated). Reconnect the client.";
-    if (!client.redirectUris.some((r) => redirectMatches(r, p.redirectUri))) return "redirect_uri was not registered for this client.";
+  let confidential: ConfidentialRef | null = null;
+  if (OAUTH_CLIENT_ID_RE.test(p.clientId)) {
+    // Desk-issued confidential client: the redirect must be one the admin pasted.
+    // It is not limited to the public DCR host list.
+    const { oauthClientById } = await import("@/content/automation.server");
+    const client = await oauthClientById(p.clientId);
+    if (!client) return "client_id is not registered here. Create it under Desk → Automation.";
+    if (!client.redirectUris.some((r) => redirectMatches(r, p.redirectUri))) return "redirect_uri was not registered for this OAuth client. Paste this exact URL on the automation profile.";
+    confidential = { profileId: client.profileId, name: client.name, clientId: client.clientId };
     clientName = client.name;
+  } else {
+    if (!redirectAllowed(p.redirectUri, await extraClientHosts(env))) return "redirect_uri is not allowed.";
+    if (isSignedClientId(p.clientId)) {
+      // Registered via /oauth/register: the redirect must be one it registered (loopback port-agnostic).
+      const client = await readClient(env.MCP_TOKEN as string, p.clientId);
+      if (!client) return "client_id is not registered here (or MCP_TOKEN was rotated). Reconnect the client.";
+      if (!client.redirectUris.some((r) => redirectMatches(r, p.redirectUri))) return "redirect_uri was not registered for this client.";
+      clientName = client.name;
+    }
   }
   if (p.method !== "S256" || !/^[A-Za-z0-9_-]{43,128}$/.test(p.challenge)) return "PKCE with S256 is required.";
-  return { clientId: p.clientId, clientName, redirectUri: p.redirectUri, challenge: p.challenge, state: p.state, scope: p.scope };
+  return { clientId: p.clientId, clientName, redirectUri: p.redirectUri, challenge: p.challenge, state: p.state, scope: p.scope, confidential };
 }
 
-function page(params: AuthorizeParams, message: string | null, status = 200): Response {
+function page(params: AuthorizeParams, message: string | null, status = 200, signedIn = false): Response {
   const hidden = (name: string, value: string) => `<input type="hidden" name="${name}" value="${esc(value)}">`;
   const target = new URL(params.redirectUri);
   const host = esc(target.host || target.protocol);
   const loopback = target.protocol === "http:";
-  const who = params.clientName ? `<strong>${esc(params.clientName)}</strong> <em>(self-registered client name — unverified)</em> (returning to <strong>${host}</strong>)` : `<strong>${host}</strong>`;
+  const who = params.clientName ? `<strong>${esc(params.clientName)}</strong> (returning to <strong>${host}</strong>)` : `<strong>${host}</strong>`;
+  const bound = params.confidential
+    ? `<p>This is an OAuth client you created in the desk, bound to automation profile <strong>${esc(params.confidential.name)}</strong>. Allowing it lets that AI app draft as that profile only.</p>`
+    : "";
+  const unverified = params.clientName && !params.confidential ? " <em>(self-registered client name — unverified)</em>" : "";
+  const deskOk = signedIn && Boolean(params.confidential);
   const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex"><title>Connect to DYPOL Blog</title>
 <style>body{font:16px/1.5 system-ui,sans-serif;max-width:28rem;margin:3rem auto;padding:0 1rem;color:#111}
 input[type=password]{width:100%;padding:.55rem;border:2px solid #111;font:inherit}button{margin-top:1rem;padding:.6rem 1rem;border:0;background:#111;color:#fff;font:inherit;font-weight:700}
 .bad{border:2px solid #ff4d00;padding:.5rem}</style></head><body>
 <h1>Connect an MCP client</h1>
-<p>${who} asks to draft articles on DYPOL Blog through the automation tools (scope <code>${esc(params.scope)}</code>). It cannot sign in to the desk.</p>
+<p>${who}${unverified} asks to draft articles on DYPOL Blog through the automation tools (scope <code>${esc(params.scope)}</code>). It cannot sign in to the desk.</p>
+${bound}
 <p class="bad">After you allow, the authorization code goes to this exact address:<br><code>${esc(params.redirectUri)}</code><br>Only continue if you started this connection yourself and recognise that address.</p>
 ${loopback ? `<p class="bad">This returns to a program on this computer (${host}). Only allow it if you just started the connection from a desktop app or CLI.</p>` : ""}
 ${message ? `<p class="bad" role="alert">${esc(message)}</p>` : ""}
+${deskOk ? `<p>You are signed in to the desk, so you can Allow this OAuth client without pasting a token.</p>` : ""}
 <form method="post" action="/oauth/authorize">
 ${hidden("response_type", "code")}${hidden("client_id", params.clientId)}${hidden("redirect_uri", params.redirectUri)}
 ${hidden("code_challenge", params.challenge)}${hidden("code_challenge_method", "S256")}${hidden("state", params.state)}${hidden("scope", params.scope)}
-<label>MCP token (the MCP_TOKEN secret, or an automation profile token from the admin panel)<br><input type="password" name="owner_secret" autocomplete="off" required></label>
+<label>MCP token or profile API key${deskOk ? " (optional while signed in)" : ""}<br><input type="password" name="owner_secret" autocomplete="off"${deskOk ? "" : " required"}></label>
 <button type="submit">Allow</button></form></body></html>`;
   return new Response(html, {
     status,
@@ -198,7 +223,9 @@ export async function authorize(request: Request): Promise<Response> {
     const url = new URL(request.url);
     const params = await readParams((k) => url.searchParams.get(k), env);
     if (typeof params === "string") return new Response(params, { status: 400, headers: noStore });
-    return page(params, null);
+    const { deskSessionFromCookieHeader } = await import("@/lib/auth/admin.server");
+    const signedIn = await deskSessionFromCookieHeader(request.headers.get("cookie"));
+    return page(params, null, 200, signedIn);
   }
   // t79 (SEC-002): a browser form POST always carries Origin; reject
   // cross-origin submissions so a third-party page cannot drive this form.
@@ -233,27 +260,89 @@ export async function authorize(request: Request): Promise<Response> {
   const approveIp = request.headers.get("cf-connecting-ip") ?? "unknown";
   if (approveThrottled(approveIp)) return page(params, "Too many failed attempts. Try again in a minute.", 429);
   const secret = form.get("owner_secret");
-  // Either the master MCP_TOKEN (default profile) or one automation profile's token.
+  const { deskSessionFromCookieHeader } = await import("@/lib/auth/admin.server");
+  const { profileResolver, oauthClientById } = await import("@/content/automation.server");
+  const signedIn = await deskSessionFromCookieHeader(request.headers.get("cookie"));
+  const presented = typeof secret === "string" ? secret.slice(0, 512).trim() : "";
+  // Master MCP_TOKEN → default profile. A profile API key → that profile.
+  // A desk session (no token pasted) → default, or the confidential client's profile.
   let profile: ProfileBinding | null = null;
-  if (typeof secret === "string") {
-    const presented = secret.slice(0, 512);
-    if (await secretMatches(presented, env.MCP_TOKEN)) profile = DEFAULT_PROFILE;
-    else if (presented.trim().startsWith("dyp_")) {
-      const { profileResolver } = await import("@/content/automation.server");
-      profile = await profileResolver.byToken(presented.trim());
+  let pastedProfile: ProfileBinding | null = null;
+  let master = false;
+  if (presented) {
+    if (await secretMatches(presented, env.MCP_TOKEN)) master = true;
+    else if (presented.startsWith("dyp_")) pastedProfile = await profileResolver.byToken(presented);
+    else {
+      noteApproveFailure(approveIp);
+      return page(params, "That token is not right.", 401, signedIn);
     }
+    if (!master && !pastedProfile) {
+      noteApproveFailure(approveIp);
+      return page(params, "That token is not right.", 401, signedIn);
+    }
+  }
+  let oauthClientVersion: string | undefined;
+  if (params.confidential) {
+    const bound = await oauthClientById(params.clientId);
+    if (!bound) return page(params, "This OAuth client was removed. Create it again in the desk.", 400, signedIn);
+    if (pastedProfile && pastedProfile.id !== bound.profileId) {
+      noteApproveFailure(approveIp);
+      return page(params, "That API key belongs to a different automation profile.", 401, signedIn);
+    }
+    const ownsProfile = Boolean(pastedProfile && pastedProfile.id === bound.profileId);
+    if (!master && !ownsProfile && !signedIn) {
+      noteApproveFailure(approveIp);
+      return page(params, "Sign in to the desk in this browser, or enter the MCP token or this profile's API key.", 401, signedIn);
+    }
+    profile = bound.profileId === "default" ? DEFAULT_PROFILE : { id: bound.profileId, version: pastedProfile?.version ?? "" };
+    oauthClientVersion = bound.secretVersion;
+  } else if (pastedProfile) {
+    profile = pastedProfile;
+  } else if (master) {
+    profile = DEFAULT_PROFILE;
   }
   if (!profile) {
     noteApproveFailure(approveIp);
-    return page(params, "That token is not right.", 401);
+    return page(params, "That token is not right. Sign in to the desk, or paste the MCP token or a profile API key.", 401, signedIn);
   }
   approveFailures.delete(approveIp);
-  const code = await issueCode(env.MCP_TOKEN, { clientId: params.clientId, redirectUri: params.redirectUri, challenge: params.challenge, profile });
+  const code = await issueCode(env.MCP_TOKEN, { clientId: params.clientId, redirectUri: params.redirectUri, challenge: params.challenge, profile, oauthClientVersion });
   const target = new URL(params.redirectUri);
   target.searchParams.set("code", code);
   if (params.state) target.searchParams.set("state", params.state);
   target.searchParams.set("iss", new URL(request.url).origin);
   return new Response(null, { status: 302, headers: { location: target.toString(), ...noStore } });
+}
+
+function safeDecode(value: string): string {
+  try { return decodeURIComponent(value); } catch { return value; }
+}
+
+/** client_secret_post (form/JSON body) or client_secret_basic (Authorization header). */
+function readClientCredentials(request: Request, get: (k: string) => string): { clientId: string; secret: string; mismatch: boolean } {
+  let headerId = "";
+  let headerSecret = "";
+  const basic = /^Basic\s+([A-Za-z0-9+/=_-]+)$/i.exec((request.headers.get("authorization") ?? "").trim());
+  if (basic) {
+    try {
+      const pad = basic[1].replace(/-/g, "+").replace(/_/g, "/");
+      const decoded = atob(pad + "===".slice((pad.length + 3) % 4));
+      const idx = decoded.indexOf(":");
+      if (idx >= 0) {
+        headerId = safeDecode(decoded.slice(0, idx)).slice(0, 200);
+        headerSecret = safeDecode(decoded.slice(idx + 1)).slice(0, 512);
+      }
+    } catch {
+      // Malformed Basic is ignored; body credentials can still authenticate a confidential client.
+    }
+  }
+  const bodyId = get("client_id").slice(0, 200);
+  const bodySecret = get("client_secret").slice(0, 512);
+  return {
+    clientId: bodyId || headerId,
+    secret: bodySecret || headerSecret,
+    mismatch: Boolean(headerId && bodyId && headerId !== bodyId),
+  };
 }
 
 export async function token(request: Request): Promise<Response> {
@@ -272,12 +361,20 @@ export async function token(request: Request): Promise<Response> {
       return typeof v === "string" ? v : "";
     };
   }
+  const creds = readClientCredentials(request, get);
+  if (creds.mismatch) return oauthError("invalid_client", "client_id does not match the Authorization header.", 401);
+  if (!creds.clientId) return oauthError("invalid_client", "client_id is required.", 401);
+  if (OAUTH_CLIENT_ID_RE.test(creds.clientId)) {
+    const { authenticateOauthClient } = await import("@/content/automation.server");
+    const client = await authenticateOauthClient(creds.clientId, creds.secret);
+    if (!client) return oauthError("invalid_client", "Unknown client or wrong client secret.", 401);
+  }
   const grant = get("grant_type");
   if (grant === "authorization_code") {
     const { claimOAuthNonce } = await import("./consumed.server");
     const pair = await exchangeCode(env.MCP_TOKEN, {
       code: get("code"),
-      clientId: get("client_id"),
+      clientId: creds.clientId,
       redirectUri: get("redirect_uri"),
       verifier: get("code_verifier"),
     }, undefined, claimOAuthNonce);
@@ -286,7 +383,7 @@ export async function token(request: Request): Promise<Response> {
   if (grant === "refresh_token") {
     const { profileResolver } = await import("@/content/automation.server");
     const { claimOAuthNonce } = await import("./consumed.server");
-    const pair = await refresh(env.MCP_TOKEN, { refreshToken: get("refresh_token"), clientId: get("client_id") }, undefined, profileResolver, claimOAuthNonce);
+    const pair = await refresh(env.MCP_TOKEN, { refreshToken: get("refresh_token"), clientId: creds.clientId }, undefined, profileResolver, claimOAuthNonce);
     return pair ? json(pair) : oauthError("invalid_grant", "The refresh token is invalid or expired.");
   }
   return oauthError("unsupported_grant_type", "Use authorization_code or refresh_token.");

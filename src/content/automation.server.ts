@@ -5,8 +5,9 @@ import {
   type AutomationSettings,
 } from "@/lib/automation/settings";
 import { ensureContent } from "./repository.server";
-import { constantTimeEqual, type ProfileBinding, type ProfileResolver } from "@/lib/mcp/auth";
+import { constantTimeEqual, cleanClientName, type ProfileBinding, type ProfileResolver } from "@/lib/mcp/auth";
 import { hashToken, newProfileId, newProfileToken, parseProfileToken, PROFILE_ID_RE, tokenVersion } from "@/lib/automation/profile-token";
+import { newOauthClientId, newOauthClientSecret, parseAdminRedirects, OAUTH_CLIENT_ID_RE } from "@/lib/automation/oauth-client";
 
 /** Storage for AI-connector automation: settings row, submissions (idempotency) and the run log. */
 
@@ -271,6 +272,13 @@ export async function releaseAiPublishClaim(claimId: string | null): Promise<voi
 
 // ---- Profiles ------------------------------------------------------------------
 
+export type OauthClientPublic = {
+  clientId: string;
+  secretHint: string | null;
+  redirectUris: string[];
+  createdAt: string;
+};
+
 export type ProfileSummary = {
   id: string;
   name: string;
@@ -280,6 +288,7 @@ export type ProfileSummary = {
   hasToken: boolean;
   tokenHint: string | null;
   tokenCreatedAt: string | null;
+  oauth: OauthClientPublic | null;
 };
 
 type ProfileRow = { id: string; name: string; settings: string; token_hash: string | null; token_hint: string | null; token_created_at: string | null };
@@ -298,11 +307,13 @@ async function profileRows(): Promise<ProfileRow[]> {
 export async function listProfiles(): Promise<ProfileSummary[]> {
   const def = await readAutomationSettings();
   const rows = await profileRows();
+  const oauth = await oauthByProfile();
+  const pub = (id: string): OauthClientPublic | null => oauth.get(id)?.public ?? null;
   return [
-    { id: "default", name: DEFAULT_PROFILE_NAME, isDefault: true, enabled: def.enabled, paused: def.paused, hasToken: true, tokenHint: null, tokenCreatedAt: null },
+    { id: "default", name: DEFAULT_PROFILE_NAME, isDefault: true, enabled: def.enabled, paused: def.paused, hasToken: true, tokenHint: null, tokenCreatedAt: null, oauth: pub("default") },
     ...rows.map((r) => {
       const s = normalizeAutomationSettings(JSON.parse(r.settings || "{}"));
-      return { id: r.id, name: r.name, isDefault: false, enabled: s.enabled, paused: s.paused, hasToken: Boolean(r.token_hash), tokenHint: r.token_hint, tokenCreatedAt: r.token_created_at };
+      return { id: r.id, name: r.name, isDefault: false, enabled: s.enabled, paused: s.paused, hasToken: Boolean(r.token_hash), tokenHint: r.token_hint, tokenCreatedAt: r.token_created_at, oauth: pub(r.id) };
     }),
   ];
 }
@@ -354,14 +365,16 @@ export async function createProfile(name: unknown): Promise<ProfileSummary> {
   const now = new Date().toISOString();
   const sql = await getSql();
   await sql`insert into automation_profiles (id, name, settings, created_at, updated_at) values (${id}, ${clean}, ${JSON.stringify(settings)}, ${now}, ${now})`;
-  return { id, name: clean, isDefault: false, enabled: false, paused: false, hasToken: false, tokenHint: null, tokenCreatedAt: null };
+  return { id, name: clean, isDefault: false, enabled: false, paused: false, hasToken: false, tokenHint: null, tokenCreatedAt: null, oauth: null };
 }
 
 export async function renameProfile(id: string, name: unknown): Promise<void> {
   checkId(id);
   if (id === "default") throw new ProfileError("The default profile can't be renamed.");
+  const clean = cleanName(name);
   const sql = await getSql();
-  await sql`update automation_profiles set name = ${cleanName(name)}, updated_at = ${new Date().toISOString()} where id = ${id}`;
+  await sql`update automation_profiles set name = ${clean}, updated_at = ${new Date().toISOString()} where id = ${id}`;
+  await sql`update automation_oauth_clients set name = ${cleanClientName(clean)}, updated_at = ${new Date().toISOString()} where profile_id = ${id}`.catch(() => undefined);
 }
 
 /** Removes the profile (its token stops working). Its past runs and drafts are kept. */
@@ -369,6 +382,7 @@ export async function deleteProfile(id: string): Promise<void> {
   checkId(id);
   if (id === "default") throw new ProfileError("The default profile can't be deleted.");
   const sql = await getSql();
+  await sql`delete from automation_oauth_clients where profile_id = ${id}`.catch(() => undefined);
   await sql`delete from automation_profiles where id = ${id}`;
 }
 
@@ -389,6 +403,141 @@ export async function revokeProfileToken(id: string): Promise<void> {
   checkId(id);
   const sql = await getSql();
   await sql`update automation_profiles set token_hash = null, token_hint = null, token_created_at = null, updated_at = ${new Date().toISOString()} where id = ${id}`;
+}
+
+// ---- Confidential OAuth clients (client id + secret) -----------------------
+
+type OauthRow = {
+  profile_id: string;
+  client_id: string;
+  secret_hash: string;
+  secret_hint: string | null;
+  name: string;
+  redirect_uris: string;
+  created_at: string;
+};
+
+export type OauthClientRecord = OauthClientPublic & { profileId: string; name: string; secretVersion: string };
+
+let oauthTableReady = false;
+
+async function ensureOauthClients(): Promise<void> {
+  if (oauthTableReady) return;
+  const sql = await getSql();
+  await sql`create table if not exists automation_oauth_clients (
+    profile_id text primary key,
+    client_id text not null unique,
+    secret_hash text not null,
+    secret_hint text,
+    name text not null,
+    redirect_uris text not null,
+    created_at text not null,
+    updated_at text not null
+  )`;
+  oauthTableReady = true;
+}
+
+function parseStoredUris(raw: string): string[] {
+  try {
+    const value = JSON.parse(raw) as unknown;
+    return Array.isArray(value) ? value.filter((u): u is string => typeof u === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+function toOauthRecord(row: OauthRow): OauthClientRecord {
+  return {
+    profileId: row.profile_id,
+    clientId: row.client_id,
+    name: row.name,
+    secretHint: row.secret_hint,
+    redirectUris: parseStoredUris(row.redirect_uris),
+    createdAt: row.created_at,
+    secretVersion: tokenVersion(row.secret_hash),
+  };
+}
+
+async function oauthRows(): Promise<OauthRow[]> {
+  try {
+    await ensureOauthClients();
+    const sql = await getSql();
+    return await sql<OauthRow>`select profile_id, client_id, secret_hash, secret_hint, name, redirect_uris, created_at from automation_oauth_clients`;
+  } catch {
+    return [];
+  }
+}
+
+async function oauthByProfile(): Promise<Map<string, { public: OauthClientPublic }>> {
+  const map = new Map<string, { public: OauthClientPublic }>();
+  for (const row of await oauthRows()) {
+    const record = toOauthRecord(row);
+    map.set(row.profile_id, { public: { clientId: record.clientId, secretHint: record.secretHint, redirectUris: record.redirectUris, createdAt: record.createdAt } });
+  }
+  return map;
+}
+
+export async function oauthClientById(clientId: string): Promise<OauthClientRecord | null> {
+  if (!OAUTH_CLIENT_ID_RE.test(clientId)) return null;
+  const row = (await oauthRows()).find((r) => r.client_id === clientId);
+  return row ? toOauthRecord(row) : null;
+}
+
+/** Constant-time secret check. Unknown id and wrong secret both return null. */
+export async function authenticateOauthClient(clientId: string, secret: string): Promise<OauthClientRecord | null> {
+  const presented = await hashToken(secret.slice(0, 512));
+  const row = OAUTH_CLIENT_ID_RE.test(clientId) ? (await oauthRows()).find((r) => r.client_id === clientId) : undefined;
+  const stored = row?.secret_hash && /^[0-9a-f]{64}$/.test(row.secret_hash) ? row.secret_hash : "0".repeat(64);
+  if (!constantTimeEqual(presented, stored) || !row) return null;
+  return toOauthRecord(row);
+}
+
+async function assertProfileExists(profileId: string): Promise<void> {
+  checkId(profileId);
+  if (profileId === "default") return;
+  const sql = await getSql();
+  const rows = await sql<{ id: string }>`select id from automation_profiles where id = ${profileId}`;
+  if (!rows[0]) throw new ProfileError("That automation profile no longer exists.");
+}
+
+/** Creates or replaces the profile's OAuth client. The secret is returned once. */
+export async function issueOauthClient(profileId: string, redirectInput: unknown, name: string): Promise<{ clientId: string; clientSecret: string; secretHint: string; redirectUris: string[] }> {
+  await assertProfileExists(profileId);
+  const redirectUris = parseAdminRedirects(redirectInput);
+  await ensureOauthClients();
+  const clientSecret = newOauthClientSecret();
+  const secretHint = clientSecret.slice(-4);
+  const clientId = newOauthClientId();
+  const now = new Date().toISOString();
+  const sql = await getSql();
+  await sql`insert into automation_oauth_clients (profile_id, client_id, secret_hash, secret_hint, name, redirect_uris, created_at, updated_at)
+    values (${profileId}, ${clientId}, ${await hashToken(clientSecret)}, ${secretHint}, ${cleanClientName(name)}, ${JSON.stringify(redirectUris)}, ${now}, ${now})
+    on conflict (profile_id) do update set
+      client_id = excluded.client_id,
+      secret_hash = excluded.secret_hash,
+      secret_hint = excluded.secret_hint,
+      name = excluded.name,
+      redirect_uris = excluded.redirect_uris,
+      updated_at = excluded.updated_at`;
+  return { clientId, clientSecret, secretHint, redirectUris };
+}
+
+export async function updateOauthRedirects(profileId: string, redirectInput: unknown): Promise<string[]> {
+  await assertProfileExists(profileId);
+  const redirectUris = parseAdminRedirects(redirectInput);
+  await ensureOauthClients();
+  const sql = await getSql();
+  const done = await sql<{ profile_id: string }>`update automation_oauth_clients set redirect_uris = ${JSON.stringify(redirectUris)}, updated_at = ${new Date().toISOString()}
+    where profile_id = ${profileId} returning profile_id`;
+  if (!done[0]) throw new ProfileError("Create an OAuth client for this profile first.");
+  return redirectUris;
+}
+
+export async function revokeOauthClient(profileId: string): Promise<void> {
+  checkId(profileId);
+  await ensureOauthClients();
+  const sql = await getSql();
+  await sql`delete from automation_oauth_clients where profile_id = ${profileId}`;
 }
 
 // ---- Topic-selection cursor (sequence mode) --------------------------------
@@ -431,5 +580,13 @@ export const profileResolver: ProfileResolver = {
     const rows = await profileRows();
     const row = rows.find((r) => r.id === binding.id);
     return Boolean(row?.token_hash) && constantTimeEqual(tokenVersion(row!.token_hash!), binding.version);
+  },
+  async oauthClientStillValid(profileId: string, version: string): Promise<boolean> {
+    if (profileId !== "default" && !PROFILE_ID_RE.test(profileId)) return false;
+    if (!/^[0-9a-f]{12}$/.test(version)) return false;
+    const row = (await oauthRows()).find((r) => r.profile_id === profileId);
+    if (!row || !constantTimeEqual(tokenVersion(row.secret_hash), version)) return false;
+    if (profileId === "default") return true;
+    return (await profileRows()).some((p) => p.id === profileId);
   },
 };
