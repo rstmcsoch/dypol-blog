@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { authenticate, exchangeCode, formActionSource, issueCode, pkceS256, readClient, redirectAllowed, redirectMatches, refresh, registerClient, secretMatches } from "./auth.ts";
+import { authenticate, exchangeCode, formActionSource, issueCode, pkceS256, readClient, redirectAllowed, redirectMatches, refresh, registerClient, secretMatches, adminRegisteredRedirectOk } from "./auth.ts";
 import { handleRpc, type ToolDefinition } from "./protocol.ts";
 
 const TOKEN = "t".repeat(40);
@@ -59,12 +59,22 @@ test("OAuth redirect allow-list", () => {
     "http://127.0.0.1:33418/",
     "http://[::1]:7777/oauth/callback",
     "cursor://anysphere.cursor-mcp/oauth/callback",
+    "https://oauth-redirect.googleusercontent.com/r/example",
+    "https://oauth-redirect-sandbox.googleusercontent.com/a/example",
+    "https://vertexaisearch.cloud.google.com/oauth-redirect",
+    "https://gemini.google.com/callback",
   ]) assert.equal(redirectAllowed(uri), true, uri);
-  for (const uri of ["https://claude.ai.evil.com/cb", "http://claude.ai/api/mcp/auth_callback", "cursor://evil/cb", "vscode-evil://x", "https://u:p@claude.ai/cb", "https://claude.ai/cb#f", "data:text/html,x"]) {
+  for (const uri of ["https://claude.ai.evil.com/cb", "http://claude.ai/api/mcp/auth_callback", "cursor://evil/cb", "vscode-evil://x", "https://u:p@claude.ai/cb", "https://claude.ai/cb#f", "data:text/html,x", "https://evil.googleusercontent.com/r/x", "https://oauth-redirect.googleusercontent.com.evil.com/r/x", "https://storage.googleapis.com/bucket"]) {
     assert.equal(redirectAllowed(uri), false, uri);
   }
   assert.equal(redirectAllowed("https://a.my.host/cb", ["my.host"]), true);
   assert.equal(redirectAllowed("https://a.my.host/cb", ["https://bad"]), false);
+  assert.equal(adminRegisteredRedirectOk("https://oauth-redirect.googleusercontent.com/r/abc"), true);
+  assert.equal(adminRegisteredRedirectOk("https://connectors.example.com/cb"), true);
+  assert.equal(adminRegisteredRedirectOk("http://127.0.0.1:9/cb"), true);
+  assert.equal(adminRegisteredRedirectOk("http://evil.example/cb"), false);
+  assert.equal(adminRegisteredRedirectOk("javascript:alert(1)"), false);
+  assert.equal(adminRegisteredRedirectOk("https://user:pass@claude.ai/cb"), false);
 });
 
 test("loopback redirects match on any port; others exact", () => {
@@ -91,6 +101,25 @@ test("DCR: signed client ids carry name + redirects; tampering and rotation void
   assert.ok(pair);
   assert.deepEqual(await authenticate(`Bearer ${pair.access_token}`, TOKEN), { ok: true, via: "oauth", client: "Claude script", profile: { id: "default", version: "" } });
   assert.ok(await refresh(TOKEN, { refreshToken: pair.refresh_token, clientId: id }));
+});
+
+test("confidential OAuth: access is revoked when the client secret version no longer matches", async () => {
+  const verifier = "v".repeat(64);
+  const redirectUri = "https://oauth-redirect.googleusercontent.com/r/gemini";
+  const version = "abc123abc123";
+  const code = await issueCode(TOKEN, { clientId: "dypc_" + "ab".repeat(16), redirectUri, challenge: await pkceS256(verifier), oauthClientVersion: version });
+  const pair = await exchangeCode(TOKEN, { code, clientId: "dypc_" + "ab".repeat(16), redirectUri, verifier });
+  assert.ok(pair);
+  const ok = {
+    byToken: async () => null,
+    stillValid: async () => false,
+    oauthClientStillValid: async (id: string, v: string) => id === "default" && v === version,
+  };
+  assert.equal((await authenticate(`Bearer ${pair.access_token}`, TOKEN, undefined, ok)).ok, true);
+  const revoked = { ...ok, oauthClientStillValid: async () => false };
+  assert.deepEqual(await authenticate(`Bearer ${pair.access_token}`, TOKEN, undefined, revoked), { ok: false, reason: "invalid" });
+  assert.equal(await refresh(TOKEN, { refreshToken: pair.refresh_token, clientId: "dypc_" + "ab".repeat(16) }, undefined, revoked), null);
+  assert.equal((await authenticate(`Bearer ${pair.access_token}`, TOKEN)).ok, false, "missing resolver rejects confidential tokens");
 });
 
 const echo: ToolDefinition = {
