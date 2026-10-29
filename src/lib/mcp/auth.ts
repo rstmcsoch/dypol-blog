@@ -60,7 +60,6 @@ export function mcpConfigured(mcpToken: string | undefined): mcpToken is string 
 
 /** Compares a presented secret to MCP_TOKEN without leaking length or content. */
 export async function secretMatches(presented: string, mcpToken: string): Promise<boolean> {
-  if (presented.length > 512) return false;
   const key = keyFor(mcpToken);
   const [a, b] = await Promise.all([hmac(key, `static|${norm(presented)}`), hmac(key, `static|${norm(mcpToken)}`)]);
   return constantTimeEqual(a, b);
