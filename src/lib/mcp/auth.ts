@@ -3,11 +3,13 @@
  *
  * Two ways in, both rooted in the MCP_TOKEN Worker secret (separate from the
  * desk's ADMIN_TOKEN / ADMIN_SESSION_SECRET):
- *  1. Static bearer:   Authorization: Bearer <MCP_TOKEN>
+ *  1. Static bearer:   Authorization: Bearer <MCP_TOKEN or a profile API key>
  *     (Claude Code / Cursor / Gemini CLI / Grok CLI headers, scripts)
- *  2. OAuth 2.1 + PKCE + dynamic client registration (any MCP connector:
- *     Claude, ChatGPT, Grok, Cursor, VS Code, ...): the owner approves on
- *     /oauth/authorize by entering MCP_TOKEN; the site issues a short-lived
+ *  2. OAuth 2.1 + PKCE. Public clients register dynamically (no secret).
+ *     Confidential clients (client id + secret) are created in the desk and
+ *     bound to one automation profile — for connectors such as Gemini that
+ *     reject a bearer key and ask for an OAuth client instead.
+ *     The owner approves on /oauth/authorize; the site issues a short-lived
  *     signed access token. Tokens are stateless HMACs keyed by MCP_TOKEN, so
  *     rotating MCP_TOKEN revokes every OAuth grant at once.
  * All comparisons are constant time.
@@ -58,6 +60,7 @@ export function mcpConfigured(mcpToken: string | undefined): mcpToken is string 
 
 /** Compares a presented secret to MCP_TOKEN without leaking length or content. */
 export async function secretMatches(presented: string, mcpToken: string): Promise<boolean> {
+  if (presented.length > 512) return false;
   const key = keyFor(mcpToken);
   const [a, b] = await Promise.all([hmac(key, `static|${norm(presented)}`), hmac(key, `static|${norm(mcpToken)}`)]);
   return constantTimeEqual(a, b);
@@ -111,6 +114,12 @@ export const DEFAULT_PROFILE: ProfileBinding = { id: "default", version: "" };
 export type ProfileResolver = {
   byToken(token: string): Promise<ProfileBinding | null>;
   stillValid(binding: ProfileBinding): Promise<boolean>;
+  /**
+   * Confidential OAuth client for this profile still has this secret version
+   * (first 12 hex of the secret hash). Required for tokens that carry `o`.
+   * Return false if the client was removed, the secret rotated, or the profile deleted.
+   */
+  oauthClientStillValid?(profileId: string, version: string): Promise<boolean>;
 };
 
 export type AuthResult =
@@ -131,10 +140,13 @@ export async function authenticate(
   if (!match) return { ok: false, reason: "missing" };
   const presented = match[1];
   if (presented.startsWith("mcpat.")) {
-    const payload = await open<{ c: string; n?: string; p?: string; v?: string }>("mcpat", mcpToken, presented, now);
+    const payload = await open<{ c: string; n?: string; p?: string; v?: string; o?: string }>("mcpat", mcpToken, presented, now);
     if (!payload) return { ok: false, reason: "invalid" };
     const profile = payload.p && payload.p !== "default" ? { id: payload.p, version: payload.v ?? "" } : DEFAULT_PROFILE;
-    if (profile.id !== "default" && !(profiles && (await profiles.stillValid(profile)))) return { ok: false, reason: "invalid" };
+    if (payload.o) {
+      // Bound to a desk-issued client secret, not to the profile API key.
+      if (!profiles?.oauthClientStillValid || !(await profiles.oauthClientStillValid(profile.id, payload.o))) return { ok: false, reason: "invalid" };
+    } else if (profile.id !== "default" && !(profiles && (await profiles.stillValid(profile)))) return { ok: false, reason: "invalid" };
     return { ok: true, via: "oauth", client: payload.n ?? (payload.c === "signed" ? undefined : LEGACY_CLIENT_LABEL), profile };
   }
   if (presented.startsWith("dyp_") && profiles) {
@@ -157,6 +169,8 @@ export async function authenticate(
  *  - Perplexity: perplexity.ai (unverified; listed so its connector can register)
  * Desktop/CLI clients (Claude Code, Cursor desktop :8787, VS Code :33418, Gemini CLI, Grok CLI)
  * use loopback http on any port (RFC 8252 sections 7.3 / 8.3).
+ * Google's connector redirect hosts are listed exactly (not all of googleusercontent.com,
+ * which also serves untrusted user content).
  */
 export const DEFAULT_REDIRECT_HOSTS = [
   "grok.com",
@@ -168,6 +182,12 @@ export const DEFAULT_REDIRECT_HOSTS = [
   "cursor.com",
   "vscode.dev",
   "perplexity.ai",
+  "oauth-redirect.googleusercontent.com",
+  "oauth-redirect-sandbox.googleusercontent.com",
+  "oauth-redirect-test.googleusercontent.com",
+  "vertexaisearch.cloud.google.com",
+  "antigravity.google",
+  "gemini.google.com",
 ] as const;
 
 /** Private-use URI schemes of native clients (RFC 8252 section 7.1), exact scheme + host. */
@@ -193,6 +213,21 @@ function hostMatches(host: string, allowed: readonly string[]): boolean {
 
 /** Redirect URIs: https on a known client host or owner-listed host; loopback http (any port); known native schemes. */
 export function redirectAllowed(uri: string, extraHosts: string | readonly string[] = ""): boolean {
+  return redirectShapeOk(uri, [...DEFAULT_REDIRECT_HOSTS, ...parseHostList(extraHosts)]);
+}
+
+/**
+ * Redirect URL an admin pasted for one confidential OAuth client.
+ * Exact https URLs on any public hostname (the AI app's callback), loopback http,
+ * or a known native scheme. Not the public DCR allow-list: the admin is naming
+ * one callback, and authorize will require that exact URI.
+ */
+export function adminRegisteredRedirectOk(uri: string): boolean {
+  return redirectShapeOk(uri, null);
+}
+
+function redirectShapeOk(uri: string, httpsHosts: readonly string[] | null): boolean {
+  if (uri.length < 8 || uri.length > 500 || /\s/.test(uri)) return false;
   let url: URL;
   try {
     url = new URL(uri);
@@ -202,7 +237,13 @@ export function redirectAllowed(uri: string, extraHosts: string | readonly strin
   if (url.username || url.password || url.hash) return false;
   const host = url.hostname.toLowerCase();
   if (url.protocol === "http:") return LOOPBACK.has(host);
-  if (url.protocol === "https:") return hostMatches(host, [...DEFAULT_REDIRECT_HOSTS, ...parseHostList(extraHosts)]);
+  if (url.protocol === "https:") {
+    if (httpsHosts) return hostMatches(host, httpsHosts);
+    if (!/^[a-z0-9.-]{1,253}$/.test(host) || !host.includes(".") || host.startsWith(".") || host.endsWith(".")) return false;
+    // No IP literals: the code must not be delivered to an address the admin did not name as a host.
+    if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host) || host.includes(":")) return false;
+    return true;
+  }
   return CUSTOM_SCHEME_REDIRECTS.some((s) => s.protocol === url.protocol && s.host === host);
 }
 
@@ -255,27 +296,31 @@ export async function pkceS256(verifier: string): Promise<string> {
   return b64url(new Uint8Array(digest));
 }
 
-type CodePayload = { c: string; r: string; ch: string; p?: string; v?: string };
+type CodePayload = { c: string; r: string; ch: string; p?: string; v?: string; o?: string };
 
 export async function issueCode(
   mcpToken: string,
-  input: { clientId: string; redirectUri: string; challenge: string; profile?: ProfileBinding },
+  input: { clientId: string; redirectUri: string; challenge: string; profile?: ProfileBinding; oauthClientVersion?: string },
   now = nowSec(),
 ) {
   const p = input.profile && input.profile.id !== "default" ? { p: input.profile.id, v: input.profile.version } : {};
-  return mint("mcpac", mcpToken, CODE_TTL, { c: input.clientId, r: input.redirectUri, ch: input.challenge, ...p } satisfies CodePayload, now);
+  const o = input.oauthClientVersion ? { o: input.oauthClientVersion } : {};
+  return mint("mcpac", mcpToken, CODE_TTL, { c: input.clientId, r: input.redirectUri, ch: input.challenge, ...p, ...o } satisfies CodePayload, now);
 }
 
 export type TokenResponse = { access_token: string; token_type: "Bearer"; expires_in: number; refresh_token: string; scope: string };
 
-async function tokenPair(mcpToken: string, clientId: string, now: number, profile?: { p?: string; v?: string }): Promise<TokenResponse> {
+async function tokenPair(mcpToken: string, clientId: string, now: number, profile?: { p?: string; v?: string; o?: string }): Promise<TokenResponse> {
   const client = await readClient(mcpToken, clientId, now);
-  const p = profile?.p ? { p: profile.p, v: profile.v ?? "" } : {};
+  const bound = {
+    ...(profile?.p ? { p: profile.p, v: profile.v ?? "" } : {}),
+    ...(profile?.o ? { o: profile.o } : {}),
+  };
   return {
-    access_token: await mint("mcpat", mcpToken, ACCESS_TTL, client ? { c: "signed", n: client.name, ...p } : { c: clientId, ...p }, now),
+    access_token: await mint("mcpat", mcpToken, ACCESS_TTL, client ? { c: "signed", n: client.name, ...bound } : { c: clientId, ...bound }, now),
     token_type: "Bearer",
     expires_in: ACCESS_TTL,
-    refresh_token: await mint("mcprt", mcpToken, REFRESH_TTL, { c: clientId, ...p }, now),
+    refresh_token: await mint("mcprt", mcpToken, REFRESH_TTL, { c: clientId, ...bound }, now),
     scope: "blog:automation",
   };
 }
@@ -305,12 +350,14 @@ export async function refresh(
   profiles?: ProfileResolver,
   consume?: NonceConsumer,
 ): Promise<TokenResponse | null> {
-  const opened = await openWithNonce<{ c: string; p?: string; v?: string }>("mcprt", mcpToken, input.refreshToken, now);
+  const opened = await openWithNonce<{ c: string; p?: string; v?: string; o?: string }>("mcprt", mcpToken, input.refreshToken, now);
   if (!opened) return null;
   const payload = opened.payload;
   if (!constantTimeEqual(payload.c, input.clientId)) return null;
-  // A revoked/replaced profile token also ends its OAuth sessions.
-  if (payload.p && !(profiles && (await profiles.stillValid({ id: payload.p, version: payload.v ?? "" })))) return null;
+  if (payload.o) {
+    const profileId = payload.p ?? "default";
+    if (!profiles?.oauthClientStillValid || !(await profiles.oauthClientStillValid(profileId, payload.o))) return null;
+  } else if (payload.p && !(profiles && (await profiles.stillValid({ id: payload.p, version: payload.v ?? "" })))) return null;
   // Refresh-token rotation (t79, SEC-001): the presented refresh token is
   // consumed; only the newly issued one works next time.
   if (consume && !(await consume("refresh", opened.nonce))) return null;
