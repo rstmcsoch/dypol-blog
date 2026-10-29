@@ -26,15 +26,23 @@ function AutomationPage() {
   );
 }
 
-/** Named automation profiles: each AI app can connect as its own profile with its own token. */
+/** Named automation profiles. Each AI app connects with an API key, an OAuth client, or both. */
 function Profiles() {
   const data = Route.useLoaderData();
   const router = useRouter();
   const navigate = Route.useNavigate();
   const [name, setName] = useState("");
+  const [connect, setConnect] = useState<"api-key" | "oauth">("api-key");
+  const [redirects, setRedirects] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [shown, setShown] = useState<{ profileId: string; token: string } | null>(null);
+  const [shown, setShown] = useState<
+    | { kind: "token"; token: string }
+    | { kind: "oauth"; clientId: string; clientSecret: string; redirectUris: string[] }
+    | null
+  >(null);
+  const [oauthFor, setOauthFor] = useState<string | null>(null);
+  const [oauthRedirects, setOauthRedirects] = useState("");
   const run = (fn: () => Promise<unknown>) => {
     setBusy(true);
     setError(null);
@@ -43,54 +51,75 @@ function Profiles() {
       .catch((caught: unknown) => setError(errorText(caught)))
       .finally(() => setBusy(false));
   };
+  const editingOauth = data.profiles.find((p) => p.id === oauthFor) ?? null;
   return (
     <section className="block-card" aria-labelledby="profiles-h" style={{ marginBottom: "1.5rem" }}>
       <h2 id="profiles-h" className="desk-kicker">Automation profiles</h2>
       <p className="desk-note">
-        Several profiles can be on at the same time, each run by its own AI app on that app&apos;s schedule. Each profile is one automation (for example &ldquo;Grok daily tech&rdquo; or &ldquo;Claude weekly design&rdquo;) with its own
-        on/off switch, topics, publishing rules and daily limit. Give each AI app its own profile token; the master MCP_TOKEN
-        secret keeps working and acts as the Default profile.
+        Several profiles can be on at the same time, each run by its own AI app on that app's schedule. Each profile is one automation (for example &ldquo;Gemini daily tech&rdquo; or &ldquo;Claude weekly design&rdquo;) with its own
+        on/off switch, topics, publishing rules and daily limit. The master MCP_TOKEN secret keeps working and acts as the Default profile.
+      </p>
+      <p className="desk-note">
+        Two ways to connect, and a profile can have both. <strong>API key</strong>: paste a bearer token into the AI app (<code>Authorization: Bearer …</code>). <strong>OAuth client</strong>: for apps that ask for a client ID and client secret, such as Gemini's custom connector. Paste the redirect URL the app shows (Gemini: Copy redirect URL), then copy the ID and secret back into the app. The MCP address is this site's <code>/mcp</code>.
       </p>
       {error ? <p className="banner banner--bad" role="alert">{error}</p> : null}
-      {shown ? (
+      {shown?.kind === "token" ? (
         <div className="banner" role="status" data-testid="new-token">
           <p style={{ margin: 0 }}>
-            New token for this profile, shown <strong>once</strong>. Copy it now into your AI app (Authorization: Bearer … or the
-            connector&apos;s approval page). Only a fingerprint is stored.
+            New API key, shown <strong>once</strong>. Copy it into the AI app as a bearer token, or paste it on the connector approval page. Only a fingerprint is stored.
           </p>
           <code style={{ display: "block", wordBreak: "break-all", margin: "0.5rem 0" }}>{shown.token}</code>
           <button type="button" className="btn btn--ghost" onClick={() => void navigator.clipboard?.writeText(shown.token)}>Copy</button>{" "}
-          <button type="button" className="btn btn--ghost" onClick={() => setShown(null)}>I&apos;ve saved it</button>
+          <button type="button" className="btn btn--ghost" onClick={() => setShown(null)}>I've saved it</button>
+        </div>
+      ) : null}
+      {shown?.kind === "oauth" ? (
+        <div className="banner" role="status" data-testid="new-oauth">
+          <p style={{ margin: 0 }}>
+            OAuth client secret, shown <strong>once</strong>. In the AI app, set the MCP server URL to this site's <code>/mcp</code>, then paste the client ID and secret. The redirect URL must be exactly one you saved. Only a hash of the secret is stored.
+          </p>
+          <p style={{ margin: "0.5rem 0 0" }}>Client ID</p>
+          <code style={{ display: "block", wordBreak: "break-all", margin: "0.25rem 0 0.5rem" }}>{shown.clientId}</code>
+          <button type="button" className="btn btn--ghost" onClick={() => void navigator.clipboard?.writeText(shown.clientId)}>Copy client ID</button>
+          <p style={{ margin: "0.75rem 0 0" }}>Client secret</p>
+          <code style={{ display: "block", wordBreak: "break-all", margin: "0.25rem 0 0.5rem" }}>{shown.clientSecret}</code>
+          <button type="button" className="btn btn--ghost" onClick={() => void navigator.clipboard?.writeText(shown.clientSecret)}>Copy secret</button>{" "}
+          <button type="button" className="btn btn--ghost" onClick={() => setShown(null)}>I've saved it</button>
+          <p className="desk-note" style={{ marginBottom: 0 }}>Saved redirect {shown.redirectUris.length === 1 ? "URL" : "URLs"}: {shown.redirectUris.join(", ")}</p>
         </div>
       ) : null}
       <div className="adm-scroll-x"><table className="desk-table">
-        <thead><tr><th>Profile</th><th>Status</th><th>Token</th><th>Actions</th></tr></thead>
+        <thead><tr><th>Profile</th><th>Status</th><th>API key</th><th>OAuth</th><th>Actions</th></tr></thead>
         <tbody>
           {data.profiles.map((p) => (
             <tr key={p.id} aria-current={p.id === data.profileId ? "true" : undefined} style={p.id === data.profileId ? { fontWeight: 650 } : undefined}>
               <td>{p.name}</td>
               <td>{!p.enabled ? "Off" : p.paused ? "Paused" : "On"}</td>
               <td>{p.isDefault ? "MCP_TOKEN secret" : p.hasToken ? `…${p.tokenHint ?? ""}` : "none"}</td>
+              <td>{p.oauth ? <span title={p.oauth.redirectUris.join("\n")}>{p.oauth.clientId.slice(0, 10)}… secret …{p.oauth.secretHint ?? ""}</span> : "none"}</td>
               <td style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
                 <button type="button" className="btn btn--ghost" disabled={p.id === data.profileId} onClick={() => void navigate({ search: { profile: p.id } })}>
                   {p.id === data.profileId ? "Editing" : "Edit"}
+                </button>
+                <button type="button" className="btn btn--ghost" disabled={busy} onClick={() => { setOauthFor(p.id); setOauthRedirects(p.oauth?.redirectUris.join("\n") ?? ""); }}>
+                  {p.oauth ? "OAuth settings" : "Add OAuth"}
                 </button>
                 {p.isDefault ? null : (
                   <>
                     <button type="button" className="btn btn--ghost" disabled={busy}
                       onClick={() => {
-                        if (p.hasToken && !window.confirm("Replace the token? The old one (and apps signed in with it) stop working.")) return;
+                        if (p.hasToken && !window.confirm("Replace the API key? The old one (and apps signed in with it) stop working. An OAuth client on this profile is not affected.")) return;
                         void run(async () => {
                           const r = await adminProfileAction({ data: { action: "token", profileId: p.id } });
-                          if ("token" in r && r.token) setShown({ profileId: p.id, token: r.token });
+                          if ("token" in r && r.token) setShown({ kind: "token", token: r.token });
                         });
                       }}>
-                      {p.hasToken ? "New token" : "Create token"}
+                      {p.hasToken ? "New API key" : "Create API key"}
                     </button>
                     {p.hasToken ? (
                       <button type="button" className="btn btn--ghost" disabled={busy}
-                        onClick={() => window.confirm("Revoke this token? Apps using it lose access immediately.") && void run(() => adminProfileAction({ data: { action: "revoke", profileId: p.id } }))}>
-                        Revoke
+                        onClick={() => window.confirm("Revoke this API key? Apps using it lose access immediately. An OAuth client on this profile keeps working.") && void run(() => adminProfileAction({ data: { action: "revoke", profileId: p.id } }))}>
+                        Revoke key
                       </button>
                     ) : null}
                     <button type="button" className="btn btn--ghost" disabled={busy}
@@ -102,10 +131,11 @@ function Profiles() {
                     </button>
                     <button type="button" className="btn btn--danger" disabled={busy}
                       onClick={() =>
-                        window.confirm(`Delete “${p.name}”? Its token stops working. Its drafts and run history are kept.`) &&
+                        window.confirm(`Delete “${p.name}”? Its API key and OAuth client stop working. Its drafts and run history are kept.`) &&
                         void run(async () => {
                           await adminProfileAction({ data: { action: "delete", profileId: p.id } });
                           if (p.id === data.profileId) await navigate({ search: {} });
+                          if (oauthFor === p.id) setOauthFor(null);
                         })
                       }>
                       Delete
@@ -117,19 +147,77 @@ function Profiles() {
           ))}
         </tbody>
       </table></div>
+      {editingOauth ? (
+        <form
+          className="stack"
+          style={{ marginTop: "0.75rem" }}
+          data-testid="oauth-panel"
+          onSubmit={(e) => {
+            e.preventDefault();
+            const uris = lines(oauthRedirects);
+            const exists = Boolean(editingOauth.oauth);
+            if (exists && !window.confirm("Replace the client secret? The old secret stops working, and this AI app must be updated. Redirect URLs are saved with it.")) return;
+            void run(async () => {
+              const r = await adminProfileAction({ data: { action: "oauth-create", profileId: editingOauth.id, redirectUris: uris } });
+              if ("oauth" in r && r.oauth) setShown({ kind: "oauth", clientId: r.oauth.clientId, clientSecret: r.oauth.clientSecret, redirectUris: r.oauth.redirectUris });
+            });
+          }}
+        >
+          <p className="desk-note" style={{ marginBottom: 0 }}>
+            OAuth for <strong>{editingOauth.name}</strong>. Paste the exact redirect URL from the AI app (one per line, up to 5). Do not invent it — Gemini shows it under Copy redirect URL, usually <code>https://oauth-redirect.googleusercontent.com/r/…</code>. The authorization code is sent to that URL, so only paste one from an app you trust.
+            {editingOauth.oauth ? <> Client ID (not secret, copy any time): <code>{editingOauth.oauth.clientId}</code>.</> : null}
+          </p>
+          <label className="field"><span>Redirect URLs</span>
+            <textarea value={oauthRedirects} onChange={(e) => setOauthRedirects(e.target.value)} placeholder={"https://oauth-redirect.googleusercontent.com/r/…"} data-testid="oauth-redirects" />
+          </label>
+          <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
+            <button className="btn" type="submit" disabled={busy || lines(oauthRedirects).length < 1}>{editingOauth.oauth ? "Rotate secret" : "Create OAuth client"}</button>
+            {editingOauth.oauth ? (
+              <button type="button" className="btn btn--ghost" disabled={busy} onClick={() => void run(() => adminProfileAction({ data: { action: "oauth-redirects", profileId: editingOauth.id, redirectUris: lines(oauthRedirects) } }))}>
+                Save redirect URLs only
+              </button>
+            ) : null}
+            {editingOauth.oauth ? (
+              <button type="button" className="btn btn--danger" disabled={busy}
+                onClick={() => window.confirm("Remove this OAuth client? Apps using its secret lose access immediately. The API key is not affected.") && void run(async () => { await adminProfileAction({ data: { action: "oauth-revoke", profileId: editingOauth.id } }); setOauthFor(null); })}>
+                Remove OAuth
+              </button>
+            ) : null}
+            <button type="button" className="btn btn--ghost" onClick={() => setOauthFor(null)}>Close</button>
+          </div>
+        </form>
+      ) : null}
       <form
-        className="filters"
-        style={{ marginTop: "0.75rem", alignItems: "end" }}
+        className="stack"
+        style={{ marginTop: "0.75rem" }}
         onSubmit={(e) => {
           e.preventDefault();
+          const uris = lines(redirects);
+          if (connect === "oauth" && uris.length < 1) {
+            setError("Paste the redirect URL from the AI app before creating an OAuth profile.");
+            return;
+          }
           void run(async () => {
-            const r = await adminProfileAction({ data: { action: "create", name } });
+            const r = await adminProfileAction({ data: connect === "oauth" ? { action: "create", name, connect, redirectUris: uris } : { action: "create", name, connect: "api-key" } });
             setName("");
+            setRedirects("");
+            if ("token" in r && r.token) setShown({ kind: "token", token: r.token });
+            if ("oauth" in r && r.oauth) setShown({ kind: "oauth", clientId: r.oauth.clientId, clientSecret: r.oauth.clientSecret, redirectUris: r.oauth.redirectUris });
             if ("profile" in r && r.profile) await navigate({ search: { profile: r.profile.id } });
           });
         }}
       >
-        <label className="field"><span>New profile name</span><input value={name} maxLength={60} placeholder="Claude weekly design" onChange={(e) => setName(e.target.value)} /></label>
+        <label className="field"><span>New profile name</span><input value={name} maxLength={60} placeholder="Gemini daily tech" onChange={(e) => setName(e.target.value)} /></label>
+        <fieldset className="field">
+          <legend>How should this AI app connect?</legend>
+          <label style={checkRow}><input style={{ width: "auto" }} type="radio" name="connect-method" checked={connect === "api-key"} onChange={() => setConnect("api-key")} /> API key (bearer token)</label>
+          <label style={checkRow}><input style={{ width: "auto" }} type="radio" name="connect-method" checked={connect === "oauth"} onChange={() => setConnect("oauth")} /> OAuth client ID and secret</label>
+        </fieldset>
+        {connect === "oauth" ? (
+          <label className="field"><span>Redirect URL from the AI app (one per line)</span>
+            <textarea value={redirects} onChange={(e) => setRedirects(e.target.value)} placeholder="Paste the redirect URL from the AI app" />
+          </label>
+        ) : <p className="desk-note">An API key is created with the profile and shown once. You can add an OAuth client later from the same row.</p>}
         <button className="btn" type="submit" disabled={busy || name.trim().length < 2}>Add profile</button>
       </form>
     </section>
@@ -239,8 +327,8 @@ function AutomationDesk() {
         {isDefault ? <fieldset className="block-card">
           <legend>Other AI clients</legend>
           <p className="desk-note">
-            Claude, ChatGPT, Grok, Cursor, VS Code, Perplexity and desktop/CLI apps (loopback) are allowed already. Add the host of any
-            other MCP client&apos;s OAuth callback here (one per line, e.g. connectors.example.com).
+            Claude, ChatGPT, Grok, Cursor, VS Code, Perplexity, Gemini and desktop/CLI apps (loopback) are allowed already. Add the host of any
+            other MCP client&apos;s OAuth callback here (one per line, e.g. connectors.example.com). For one app that gives you a redirect URL, use that profile's OAuth client instead of adding a whole host.
           </p>
           <label className="field"><span>Extra client hosts</span><textarea value={hosts} onChange={(e) => setHosts(e.target.value)} /></label>
         </fieldset> : null}
