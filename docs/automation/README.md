@@ -38,17 +38,21 @@ or exposed. Automation can only publish or attach images to drafts it created.
 
 - **Secret:** `MCP_TOKEN` (32+ chars), separate from `ADMIN_TOKEN` / `ADMIN_SESSION_SECRET`.
   Not set ⇒ `/mcp` and `/oauth/*` answer 503 (disabled). Production has none today.
-- **Auth:** `Authorization: Bearer <MCP_TOKEN>` (constant-time HMAC compare), or an
-  OAuth access token (1 h) minted after the owner enters `MCP_TOKEN` on `/oauth/authorize`.
-  Codes (5 min) and tokens are HMACs keyed by `MCP_TOKEN`: rotating it revokes every
-  OAuth grant and every registered client.
-- **Redirect URIs (DCR and authorize):** https on a known MCP client host (+ subdomains):
+- **Auth (either method, including both on one profile):**
+  - **API key:** `Authorization: Bearer <MCP_TOKEN>` or a per-profile key `dyp_<profile>_<secret>` (constant-time compare). Claude Code, Cursor, Gemini CLI, scripts.
+  - **OAuth 2.1 + PKCE.** Public clients self-register at `/oauth/register` (no secret). Confidential clients (client id `dypc_…` + secret `dyps_…`) are created in Desk → Automation and bound to one profile — for Gemini and any app that asks for an OAuth client id, secret, and redirect URL. The secret is stored only as SHA-256 and shown once. The token endpoint accepts `client_secret_post` and `client_secret_basic` for those clients, and `none` for public clients.
+  - The owner approves on `/oauth/authorize` by entering `MCP_TOKEN` or that profile's API key. For a confidential client only, a browser already signed in to the desk can Allow without pasting the token. Access tokens last 1 hour. Codes (5 min) and tokens are HMACs keyed by `MCP_TOKEN`: rotating it revokes every OAuth grant and every dynamically registered client. Rotating or removing a confidential client revokes only that client's tokens.
+- **Redirect URIs (public DCR and authorize):** https on a known MCP client host (+ subdomains):
   `claude.ai`, `claude.com`, `chatgpt.com`, `openai.com`, `grok.com`, `x.ai`, `cursor.com`,
-  `vscode.dev`, `perplexity.ai`; loopback `http://127.0.0.1|localhost|[::1]` on **any port**
+  `vscode.dev`, `perplexity.ai`, `gemini.google.com`, `oauth-redirect.googleusercontent.com`
+  (and the `-sandbox` / `-test` hosts), `vertexaisearch.cloud.google.com`, `antigravity.google`;
+  loopback `http://127.0.0.1|localhost|[::1]` on **any port**
   (RFC 8252 §7.3, for desktop/CLI apps); `cursor://anysphere.cursor-mcp/...`; plus hosts in
   the `MCP_OAUTH_REDIRECT_HOSTS` var or Desk → Automation → "Extra client hosts".
+  Do not allow-list all of `googleusercontent.com` (it hosts untrusted content). The Google hosts above are exact.
   A client registered via DCR may only use the redirect URIs it registered (loopback
-  matched port-agnostically). The fixed legacy id `dypol-mcp-client` (manual Grok setup)
+  matched port-agnostically). A confidential client may only use the exact redirect URLs the admin pasted
+  (https on a named host, or loopback). The fixed legacy id `dypol-mcp-client` (manual Grok setup)
   still works against the host allow-list. The consent page names the client and warns
   for loopback redirects.
 - **Every request:** browser `Origin` must be this site or a known client host (403), rate limit `MCP_LIMITER`
