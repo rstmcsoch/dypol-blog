@@ -137,13 +137,18 @@ type ConfidentialRef = { profileId: string; name: string; clientId: string };
 type AuthorizeParams = { clientId: string; clientName: string | null; redirectUri: string; challenge: string; state: string; scope: string; confidential: ConfidentialRef | null };
 
 async function readParams(get: (k: string) => string | null, env: Env): Promise<AuthorizeParams | string> {
+  const rawState = get("state") ?? "";
+  // Gemini's relay encrypts `state` (~1400 chars). Cutting it makes
+  // oauth-redirect.googleusercontent.com fail with
+  // "Ciphertext HMAC does not verify". Reject over the cap; never shorten.
+  if (rawState.length > 8192) return "state is too long.";
   const p = {
     responseType: get("response_type") ?? "",
     clientId: (get("client_id") ?? "").slice(0, 4000),
     redirectUri: get("redirect_uri") ?? "",
     challenge: get("code_challenge") ?? "",
     method: get("code_challenge_method") ?? "",
-    state: (get("state") ?? "").slice(0, 500),
+    state: rawState,
     scope: (get("scope") ?? SCOPE).slice(0, 200),
   };
   if (p.responseType !== "code") return "response_type must be code.";
@@ -308,8 +313,10 @@ export async function authorize(request: Request): Promise<Response> {
   approveFailures.delete(approveIp);
   const code = await issueCode(env.MCP_TOKEN, { clientId: params.clientId, redirectUri: params.redirectUri, challenge: params.challenge, profile, oauthClientVersion });
   const target = new URL(params.redirectUri);
-  target.searchParams.set("code", code);
+  // State first: Google's relay verifies that ciphertext. Keep it intact
+  // even if a proxy trims an over-long query string.
   if (params.state) target.searchParams.set("state", params.state);
+  target.searchParams.set("code", code);
   target.searchParams.set("iss", new URL(request.url).origin);
   return new Response(null, { status: 302, headers: { location: target.toString(), ...noStore } });
 }
