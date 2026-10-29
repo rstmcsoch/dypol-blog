@@ -74,6 +74,28 @@ export async function requireAdmin(): Promise<AdminIdentity> {
   return { id: "editor", email: null, mode: "account" };
 }
 
+/**
+ * Desk session from a raw Cookie header. Used by /oauth/authorize, which is not
+ * a server function and so cannot call getCookie(). SameSite=lax still sends
+ * this cookie on the same-origin consent POST. A cross-site POST is rejected
+ * separately (Origin / Sec-Fetch-Site) before this is trusted.
+ */
+export async function deskSessionFromCookieHeader(cookieHeader: string | null): Promise<boolean> {
+  try {
+    const s = await secrets();
+    if (!s || !cookieHeader) return false;
+    const raw = cookieHeader.split(";").map((p) => p.trim()).find((p) => p.startsWith(`${COOKIE}=`))?.slice(COOKIE.length + 1);
+    if (!raw) return false;
+    let value = raw;
+    try { value = decodeURIComponent(raw); } catch { /* already raw */ }
+    const check = await verifySession(s.key, value);
+    if (!check.ok) return false;
+    return !(await sessionRevoked(check.nonce));
+  } catch {
+    return false;
+  }
+}
+
 export async function requireWriter(): Promise<AdminIdentity> {
   const admin = await requireAdmin();
   assertSameOrigin();
