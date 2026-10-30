@@ -76,16 +76,13 @@ async function handleMcpInner(request: Request, env: { MCP_TOKEN?: string; MCP_L
     return rpcError(429, RPC.INTERNAL, "Too many requests.", { "retry-after": String(MCP_RATE.periodSeconds) });
   }
 
-  const { profileResolver, adjustAuthForMasterKey } = await import("@/content/automation.server");
-  const auth = await adjustAuthForMasterKey(
-    await authenticate(request.headers.get("authorization"), env.MCP_TOKEN, undefined, profileResolver),
-    request.headers.get("authorization"),
-  );
+  const { profileResolver } = await import("@/content/automation.server");
+  const auth = await authenticate(request.headers.get("authorization"), env.MCP_TOKEN, undefined, profileResolver);
   if (!auth.ok) {
     if (auth.reason === "disabled") return rpcError(503, RPC.INTERNAL, "The MCP endpoint is not enabled on this deployment.");
     return rpcError(401, RPC.INVALID_REQUEST, "Unauthorized.", {
-      "www-authenticate": `Bearer realm="dypol-blog", resource_metadata="${resourceMetadataUrl(request)}", scope="blog:automation"${
-        auth.reason === "invalid" ? ', error="invalid_token"' : ""
+      "www-authenticate": `Bearer realm=\"dypol-blog\", resource_metadata=\"${resourceMetadataUrl(request)}\", scope=\"blog:automation\"${
+        auth.reason === \"invalid\" ? ', error=\"invalid_token\"' : \"\"
       }`,
     });
   }
