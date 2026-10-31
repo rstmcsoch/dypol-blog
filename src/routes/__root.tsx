@@ -31,6 +31,7 @@ export const Route = createRootRoute({
       meta: [
         { charSet: "utf-8" },
         { name: "viewport", content: "width=device-width, initial-scale=1" },
+        { name: "google-site-verification", content: "cnBmFIzqzl0ubtj0Wd-0F5BvCxZMnaTRTrXfmVKkkhg" },
         { title: current.title },
         { name: "description", content: current.description },
         { property: "og:site_name", content: current.name },
@@ -66,6 +67,7 @@ function RootShell({ children }: { children: ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
+        <meta name="google-site-verification" content="cnBmFIzqzl0ubtj0Wd-0F5BvCxZMnaTRTrXfmVKkkhg" />
         <script dangerouslySetInnerHTML={{ __html: themeBootScript }} />
         <HeadContent />
       </head>
