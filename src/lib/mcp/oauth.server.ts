@@ -32,6 +32,16 @@ type Limiter = { limit(o: { key: string }): Promise<{ success: boolean }> };
 
 const SCOPE = "blog:automation";
 const noStore = { "cache-control": "no-store" };
+/** Grok's published callbacks (https://grok.com/oauth/mcp-client.json). */
+const GROK_CALLBACKS = new Set([
+  "https://grok.com/connectors-oauth-exchange-code/",
+  "https://grok.com/connectors-oauth-exchange-code",
+  "https://console.x.ai/connectors-oauth-exchange-code/",
+  "https://console.x.ai/connectors-oauth-exchange-code",
+]);
+function grokCallback(uri: string): boolean {
+  return GROK_CALLBACKS.has(uri);
+}
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", ...noStore, ...PUBLIC_CORS } });
@@ -64,6 +74,8 @@ export function authorizationServerMetadata(request: Request): Response {
     code_challenge_methods_supported: ["S256"],
     token_endpoint_auth_methods_supported: ["none", "client_secret_post", "client_secret_basic"],
     scopes_supported: [SCOPE],
+    // Grok (and other CIMD clients) use a URL as client_id and skip DCR when this is set.
+    client_id_metadata_document_supported: true,
   });
 }
 
@@ -176,9 +188,16 @@ async function readParams(get: (k: string) => string | null, env: Env): Promise<
     if (isSignedClientId(p.clientId)) {
       // Registered via /oauth/register: the redirect must be one it registered (loopback port-agnostic).
       const client = await readClient(env.MCP_TOKEN as string, p.clientId);
-      if (!client) return "client_id is not registered here (or MCP_TOKEN was rotated). Reconnect the client.";
-      if (!client.redirectUris.some((r) => redirectMatches(r, p.redirectUri))) return "redirect_uri was not registered for this client.";
-      clientName = client.name;
+      if (!client) {
+        // The id is an HMAC of MCP_TOKEN. Rotating that secret makes Grok's
+        // saved id unverifiable, and Grok then shows "Failed to connect"
+        // instead of the consent page. Its callback URL is fixed, so allow it.
+        if (!grokCallback(p.redirectUri)) return "client_id is not registered here (or MCP_TOKEN was rotated). Delete the connector and add it again.";
+        clientName = "Grok";
+      } else {
+        if (!client.redirectUris.some((r) => redirectMatches(r, p.redirectUri))) return "redirect_uri was not registered for this client.";
+        clientName = client.name;
+      }
     }
   }
   if (p.method !== "S256" || !/^[A-Za-z0-9_-]{43,128}$/.test(p.challenge)) return "PKCE with S256 is required.";
@@ -213,19 +232,20 @@ function page(params: AuthorizeParams, message: string | null, status = 200, sig
 }
 
 function handoff(target: string): Response {
-  // Chrome 157 follows the consent POST (Origin is often "null" because this
-  // page sends referrer-policy: no-referrer) and then drops the cross-origin
-  // 302. The document never changes, so Allow looks dead. A 200 from this
-  // same origin is allowed; the link and meta refresh are a new navigation,
-  // not a form redirect, so Gemini's state is delivered intact.
+  // Chrome 157 drops a cross-origin 302 that answers a form POST, so Allow
+  // looks dead if we redirect. A 200 from this origin is kept; the script,
+  // Refresh header, and meta refresh are a new navigation to the callback.
+  // Grok only finishes the connector once that callback URL actually loads.
   const href = esc(target);
-  const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">\n<meta name="robots" content="noindex"><meta http-equiv="refresh" content="0;url=${href}">\n<title>Allowed</title>\n<style>body{font:16px/1.5 system-ui,sans-serif;max-width:28rem;margin:3rem auto;padding:0 1rem;color:#111}\na{display:inline-block;margin-top:1rem;padding:.6rem 1rem;background:#111;color:#fff;font-weight:700;text-decoration:none}</style></head><body>\n<h1>Allowed</h1>\n<p>The authorization code is ready. Sending you back to the app.</p>\n<p><a id="continue" href="${href}" rel="noreferrer">Continue</a></p>\n</body></html>`;
+  const jsUrl = JSON.stringify(target);
+  const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">\n<meta name="robots" content="noindex"><meta http-equiv="refresh" content="0;url=${href}">\n<script>location.replace(${jsUrl})</script>\n<title>Allowed</title>\n<style>body{font:16px/1.5 system-ui,sans-serif;max-width:28rem;margin:3rem auto;padding:0 1rem;color:#111}\na{display:inline-block;margin-top:1rem;padding:.6rem 1rem;background:#111;color:#fff;font-weight:700;text-decoration:none}</style></head><body>\n<h1>Allowed</h1>\n<p>The authorization code is ready. Sending you back to the app.</p>\n<p><a id="continue" href="${href}" rel="noreferrer">Continue</a></p>\n</body></html>`;
   return new Response(html, {
     status: 200,
     headers: {
       "content-type": "text/html; charset=utf-8",
+      refresh: `0;url=${target}`,
       "x-frame-options": "DENY",
-      "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'; form-action 'none'; frame-ancestors 'none'",
+      "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; form-action 'none'; frame-ancestors 'none'",
       "referrer-policy": "no-referrer",
       ...noStore,
     },
@@ -347,14 +367,17 @@ function readClientCredentials(request: Request, get: (k: string) => string): { 
       const decoded = atob(pad + "===".slice((pad.length + 3) % 4));
       const idx = decoded.indexOf(":");
       if (idx >= 0) {
-        headerId = safeDecode(decoded.slice(0, idx)).slice(0, 200);
+        headerId = safeDecode(decoded.slice(0, idx)).slice(0, 4000);
         headerSecret = safeDecode(decoded.slice(idx + 1)).slice(0, 512);
       }
     } catch {
       // Malformed Basic is ignored; body credentials can still authenticate a confidential client.
     }
   }
-  const bodyId = get("client_id").slice(0, 200);
+  // Signed DCR client ids (mcpcl.*) embed the redirect list. Grok's is ~280
+  // characters. Cutting at 200 makes the token endpoint disagree with the
+  // code, so exchange always fails and the app shows "Failed to connect".
+  const bodyId = get("client_id").slice(0, 4000);
   const bodySecret = get("client_secret").slice(0, 512);
   return {
     clientId: bodyId || headerId,
