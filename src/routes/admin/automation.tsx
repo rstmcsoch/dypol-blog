@@ -6,6 +6,7 @@ import { adminAutomation, adminProfileAction, adminSaveAutomation } from "@/cont
 import { SERVER_API_PROVIDERS, type AutomationSettings } from "@/lib/automation/settings";
 import { PROVIDER_KEY_SECRETS, PROVIDER_LABELS } from "@/lib/automation/provider";
 import { nextExpectedRun } from "@/lib/automation/schedule";
+import { checkAuthorName, sameAuthor } from "@/lib/author-name";
 
 export const Route = createFileRoute("/admin/automation")({
   ...adminPending,
@@ -32,6 +33,7 @@ function Profiles() {
   const router = useRouter();
   const navigate = Route.useNavigate();
   const [name, setName] = useState("");
+  const [authorName, setAuthorName] = useState("");
   const [connect, setConnect] = useState<"api-key" | "oauth">("api-key");
   const [redirects, setRedirects] = useState("");
   const [busy, setBusy] = useState(false);
@@ -89,11 +91,12 @@ function Profiles() {
         </div>
       ) : null}
       <div className="adm-scroll-x"><table className="desk-table">
-        <thead><tr><th>Profile</th><th>Status</th><th>API key</th><th>OAuth</th><th>Actions</th></tr></thead>
+        <thead><tr><th>Profile</th><th>Author name</th><th>Status</th><th>API key</th><th>OAuth</th><th>Actions</th></tr></thead>
         <tbody>
           {data.profiles.map((p) => (
             <tr key={p.id} aria-current={p.id === data.profileId ? "true" : undefined} style={p.id === data.profileId ? { fontWeight: 650 } : undefined}>
               <td>{p.name}</td>
+              <td><AuthorCell profileId={p.id} profileName={p.name} initial={p.authorName ?? ""} others={data.profiles.filter((o) => o.id !== p.id)} onSaved={() => router.invalidate()} /></td>
               <td>{!p.enabled ? "Off" : p.paused ? "Paused" : "On"}</td>
               <td>{p.isDefault ? "MCP_TOKEN secret" : p.hasToken ? `…${p.tokenHint ?? ""}` : "none"}</td>
               <td>{p.oauth ? <span title={p.oauth.redirectUris.join("\n")}>{p.oauth.clientId.slice(0, 10)}… secret …{p.oauth.secretHint ?? ""}</span> : "none"}</td>
@@ -198,8 +201,9 @@ function Profiles() {
             return;
           }
           void run(async () => {
-            const r = await adminProfileAction({ data: connect === "oauth" ? { action: "create", name, connect, redirectUris: uris } : { action: "create", name, connect: "api-key" } });
+            const r = await adminProfileAction({ data: connect === "oauth" ? { action: "create", name, connect, redirectUris: uris, authorName } : { action: "create", name, connect: "api-key", authorName } });
             setName("");
+            setAuthorName("");
             setRedirects("");
             if ("token" in r && r.token) setShown({ kind: "token", token: r.token });
             if ("oauth" in r && r.oauth) setShown({ kind: "oauth", clientId: r.oauth.clientId, clientSecret: r.oauth.clientSecret, redirectUris: r.oauth.redirectUris });
@@ -208,6 +212,9 @@ function Profiles() {
         }}
       >
         <label className="field"><span>New profile name</span><input value={name} maxLength={60} placeholder="Gemini daily tech" onChange={(e) => setName(e.target.value)} /></label>
+        <label className="field"><span>Author name (byline on this profile's articles)</span><input value={authorName} maxLength={60} placeholder="John Daniel" data-testid="new-profile-author" onChange={(e) => setAuthorName(e.target.value)} />
+          {authorError(authorName, data.profiles) ? <small className="author-cell__error" role="alert">{authorError(authorName, data.profiles)}</small> : null}
+        </label>
         <fieldset className="field">
           <legend>How should this AI app connect?</legend>
           <label style={checkRow}><input style={{ width: "auto" }} type="radio" name="connect-method" checked={connect === "api-key"} onChange={() => setConnect("api-key")} /> API key (bearer token)</label>
@@ -218,9 +225,58 @@ function Profiles() {
             <textarea value={redirects} onChange={(e) => setRedirects(e.target.value)} placeholder="Paste the redirect URL from the AI app" />
           </label>
         ) : <p className="desk-note">An API key is created with the profile and shown once. You can add an OAuth client later from the same row.</p>}
-        <button className="btn" type="submit" disabled={busy || name.trim().length < 2}>Add profile</button>
+        <button className="btn" type="submit" disabled={busy || name.trim().length < 2 || Boolean(authorError(authorName, data.profiles))}>Add profile</button>
       </form>
     </section>
+  );
+}
+
+type ProfileLite = { id: string; name: string; authorName: string | null };
+
+/** Client-side mirror of src/lib/author-name.ts (server re-checks everything). */
+function authorError(value: string, others: ProfileLite[]): string | null {
+  const r = checkAuthorName(value);
+  if (!r.ok) return r.error;
+  const taken = r.value ? others.find((o) => sameAuthor(o.authorName, r.value)) : undefined;
+  return taken ? `“${taken.name}” already uses this author name.` : null;
+}
+
+/** t141: inline author-name editor for one profile row. */
+function AuthorCell(props: { profileId: string; profileName: string; initial: string; others: ProfileLite[]; onSaved: () => unknown }) {
+  const [value, setValue] = useState(props.initial);
+  const [busy, setBusy] = useState(false);
+  const [serverError, setServerError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+  const localError = authorError(value, props.others);
+  const dirty = value.trim() !== props.initial.trim();
+  const error = localError ?? serverError;
+  return (
+    <form
+      className="author-cell"
+      data-testid={`author-${props.profileId}`}
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (localError || !dirty) return;
+        setBusy(true);
+        setServerError(null);
+        setSaved(false);
+        adminProfileAction({ data: { action: "author", profileId: props.profileId, authorName: value } })
+          .then(async () => { setSaved(true); await props.onSaved(); })
+          .catch((caught: unknown) => setServerError(errorText(caught)))
+          .finally(() => setBusy(false));
+      }}
+    >
+      <input
+        aria-label={`Author name for ${props.profileName}`}
+        value={value}
+        maxLength={60}
+        placeholder="DYPOL LABS"
+        aria-invalid={error ? true : undefined}
+        onChange={(e) => { setValue(e.target.value); setSaved(false); setServerError(null); }}
+      />
+      <button type="submit" className="btn btn--ghost" disabled={busy || !dirty || Boolean(localError)}>{busy ? "Saving…" : "Save"}</button>
+      {error ? <small className="author-cell__error" role="alert">{error}</small> : saved ? <small className="author-cell__ok" role="status">Saved</small> : null}
+    </form>
   );
 }
 

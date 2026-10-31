@@ -24,12 +24,14 @@ export const Route = createFileRoute("/feed.xml")({
           updatedAt: article.updatedAt,
           topics: article.topics,
           coverMediaId: article.coverMediaId,
+          authorName: article.authorName ?? null,
         }));
         const body = rssXml({
           origin,
           siteTitle: site.title,
           description: site.description,
           articles,
+          publisher: site.publisher,
         });
         return new Response(body, {
           headers: { "content-type": "application/rss+xml; charset=utf-8", "cache-control": "public, max-age=900" },
