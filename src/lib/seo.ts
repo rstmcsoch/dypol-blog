@@ -59,6 +59,8 @@ export type SeoArticle = {
   topics: string[];
   coverMediaId?: string | null;
   coverAlt?: string | null;
+  /** t141: byline author; empty = publisher (Organization). */
+  authorName?: string | null;
   /** t91 Phase 3: plain-text article body for full-text RSS (optional). */
   bodyText?: string;
 };
@@ -98,7 +100,9 @@ export function articleJsonLd(input: { origin: string; siteName: string; publish
     ...(article.coverMediaId ? { image: [absoluteUrl(origin, `/media/${article.coverMediaId}`)] } : {}),
     ...(published ? { datePublished: published } : {}),
     ...(modified ? { dateModified: modified } : {}),
-    author: [{ "@type": "Organization", name: authorName ?? publisher, url: absoluteUrl(origin, "/about") }],
+    author: article.authorName?.trim()
+      ? [{ "@type": "Person", name: article.authorName.trim() }]
+      : [{ "@type": "Organization", name: authorName ?? publisher, url: absoluteUrl(origin, "/about") }],
     publisher: {
       "@type": "Organization",
       name: publisher,
@@ -208,7 +212,7 @@ export function newsSitemapXml(input: { origin: string; publicationName: string;
 }
 
 /** RSS 2.0 feed of the latest published articles. */
-export function rssXml(input: { origin: string; siteTitle: string; description: string; articles: SeoArticle[] }): string {
+export function rssXml(input: { origin: string; siteTitle: string; description: string; articles: SeoArticle[]; publisher?: string }): string {
   const home = absoluteUrl(input.origin, "/");
   const items = input.articles
     .map((a) => {
@@ -224,6 +228,7 @@ export function rssXml(input: { origin: string; siteTitle: string; description: 
         `      <guid isPermaLink="true">${xmlEscape(url)}</guid>`,
         `      <pubDate>${pubDate}</pubDate>`,
         `      <description>${xmlEscape(a.excerpt)}</description>`,
+        `      <dc:creator>${xmlEscape(a.authorName?.trim() || input.publisher || "DYPOL LABS")}</dc:creator>`,
         ...(cats ? [cats] : []),
         ...(cover ? [cover] : []),
         ...(full ? [full] : []),
@@ -233,7 +238,7 @@ export function rssXml(input: { origin: string; siteTitle: string; description: 
     .join("\n");
   return [
     `<?xml version="1.0" encoding="UTF-8"?>`,
-    `<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:media="http://search.yahoo.com/mrss/">`,
+    `<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:media="http://search.yahoo.com/mrss/" xmlns:dc="http://purl.org/dc/elements/1.1/">`,
     "  <channel>",
     `    <title>${xmlEscape(input.siteTitle)}</title>`,
     `    <link>${xmlEscape(home)}</link>`,

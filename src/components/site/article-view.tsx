@@ -62,7 +62,7 @@ export function ArticleView({
           <h1 className="article-title">{article.title}</h1>
           <p className="lede">{article.excerpt}</p>
           <p className="meta">
-            <span>by {site.publisher}</span>
+            <span className="byline">by {article.authorName?.trim() || site.publisher}</span>
             {article.publishedAt ? <span>{formatDate(article.publishedAt)}</span> : null}
             {isMeaningfullyUpdated(article.publishedAt, article.updatedAt) ? <span>Updated {formatDate(article.updatedAt)}</span> : null}
             <span>

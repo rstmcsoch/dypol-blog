@@ -701,6 +701,8 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
           await deleteDraft(saved.id); // lost a concurrent retry race: keep the first draft only
           return { ok: true, data: { duplicate: true, matchedBy: "idempotency_key", article_id: winner.articleId, flags: winner.flags, status: "unchanged" } };
         }
+        // t141: byline = this profile's author name (set once, on create).
+        const author = await (await import("@/content/repository.server")).stampArticleAuthor({ articleId: saved.id, kind: "create", actingProfileId: profileId });
         await store.recordRun({ profileId,
           tool: "submit_article_draft",
           outcome: "drafted",
@@ -729,6 +731,7 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
             duplicate: false,
             article_id: saved.id,
             slug: saved.slug,
+            author: author ?? "DYPOL LABS",
             topics: topicIds.map((id) => categories.find((c) => c.id === id)?.slug ?? id),
             topic_advice: {
               filed: topicIds.map((id) => categories.find((c) => c.id === id)?.slug ?? id),
@@ -1044,6 +1047,8 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
             patch.blocks = [...stripSourcesSection(current.blocks), ...sourcesBlocks(validSources)];
           }
           const { updated, viaGrant } = await repo.updateArticleForAi(input.article_id, patch, actor);
+          // t141: fill a missing byline only for the profile that created the article.
+          await repo.stampArticleAuthor({ articleId: input.article_id, kind: "update", actingProfileId: profileId });
           if (submission && input.source_urls !== undefined) await store.updateSubmissionSources(input.article_id, validSources);
           const { flags, wouldPublish, publishReasons } = await refreshFlags(input.article_id, settings, droppedTags);
           const changed = Object.keys(input).filter((k) => k !== "article_id");

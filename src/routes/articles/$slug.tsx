@@ -33,6 +33,7 @@ export const Route = createFileRoute("/articles/$slug")({
         slug: article.slug, title: article.title, excerpt: article.excerpt, description,
         publishedAt: article.publishedAt, updatedAt: article.updatedAt, topics,
         coverMediaId: article.coverMediaId ?? null,
+        authorName: article.authorName ?? null,
       },
     });
     const crumbs = breadcrumbJsonLd({
@@ -48,6 +49,7 @@ export const Route = createFileRoute("/articles/$slug")({
       meta: [
         { title },
         { name: "description", content: description },
+        { name: "author", content: article.authorName?.trim() || loaderData.site.publisher },
         ...socialMeta({
           title, description, url, type: "article", siteName: loaderData.site.name, image: cover,
           publishedAt: article.publishedAt, modifiedAt: article.updatedAt, section: topics[0], imageAlt: article.coverAlt ?? article.title,

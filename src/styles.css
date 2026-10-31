@@ -4153,3 +4153,11 @@ html.nav-open .reading-progress { display: none; }
   box-shadow: var(--shadow-hard);
 }
 .consent-bar p { margin: 0 0 0.75rem; }
+
+/* t141: per-profile author name field (Automation → profiles table). */
+.author-cell { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; min-width: 12rem; margin: 0; }
+.author-cell input { flex: 1 1 9rem; min-width: 0; width: auto; }
+.author-cell .btn { flex: 0 0 auto; }
+.author-cell__error { flex-basis: 100%; color: var(--danger, #c62828); font-size: 0.8rem; line-height: 1.3; }
+.author-cell__ok { flex-basis: 100%; color: var(--ok, #2e7d32); font-size: 0.8rem; }
+.field .author-cell__error { display: block; margin-top: 0.25rem; }

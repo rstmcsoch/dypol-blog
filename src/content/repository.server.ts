@@ -54,6 +54,7 @@ type ArticleRow = {
   cover_media_id: string | null;
   scheduled_at?: string | null;
   corrections?: string | null;
+  author_name?: string | null;
   blocks: ArticleBlock[] | string;
 };
 
@@ -133,6 +134,7 @@ function mapArticle(row: ArticleRow, tagIds: string[], topicIds: string[], cover
     coverMediaId: row.cover_media_id,
     scheduledAt: iso(row.scheduled_at ?? null),
     corrections: row.corrections ?? null,
+    authorName: row.author_name?.trim() || null,
     coverAlt,
     blocks,
   };
@@ -217,12 +219,21 @@ async function loadArticles(sql: Sql, where = "", params: unknown[] = []): Promi
   await sweepDueScheduled(sql);
   let rows: ArticleRow[];
   try {
-    rows = await sql.query<ArticleRow>(
-      `select id, slug, title, excerpt, status, published_at, updated_at, category_id, motif, featured,
-              seo_title, seo_description, cover_media_id, scheduled_at, corrections, blocks
-       from articles ${where}`,
-      params,
-    );
+    try {
+      rows = await sql.query<ArticleRow>(
+        `select id, slug, title, excerpt, status, published_at, updated_at, category_id, motif, featured,
+                seo_title, seo_description, cover_media_id, scheduled_at, corrections, author_name, blocks
+         from articles ${where}`,
+        params,
+      );
+    } catch {
+      rows = await sql.query<ArticleRow>(
+        `select id, slug, title, excerpt, status, published_at, updated_at, category_id, motif, featured,
+                seo_title, seo_description, cover_media_id, scheduled_at, corrections, blocks
+         from articles ${where}`,
+        params,
+      );
+    }
   } catch {
     rows = await sql.query<ArticleRow>(
       `select id, slug, title, excerpt, status, published_at, updated_at, category_id, motif, featured,
@@ -626,6 +637,7 @@ export async function readSitemap() {
       excerpt: article.excerpt,
       topics: article.topicIds.map((id) => labelOf.get(id) ?? "").filter(Boolean),
       coverMediaId: article.coverMediaId ?? null,
+      authorName: article.authorName ?? null,
     })),
     topics: data.categories.map((category) => {
       const inTopic = live.filter((a) => a.topicIds.includes(category.id));
@@ -1176,6 +1188,34 @@ async function aiOwnerProfileId(sql: Sql, articleId: string): Promise<string | n
     return rows.length ? (rows[0].profile_id ?? "default") : null;
   } catch {
     return null; // no submissions table: treat as owner-created
+  }
+}
+
+/**
+ * t141: store the acting automation profile's author name on an article.
+ * Set on create; on update only when the article has no author yet and the
+ * acting profile created it. Never overwrites. Returns the stored name.
+ */
+export async function stampArticleAuthor(input: { articleId: string; kind: "create" | "update"; actingProfileId: string }): Promise<string | null> {
+  try {
+    const sql = await getSql();
+    const { profileAuthorName } = await import("./automation.server");
+    const { authorToAssign } = await import("@/lib/author-name");
+    const rows = await sql<{ author_name: string | null }>`select author_name from articles where id = ${input.articleId}`;
+    if (!rows[0]) return null;
+    const owner = input.kind === "create" ? input.actingProfileId : await aiOwnerProfileId(sql, input.articleId);
+    const name = authorToAssign({
+      kind: input.kind,
+      currentAuthor: rows[0].author_name,
+      profileAuthor: await profileAuthorName(input.actingProfileId),
+      actingProfileId: input.actingProfileId,
+      ownerProfileId: owner,
+    });
+    if (!name) return rows[0].author_name ?? null;
+    await sql`update articles set author_name = ${name} where id = ${input.articleId} and (author_name is null or author_name = '')`;
+    return name;
+  } catch {
+    return null; // pre-0022 database: bylines stay DYPOL LABS
   }
 }
 

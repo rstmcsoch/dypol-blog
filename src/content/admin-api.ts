@@ -604,8 +604,9 @@ export const adminSaveAutomation = createServerFn({ method: "POST" })
   });
 
 type ProfileAction =
-  | { action: "create"; name: string; connect?: "api-key" | "oauth"; redirectUris?: string[] }
+  | { action: "create"; name: string; connect?: "api-key" | "oauth"; redirectUris?: string[]; authorName?: string }
   | { action: "rename"; profileId: string; name: string }
+  | { action: "author"; profileId: string; authorName: string }
   | { action: "delete" | "token" | "revoke" | "oauth-revoke"; profileId: string }
   | { action: "oauth-create" | "oauth-redirects"; profileId: string; redirectUris: string[] };
 
@@ -616,10 +617,12 @@ export const adminProfileAction = createServerFn({ method: "POST" })
     const name = typeof v.name === "string" ? v.name.slice(0, 200) : "";
     const connect = v.connect === "oauth" || v.connect === "api-key" ? v.connect : undefined;
     if (v.action === "create") {
-      if (connect === "oauth") return { action: "create", name, connect, redirectUris: parseAdminRedirects(v.redirectUris) };
-      return { action: "create", name, connect };
+      const authorName = typeof v.authorName === "string" ? v.authorName.slice(0, 200) : "";
+      if (connect === "oauth") return { action: "create", name, connect, redirectUris: parseAdminRedirects(v.redirectUris), authorName };
+      return { action: "create", name, connect, authorName };
     }
     if (v.action === "rename") return { action: "rename", profileId: profileIdOf(v), name };
+    if (v.action === "author") return { action: "author", profileId: profileIdOf(v), authorName: typeof v.authorName === "string" ? v.authorName.slice(0, 200) : "" };
     if (v.action === "delete" || v.action === "token" || v.action === "revoke" || v.action === "oauth-revoke") return { action: v.action, profileId: profileIdOf(v) };
     if (v.action === "oauth-create" || v.action === "oauth-redirects") {
       return { action: v.action, profileId: profileIdOf(v), redirectUris: parseAdminRedirects(v.redirectUris) };
@@ -631,8 +634,15 @@ export const adminProfileAction = createServerFn({ method: "POST" })
     const store = await import("./automation.server");
     try {
       if (data.action === "create") {
-        const profile = await store.createProfile(data.name);
+        if (data.authorName?.trim()) {
+          const { checkAuthorName } = await import("@/lib/author-name");
+          const checked = checkAuthorName(data.authorName);
+          if (!checked.ok) throw new store.ProfileError(checked.error);
+        }
+        const created = await store.createProfile(data.name);
+        let profile = created;
         try {
+          if (data.authorName?.trim()) profile = { ...created, authorName: await store.setProfileAuthor(created.id, data.authorName) };
           if (data.connect === "api-key") {
             const issued = await store.issueProfileToken(profile.id);
             return { ok: true as const, profile: { ...profile, hasToken: true, tokenHint: issued.hint }, token: issued.token, hint: issued.hint };
@@ -652,6 +662,7 @@ export const adminProfileAction = createServerFn({ method: "POST" })
         return { ok: true as const, profile };
       }
       if (data.action === "rename") await store.renameProfile(data.profileId, data.name);
+      if (data.action === "author") return { ok: true as const, authorName: await store.setProfileAuthor(data.profileId, data.authorName) };
       if (data.action === "delete") await store.deleteProfile(data.profileId);
       if (data.action === "revoke") await store.revokeProfileToken(data.profileId);
       if (data.action === "token") return { ok: true as const, ...(await store.issueProfileToken(data.profileId)) };

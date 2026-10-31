@@ -26,6 +26,8 @@ export type ArticleBlock =
 export type Article = {
   /** t115: optional public corrections note, shown at the end of the article. */
   corrections?: string | null;
+  /** t141: byline author (set from the creating automation profile). Null = publisher. */
+  authorName?: string | null;
   id: string;
   slug: string;
   title: string;

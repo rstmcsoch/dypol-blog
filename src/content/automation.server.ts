@@ -289,16 +289,69 @@ export type ProfileSummary = {
   tokenHint: string | null;
   tokenCreatedAt: string | null;
   oauth: OauthClientPublic | null;
+  /** t141: byline for articles this profile creates (null = DYPOL LABS). */
+  authorName: string | null;
 };
 
-type ProfileRow = { id: string; name: string; settings: string; token_hash: string | null; token_hint: string | null; token_created_at: string | null };
+type ProfileRow = { id: string; name: string; settings: string; token_hash: string | null; token_hint: string | null; token_created_at: string | null; author_name?: string | null };
+
+const DEFAULT_AUTHOR_KEY = "automation_default_author";
+
+async function readDefaultAuthor(): Promise<string | null> {
+  try {
+    const sql = await getSql();
+    const rows = await sql<{ data: string }>`select data from site_settings where id = ${DEFAULT_AUTHOR_KEY}`;
+    const v = rows[0] ? (JSON.parse(rows[0].data) as unknown) : null;
+    return typeof v === "string" && v.trim() ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+/** t141: the author name a profile stamps on the articles it creates. */
+export async function profileAuthorName(id: string): Promise<string | null> {
+  if (id === "default") return readDefaultAuthor();
+  try {
+    const sql = await getSql();
+    const rows = await sql<{ author_name: string | null }>`select author_name from automation_profiles where id = ${id}`;
+    return rows[0]?.author_name?.trim() || null;
+  } catch {
+    return null; // pre-0022 database
+  }
+}
+
+/** t141: set (or clear with "") a profile's author name. Unique across profiles. */
+export async function setProfileAuthor(id: string, raw: unknown): Promise<string | null> {
+  checkId(id);
+  const { checkAuthorName, sameAuthor } = await import("@/lib/author-name");
+  const checked = checkAuthorName(raw);
+  if (!checked.ok) throw new ProfileError(checked.error);
+  const value = checked.value;
+  if (value) {
+    const taken = (await listProfiles()).find((p) => p.id !== id && sameAuthor(p.authorName, value));
+    if (taken) throw new ProfileError(`“${taken.name}” already uses the author name “${taken.authorName}”. Pick a different name.`);
+  }
+  const sql = await getSql();
+  if (id === "default") {
+    if (value) await sql`insert into site_settings (id, data) values (${DEFAULT_AUTHOR_KEY}, ${JSON.stringify(value)}) on conflict (id) do update set data = excluded.data`;
+    else await sql`delete from site_settings where id = ${DEFAULT_AUTHOR_KEY}`;
+    return value;
+  }
+  const done = await sql<{ id: string }>`update automation_profiles set author_name = ${value}, updated_at = ${new Date().toISOString()} where id = ${id} returning id`;
+  if (!done[0]) throw new ProfileError("That automation profile no longer exists.");
+  return value;
+}
 
 export const DEFAULT_PROFILE_NAME = "Default (master MCP token)";
 
 async function profileRows(): Promise<ProfileRow[]> {
   try {
     const sql = await getSql();
-    return await sql<ProfileRow>`select id, name, settings, token_hash, token_hint, token_created_at from automation_profiles order by created_at`;
+    try {
+      return await sql<ProfileRow>`select id, name, settings, token_hash, token_hint, token_created_at, author_name from automation_profiles order by created_at`;
+    } catch {
+      return await sql<ProfileRow>`select id, name, settings, token_hash, token_hint, token_created_at from automation_profiles order by created_at`;
+    }
   } catch {
     return []; // migration 0004 not applied yet: only the default profile exists
   }
@@ -308,12 +361,13 @@ export async function listProfiles(): Promise<ProfileSummary[]> {
   const def = await readAutomationSettings();
   const rows = await profileRows();
   const oauth = await oauthByProfile();
+  const defaultAuthor = await readDefaultAuthor();
   const pub = (id: string): OauthClientPublic | null => oauth.get(id)?.public ?? null;
   return [
-    { id: "default", name: DEFAULT_PROFILE_NAME, isDefault: true, enabled: def.enabled, paused: def.paused, hasToken: true, tokenHint: null, tokenCreatedAt: null, oauth: pub("default") },
+    { id: "default", name: DEFAULT_PROFILE_NAME, isDefault: true, enabled: def.enabled, paused: def.paused, hasToken: true, tokenHint: null, tokenCreatedAt: null, oauth: pub("default"), authorName: defaultAuthor },
     ...rows.map((r) => {
       const s = normalizeAutomationSettings(JSON.parse(r.settings || "{}"));
-      return { id: r.id, name: r.name, isDefault: false, enabled: s.enabled, paused: s.paused, hasToken: Boolean(r.token_hash), tokenHint: r.token_hint, tokenCreatedAt: r.token_created_at, oauth: pub(r.id) };
+      return { id: r.id, name: r.name, isDefault: false, enabled: s.enabled, paused: s.paused, hasToken: Boolean(r.token_hash), tokenHint: r.token_hint, tokenCreatedAt: r.token_created_at, oauth: pub(r.id), authorName: r.author_name?.trim() || null };
     }),
   ];
 }
@@ -365,7 +419,7 @@ export async function createProfile(name: unknown): Promise<ProfileSummary> {
   const now = new Date().toISOString();
   const sql = await getSql();
   await sql`insert into automation_profiles (id, name, settings, created_at, updated_at) values (${id}, ${clean}, ${JSON.stringify(settings)}, ${now}, ${now})`;
-  return { id, name: clean, isDefault: false, enabled: false, paused: false, hasToken: false, tokenHint: null, tokenCreatedAt: null, oauth: null };
+  return { id, name: clean, isDefault: false, enabled: false, paused: false, hasToken: false, tokenHint: null, tokenCreatedAt: null, oauth: null, authorName: null };
 }
 
 export async function renameProfile(id: string, name: unknown): Promise<void> {
