@@ -228,7 +228,7 @@ export function rssXml(input: { origin: string; siteTitle: string; description: 
         `      <guid isPermaLink="true">${xmlEscape(url)}</guid>`,
         `      <pubDate>${pubDate}</pubDate>`,
         `      <description>${xmlEscape(a.excerpt)}</description>`,
-        `      <dc:creator>${xmlEscape(a.authorName?.trim() || input.publisher || "DYPOL LABS")}</dc:creator>`,
+        `      <dc:creator>${xmlEscape(a.authorName?.trim() || "DYPOL LABS")}</dc:creator>`,
         ...(cats ? [cats] : []),
         ...(cover ? [cover] : []),
         ...(full ? [full] : []),
