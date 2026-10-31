@@ -8,7 +8,19 @@ import { createMiddleware, createStart } from "@tanstack/react-start";
  * (OAuth consent and /media already set their own stricter headers —
  * `set` here only fills the gaps, it does not weaken existing values.)
  */
-const securityHeaders = createMiddleware().server(async ({ request, next }) => {
+const securityHeaders = createMiddleware().server(async ({ request, pathname, next }) => {
+  // MCP clients (Grok included) try these when the server lives at /mcp.
+  // A blog 404 HTML here aborts discovery before the consent page opens.
+  if (
+    request.method !== "POST" &&
+    (pathname === "/.well-known/oauth-authorization-server/mcp" ||
+      pathname === "/.well-known/openid-configuration" ||
+      pathname === "/.well-known/openid-configuration/mcp")
+  ) {
+    const oauth = await import("@/lib/mcp/oauth.server");
+    if (request.method === "OPTIONS") return oauth.preflight();
+    return oauth.authorizationServerMetadata(request);
+  }
   const result = await next();
   const headers = result.response.headers;
   const type = headers.get("content-type") ?? "";
