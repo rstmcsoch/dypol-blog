@@ -16,7 +16,7 @@ const BASE = process.env.BASE ?? "http://127.0.0.1:8787";
 const MASTER = process.env.MCP_TOKEN ?? "";
 assert.ok(MASTER.length >= 16, "set MCP_TOKEN");
 const host = new URL(BASE).host;
-if (/dypolblog\.rstmcsoch\.workers\.dev$/.test(host) && !host.includes("-dypolblog")) throw new Error("Refusing production.");
+if ((/^blog\.dypol\.workers\.dev$/.test(host) || /dypolblog\.rstmcsoch\.workers\.dev$/.test(host)) && !host.includes("-dypolblog")) throw new Error("Refusing production.");
 assert.ok(/^(127\.0\.0\.1|localhost)/.test(host), "local only");
 
 const sql = (command) => execFileSync("npx", ["wrangler", "d1", "execute", "DB", "--local", "--command", command, "--json"], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });

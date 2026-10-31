@@ -12,7 +12,7 @@ import assert from "node:assert/strict";
 import { chromium } from "playwright";
 
 const BASE = process.env.BASE ?? "http://127.0.0.1:8787";
-if (/^https:\/\/(dypolblog|dypol-blog)\.rstmcsoch\.workers\.dev\/?$/.test(BASE)) throw new Error("Refusing production.");
+if (/^https:\/\/(blog\.dypol|dypolblog\.rstmcsoch|dypol-blog\.rstmcsoch)\.workers\.dev\/?$/.test(BASE)) throw new Error("Refusing production.");
 const MASTER = process.env.MCP_TOKEN ?? "";
 const ADMIN = process.env.ADMIN_TOKEN ?? "";
 const A = process.env.PROFILE_A_TOKEN ?? "", B = process.env.PROFILE_B_TOKEN ?? "";

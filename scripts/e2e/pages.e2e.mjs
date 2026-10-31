@@ -11,7 +11,7 @@ import { chromium } from "playwright";
 const BASE = process.env.BASE ?? "http://127.0.0.1:8787";
 const TOKEN = process.env.ADMIN_TOKEN ?? "";
 assert.ok(TOKEN.length >= 16, "set ADMIN_TOKEN");
-if (/dypolblog\.rstmcsoch\.workers\.dev$/.test(new URL(BASE).host)) throw new Error("Refusing to run write tests against production.");
+if ((/^blog\.dypol\.workers\.dev$/.test(new URL(BASE).host) || /dypolblog\.rstmcsoch\.workers\.dev$/.test(new URL(BASE).host))) throw new Error("Refusing to run write tests against production.");
 
 let failures = 0;
 async function check(name, fn) {

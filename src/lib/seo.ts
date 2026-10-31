@@ -103,7 +103,7 @@ export function articleJsonLd(input: { origin: string; siteName: string; publish
       "@type": "Organization",
       name: publisher,
       url: absoluteUrl(origin, "/"),
-      ...(input.logoMediaId ? { logo: { "@type": "ImageObject", url: absoluteUrl(origin, `/media/${input.logoMediaId}`) } } : {}),
+      logo: { "@type": "ImageObject", url: absoluteUrl(origin, input.logoMediaId ? `/media/${input.logoMediaId}` : DEFAULT_ASSETS.logo) },
     },
     mainEntityOfPage: { "@type": "WebPage", "@id": url },
     isAccessibleForFree: true,

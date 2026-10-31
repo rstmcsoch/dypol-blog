@@ -1,7 +1,7 @@
 # PageSpeed fixes (t88)
 
 User supplied a mobile PageSpeed Insights report for
-`https://dypolblog.rstmcsoch.workers.dev/`. The unauthenticated PSI API
+`https://blog.dypol.workers.dev/`. The unauthenticated PSI API
 returned 429 (daily quota for the shared keyless consumer exhausted),
 so the baseline below was measured with the same Lighthouse engine
 locally against the **live** site (mobile emulation, devtools
