@@ -1,4 +1,5 @@
 import { createMiddleware, createStart } from "@tanstack/react-start";
+import { workerEnv } from "@/lib/cf-env.server";
 
 /**
  * t79 (SEC-008): baseline security headers on every HTML response.
@@ -12,6 +13,20 @@ const securityHeaders = createMiddleware().server(async ({ request, pathname, ne
   // Grok discovers OAuth by probing the MCP path, not only the issuer root.
   // An HTML 404 on any of these aborts connect before the consent page opens.
   const path = pathname.length > 1 && pathname.endsWith("/") ? pathname.slice(0, -1) : pathname;
+  if ((request.method === "GET" || request.method === "HEAD") && (path === "/photolab" || path.startsWith("/photolab/"))) {
+    const file = path === "/photolab" ? "page.html" : path.slice("/photolab/".length);
+    if (file && !file.includes("..") && !file.includes("/")) {
+      const env = await workerEnv();
+      const media = env.MEDIA as { get?: (key: string) => Promise<{ body: ReadableStream; httpMetadata?: { contentType?: string } } | null> } | undefined;
+      const obj = media?.get ? await media.get(`_photolab/${file}`) : null;
+      if (obj) {
+        const headers = new Headers();
+        headers.set("content-type", path === "/photolab" ? "text/html; charset=utf-8" : obj.httpMetadata?.contentType || "image/jpeg");
+        headers.set("cache-control", path === "/photolab" ? "public, max-age=300" : "public, max-age=86400");
+        return new Response(request.method === "HEAD" ? null : obj.body, { headers });
+      }
+    }
+  }
   if (
     request.method !== "POST" &&
     (path === "/.well-known/oauth-authorization-server/mcp" ||
