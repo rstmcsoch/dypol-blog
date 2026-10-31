@@ -22,7 +22,7 @@ const BASE = process.env.BASE ?? "http://127.0.0.1:8787";
 const TOKEN = process.env.MCP_TOKEN ?? "";
 const CATEGORY = process.env.CATEGORY ?? "cat-systems";
 const OTHER = process.env.OTHER_CATEGORY ?? "cat-design";
-if (/^https:\/\/(dypolblog|dypol-blog)\.rstmcsoch\.workers\.dev\/?$/.test(BASE)) throw new Error("Refusing to run against production.");
+if (/^https:\/\/(blog\.dypol|dypolblog\.rstmcsoch|dypol-blog\.rstmcsoch)\.workers\.dev\/?$/.test(BASE)) throw new Error("Refusing to run against production.");
 const PIXEL = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC", "base64");
 /** A real 480x270 RGB PNG (covers must be at least 400x200). */
 function makePng(width, height) {

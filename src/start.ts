@@ -13,6 +13,15 @@ const securityHeaders = createMiddleware().server(async ({ request, pathname, ne
   // Grok discovers OAuth by probing the MCP path, not only the issuer root.
   // An HTML 404 on any of these aborts connect before the consent page opens.
   const path = pathname.length > 1 && pathname.endsWith("/") ? pathname.slice(0, -1) : pathname;
+  // t140: the blog moved to blog.dypol.workers.dev. Any request that still
+  // reaches an old production host 301s to the same path on the new origin.
+  const reqUrl = new URL(request.url);
+  if (/^(dypolblog|dypol-blog)\.rstmcsoch\.workers\.dev$/i.test(reqUrl.hostname)) {
+    return new Response(null, { status: 301, headers: { location: `https://blog.dypol.workers.dev${reqUrl.pathname}${reqUrl.search}`, "x-robots-tag": "noindex" } });
+  }
+  if ((request.method === "GET" || request.method === "HEAD") && path === "/rss.xml") {
+    return new Response(null, { status: 301, headers: { location: "/feed.xml" } });
+  }
   if ((request.method === "GET" || request.method === "HEAD") && (path === "/photolab" || path.startsWith("/photolab/"))) {
     const file = path === "/photolab" ? "page.html" : path.slice("/photolab/".length);
     if (file && !file.includes("..") && !file.includes("/")) {
@@ -44,6 +53,11 @@ const securityHeaders = createMiddleware().server(async ({ request, pathname, ne
   }
   const result = await next();
   const headers = result.response.headers;
+  // t140: only the canonical host is indexable. Version / branch preview
+  // hosts (*-blog.dypol.workers.dev etc.) get noindex on every response.
+  if (reqUrl.hostname.endsWith(".workers.dev") && reqUrl.hostname !== "blog.dypol.workers.dev") {
+    try { headers.set("x-robots-tag", "noindex, nofollow"); } catch { /* immutable headers */ }
+  }
   const type = headers.get("content-type") ?? "";
   if (type.includes("text/html")) {
     // Admin, preview and auth pages must never be cached. Public pages get a

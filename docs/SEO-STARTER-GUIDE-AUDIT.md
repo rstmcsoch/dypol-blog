@@ -1,7 +1,7 @@
 # SEO Starter Guide audit — DYPOL Blog (t89, 19 Oct 2026, Asia/Calcutta)
 
 Source guide: https://developers.google.com/search/docs/fundamentals/seo-starter-guide (fetched live for this audit).
-Live site audited: https://dypolblog.rstmcsoch.workers.dev — all 36 sitemap URLs fetched, plus robots/sitemaps/feed/404/alias checks. Repo on `main` (641514e) audited in parallel. PR #40 (PageSpeed, t88) is open/unmerged and based elsewhere; this branch is based on `main` and does not touch its files (no overlap expected except possibly `src/lib/seo.ts` image/thumbnail helpers — none changed there in #40's route code path conflict risk is low; rebase check needed if both touch sitemap).
+Live site audited: https://blog.dypol.workers.dev — all 36 sitemap URLs fetched, plus robots/sitemaps/feed/404/alias checks. Repo on `main` (641514e) audited in parallel. PR #40 (PageSpeed, t88) is open/unmerged and based elsewhere; this branch is based on `main` and does not touch its files (no overlap expected except possibly `src/lib/seo.ts` image/thumbnail helpers — none changed there in #40's route code path conflict risk is low; rebase check needed if both touch sitemap).
 
 ## Summary counts (before this PR's fixes)
 
@@ -17,7 +17,7 @@ Live site audited: https://dypolblog.rstmcsoch.workers.dev — all 36 sitemap UR
 
 | # | Guide item | Status | Evidence |
 |---|---|---|---|
-| 1 | Google can find site / `site:` check | OWNER-ONLY | Code cannot verify GSC index coverage; owner to check `site:dypolblog.rstmcsoch.workers.dev` in GSC |
+| 1 | Google can find site / `site:` check | OWNER-ONLY | Code cannot verify GSC index coverage; owner to check `site:blog.dypol.workers.dev` in GSC |
 | 2 | Google sees page as user does (no cloaking/blocked CSS-JS) | DONE-GOOD | SSR HTML contains full title/meta/JSON-LD/content; robots allows `/` |
 | 3 | Sitemap exists, absolute URLs | DONE-GOOD | `/sitemap.xml` 200, 36 URLs, article/topic lastmod; `/news-sitemap.xml` 48h only |
 | 4 | Robots.txt correct | DONE-GOOD | Allows *, disallows /admin /preview /mcp /api/ /oauth/, lists both sitemaps; AI search bots allowed |

@@ -8,7 +8,7 @@
  */
 import assert from "node:assert/strict";
 const BASE = process.env.BASE ?? "http://127.0.0.1:8787";
-if (/^https:\/\/(dypolblog|dypol-blog)\.rstmcsoch\.workers\.dev\/?$/.test(BASE)) throw new Error("Refusing production.");
+if (/^https:\/\/(blog\.dypol|dypolblog\.rstmcsoch|dypol-blog\.rstmcsoch)\.workers\.dev\/?$/.test(BASE)) throw new Error("Refusing production.");
 const SEQ_A = process.env.SEQ_A_TOKEN ?? "", SEQ_B = process.env.SEQ_B_TOKEN ?? "", RAND = process.env.RAND_TOKEN ?? "";
 const CAT = process.env.CAT ?? "systems";
 assert.ok(SEQ_A && SEQ_B && RAND, "set SEQ_A_TOKEN, SEQ_B_TOKEN, RAND_TOKEN");

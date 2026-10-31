@@ -16,7 +16,7 @@ import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 const BASE = process.env.BASE ?? "http://127.0.0.1:8787";
-if (/^https:\/\/(dypolblog|dypol-blog)\.rstmcsoch\.workers\.dev\/?$/.test(BASE)) throw new Error("Refusing production.");
+if (/^https:\/\/(blog\.dypol|dypolblog\.rstmcsoch|dypol-blog\.rstmcsoch)\.workers\.dev\/?$/.test(BASE)) throw new Error("Refusing production.");
 const A = process.env.PROFILE_A_TOKEN ?? "", B = process.env.PROFILE_B_TOKEN ?? "", PAUSED = process.env.PROFILE_PAUSED_TOKEN ?? "";
 const CAT_A = process.env.CAT_A ?? "systems", CAT_B = process.env.CAT_B ?? "design";
 assert.ok(A.startsWith("dyp_") && B.startsWith("dyp_"), "set PROFILE_A_TOKEN and PROFILE_B_TOKEN");
