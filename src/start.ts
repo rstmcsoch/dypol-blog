@@ -9,16 +9,22 @@ import { createMiddleware, createStart } from "@tanstack/react-start";
  * `set` here only fills the gaps, it does not weaken existing values.)
  */
 const securityHeaders = createMiddleware().server(async ({ request, pathname, next }) => {
-  // MCP clients (Grok included) try these when the server lives at /mcp.
-  // A blog 404 HTML here aborts discovery before the consent page opens.
+  // Grok discovers OAuth by probing the MCP path, not only the issuer root.
+  // An HTML 404 on any of these aborts connect before the consent page opens.
+  const path = pathname.length > 1 && pathname.endsWith("/") ? pathname.slice(0, -1) : pathname;
   if (
     request.method !== "POST" &&
-    (pathname === "/.well-known/oauth-authorization-server/mcp" ||
-      pathname === "/.well-known/openid-configuration" ||
-      pathname === "/.well-known/openid-configuration/mcp")
+    (path === "/.well-known/oauth-authorization-server/mcp" ||
+      path === "/.well-known/openid-configuration" ||
+      path === "/.well-known/openid-configuration/mcp" ||
+      path === "/mcp/.well-known/openid-configuration" ||
+      path === "/mcp/.well-known/oauth-authorization-server")
   ) {
     const oauth = await import("@/lib/mcp/oauth.server");
     if (request.method === "OPTIONS") return oauth.preflight();
+    if (request.method !== "GET" && request.method !== "HEAD") {
+      return new Response(null, { status: 405, headers: { allow: "GET, HEAD, OPTIONS" } });
+    }
     return oauth.authorizationServerMetadata(request);
   }
   const result = await next();
