@@ -1932,7 +1932,10 @@ html[data-theme="dark"] .theme-switch__btn[data-value="dark"] .theme-switch__mar
 
   .article-aside {
     position: sticky;
-    top: calc(var(--header-h) + 1.25rem);
+    /* t167: a sidebar taller than the window (a 160x600 ad under the lists) would
+       pin its top and keep its bottom, the ad, below the screen. Then it scrolls
+       on until its bottom is in view and sticks there (--aside-h set by script). */
+    top: min(calc(var(--header-h) + 1.25rem), calc(100vh - var(--aside-h, 0px) - 1.25rem));
   }
 
   .neighbor-list {
