@@ -3624,6 +3624,10 @@ html.nav-open .reading-progress { display: none; }
 .article-body .article-corrections h2 { margin: 0 0 0.4rem; font-size: 0.85rem; letter-spacing: 0.1em; text-transform: uppercase; }
 .article-corrections p { margin: 0; white-space: pre-line; }
 .topic-chips--end { margin: 1.75rem 0 0.5rem; }
+.article-body .topic-chips--end { padding-left: 0; list-style: none; font-family: var(--font-display); line-height: 1.2; }
+.article-body .topic-chips--end li { margin: 0; }
+.article-body .topic-chips--end li::marker { content: none; }
+.article-body .topic-chips--end .topic-chip { color: var(--ink); font-weight: 700; text-decoration: none; overflow-wrap: normal; }
 .article-related { margin: 2rem 0 0; padding-top: 1rem; border-top: 1px solid color-mix(in srgb, currentColor 20%, transparent); }
 .article-body .article-related h2 { margin: 0 0 0.6rem; font-size: 0.85rem; letter-spacing: 0.1em; text-transform: uppercase; }
 .article-body .article-related ul { margin: 0; padding-left: 1.2rem; }
