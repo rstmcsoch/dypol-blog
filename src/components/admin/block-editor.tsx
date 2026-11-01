@@ -2,6 +2,8 @@ import { useState } from "react";
 import { move } from "@/components/admin/site-form";
 import type { BlockType, ContentBlock } from "@/content/types";
 import { block as makeBlock } from "@/content/site";
+import { ShareButtonsEditor } from "@/components/admin/share-editor";
+import type { ShareSettings } from "@/lib/share-buttons";
 
 export const BLOCK_INFO: Record<BlockType, { name: string; help: string; count?: string; layout?: boolean }> = {
   featured: { name: "Featured article (hero)", help: "The article marked Featured, or the newest one, shown big." },
@@ -17,7 +19,7 @@ export const BLOCK_INFO: Record<BlockType, { name: string; help: string; count?:
   cta: { name: "Button / newsletter call-to-action", help: "A box with a short text and one button (e.g. “Subscribe” linking to your newsletter page)." },
   tags: { name: "Tags of this article", help: "The article's tags." },
   newStories: { name: "New stories", help: "The newest other articles.", count: "Stories" },
-  share: { name: "Share buttons", help: "X, LinkedIn, Facebook, email and copy link." },
+  share: { name: "Share buttons", help: "Buttons to share the article. Choose, order and rename them below (WhatsApp, Telegram, Reddit, custom links and more)." },
   river: { name: "Latest river + Most read", help: "Newest stories not shown above, with dates, beside a numbered Most-read rail (the rail appears once stories have views).", count: "Stories" },
   topicRows: { name: "Topic rows (automatic)", help: "One row for each of your busiest topics: a big story, three small ones and a “More in …” button. A topic needs at least 3 stories not shown above.", count: "Topics" },
   quickReads: { name: "Quick reads", help: "The shortest stories not shown above, with their reading time.", count: "Stories" },
@@ -38,6 +40,8 @@ export function BlockEditor({
   tags,
   defaultTitle,
   prefix,
+  share,
+  onShareChange,
 }: {
   blocks: ContentBlock[];
   onChange: (next: ContentBlock[]) => void;
@@ -46,6 +50,9 @@ export function BlockEditor({
   tags: Option[];
   defaultTitle: (b: ContentBlock) => string;
   prefix: string;
+  /** t148: share-button settings, edited inside the Share block (sidebar only). */
+  share?: ShareSettings;
+  onShareChange?: (next: ShareSettings) => void;
 }) {
   const [adding, setAdding] = useState<BlockType>(types.find((t) => t === "category") ?? types[0]);
   const [drag, setDrag] = useState<number | null>(null);
@@ -158,6 +165,7 @@ export function BlockEditor({
                 </label>
               ) : null}
             </div>
+            {b.type === "share" && share && onShareChange ? <ShareButtonsEditor value={share} onChange={onShareChange} /> : null}
             {b.type === "text" || b.type === "cta" ? (
               <label className="field">
                 <span>{b.type === "text" ? "Text" : "Short text (optional)"}</span>

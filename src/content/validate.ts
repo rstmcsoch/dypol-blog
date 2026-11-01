@@ -3,6 +3,7 @@ import { isSafeHref } from "./rules.ts";
 import { site, T96_HOME_BLOCKS } from "./site.ts";
 import { BLOCK_TYPES, publicationStatuses, type ContentBlock, type NavItem, type SiteConfig } from "./types.ts";
 import { SOCIAL_PLATFORMS, normalizeSocials, validSocialUrl } from "../lib/social-links.ts";
+import { SHARE_KINDS, customTemplateError, normalizeShareSettings } from "../lib/share-buttons.ts";
 
 export { isSafeHref, publishProblems, slugify } from "./rules.ts";
 
@@ -267,6 +268,26 @@ const siteSchema = z.object({
     )
     .max(7),
   aiDailyPublishLimit: z.number().int().min(0).max(100),
+  share: z.object({
+    buttons: z
+      .array(
+        z
+          .object({
+            id: z.string().trim().min(1).max(40),
+            kind: z.enum(SHARE_KINDS),
+            enabled: z.boolean(),
+            label: z.string().trim().max(40),
+            template: z.string().trim().max(500),
+          })
+          .superRefine((b, ctx) => {
+            if (b.kind !== "custom") return;
+            const problem = customTemplateError(b.template);
+            if (problem) ctx.addIssue({ code: "custom", message: problem, path: ["template"] });
+          }),
+      )
+      .max(24)
+      .refine((list) => new Set(list.map((b) => b.id)).size === list.length, "Each share button needs a unique id."),
+  }),
 });
 
 
@@ -423,6 +444,7 @@ function normalizeCore(input: unknown): SiteConfig {
     analytics: { ...site.analytics, ...(raw.analytics ?? {}) },
     socials: normalizeSocials(raw.socials),
     aiDailyPublishLimit: typeof raw.aiDailyPublishLimit === "number" ? raw.aiDailyPublishLimit : 0,
+    share: normalizeShareSettings(raw.share),
   });
 }
 

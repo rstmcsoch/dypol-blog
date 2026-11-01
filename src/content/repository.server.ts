@@ -1500,6 +1500,8 @@ export async function readSettings() {
 }
 
 export async function saveSettings(raw: unknown): Promise<void> {
+  // t148: callers that predate share settings (older admin tabs, tools) keep the saved ones.
+  if (raw && typeof raw === "object" && !("share" in raw)) raw = { ...raw, share: (await catalog()).site.share };
   const next = parseSite(raw);
   await ensureContent();
   if (next.logoMediaId || next.faviconMediaId) {
