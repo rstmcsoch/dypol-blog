@@ -127,10 +127,61 @@ export function AdSlot({ id, occurrence = 0, wrap }: { id: SlotId; occurrence?: 
   return <AdBox key={`${id}-${occurrence}-${r.creative?.id ?? "house"}`} r={r} id={id} occurrence={occurrence} wrap={wrap} />;
 }
 
-function frameVars(heights: Partial<Record<Device, number>>): CSSProperties {
+/** Per-breakpoint creative box, rendered by the server (no CLS): width, height and ratio for each device that has a fixed size. */
+function frameVars(dims: Partial<Record<Device, { w: number; h: number } | null>>): CSSProperties {
   const vars: Record<string, string> = {};
-  for (const d of DEVICES) if (heights[d]) vars[`--ad-h-${d}`] = `${heights[d]}px`;
+  for (const d of DEVICES) {
+    const x = dims[d];
+    if (!x || !x.w || !x.h) continue;
+    vars[`--ad-w-${d}`] = `${x.w}px`;
+    vars[`--ad-h-${d}`] = `${x.h}px`;
+    vars[`--ad-ar-${d}`] = `${x.w} / ${x.h}`;
+  }
   return vars as CSSProperties;
+}
+
+/** Scale a fixed-size creative down to the frame width; shrink the box if the creative is shorter than the slot size. */
+function useFitStage(frameRef: React.RefObject<HTMLDivElement | null>, stageRef: React.RefObject<HTMLDivElement | null>, deps: unknown[]) {
+  useEffect(() => {
+    const frame = frameRef.current;
+    const stage = stageRef.current;
+    if (!frame || !stage || typeof ResizeObserver === "undefined") return;
+    const fit = () => {
+      if (frame.classList.contains("ad-frame--img")) return;
+      const cs = getComputedStyle(stage);
+      const sw = parseFloat(cs.getPropertyValue("--ad-sw")) || 0;
+      const sh = parseFloat(cs.getPropertyValue("--ad-sh")) || 0;
+      if (!sw || !sh) {
+        frame.style.removeProperty("--ad-scale");
+        frame.style.removeProperty("--ad-real-h");
+        return;
+      }
+      const scale = Math.min(1, frame.clientWidth / sw);
+      frame.style.setProperty("--ad-scale", String(scale));
+      // Real creative height (largest iframe/img/ins) when it is shorter than the reserved size.
+      let real = 0;
+      for (const el of Array.from(stage.querySelectorAll<HTMLElement>("iframe, img, ins, video, canvas"))) {
+        const h = el.offsetHeight;
+        if (h > real) real = h;
+      }
+      if (real > 0 && real < sh - 1) frame.style.setProperty("--ad-real-h", `${Math.round(real * scale)}px`);
+      else frame.style.removeProperty("--ad-real-h");
+    };
+    fit();
+    const ro = new ResizeObserver(fit);
+    ro.observe(frame);
+    const mo = new MutationObserver(() => {
+      fit();
+      for (const el of Array.from(stage.querySelectorAll("iframe, img, ins"))) ro.observe(el);
+    });
+    mo.observe(stage, { subtree: true, childList: true, attributes: true, attributeFilter: ["width", "height", "style"] });
+    window.addEventListener("load", fit);
+    return () => {
+      ro.disconnect();
+      mo.disconnect();
+      window.removeEventListener("load", fit);
+    };
+  }, deps); // eslint-disable-line react-hooks/exhaustive-deps
 }
 
 function sizeOf(c: PublicCreative, d: Device): { w: number; h: number } | null {
@@ -179,16 +230,19 @@ function AdBox({ r, id, occurrence, wrap }: { r: Resolved; id: SlotId; occurrenc
   const consentTick = useConsentTick();
   const asideRef = useRef<HTMLElement>(null);
   const frameRef = useRef<HTMLDivElement>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
   const cellRef = useGridCell(wrap === "cell");
   const def = slotDef(id);
   const showing = useHouse ? null : creative;
   const devices = DEVICES.filter((d) => (showing ? !!(showing.code[d] || showing.banners[d]) : (def?.devices ?? DEVICES).includes(d) && slot.targeting.devices.includes(d)));
-  const heights: Partial<Record<Device, number>> = {};
-  if (showing) for (const d of devices) heights[d] = sizeOf(showing, d)?.h ?? 0;
+  const dimsBy: Partial<Record<Device, { w: number; h: number } | null>> = {};
+  if (showing) for (const d of devices) dimsBy[d] = showing.kind === "native" && !showing.code[d]?.html ? null : sizeOf(showing, d);
+
+  useFitStage(frameRef, stageRef, [showing, useHouse]);
 
   useEffect(() => {
     const el = asideRef.current;
-    const frame = frameRef.current;
+    const frame = stageRef.current;
     if (!el || !frame) return;
     const cleanups: Array<() => void> = [];
     let done = false;
@@ -217,7 +271,6 @@ function AdBox({ r, id, occurrence, wrap }: { r: Resolved; id: SlotId; occurrenc
     const raf = requestAnimationFrame(() => {
       if (suppressedByRules(el, ads.rules)) return collapse();
       const dims = showing ? sizeOf(showing, device) : null;
-      if (dims && dims.w > frame.clientWidth + 1) return collapse();
       const seenId = showing ? showing.id : "house";
       cleanups.push(trackImpression(el, id, seenId, () => noteCapView(seenId)));
       const code = showing?.code[device];
@@ -230,7 +283,7 @@ function AdBox({ r, id, occurrence, wrap }: { r: Resolved; id: SlotId; occurrenc
       cleanups.push(
         whenNear(el, () => {
           if (showing.isolate) {
-            const d = dims ?? { w: frame.clientWidth, h: 250 };
+            const d = dims ?? { w: frameRef.current?.clientWidth || frame.clientWidth || 300, h: 250 };
             frame.replaceChildren(isolatedFrame(code.html, d.w, d.h));
             return;
           }
@@ -256,10 +309,12 @@ function AdBox({ r, id, occurrence, wrap }: { r: Resolved; id: SlotId; occurrenc
   const node = (
     <aside ref={asideRef} className={cls} data-slot={id} aria-label="Advertisement" data-leave-guard="off">
       <span className="ad-label">{slot.label}</span>
-      <div ref={frameRef} className="ad-frame" style={frameVars(heights)}>
-        {showing?.kind === "sponsor" ? <SponsorPicture c={showing} /> : null}
-        {showing?.kind === "native" && !Object.values(showing.code).some((x) => x?.html) ? <NativeCard c={showing} /> : null}
-        {!showing && house ? <HouseCard house={house} id={id} /> : null}
+      <div ref={frameRef} className={["ad-frame", ...DEVICES.filter((d) => dimsBy[d]).map((d) => `ad-fix-${d}`), showing?.kind === "sponsor" ? "ad-frame--img" : ""].filter(Boolean).join(" ")} style={frameVars(dimsBy)}>
+        <div ref={stageRef} className="ad-stage">
+          {showing?.kind === "sponsor" ? <SponsorPicture c={showing} /> : null}
+          {showing?.kind === "native" && !Object.values(showing.code).some((x) => x?.html) ? <NativeCard c={showing} /> : null}
+          {!showing && house ? <HouseCard house={house} id={id} /> : null}
+        </div>
       </div>
       {wrap === "anchor" ? (
         <button

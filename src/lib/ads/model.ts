@@ -8,7 +8,7 @@
  * decides how many ads the site shows.
  */
 
-export const AD_SIZES = ["728x90", "468x60", "300x250", "300x600", "160x600", "160x300", "320x50", "320x100", "responsive"] as const;
+export const AD_SIZES = ["728x90", "468x60", "300x250", "300x600", "160x600", "160x300", "320x50", "320x100", "300x50", "responsive"] as const;
 export type AdSize = (typeof AD_SIZES)[number];
 export const DEVICES = ["desktop", "tablet", "mobile"] as const;
 export type Device = (typeof DEVICES)[number];
