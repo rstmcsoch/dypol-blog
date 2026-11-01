@@ -4355,3 +4355,35 @@ body:has(.consent-bar) .ad-consent { display: none; }
 /* ?adpreview=1 (admins): dashed placeholders with slot id and size. */
 .ad-slot--preview .ad-frame { outline: 2px dashed #2a7de1; outline-offset: -2px; background: rgb(42 125 225 / 0.07); }
 .ad-slot--preview .ad-label { color: #2a7de1; }
+
+/* t150: share buttons with brand icons (currentColor, so day/night and hover follow the theme). */
+.share-list a,
+.share-list button {
+  gap: 0.4rem;
+}
+.share-list .share-icon {
+  flex: 0 0 auto;
+  width: 0.95rem;
+  height: 0.95rem;
+}
+@media (max-width: 559px) {
+  .share-list a,
+  .share-list button {
+    justify-content: center;
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+    padding: 0.2rem;
+  }
+  .share-list .share-icon {
+    width: 1.15rem;
+    height: 1.15rem;
+  }
+  .share-list .share-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+}
