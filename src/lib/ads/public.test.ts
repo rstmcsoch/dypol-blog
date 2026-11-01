@@ -40,6 +40,9 @@ test("consent only when enabled and the visitor is in scope", () => {
   assert.equal(buildPublicAds(s, NOW, { seed: 1, country: "IN" })!.consent, null);
   s.consent.scope = "all";
   assert.ok(buildPublicAds(s, NOW, { seed: 1, country: "IN" })!.consent);
+  // t161: a certified CMP's head code switches the simple banner off.
+  s.consent.cmpHead = "<script src=\"https://cmp.example/c.js\"></script>";
+  assert.equal(buildPublicAds(s, NOW, { seed: 1, country: "DE" })!.consent, null);
 });
 
 test("sponsor banners: live campaign + matching size, tracked click link", () => {

@@ -6,6 +6,7 @@ import { SiteFooter } from "@/components/site/footer";
 import { SiteHeader } from "@/components/site/header";
 import { ExternalLinkGuard } from "@/components/site/external-link-guard";
 import { AdHeadCode, AdsRuntime } from "@/components/site/ads";
+import { CmpHeadMirror } from "@/components/site/cmp-head";
 import { ThemeSync } from "@/components/site/theme-sync";
 import { themeBootScript } from "@/components/site/theme";
 import { TrendingBar } from "@/components/site/trending-bar";
@@ -69,6 +70,7 @@ function RootShell({ children }: { children: ReactNode }) {
     <html lang="en" suppressHydrationWarning>
       <head>
         <meta name="google-site-verification" content="cnBmFIzqzl0ubtj0Wd-0F5BvCxZMnaTRTrXfmVKkkhg" />
+        <CmpHeadMirror />
         <script dangerouslySetInnerHTML={{ __html: themeBootScript }} />
         <HeadContent />
         <AdHeadCode />
