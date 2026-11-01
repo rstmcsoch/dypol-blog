@@ -3,13 +3,19 @@ import { formatDate, padIndex } from "@/lib/format";
 import type { ArticleMeta } from "@/content/present";
 import type { Article } from "@/content/types";
 import { thumbUrl } from "@/lib/media-url";
+import { Fragment, type ReactNode } from "react";
 
 export function IndexList({
   articles,
   meta,
   minRead,
   start = 0,
+  adAfter,
+  ad,
 }: {
+  /** t148: an ad row after this many rows (rendered only when the slot is live). */
+  adAfter?: number;
+  ad?: ReactNode;
   articles: Article[];
   meta: Record<string, ArticleMeta>;
   minRead: string;
@@ -21,7 +27,8 @@ export function IndexList({
       {articles.map((article, i) => {
         const row = meta[article.id];
         return (
-          <li key={article.id}>
+          <Fragment key={article.id}>
+          <li>
             <Link to="/articles/$slug" params={{ slug: article.slug }} className="index-row">
               <span className="index-row__num">{padIndex(start + i + 1)}</span>
               {article.coverMediaId ? (
@@ -42,6 +49,8 @@ export function IndexList({
               </span>
             </Link>
           </li>
+          {ad && adAfter === i + 1 && articles.length > i + 1 ? ad : null}
+          </Fragment>
         );
       })}
     </ol>

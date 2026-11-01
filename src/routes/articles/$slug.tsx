@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { createFileRoute, notFound, redirect } from "@tanstack/react-router";
 import { initArticleAnalytics } from "@/lib/analytics-beacon";
 import { ArticleView } from "@/components/site/article-view";
+import { AdPage, useSponsoredArticle } from "@/components/site/ads";
 import { ArticlePagePending, NotFoundState } from "@/components/site/states";
 import { useSite } from "@/components/site/use-site";
 import { getArticle } from "@/content/public-api";
@@ -98,5 +99,11 @@ function ArticlePage() {
     });
     return teardown;
   }, [data.article.id, slug]);
-  return <ArticleView {...data} site={site} />;
+  const sponsored = useSponsoredArticle(slug);
+  const topics = [data.category, ...(data.topics ?? [])].flatMap((c) => (c ? [c.slug] : []));
+  return (
+    <AdPage page={{ type: "article", slug, topics, sponsored }}>
+      <ArticleView {...data} site={site} />
+    </AdPage>
+  );
 }

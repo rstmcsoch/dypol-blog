@@ -5,6 +5,7 @@ import { PreviewHostBridge } from "@/components/preview-host-bridge";
 import { SiteFooter } from "@/components/site/footer";
 import { SiteHeader } from "@/components/site/header";
 import { ExternalLinkGuard } from "@/components/site/external-link-guard";
+import { AdHeadCode, AdsRuntime } from "@/components/site/ads";
 import { ThemeSync } from "@/components/site/theme-sync";
 import { themeBootScript } from "@/components/site/theme";
 import { TrendingBar } from "@/components/site/trending-bar";
@@ -70,6 +71,7 @@ function RootShell({ children }: { children: ReactNode }) {
         <meta name="google-site-verification" content="cnBmFIzqzl0ubtj0Wd-0F5BvCxZMnaTRTrXfmVKkkhg" />
         <script dangerouslySetInnerHTML={{ __html: themeBootScript }} />
         <HeadContent />
+        <AdHeadCode />
       </head>
       <body>
         <PreviewHostBridge />
@@ -103,6 +105,7 @@ function RootLayout() {
       </main>
       <SiteFooter />
       <ExternalLinkGuard />
+      <AdsRuntime />
     </div>
     </>
   );

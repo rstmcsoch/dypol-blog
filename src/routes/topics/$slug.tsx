@@ -1,5 +1,6 @@
 import { createFileRoute, notFound } from "@tanstack/react-router";
 import { IndexList } from "@/components/site/index-list";
+import { AdPage } from "@/components/site/ads";
 import { EmptyState, NotFoundState, PagePending } from "@/components/site/states";
 import { useSite } from "@/components/site/use-site";
 import { getTopic } from "@/content/public-api";
@@ -61,6 +62,7 @@ function TopicPage() {
   const site = useSite();
   const { category, articles, meta, page, pages, start } = Route.useLoaderData();
   return (
+    <AdPage page={{ type: "topic", slug: category.slug, topics: [category.slug] }}>
     <div className="page">
       <div className="container">
         <header className="page-header">
@@ -78,5 +80,6 @@ function TopicPage() {
         )}
       </div>
     </div>
+    </AdPage>
   );
 }

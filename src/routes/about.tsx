@@ -1,6 +1,9 @@
 import { createFileRoute, notFound } from "@tanstack/react-router";
 import { NotFoundState, PagePending } from "@/components/site/states";
 import { StaticPage } from "@/components/site/static-page";
+import { AdPage } from "@/components/site/ads";
+
+const ABOUT_PAGE = { type: "about" as const };
 import { getPage } from "@/content/public-api";
 import { defaultOgPath, absoluteUrl, breadcrumbJsonLd, metaDescription, sitePageTitle, socialMeta } from "@/lib/seo";
 
@@ -33,5 +36,9 @@ export const Route = createFileRoute("/about")({
 
 function AboutRoute() {
   const data = Route.useLoaderData();
-  return <StaticPage page={data} />;
+  return (
+    <AdPage page={ABOUT_PAGE}>
+      <StaticPage page={data} />
+    </AdPage>
+  );
 }

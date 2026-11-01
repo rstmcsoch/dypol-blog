@@ -1,5 +1,8 @@
 import { createFileRoute, notFound } from "@tanstack/react-router";
 import { IndexList } from "@/components/site/index-list";
+import { AdPage, AdSlot } from "@/components/site/ads";
+
+const INDEX_PAGE = { type: "index" as const };
 import { NotFoundState, PagePending } from "@/components/site/states";
 import { Pager, pageHref, parsePage } from "@/components/site/pager";
 import { useSite } from "@/components/site/use-site";
@@ -55,6 +58,7 @@ function ArticlesPage() {
   const site = useSite();
   const { articles, meta, page, pages, start } = Route.useLoaderData();
   return (
+    <AdPage page={INDEX_PAGE}>
     <div className="page">
       <div className="container">
         <header className="page-header">
@@ -62,9 +66,10 @@ function ArticlesPage() {
           <h1 className="page-title">{site.labels.indexTitle}</h1>
           <p className="lede">{site.labels.indexLede}</p>
         </header>
-        <IndexList articles={articles} meta={meta} minRead={site.labels.minRead} start={start} />
+        <IndexList articles={articles} meta={meta} minRead={site.labels.minRead} start={start} adAfter={6} ad={<AdSlot id="L1" wrap="li" />} />
         <Pager basePath="/articles" page={page} pages={pages} />
       </div>
     </div>
+    </AdPage>
   );
 }

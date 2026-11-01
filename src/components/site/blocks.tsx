@@ -8,7 +8,8 @@ import { ShareLinks } from "./share";
 import { TopicGrid } from "./topic-grid";
 import { thumbUrl } from "@/lib/media-url";
 import { ArrowRight } from "lucide-react";
-import type { ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
+import { AdSlot, useSlotActive } from "./ads";
 
 /** Each card's OWN cover (16/9), or a clean fallback panel with its topic — never another article's image. */
 function Thumb({ c, className = "story-card__img" }: { c: Card; className?: string }) {
@@ -26,7 +27,7 @@ export function topicLine(c: Card): string {
   return `${labels.slice(0, 2).join(" · ")} +${labels.length - 2}`;
 }
 
-function CardList({ cards, layout, minRead }: { cards: Card[]; layout: "list" | "grid" | "cards"; minRead: string }) {
+function CardList({ cards, layout, minRead, adCell }: { cards: Card[]; layout: "list" | "grid" | "cards"; minRead: string; adCell?: ReactNode }) {
   if (layout === "list") {
     return (
       <ol className="index-list">
@@ -71,6 +72,7 @@ function CardList({ cards, layout, minRead }: { cards: Card[]; layout: "list" | 
           </Link>
         </li>
       ))}
+      {adCell}
     </ul>
   );
 }
@@ -141,6 +143,7 @@ function SectionHead({ id, title, children }: { id: string; title: string; child
 function River({ r, site, id }: { r: ResolvedBlock; site: SiteConfig; id: string }) {
   const rail = r.rail ?? [];
   const railId = `${id}-rail`;
+  const railAd = useSlotActive("H2");
   return (
     <section className="section river-section" aria-labelledby={id} data-block="river">
       <div className={rail.length ? "container river" : "container river river--solo"}>
@@ -151,8 +154,9 @@ function River({ r, site, id }: { r: ResolvedBlock; site: SiteConfig; id: string
             </Link>
           </SectionHead>
           <ol className="river__list">
-            {r.cards.map((c) => (
-              <li key={c.id}>
+            {r.cards.map((c, i) => (
+              <Fragment key={c.id}>
+              <li>
                 <Link to="/articles/$slug" params={{ slug: c.slug }} className="river-row">
                   <span className="river-row__when">{c.publishedAt ? <time dateTime={c.publishedAt}>{formatDate(c.publishedAt)}</time> : null}</span>
                   <span className="river-row__main">
@@ -163,10 +167,13 @@ function River({ r, site, id }: { r: ResolvedBlock; site: SiteConfig; id: string
                   <Thumb c={c} className="river-row__img" />
                 </Link>
               </li>
+              {i === 3 && r.cards.length > 4 ? <AdSlot id="H3" wrap="li" /> : null}
+              </Fragment>
             ))}
           </ol>
         </div>
         {rail.length ? (
+          <RailColumn ad={railAd}>
           <aside className="rail" aria-labelledby={railId}>
             <h2 id={railId} className="rail__head">
               {r.railTitle ?? site.labels.popular}
@@ -184,21 +191,44 @@ function River({ r, site, id }: { r: ResolvedBlock; site: SiteConfig; id: string
               ))}
             </ol>
           </aside>
+          </RailColumn>
         ) : null}
       </div>
     </section>
   );
 }
 
+/** t148: the rail and its ad (H2) stick together; without the ad the rail renders exactly as before. */
+function RailColumn({ ad, children }: { ad: boolean; children: ReactNode }) {
+  if (!ad) return <>{children}</>;
+  return (
+    <div className="rail-col">
+      {children}
+      <AdSlot id="H2" />
+    </div>
+  );
+}
+
+function TopicSide({ ad, children }: { ad: boolean; children: ReactNode }) {
+  if (!ad) return <>{children}</>;
+  return (
+    <div className="topic-row__side">
+      {children}
+      <AdSlot id="H4" />
+    </div>
+  );
+}
+
 /** t96: one row per busy topic — a big story and three compact ones, then "More in …". */
 function TopicRows({ r, site, id }: { r: ResolvedBlock; site: SiteConfig; id: string }) {
+  const h4 = useSlotActive("H4");
   return (
     <section className="section topic-rows" aria-labelledby={id} data-block="topicRows">
       <div className="container">
         <p id={id} className="kicker topic-rows__kicker">
           {r.title}
         </p>
-        {(r.rows ?? []).map((row) => {
+        {(r.rows ?? []).map((row, rowIndex) => {
           const [big, ...rest] = row.cards;
           const rowId = `${id}-${row.category.slug}`;
           return (
@@ -224,6 +254,7 @@ function TopicRows({ r, site, id }: { r: ResolvedBlock; site: SiteConfig; id: st
                     <Meta c={big} minRead={site.labels.minRead} />
                   </Link>
                 ) : null}
+                <TopicSide ad={rowIndex === 0 && h4}>
                 <ul className="topic-row__list">
                   {rest.map((c) => (
                     <li key={c.id}>
@@ -237,6 +268,7 @@ function TopicRows({ r, site, id }: { r: ResolvedBlock; site: SiteConfig; id: st
                     </li>
                   ))}
                 </ul>
+                </TopicSide>
               </div>
             </section>
           );
@@ -277,7 +309,7 @@ function MoreStories({ r, site, id }: { r: ResolvedBlock; site: SiteConfig; id: 
     <section className="section more-stories" aria-labelledby={id} data-block="moreStories">
       <div className="container">
         <SectionHead id={id} title={r.title} />
-        <CardList cards={r.cards} layout={r.block.layout} minRead={site.labels.minRead} />
+        <CardList cards={r.cards} layout={r.block.layout} minRead={site.labels.minRead} adCell={r.block.layout === "list" ? undefined : <AdSlot id="H7" wrap="cell" />} />
         <p className="more-stories__foot">
           <Link to="/articles" className="btn btn--accent grain">
             {site.labels.fullIndex}
@@ -314,11 +346,19 @@ export function HomeBlocks({ blocks, site }: { blocks: ResolvedBlock[]; site: Si
         if (t === "featured") return <Featured key={r.block.id} r={r} site={site} />;
         if (t === "river") return <River key={r.block.id} r={r} site={site} id={id} />;
         if (t === "topicRows") return <TopicRows key={r.block.id} r={r} site={site} id={id} />;
-        if (t === "quickReads") return <QuickReads key={r.block.id} r={r} site={site} id={id} />;
+        if (t === "quickReads") {
+          return (
+            <Fragment key={r.block.id}>
+              <AdSlot id="H5" wrap="container" />
+              <QuickReads r={r} site={site} id={id} />
+            </Fragment>
+          );
+        }
         if (t === "moreStories") return <MoreStories key={r.block.id} r={r} site={site} id={id} />;
         if (t === "also") {
           return (
-            <section key={r.block.id} className="band grain" aria-labelledby={id} data-block={t}>
+            <Fragment key={r.block.id}>
+            <section className="band grain" aria-labelledby={id} data-block={t}>
               <div className="container band-inner">
                 <h2 id={id} className="band-head">
                   {r.title}
@@ -335,6 +375,8 @@ export function HomeBlocks({ blocks, site }: { blocks: ResolvedBlock[]; site: Si
                 </ul>
               </div>
             </section>
+            <AdSlot id="H1" wrap="container" />
+            </Fragment>
           );
         }
         return (
@@ -384,7 +426,7 @@ export function HomeBlocks({ blocks, site }: { blocks: ResolvedBlock[]; site: Si
                       ))}
                     </ul>
                   ) : null}
-                  {r.cards.length > 0 ? <CardList cards={r.cards} layout={r.block.layout} minRead={site.labels.minRead} /> : null}
+                  {r.cards.length > 0 ? <CardList cards={r.cards} layout={r.block.layout} minRead={site.labels.minRead} adCell={t === "related" && r.block.layout !== "list" ? <AdSlot id="H6" wrap="cell" /> : undefined} /> : null}
                 </>
               )}
             </div>
@@ -396,10 +438,25 @@ export function HomeBlocks({ blocks, site }: { blocks: ResolvedBlock[]; site: Si
 }
 
 /** Article sidebar blocks (always compact lists). */
-export function SidebarBlocks({ blocks, site, title, slug }: { blocks: ResolvedBlock[]; site: SiteConfig; title: string; slug: string }) {
+export function SidebarBlocks({ blocks, site, title, slug, adAfterRelated }: { blocks: ResolvedBlock[]; site: SiteConfig; title: string; slug: string; adAfterRelated?: ReactNode }) {
+  const anchor = blocks.findIndex((r) => r.block.type === "related");
+  const adAt = anchor >= 0 ? anchor : blocks.length - 1;
   return (
     <>
-      {blocks.map((r) => {
+      {blocks.map((r, i) => (
+        <Fragment key={r.block.id}>
+          <SidebarBlock r={r} site={site} title={title} slug={slug} />
+          {i === adAt ? adAfterRelated : null}
+        </Fragment>
+      ))}
+    </>
+  );
+}
+
+function SidebarBlock({ r, site, title, slug }: { r: ResolvedBlock; site: SiteConfig; title: string; slug: string }) {
+  return (
+    <>
+      {[r].map((r) => {
         const t = r.block.type;
         if (t === "share") {
           return <ShareLinks key={r.block.id} title={title} path={`/articles/${slug}`} label={r.title} copyLabel={site.labels.copyLink} copiedLabel={site.labels.linkCopied} buttons={site.share?.buttons} />;

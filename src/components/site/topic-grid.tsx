@@ -1,8 +1,9 @@
 import { Link } from "@tanstack/react-router";
 import { padIndex } from "@/lib/format";
 import type { Category } from "@/content/types";
+import type { ReactNode } from "react";
 
-export function TopicGrid({ topics }: { topics: { category: Category; count: number }[] }) {
+export function TopicGrid({ topics, adCell }: { topics: { category: Category; count: number }[]; adCell?: ReactNode }) {
   return (
     <ul className="topic-grid">
       {topics.map(({ category, count }) => (
@@ -14,6 +15,7 @@ export function TopicGrid({ topics }: { topics: { category: Category; count: num
           </Link>
         </li>
       ))}
+      {adCell}
     </ul>
   );
 }

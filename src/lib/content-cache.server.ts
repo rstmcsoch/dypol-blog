@@ -18,7 +18,7 @@
  */
 import type { Sql } from "./db";
 
-const CONTENT_TABLES = "articles|article_tags|article_topics|categories|tags|site_settings|pages|media|redirects";
+const CONTENT_TABLES = "articles|article_tags|article_topics|categories|tags|site_settings|pages|media|redirects|ads_settings";
 const CONTENT_WRITE = new RegExp(
   `^\\s*(?:insert|update|delete|replace)\\b(?:\\s+or\\s+\\w+)?(?:\\s+into|\\s+from)?\\s+["\`]?(?:${CONTENT_TABLES})["\`]?(?=[\\s(]|$)`,
   "i",

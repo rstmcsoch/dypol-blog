@@ -18,6 +18,8 @@ export const Route = createFileRoute("/robots.txt")({
           `User-agent: OAI-SearchBot\nAllow: /\n${privatePaths}`,
           `User-agent: Claude-SearchBot\nAllow: /\n${privatePaths}`,
           `User-agent: Claude-User\nAllow: /\n${privatePaths}`,
+          // t148: AdSense's crawler reads pages to match ads (it never indexes).
+          `User-agent: Mediapartners-Google\nAllow: /`,
           `Sitemap: ${origin}/sitemap.xml\nSitemap: ${origin}/news-sitemap.xml\n`,
         ].join("\n\n");
         return new Response(body, {
