@@ -14,6 +14,7 @@ import { Route as SplatRouteImport } from './routes/$'
 import { Route as PageRouteImport } from './routes/$page'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as AdminRouteImport } from './routes/admin'
+import { Route as AdsDottxtRouteImport } from './routes/ads[.]txt'
 import { Route as FeedDotxmlRouteImport } from './routes/feed[.]xml'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as ManifestDotwebmanifestRouteImport } from './routes/manifest[.]webmanifest'
@@ -25,8 +26,11 @@ import { Route as SearchRouteImport } from './routes/search'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as DotwellKnownOauthAuthorizationServerRouteImport } from './routes/[.]well-known/oauth-authorization-server'
 import { Route as DotwellKnownOauthProtectedResourceRouteImport } from './routes/[.]well-known/oauth-protected-resource'
+import { Route as AdClickIdRouteImport } from './routes/ad-click/$id'
+import { Route as AdMediaNameRouteImport } from './routes/ad-media/$name'
 import { Route as AdminIndexRouteImport } from './routes/admin/index'
 import { Route as AdminActivityRouteImport } from './routes/admin/activity'
+import { Route as AdminAdsRouteImport } from './routes/admin/ads'
 import { Route as AdminAppearanceRouteImport } from './routes/admin/appearance'
 import { Route as AdminAutomationRouteImport } from './routes/admin/automation'
 import { Route as AdminHealthRouteImport } from './routes/admin/health'
@@ -41,6 +45,7 @@ import { Route as AdminSiteTextRouteImport } from './routes/admin/site-text'
 import { Route as AdminStatsRouteImport } from './routes/admin/stats'
 import { Route as AdminTickerRouteImport } from './routes/admin/ticker'
 import { Route as AdminTopicsRouteImport } from './routes/admin/topics'
+import { Route as ApiAdEventsRouteImport } from './routes/api/ad-events'
 import { Route as ApiContactRouteImport } from './routes/api/contact'
 import { Route as ApiNotFoundRouteImport } from './routes/api/not-found'
 import { Route as ArticlesIndexRouteImport } from './routes/articles/index'
@@ -87,6 +92,11 @@ const AboutRoute = AboutRouteImport.update({
 const AdminRoute = AdminRouteImport.update({
   id: '/admin',
   path: '/admin',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdsDottxtRoute = AdsDottxtRouteImport.update({
+  id: '/ads.txt',
+  path: '/ads.txt',
   getParentRoute: () => rootRouteImport,
 } as any)
 const FeedDotxmlRoute = FeedDotxmlRouteImport.update({
@@ -146,6 +156,16 @@ const DotwellKnownOauthProtectedResourceRoute =
     path: '/.well-known/oauth-protected-resource',
     getParentRoute: () => rootRouteImport,
   } as any)
+const AdClickIdRoute = AdClickIdRouteImport.update({
+  id: '/ad-click/$id',
+  path: '/ad-click/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdMediaNameRoute = AdMediaNameRouteImport.update({
+  id: '/ad-media/$name',
+  path: '/ad-media/$name',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminIndexRoute = AdminIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -154,6 +174,11 @@ const AdminIndexRoute = AdminIndexRouteImport.update({
 const AdminActivityRoute = AdminActivityRouteImport.update({
   id: '/activity',
   path: '/activity',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminAdsRoute = AdminAdsRouteImport.update({
+  id: '/ads',
+  path: '/ads',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminAppearanceRoute = AdminAppearanceRouteImport.update({
@@ -225,6 +250,11 @@ const AdminTopicsRoute = AdminTopicsRouteImport.update({
   id: '/topics',
   path: '/topics',
   getParentRoute: () => AdminRoute,
+} as any)
+const ApiAdEventsRoute = ApiAdEventsRouteImport.update({
+  id: '/api/ad-events',
+  path: '/api/ad-events',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const ApiContactRoute = ApiContactRouteImport.update({
   id: '/api/contact',
@@ -344,6 +374,7 @@ export interface FileRoutesByFullPath {
   '/$page': typeof PageRoute
   '/about': typeof AboutRoute
   '/admin': typeof AdminRouteWithChildren
+  '/ads.txt': typeof AdsDottxtRoute
   '/feed.xml': typeof FeedDotxmlRoute
   '/login': typeof LoginRoute
   '/manifest.webmanifest': typeof ManifestDotwebmanifestRoute
@@ -355,7 +386,10 @@ export interface FileRoutesByFullPath {
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/.well-known/oauth-authorization-server': typeof DotwellKnownOauthAuthorizationServerRoute
   '/.well-known/oauth-protected-resource': typeof DotwellKnownOauthProtectedResourceRouteWithChildren
+  '/ad-click/$id': typeof AdClickIdRoute
+  '/ad-media/$name': typeof AdMediaNameRoute
   '/admin/activity': typeof AdminActivityRoute
+  '/admin/ads': typeof AdminAdsRoute
   '/admin/appearance': typeof AdminAppearanceRoute
   '/admin/automation': typeof AdminAutomationRoute
   '/admin/health': typeof AdminHealthRoute
@@ -370,6 +404,7 @@ export interface FileRoutesByFullPath {
   '/admin/stats': typeof AdminStatsRoute
   '/admin/ticker': typeof AdminTickerRoute
   '/admin/topics': typeof AdminTopicsRoute
+  '/api/ad-events': typeof ApiAdEventsRoute
   '/api/contact': typeof ApiContactRoute
   '/api/not-found': typeof ApiNotFoundRoute
   '/articles/$slug': typeof ArticlesSlugRoute
@@ -399,6 +434,7 @@ export interface FileRoutesByTo {
   '/$': typeof SplatRoute
   '/$page': typeof PageRoute
   '/about': typeof AboutRoute
+  '/ads.txt': typeof AdsDottxtRoute
   '/feed.xml': typeof FeedDotxmlRoute
   '/login': typeof LoginRoute
   '/manifest.webmanifest': typeof ManifestDotwebmanifestRoute
@@ -410,7 +446,10 @@ export interface FileRoutesByTo {
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/.well-known/oauth-authorization-server': typeof DotwellKnownOauthAuthorizationServerRoute
   '/.well-known/oauth-protected-resource': typeof DotwellKnownOauthProtectedResourceRouteWithChildren
+  '/ad-click/$id': typeof AdClickIdRoute
+  '/ad-media/$name': typeof AdMediaNameRoute
   '/admin/activity': typeof AdminActivityRoute
+  '/admin/ads': typeof AdminAdsRoute
   '/admin/appearance': typeof AdminAppearanceRoute
   '/admin/automation': typeof AdminAutomationRoute
   '/admin/health': typeof AdminHealthRoute
@@ -425,6 +464,7 @@ export interface FileRoutesByTo {
   '/admin/stats': typeof AdminStatsRoute
   '/admin/ticker': typeof AdminTickerRoute
   '/admin/topics': typeof AdminTopicsRoute
+  '/api/ad-events': typeof ApiAdEventsRoute
   '/api/contact': typeof ApiContactRoute
   '/api/not-found': typeof ApiNotFoundRoute
   '/articles/$slug': typeof ArticlesSlugRoute
@@ -456,6 +496,7 @@ export interface FileRoutesById {
   '/$page': typeof PageRoute
   '/about': typeof AboutRoute
   '/admin': typeof AdminRouteWithChildren
+  '/ads.txt': typeof AdsDottxtRoute
   '/feed.xml': typeof FeedDotxmlRoute
   '/login': typeof LoginRoute
   '/manifest.webmanifest': typeof ManifestDotwebmanifestRoute
@@ -467,7 +508,10 @@ export interface FileRoutesById {
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/.well-known/oauth-authorization-server': typeof DotwellKnownOauthAuthorizationServerRoute
   '/.well-known/oauth-protected-resource': typeof DotwellKnownOauthProtectedResourceRouteWithChildren
+  '/ad-click/$id': typeof AdClickIdRoute
+  '/ad-media/$name': typeof AdMediaNameRoute
   '/admin/activity': typeof AdminActivityRoute
+  '/admin/ads': typeof AdminAdsRoute
   '/admin/appearance': typeof AdminAppearanceRoute
   '/admin/automation': typeof AdminAutomationRoute
   '/admin/health': typeof AdminHealthRoute
@@ -482,6 +526,7 @@ export interface FileRoutesById {
   '/admin/stats': typeof AdminStatsRoute
   '/admin/ticker': typeof AdminTickerRoute
   '/admin/topics': typeof AdminTopicsRoute
+  '/api/ad-events': typeof ApiAdEventsRoute
   '/api/contact': typeof ApiContactRoute
   '/api/not-found': typeof ApiNotFoundRoute
   '/articles/$slug': typeof ArticlesSlugRoute
@@ -514,6 +559,7 @@ export interface FileRouteTypes {
     | '/$page'
     | '/about'
     | '/admin'
+    | '/ads.txt'
     | '/feed.xml'
     | '/login'
     | '/manifest.webmanifest'
@@ -525,7 +571,10 @@ export interface FileRouteTypes {
     | '/sitemap.xml'
     | '/.well-known/oauth-authorization-server'
     | '/.well-known/oauth-protected-resource'
+    | '/ad-click/$id'
+    | '/ad-media/$name'
     | '/admin/activity'
+    | '/admin/ads'
     | '/admin/appearance'
     | '/admin/automation'
     | '/admin/health'
@@ -540,6 +589,7 @@ export interface FileRouteTypes {
     | '/admin/stats'
     | '/admin/ticker'
     | '/admin/topics'
+    | '/api/ad-events'
     | '/api/contact'
     | '/api/not-found'
     | '/articles/$slug'
@@ -569,6 +619,7 @@ export interface FileRouteTypes {
     | '/$'
     | '/$page'
     | '/about'
+    | '/ads.txt'
     | '/feed.xml'
     | '/login'
     | '/manifest.webmanifest'
@@ -580,7 +631,10 @@ export interface FileRouteTypes {
     | '/sitemap.xml'
     | '/.well-known/oauth-authorization-server'
     | '/.well-known/oauth-protected-resource'
+    | '/ad-click/$id'
+    | '/ad-media/$name'
     | '/admin/activity'
+    | '/admin/ads'
     | '/admin/appearance'
     | '/admin/automation'
     | '/admin/health'
@@ -595,6 +649,7 @@ export interface FileRouteTypes {
     | '/admin/stats'
     | '/admin/ticker'
     | '/admin/topics'
+    | '/api/ad-events'
     | '/api/contact'
     | '/api/not-found'
     | '/articles/$slug'
@@ -625,6 +680,7 @@ export interface FileRouteTypes {
     | '/$page'
     | '/about'
     | '/admin'
+    | '/ads.txt'
     | '/feed.xml'
     | '/login'
     | '/manifest.webmanifest'
@@ -636,7 +692,10 @@ export interface FileRouteTypes {
     | '/sitemap.xml'
     | '/.well-known/oauth-authorization-server'
     | '/.well-known/oauth-protected-resource'
+    | '/ad-click/$id'
+    | '/ad-media/$name'
     | '/admin/activity'
+    | '/admin/ads'
     | '/admin/appearance'
     | '/admin/automation'
     | '/admin/health'
@@ -651,6 +710,7 @@ export interface FileRouteTypes {
     | '/admin/stats'
     | '/admin/ticker'
     | '/admin/topics'
+    | '/api/ad-events'
     | '/api/contact'
     | '/api/not-found'
     | '/articles/$slug'
@@ -682,6 +742,7 @@ export interface RootRouteChildren {
   PageRoute: typeof PageRoute
   AboutRoute: typeof AboutRoute
   AdminRoute: typeof AdminRouteWithChildren
+  AdsDottxtRoute: typeof AdsDottxtRoute
   FeedDotxmlRoute: typeof FeedDotxmlRoute
   LoginRoute: typeof LoginRoute
   ManifestDotwebmanifestRoute: typeof ManifestDotwebmanifestRoute
@@ -693,6 +754,9 @@ export interface RootRouteChildren {
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   DotwellKnownOauthAuthorizationServerRoute: typeof DotwellKnownOauthAuthorizationServerRoute
   DotwellKnownOauthProtectedResourceRoute: typeof DotwellKnownOauthProtectedResourceRouteWithChildren
+  AdClickIdRoute: typeof AdClickIdRoute
+  AdMediaNameRoute: typeof AdMediaNameRoute
+  ApiAdEventsRoute: typeof ApiAdEventsRoute
   ApiContactRoute: typeof ApiContactRoute
   ApiNotFoundRoute: typeof ApiNotFoundRoute
   ArticlesSlugRoute: typeof ArticlesSlugRoute
@@ -745,6 +809,13 @@ declare module '@tanstack/react-router' {
       path: '/admin'
       fullPath: '/admin'
       preLoaderRoute: typeof AdminRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/ads.txt': {
+      id: '/ads.txt'
+      path: '/ads.txt'
+      fullPath: '/ads.txt'
+      preLoaderRoute: typeof AdsDottxtRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/feed.xml': {
@@ -824,6 +895,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DotwellKnownOauthProtectedResourceRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/ad-click/$id': {
+      id: '/ad-click/$id'
+      path: '/ad-click/$id'
+      fullPath: '/ad-click/$id'
+      preLoaderRoute: typeof AdClickIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/ad-media/$name': {
+      id: '/ad-media/$name'
+      path: '/ad-media/$name'
+      fullPath: '/ad-media/$name'
+      preLoaderRoute: typeof AdMediaNameRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/': {
       id: '/admin/'
       path: '/'
@@ -836,6 +921,13 @@ declare module '@tanstack/react-router' {
       path: '/activity'
       fullPath: '/admin/activity'
       preLoaderRoute: typeof AdminActivityRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/ads': {
+      id: '/admin/ads'
+      path: '/ads'
+      fullPath: '/admin/ads'
+      preLoaderRoute: typeof AdminAdsRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/appearance': {
@@ -935,6 +1027,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/admin/topics'
       preLoaderRoute: typeof AdminTopicsRouteImport
       parentRoute: typeof AdminRoute
+    }
+    '/api/ad-events': {
+      id: '/api/ad-events'
+      path: '/api/ad-events'
+      fullPath: '/api/ad-events'
+      preLoaderRoute: typeof ApiAdEventsRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/api/contact': {
       id: '/api/contact'
@@ -1095,6 +1194,7 @@ declare module '@tanstack/react-router' {
 
 interface AdminRouteChildren {
   AdminActivityRoute: typeof AdminActivityRoute
+  AdminAdsRoute: typeof AdminAdsRoute
   AdminAppearanceRoute: typeof AdminAppearanceRoute
   AdminAutomationRoute: typeof AdminAutomationRoute
   AdminHealthRoute: typeof AdminHealthRoute
@@ -1119,6 +1219,7 @@ interface AdminRouteChildren {
 
 const AdminRouteChildren: AdminRouteChildren = {
   AdminActivityRoute: AdminActivityRoute,
+  AdminAdsRoute: AdminAdsRoute,
   AdminAppearanceRoute: AdminAppearanceRoute,
   AdminAutomationRoute: AdminAutomationRoute,
   AdminHealthRoute: AdminHealthRoute,
@@ -1176,6 +1277,7 @@ const rootRouteChildren: RootRouteChildren = {
   PageRoute: PageRoute,
   AboutRoute: AboutRoute,
   AdminRoute: AdminRouteWithChildren,
+  AdsDottxtRoute: AdsDottxtRoute,
   FeedDotxmlRoute: FeedDotxmlRoute,
   LoginRoute: LoginRoute,
   ManifestDotwebmanifestRoute: ManifestDotwebmanifestRoute,
@@ -1189,6 +1291,9 @@ const rootRouteChildren: RootRouteChildren = {
     DotwellKnownOauthAuthorizationServerRoute,
   DotwellKnownOauthProtectedResourceRoute:
     DotwellKnownOauthProtectedResourceRouteWithChildren,
+  AdClickIdRoute: AdClickIdRoute,
+  AdMediaNameRoute: AdMediaNameRoute,
+  ApiAdEventsRoute: ApiAdEventsRoute,
   ApiContactRoute: ApiContactRoute,
   ApiNotFoundRoute: ApiNotFoundRoute,
   ArticlesSlugRoute: ArticlesSlugRoute,

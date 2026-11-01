@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
 import type { ArticleBlock } from "@/content/types";
 import { renderInline } from "@/components/markdown";
 import { stripCreditsAndSources } from "@/lib/automation/body";
@@ -11,11 +11,11 @@ import { SocialEmbed } from "@/components/site/social-embed";
  * renderer (bold, italic, links, entities …) — including At a glance items,
  * table cells, spec rows and callouts. No HTML passthrough.
  */
-export function ArticleBody({ blocks, before, after }: { blocks: ArticleBlock[]; before?: ReactNode; after?: ReactNode }) {
+export function ArticleBody({ blocks, before, after, inserts }: { blocks: ArticleBlock[]; before?: ReactNode; after?: ReactNode; inserts?: Record<number, ReactNode> }) {
   return (
     <div className="article-body">
       {before}
-      <ProseBlocks blocks={stripCreditsAndSources(blocks)} />
+      <ProseBlocks blocks={stripCreditsAndSources(blocks)} inserts={inserts} />
       {after}
     </div>
   );
@@ -38,10 +38,24 @@ function cellAlign(block: Extract<ArticleBlock, { type: "table" }>, col: number)
   return col > 0 && cells.length > 0 && cells.every((c) => NUMERIC_CELL.test(c)) ? "right" : undefined;
 }
 
-export function ProseBlocks({ blocks }: { blocks: ArticleBlock[] }) {
+/** t148: `inserts` puts extra nodes (in-text ad slots) after the block at that index. */
+export function ProseBlocks({ blocks, inserts, offset = 0 }: { blocks: ArticleBlock[]; inserts?: Record<number, ReactNode>; offset?: number }) {
+  if (inserts && Object.keys(inserts).length) {
+    return (
+      <>
+        {blocks.map((block, index) => (
+          <Fragment key={`${block.type}-${index}`}>
+            <ProseBlocks blocks={[block]} offset={index} />
+            {inserts[index] ?? null}
+          </Fragment>
+        ))}
+      </>
+    );
+  }
   return (
     <>
-      {blocks.map((block, index) => {
+      {blocks.map((block, i) => {
+        const index = offset + i;
         const key = `${block.type}-${index}`;
         switch (block.type) {
           case "paragraph": {

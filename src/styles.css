@@ -4190,3 +4190,168 @@ html.nav-open .reading-progress { display: none; }
 .author-cell__error { flex-basis: 100%; color: var(--danger, #c62828); font-size: 0.8rem; line-height: 1.3; }
 .author-cell__ok { flex-basis: 100%; color: var(--ok, #2e7d32); font-size: 0.8rem; }
 .field .author-cell__error { display: block; margin-top: 0.25rem; }
+
+/* ---------------------------------------------------------------------------
+ * t148 ads. Every rule targets ad-only classes, so with no live slot nothing
+ * here matches and the site renders exactly as before.
+ * ------------------------------------------------------------------------- */
+:root { --ad-bg: #f6f6f4; --ad-rule: rgb(17 17 17 / 0.12); --ad-gap: 2.75rem; }
+:root[data-theme="dark"] { --ad-bg: #141414; --ad-rule: rgb(244 244 244 / 0.14); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --ad-bg: #141414; --ad-rule: rgb(244 244 244 / 0.14); }
+}
+@media (max-width: 767px) { :root { --ad-gap: 1.75rem; } }
+
+.ad-slot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  max-width: 100%;
+  margin: var(--ad-gap) auto;
+  padding-top: 0.45rem;
+  border-top: 1px solid var(--ad-rule);
+  box-shadow: none;
+}
+.ad-label {
+  align-self: flex-start;
+  font: 600 10.5px/1 var(--font-display);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.ad-frame {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  max-width: 100%;
+  min-height: var(--ad-h-desktop, 0px);
+  overflow: hidden;
+  background: var(--ad-bg);
+}
+.ad-frame:empty { background: var(--ad-bg); }
+.ad-frame img { display: block; max-width: 100%; height: auto; }
+.ad-frame iframe { display: block; max-width: 100%; border: 0; }
+.ad-link { display: block; line-height: 0; }
+.ad-slot.is-collapsed { display: none !important; }
+.ad-anchor:has(> .is-collapsed), .ad-rail:has(.is-collapsed), .ad-li:has(> .is-collapsed), .ad-cell:has(> .is-collapsed) { display: none !important; }
+@media (min-width: 1024px) { .ad-slot--no-desktop { display: none !important; } }
+@media (min-width: 768px) and (max-width: 1023px) {
+  .ad-frame { min-height: var(--ad-h-tablet, var(--ad-h-desktop, 0px)); }
+  .ad-slot--no-tablet { display: none !important; }
+}
+@media (max-width: 767px) {
+  .ad-frame { min-height: var(--ad-h-mobile, 0px); }
+  .ad-slot--no-mobile { display: none !important; }
+}
+.ad-wrap > .ad-slot { margin-block: var(--ad-gap); }
+.article-body .ad-slot { margin: 2rem auto; }
+.article-body .ad-slot + * { margin-top: 0; }
+
+/* Feed rows (H3, L1) and grid cells (H6, H7, L2). */
+.ad-li { list-style: none; }
+.ad-li > .ad-slot { margin: 1.5rem auto; }
+.ad-cell { display: flex; list-style: none; min-width: 0; }
+.ad-cell[hidden] { display: none; }
+.ad-cell > .ad-slot { margin: 0; width: 100%; justify-content: flex-start; }
+
+/* H2 under the Most read rail; H4 under a topic row's list. */
+.rail-col { display: grid; align-content: start; gap: 0; min-width: 0; }
+.rail-col > .ad-slot { margin: 1.75rem 0 0; }
+@media (min-width: 1024px) {
+  .rail-col { align-self: start; position: sticky; top: calc(var(--header-h, 4.5rem) + 1rem); }
+  .rail-col > .rail { position: static; }
+}
+.topic-row__side { display: grid; align-content: start; min-width: 0; }
+.topic-row__side > .ad-slot { margin: 1.5rem 0 0; }
+
+/* G2 side rails: only on very wide screens, in the gutter outside the 76rem container. */
+main:has(> .ad-rail) { position: relative; }
+.ad-rail { display: none; position: absolute; top: 0; bottom: 0; width: 160px; pointer-events: none; }
+.ad-rail--left { left: calc(50% - 38rem - 184px); }
+.ad-rail--right { right: calc(50% - 38rem - 184px); }
+.ad-rail__inner { position: sticky; top: calc(var(--header-h, 4.5rem) + 1.5rem); pointer-events: auto; }
+.ad-rail .ad-slot { margin: 1.5rem 0 0; }
+@media (min-width: 1600px) { .ad-rail { display: block; } }
+
+/* G4 mobile anchor. */
+.ad-anchor {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 40;
+  display: flex;
+  justify-content: center;
+  padding: 0.3rem 0 calc(0.3rem + env(safe-area-inset-bottom, 0px));
+  background: var(--paper);
+  border-top: 1px solid var(--ad-rule);
+}
+.ad-anchor .ad-slot { position: relative; width: min(100%, 22rem); margin: 0; padding: 0; border: 0; gap: 0.2rem; }
+.ad-anchor .ad-frame { min-height: var(--ad-h-mobile, 50px); }
+.ad-close {
+  position: absolute;
+  top: -0.25rem;
+  right: 0;
+  width: 1.75rem;
+  height: 1.25rem;
+  font: 600 14px/1 var(--font-display);
+  color: var(--muted);
+  background: var(--paper);
+  border: 1px solid var(--ad-rule);
+  cursor: pointer;
+}
+@media (min-width: 768px) { .ad-anchor { display: none; } }
+@media (max-width: 767px) { html.has-ad-anchor body { padding-bottom: 5rem; } }
+
+/* Consent banner (sits above the G4 anchor, never on top of it). */
+.ad-consent {
+  position: fixed;
+  left: 1rem;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 45;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem 1rem;
+  max-width: 44rem;
+  margin-inline: auto;
+  padding: 0.9rem 1rem;
+  font-size: 0.9rem;
+  color: var(--ink);
+  background: var(--paper);
+  border: var(--line) solid var(--ink);
+}
+.ad-consent p { margin: 0; flex: 1 1 18rem; }
+.ad-consent__actions { display: flex; gap: 0.5rem; }
+@media (max-width: 767px) {
+  html.has-ad-anchor .ad-consent,
+  html.has-ad-anchor .consent-bar { bottom: calc(6rem + env(safe-area-inset-bottom, 0px)); }
+}
+/* One banner at a time: the ads banner waits until the analytics choice is made. */
+body:has(.consent-bar) .ad-consent { display: none; }
+
+/* Native and house cards. */
+.ad-native {
+  display: grid;
+  gap: 0.35rem;
+  width: 100%;
+  padding: 1rem 1.1rem;
+  color: inherit;
+  text-align: left;
+  text-decoration: none;
+}
+.ad-native__by { font: 600 11px/1 var(--font-display); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.ad-native__title { font: 700 1.1rem/1.25 var(--font-display); }
+.ad-native__text { color: var(--muted); font-size: 0.95rem; }
+.ad-native__cta { font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+.ad-native:hover .ad-native__title { text-decoration: underline; }
+
+.sponsored-by { margin: 0.5rem 0 0; font: 600 0.8rem/1.3 var(--font-display); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+
+/* ?adpreview=1 (admins): dashed placeholders with slot id and size. */
+.ad-slot--preview .ad-frame { outline: 2px dashed #2a7de1; outline-offset: -2px; background: rgb(42 125 225 / 0.07); }
+.ad-slot--preview .ad-label { color: #2a7de1; }

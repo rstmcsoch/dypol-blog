@@ -12,15 +12,33 @@ async function requestOrigin(): Promise<string> {
   }
 }
 
+/** t148: live ads for this request (null = no ad markup anywhere, the plain site). */
+async function shellAds(): Promise<import("@/lib/ads/public").PublicAds | null> {
+  try {
+    const { getRequest } = await import("@tanstack/react-start/server");
+    const request = getRequest() as (Request & { cf?: { country?: string } }) | undefined;
+    if (request && new URL(request.url).searchParams.get("noads") === "1") return null;
+    const { publicAdsSettings } = await import("@/lib/ads/ads.server");
+    const { buildPublicAds } = await import("@/lib/ads/public");
+    const settings = await publicAdsSettings();
+    const country = request?.cf?.country ?? request?.headers.get("cf-ipcountry") ?? null;
+    return buildPublicAds(settings, Date.now(), { country, seed: Math.floor(Math.random() * 0xffffffff) });
+  } catch (error) {
+    console.error("[ads] disabled for this request.", error);
+    return null;
+  }
+}
+
 export const getShell = createServerFn({ method: "GET" }).handler(async () => {
   try {
     const { readShell } = await import("./repository.server");
-    return await readShell();
+    const [shell, ads] = await Promise.all([readShell(), shellAds()]);
+    return { ...shell, ads };
   } catch (error) {
     // The site frame must always render, even if the content layer is broken.
     console.error("[shell] falling back to the built-in site config.", error);
     const { site } = await import("./site");
-    return { site, trending: [] as import("./ticker").TickerEntry[], pages: [] as { slug: string; title: string }[], menuTopics: null as { slug: string; label: string; count: number }[] | null, storyCount: 0 };
+    return { site, trending: [] as import("./ticker").TickerEntry[], pages: [] as { slug: string; title: string }[], menuTopics: null as { slug: string; label: string; count: number }[] | null, storyCount: 0, ads: null as import("@/lib/ads/public").PublicAds | null };
   }
 });
 

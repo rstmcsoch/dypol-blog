@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import { Link, useRouter, useRouterState } from "@tanstack/react-router";
 import { forgetDesk } from "@/components/admin/desk-cache";
 import {
-  Activity, BarChart3, Bell, Bot, ChevronRight, ExternalLink, FileText, HelpCircle, Image, Inbox, LayoutDashboard, LayoutTemplate,
+  Activity, BadgeDollarSign, BarChart3, Bell, Bot, ChevronRight, ExternalLink, FileText, HelpCircle, Image, Inbox, LayoutDashboard, LayoutTemplate,
   LogOut, Megaphone, Menu, Monitor, Moon, Palette, PanelLeft, ScrollText, Search, Settings, ShieldCheck, SlidersHorizontal, Sun, Tags,
   Type, X, type LucideIcon,
 } from "lucide-react";
@@ -33,6 +33,7 @@ const groups: { label: string; links: NavLinkDef[] }[] = [
       { to: "/admin/site-text", label: "Site text", icon: Type },
       { to: "/admin/pages", label: "Pages", icon: ScrollText },
       { to: "/admin/appearance", label: "Appearance", icon: Palette },
+      { to: "/admin/ads", label: "Ads", icon: BadgeDollarSign },
     ],
   },
   {

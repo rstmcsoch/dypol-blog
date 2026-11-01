@@ -1,5 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { HomeBlocks } from "@/components/site/blocks";
+import { AdPage } from "@/components/site/ads";
+
+const HOME_PAGE = { type: "home" as const };
 import { PagePending } from "@/components/site/states";
 import { useSite } from "@/components/site/use-site";
 import { getHome } from "@/content/public-api";
@@ -55,5 +58,9 @@ function Home() {
       </div>
     );
   }
-  return <HomeBlocks blocks={blocks} site={site} />;
+  return (
+    <AdPage page={HOME_PAGE}>
+      <HomeBlocks blocks={blocks} site={site} />
+    </AdPage>
+  );
 }

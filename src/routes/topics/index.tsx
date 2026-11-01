@@ -1,6 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { PagePending } from "@/components/site/states";
 import { TopicGrid } from "@/components/site/topic-grid";
+import { AdPage, AdSlot } from "@/components/site/ads";
+
+const TOPICS_PAGE = { type: "topics" as const };
 import { useSite } from "@/components/site/use-site";
 import { getTopics } from "@/content/public-api";
 import { defaultOgPath, absoluteUrl, itemListJsonLd, sitePageTitle, socialMeta } from "@/lib/seo";
@@ -36,6 +39,7 @@ function TopicsPage() {
   const site = useSite();
   const { topics } = Route.useLoaderData();
   return (
+    <AdPage page={TOPICS_PAGE}>
     <div className="page">
       <div className="container">
         <header className="page-header">
@@ -43,8 +47,9 @@ function TopicsPage() {
           <h1 className="page-title">{site.labels.topicsTitle}</h1>
           <p className="lede">{site.labels.topicsLede}</p>
         </header>
-        <TopicGrid topics={topics} />
+        <TopicGrid topics={topics} adCell={<AdSlot id="L2" wrap="cell" />} />
       </div>
     </div>
+    </AdPage>
   );
 }

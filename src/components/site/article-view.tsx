@@ -11,6 +11,10 @@ import { Cover, hasCover } from "./cover";
 import { SidebarBlocks } from "./blocks";
 import type { ResolvedBlock } from "@/content/blocks";
 import { IndexList } from "./index-list";
+import { AdSlot, SponsoredBy, useAds, useSlotActive } from "./ads";
+import { inTextPositions } from "@/lib/ads/model";
+import { parseEmbed } from "@/lib/social-embed";
+import type { ReactNode } from "react";
 
 export function ArticleView({
   article,
@@ -43,6 +47,7 @@ export function ArticleView({
   const toc = tocEntries(stripCreditsAndSources(article.blocks));
   const chipTopics = topics.length ? topics : category ? [category] : [];
   const corrections = article.corrections?.trim();
+  const inserts = useInTextAds(article.blocks);
   return (
     <article className="article" ref={root}>
       <ReadingProgress target={root} />
@@ -59,6 +64,7 @@ export function ArticleView({
             </span>
             {article.status !== "published" ? <span>{article.status}</span> : null}
           </p>
+          <SponsoredBy slug={article.slug} />
         </header>
         {hasCover(article.coverMediaId, fallback) ? (
           <div className="article-plate">
@@ -78,6 +84,7 @@ export function ArticleView({
         <div className={blocks.length > 0 ? "article-layout" : "article-layout article-layout--full"}>
           <ArticleBody
             blocks={article.blocks}
+            inserts={inserts}
             before={toc.length ? <TableOfContents entries={toc} /> : null}
             after={
               <>
@@ -92,6 +99,7 @@ export function ArticleView({
                     ))}
                   </ul>
                 ) : null}
+                <AdSlot id="A4" />
                 {inlineRelated.length >= 2 ? (
                   <aside className="article-related" aria-labelledby="article-related-title">
                     <h2 id="article-related-title">Related</h2>
@@ -115,7 +123,8 @@ export function ArticleView({
           />
           {blocks.length > 0 ? (
             <aside className="article-aside">
-              <SidebarBlocks blocks={blocks} site={site} title={article.title} slug={article.slug} />
+              <SidebarBlocks blocks={blocks} site={site} title={article.title} slug={article.slug} adAfterRelated={<AdSlot id="A3" />} />
+              <AdSlot id="A3b" />
             </aside>
           ) : null}
         </div>
@@ -135,6 +144,7 @@ export function ArticleView({
             ) : null}
           </nav>
         )}
+        {related.length > 0 ? <AdSlot id="A5" /> : null}
         {related.length > 0 ? (
           <section className="section" aria-labelledby="continue">
             <h2 id="continue">{site.labels.related}</h2>
@@ -144,4 +154,20 @@ export function ArticleView({
       </div>
     </article>
   );
+}
+
+/** t148: A1 after paragraph N, then A2 (repeated up to the owner's max), only at a natural break (before a paragraph or heading). */
+function useInTextAds(blocks: Article["blocks"]): Record<number, ReactNode> | undefined {
+  const ads = useAds();
+  const a1 = useSlotActive("A1");
+  const a2 = useSlotActive("A2");
+  if (!a1 && !a2) return undefined;
+  const prose = stripCreditsAndSources(blocks);
+  const rules = ads?.rules ?? { maxInText: 2, paragraphsBetween: 2, firstAfterParagraph: 2, a2MinParagraphs: 5 };
+  const shapes = prose.map((b) => ({ type: b.type, embed: b.type === "paragraph" && !!parseEmbed(b.text) }));
+  const out: Record<number, ReactNode> = {};
+  inTextPositions(shapes, rules).forEach((index, n) => {
+    out[index] = n === 0 ? <AdSlot id="A1" /> : <AdSlot id="A2" occurrence={n - 1} />;
+  });
+  return out;
 }
