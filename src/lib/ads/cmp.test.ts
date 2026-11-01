@@ -19,3 +19,14 @@ test("consent code is skipped on private paths", () => {
   assert.ok(isCmpPath("/") && isCmpPath("/articles/x"));
   assert.ok(!isCmpPath("/admin") && !isCmpPath("/admin/ads") && !isCmpPath("/login"));
 });
+
+import { headBlock } from "./cmp.ts";
+test("head block: consent code first, then cleaned custom head code; mirrors cover style/noscript", () => {
+  const b = headBlock(BLOCK, `<meta name="x" content="1"></head><script>window.y=1</script><style>.a{}</style>`);
+  assert.ok(b.startsWith(BLOCK.trim()));
+  assert.ok(b.endsWith(`<meta name="x" content="1">\n<script>window.y=1</script>\n<style>.a{}</style>`));
+  assert.ok(!b.includes("</head>"));
+  assert.deepEqual(cmpMirrorNodes(b).map((n) => n.tag), ["script", "script", "script", "style"]);
+  assert.equal(headBlock("", ""), "");
+  assert.equal(headBlock("  ", `<meta name="v" content="2">`), `<meta name="v" content="2">`);
+});

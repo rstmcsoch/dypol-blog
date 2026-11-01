@@ -161,10 +161,20 @@ export function codeBlocked(r: RunResult): boolean {
   return r.external > 0 && r.failed >= r.external;
 }
 
-/** Network code in its own sandboxed document (Adsterra-style globals, document.write). */
+/**
+ * Network code in its own document (Adsterra-style globals such as atOptions,
+ * document.write), so two slots never share or overwrite each other's options.
+ *
+ * t164: the frame needs allow-same-origin. Without it the srcdoc document has
+ * an opaque origin and Adsterra's invoke.js never renders (no storage access),
+ * which left an empty frame. The same code already runs directly in the page
+ * for non-isolated slots, so this grants it nothing more than that.
+ * color-scheme: light on both sides keeps the frame transparent in night mode
+ * (a dark page around a light-scheme frame makes the browser paint it white).
+ */
 export function isolatedFrame(html: string, w: number, h: number): HTMLIFrameElement {
   const f = document.createElement("iframe");
-  f.setAttribute("sandbox", "allow-scripts allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation");
+  f.setAttribute("sandbox", "allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation");
   f.setAttribute("scrolling", "no");
   f.setAttribute("title", "Advertisement");
   f.setAttribute("loading", "lazy");
@@ -173,7 +183,9 @@ export function isolatedFrame(html: string, w: number, h: number): HTMLIFrameEle
   f.style.border = "0";
   f.style.display = "block";
   f.style.maxWidth = "100%";
-  f.srcdoc = `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;padding:0;overflow:hidden;background:transparent}</style>${FILL_REPORTER}</head><body>${html}</body></html>`;
+  f.style.colorScheme = "light";
+  f.style.background = "transparent";
+  f.srcdoc = `<!doctype html><html><head><meta charset="utf-8"><meta name="color-scheme" content="light"><style>:root{color-scheme:light}html,body{margin:0;padding:0;overflow:hidden;background:transparent}</style>${FILL_REPORTER}</head><body>${html}</body></html>`;
   return f;
 }
 

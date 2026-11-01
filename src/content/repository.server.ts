@@ -465,6 +465,11 @@ export async function recordView(slug: string): Promise<boolean> {
   return true;
 }
 
+/** t164: Settings → Custom head code for public pages (cached; content_version invalidates). */
+export async function publicCustomHead(): Promise<string> {
+  return (await publicCatalog()).site.customHead ?? "";
+}
+
 export async function readShell() {
   const [data, pages] = await Promise.all([publicCatalog(), readPageLinks()]);
   const live = published(data.articles);

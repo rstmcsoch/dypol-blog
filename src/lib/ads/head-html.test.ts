@@ -23,3 +23,21 @@ test("adOrigins: script/iframe hosts, protocol-relative, Google only with AdSens
   assert.deepEqual(adOrigins([adsense]), GOOGLE_AD_ORIGINS);
   assert.deepEqual(adOrigins([adsterra, adsterra]).length, 2);
 });
+
+import { checkHeadCode } from "./head-html.ts";
+test("checkHeadCode keeps head-valid tags verbatim and lists what it drops", () => {
+  const r = checkHeadCode(`<!-- gsc --><meta name="google-site-verification" content="abc" />
+</head><body><base href="/x"><title>T</title>
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-1"></script>
+<script>if (1 < 2) gtag('js', new Date());</script>
+<noscript><iframe src="https://www.googletagmanager.com/ns.html"></iframe></noscript>
+<noscript><style>.x{}</style></noscript><style>.a > b {}</style>stray <link rel="preconnect" href="https://a.test">`);
+  assert.deepEqual(r.tags.map((t) => t.tag), ["meta", "script", "script", "noscript", "style", "link"]);
+  assert.equal(r.tags[0].summary, "google-site-verification = abc");
+  assert.ok(r.code.startsWith(`<meta name="google-site-verification" content="abc" />\n<script async`));
+  assert.ok(r.code.includes("if (1 < 2) gtag('js', new Date());"));
+  assert.ok(!/<\/head>|<body>|<base|<title|iframe|stray/.test(r.code));
+  for (const d of ["</head>", "<body>", `<base href="/x">`, "<title>", "stray"]) assert.ok(r.dropped.includes(d), d);
+  assert.ok(r.dropped.some((d) => d.includes("GTM")));
+  assert.deepEqual(checkHeadCode(""), { code: "", tags: [], dropped: [] });
+});

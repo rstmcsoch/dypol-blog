@@ -4308,21 +4308,30 @@ html.nav-open .reading-progress { display: none; }
 .ad-frame { position: relative; display: block; width: 100%; max-width: 100%; margin-inline: auto; overflow: hidden; background: transparent; }
 .ad-stage { display: flex; flex-direction: column; align-items: center; max-width: 100%; }
 .ad-stage > * { max-width: 100%; }
-.ad-frame iframe { display: block; border: 0; }
+.ad-frame iframe { display: block; border: 0; color-scheme: light; background: transparent; }
+/* t164: an iframe whose color-scheme differs from its document is painted opaque
+   (white in night mode); network frames are light-scheme documents, so match them. */
+.ad-slot.is-empty .ad-label { visibility: hidden; }
 .ad-frame img { display: block; max-width: 100%; height: auto; }
 .ad-link { display: block; line-height: 0; }
 .ad-frame--img > .ad-stage { position: static !important; width: 100% !important; height: auto !important; transform: none !important; }
 .ad-frame--img img { width: 100%; height: auto; }
 @media (min-width: 1024px) {
   .ad-fix-desktop { width: min(100%, var(--ad-w-desktop)); aspect-ratio: var(--ad-ar-desktop); height: var(--ad-real-h, auto); --ad-sw: var(--ad-w-desktop); --ad-sh: var(--ad-h-desktop); }
+  /* t164: the label starts at the creative's left edge and is as wide as it. */
+  .ad-slot:has(> .ad-fix-desktop) > .ad-label { align-self: center; width: min(100%, var(--ad-w-desktop)); }
   .ad-fix-desktop > .ad-stage { position: absolute; top: 0; left: 0; width: var(--ad-w-desktop); height: var(--ad-h-desktop); max-width: none; transform: scale(var(--ad-scale, 1)); transform-origin: 0 0; }
 }
 @media (min-width: 768px) and (max-width: 1023px) {
   .ad-fix-tablet { width: min(100%, var(--ad-w-tablet)); aspect-ratio: var(--ad-ar-tablet); height: var(--ad-real-h, auto); --ad-sw: var(--ad-w-tablet); --ad-sh: var(--ad-h-tablet); }
+  /* t164: the label starts at the creative's left edge and is as wide as it. */
+  .ad-slot:has(> .ad-fix-tablet) > .ad-label { align-self: center; width: min(100%, var(--ad-w-tablet)); }
   .ad-fix-tablet > .ad-stage { position: absolute; top: 0; left: 0; width: var(--ad-w-tablet); height: var(--ad-h-tablet); max-width: none; transform: scale(var(--ad-scale, 1)); transform-origin: 0 0; }
 }
 @media (max-width: 767px) {
   .ad-fix-mobile { width: min(100%, var(--ad-w-mobile)); aspect-ratio: var(--ad-ar-mobile); height: var(--ad-real-h, auto); --ad-sw: var(--ad-w-mobile); --ad-sh: var(--ad-h-mobile); }
+  /* t164: the label starts at the creative's left edge and is as wide as it. */
+  .ad-slot:has(> .ad-fix-mobile) > .ad-label { align-self: center; width: min(100%, var(--ad-w-mobile)); }
   .ad-fix-mobile > .ad-stage { position: absolute; top: 0; left: 0; width: var(--ad-w-mobile); height: var(--ad-h-mobile); max-width: none; transform: scale(var(--ad-scale, 1)); transform-origin: 0 0; }
 }
 .ad-slot.is-collapsed { display: none !important; }
@@ -4471,3 +4480,16 @@ body:has(.consent-bar) .ad-consent { display: none; }
     white-space: nowrap;
   }
 }
+
+/* t164: Settings → Custom head code preview */
+.head-code textarea { width: 100%; max-width: 100%; font: 0.85rem/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.head-code__preview { display: grid; gap: 0.5rem; min-width: 0; }
+.head-code__count { margin: 0; font-size: 0.9rem; font-weight: 600; color: var(--a-text); }
+.head-code__list { display: grid; gap: 0.35rem; margin: 0; padding: 0; list-style: none; counter-reset: hc; }
+.head-code__list li { counter-increment: hc; display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.25rem 0.5rem; min-width: 0; padding: 0.45rem 0.6rem; border: 1px solid var(--a-line); border-left: 3px solid var(--a-primary); border-radius: 8px; background: var(--a-bg); font-size: 0.85rem; }
+.head-code__list li::before { content: counter(hc) "."; color: var(--a-muted); font-variant-numeric: tabular-nums; }
+.head-code__tag { padding: 0.05rem 0.4rem; border-radius: 6px; background: var(--a-primary-soft); color: var(--a-primary); font-weight: 700; font-size: 0.78rem; }
+.head-code__sum { flex: 1 1 12rem; min-width: 0; overflow-wrap: anywhere; color: var(--a-muted); }
+.head-code__dropped { margin: 0; font-size: 0.85rem; }
+.head-code__dropped ul { margin: 0.35rem 0 0; padding-left: 1.1rem; }
+.head-code__dropped code { overflow-wrap: anywhere; }

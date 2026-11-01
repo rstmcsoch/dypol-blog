@@ -824,6 +824,10 @@ function ScriptsTab({ s, setS }: { s: AdsSettings; setS: (n: AdsSettings) => voi
         Site-wide code: AdSense Auto ads / verification, a consent platform (CMP), Adsterra Popunder or Social Bar, analytics for ads. Head code is placed in &lt;head&gt;; body code
         loads at the end of the page. Legal pages, contact, 404, empty searches and the admin never get any of it.
       </p>
+      <p className="field-help">
+        Verification tags (Search Console, Bing, Pinterest, Yandex) and site-wide analytics that must be in the page HTML whether ads are on or off belong in{" "}
+        <a href="/admin/settings#custom-head-code">Settings → Custom head code</a>.
+      </p>
       {s.scripts.map((sc) => (
         <fieldset key={sc.id} className="block-card" data-script={sc.id}>
           <legend>{sc.name}</legend>

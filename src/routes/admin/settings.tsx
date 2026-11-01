@@ -2,6 +2,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { adminPending } from "@/components/admin/pending";
 import { FormShell, useSiteForm } from "@/components/admin/site-form";
 import { adminSettings } from "@/content/admin-api";
+import { useMemo } from "react";
+import { checkHeadCode } from "@/lib/ads/head-html";
 import { isRootSocialUrl, SOCIAL_LABELS, SOCIAL_PLATFORMS, type SocialLink } from "@/lib/social-links";
 
 export const Route = createFileRoute("/admin/settings")({
@@ -47,6 +49,7 @@ function SettingsAdmin() {
           <label className="field"><span>GA4 Measurement ID</span><input value={site.analytics.measurementId} placeholder="G-…" onChange={(e) => patch({ analytics: { ...site.analytics, measurementId: e.target.value } })} /></label>
           <p className="field-help">No Google script or request is sent before Accept. Admin pages never load Google Analytics.</p>
         </fieldset>
+        <HeadCodeField value={site.customHead} onChange={(customHead) => patch({ customHead })} />
         <fieldset className="block-card">
           <legend>Social links</legend>
           <p className="field-help">
@@ -138,5 +141,57 @@ function SettingsAdmin() {
         </p>
       </section>
     </>
+  );
+}
+
+/** t164: Settings → Custom head code (server-placed in <head> on every public page). */
+function HeadCodeField({ value, onChange }: { value: string; onChange: (next: string) => void }) {
+  const check = useMemo(() => checkHeadCode(value), [value]);
+  return (
+    <fieldset className="block-card head-code" id="custom-head-code">
+      <legend>Custom head code</legend>
+      <p className="field-help">
+        Paste verification tags (Google Search Console, Bing, Pinterest, Yandex), analytics or tag-manager scripts, link or style tags. The server places them inside
+        &lt;head&gt; on every public page right after the consent tool’s code, whether ads are on or off. Admin, API, MCP and sign-in pages never get them. Changes go live as
+        soon as you save, with no deploy.
+      </p>
+      <label className="field">
+        <span>Head code</span>
+        <textarea
+          rows={7}
+          spellCheck={false}
+          autoCapitalize="off"
+          autoCorrect="off"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={'<meta name="google-site-verification" content="…" />'}
+        />
+      </label>
+      <div className="head-code__preview" aria-live="polite">
+        <p className="head-code__count">
+          {check.tags.length ? `${check.tags.length} tag${check.tags.length === 1 ? "" : "s"} will be placed in <head>:` : "No tags yet."}
+        </p>
+        {check.tags.length ? (
+          <ol className="head-code__list">
+            {check.tags.map((t, i) => (
+              <li key={i}>
+                <code className="head-code__tag">{t.tag}</code>
+                <span className="head-code__sum">{t.summary}</span>
+              </li>
+            ))}
+          </ol>
+        ) : null}
+        {check.dropped.length ? (
+          <div className="banner banner--bad head-code__dropped" role="alert">
+            <strong>Removed when you save</strong> (only meta, link, script, style and noscript belong in &lt;head&gt;; &lt;base&gt; is not allowed):
+            <ul>{check.dropped.map((d, i) => <li key={i}><code>{d}</code></li>)}</ul>
+          </div>
+        ) : null}
+      </div>
+      <p className="field-help">
+        Ad-network code (AdSense Auto ads, Adsterra Popunder / Social Bar) stays under <a href="/admin/ads">Ads → Scripts &amp; ads.txt</a>, and the certified consent tool under{" "}
+        <a href="/admin/ads">Ads → Settings</a>; that code obeys the ads switch and consent rules.
+      </p>
+    </fieldset>
   );
 }

@@ -167,3 +167,12 @@ test("t145: accentText validates; missing defaults to black, bad value falls bac
   assert.equal(normalizeSite({ appearance: { ...site.appearance, accentText: "white-black" } }).appearance.accentText, "white-black");
   assert.equal(normalizeSite({ appearance: { ...site.appearance, accentText: "pink" } }).appearance.accentText, "black");
 });
+
+test("t164: custom head code — legacy rows get the Search Console tag, saves are cleaned, cleared stays cleared", () => {
+  const legacy = normalizeSite({ name: "X" });
+  assert.match(legacy.customHead, /google-site-verification" content="cnBmFIzqzl0ubtj0Wd-0F5BvCxZMnaTRTrXfmVKkkhg"/);
+  const saved = parseSite({ ...site, customHead: `<meta name="msvalidate.01" content="B"></head><body><base href="/">` });
+  assert.equal(saved.customHead, `<meta name="msvalidate.01" content="B">`);
+  assert.equal(normalizeSite({ ...site, customHead: "" }).customHead, "");
+  assert.throws(() => parseSite({ ...site, customHead: "x".repeat(20001) }));
+});
