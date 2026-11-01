@@ -4,7 +4,7 @@ import { FormShell, useSiteForm } from "@/components/admin/site-form";
 import { adminSettings } from "@/content/admin-api";
 import { site as defaults } from "@/content/site";
 import type { Appearance, CoverFallback } from "@/content/types";
-import { accentInk, contrast, themeColors } from "@/lib/appearance";
+import { ACCENT_TEXT_OPTIONS, accentTextColors, contrast, themeColors } from "@/lib/appearance";
 
 export const Route = createFileRoute("/admin/appearance")({
   ...adminPending,
@@ -24,7 +24,7 @@ function AppearanceAdmin() {
   const a = form.site.appearance;
   const set = (next: Partial<Appearance>) => form.patch({ appearance: { ...a, ...next } });
   const colors = themeColors(a);
-  const ink = accentInk(a.accent);
+  const onAccent = accentTextColors(a.accentText);
 
   return (
     <FormShell kicker="Site" title="Appearance" intro="Colours of the public site. The admin panel always keeps its own light look." form={form}>
@@ -62,6 +62,24 @@ function AppearanceAdmin() {
         </div>
       </fieldset>
 
+      <fieldset className="block-card" data-testid="accent-text-setting">
+        <legend>Text on orange backgrounds</legend>
+        <p className="field-help">Colour of text and icons on orange surfaces (BLOG badge, NEW label, orange buttons, the orange homepage band, chips). Follows the visitor's day/night theme.</p>
+        {ACCENT_TEXT_OPTIONS.map((option) => {
+          const c = accentTextColors(option.value);
+          return (
+            <label key={option.value} className="check-row" style={{ alignItems: "center" }}>
+              <input type="radio" name="accentText" value={option.value} checked={(a.accentText ?? "black") === option.value} onChange={() => set({ accentText: option.value })} />
+              <span>{option.label}</span>
+              <span aria-hidden="true" style={{ display: "inline-flex", gap: "0.3rem", marginLeft: "0.4rem" }}>
+                <span className="adm-preview__chip" style={{ background: a.accent, color: c.light, outline: `2px solid ${colors.light.paper}`, boxShadow: "0 0 0 3px #999" }}>Day</span>
+                <span className="adm-preview__chip" style={{ background: a.accent, color: c.dark, outline: `2px solid ${colors.dark.paper}`, boxShadow: "0 0 0 3px #999" }}>Night</span>
+              </span>
+            </label>
+          );
+        })}
+      </fieldset>
+
       <fieldset className="block-card">
         <legend>Live preview</legend>
         <div className="adm-preview" data-testid="appearance-preview">
@@ -69,7 +87,7 @@ function AppearanceAdmin() {
             const c = colors[mode];
             return (
               <div key={mode} className="adm-preview__pane" style={{ background: c.paper, color: c.ink, borderColor: c.muted }}>
-                <span className="adm-preview__chip" style={{ background: a.accent, color: ink }}>
+                <span className="adm-preview__chip" style={{ background: a.accent, color: onAccent[mode] }}>
                   {mode === "light" ? "Day" : "Night"}
                 </span>
                 <h3>An article headline</h3>

@@ -118,7 +118,7 @@ export const site = {
     enabled: true,
     blocks: [block("side-tags", "tags"), block("side-new", "newStories", { count: 4 }), block("side-share", "share")],
   },
-  appearance: { darkness: 92, whiteness: 100, accent: "#ff4d00", coverFallback: "minimal" },
+  appearance: { darkness: 92, whiteness: 100, accent: "#ff4d00", coverFallback: "minimal", accentText: "black" },
   footer: {
     note: "© {year} DYPOL BLOG · DYPOL Labs",
     links: [],
