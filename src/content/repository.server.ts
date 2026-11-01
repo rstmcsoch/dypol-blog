@@ -25,6 +25,7 @@ import {
   type ArticleWrite,
 } from "./validate";
 import { getSql, withTransaction, type Sql } from "@/lib/db";
+import { cachedRead } from "@/lib/content-cache.server";
 import { safeColor } from "@/lib/dominant-color";
 import { REVISION_KEEP, buildRestoreInput, mergeActivityFeed, sanitizeNotFoundPath, type RevisionSnapshot } from "../lib/admin-followup.ts";
 import { assertAiCanAccess, assertAiPatchAllowed, type AiActor, type AiEditAction } from "@/lib/automation/ai-edit";
@@ -345,9 +346,25 @@ function staticCatalog(): Awaited<ReturnType<typeof catalog>> {
   };
 }
 
+/** Earliest pending scheduled publish (ms), so a cached catalog expires exactly then. */
+function nextScheduledMs(articles: Article[]): number | null {
+  let next: number | null = null;
+  for (const a of articles) {
+    if (a.status !== "draft" || !a.scheduledAt) continue;
+    const t = Date.parse(a.scheduledAt);
+    if (Number.isFinite(t) && (next === null || t < next)) next = t;
+  }
+  return next;
+}
+
+/**
+ * Public readers only (admin, preview and MCP call catalog() directly). t147: served
+ * from the in-isolate cache, revalidated against content_version on every request.
+ */
 async function publicCatalog(): Promise<Awaited<ReturnType<typeof catalog>>> {
   try {
-    return await catalog();
+    const sql = await getSql();
+    return await cachedRead("catalog", sql, catalog, { expiresAt: (d) => nextScheduledMs(d.articles) });
   } catch (error) {
     console.error("[content] D1 unavailable, serving built-in content.", error);
     return staticCatalog();
@@ -387,8 +404,17 @@ function needsViews(site: SiteConfig): boolean {
  * at least three stories have views this week; otherwise the all-time counter.
  * The window travels with the counts so the heading states it accurately.
  */
-async function viewCountsWindowed(site: SiteConfig): Promise<{ views: Record<string, number>; viewsWindow?: "week" | "all" }> {
+type WindowedViews = { views: Record<string, number>; viewsWindow?: "week" | "all" };
+
+/** t147: view counts change constantly and need not be exact; cached 60 s per isolate. */
+async function viewCountsWindowed(site: SiteConfig): Promise<WindowedViews> {
   if (!needsViews(site)) return { views: {} };
+  const sql = await getSql().catch(() => null);
+  if (!sql) return loadViewCounts();
+  return cachedRead("views", sql, () => loadViewCounts(), { verify: false, ttlMs: 60_000 });
+}
+
+async function loadViewCounts(): Promise<WindowedViews> {
   const sql = await getSql().catch(() => null);
   if (!sql) return { views: {} };
   try {
@@ -451,8 +477,14 @@ async function dbPages(): Promise<(PageRow & { id: string })[] | null> {
 }
 
 /** Published page by slug. D1 when available; built-in defaults otherwise. */
+/** t147: reader-facing page reads go through the content cache; admin reads stay fresh. */
+async function publicPages(): Promise<(PageRow & { id: string })[] | null> {
+  const sql = await getSql().catch(() => null);
+  return sql ? cachedRead("pages", sql, dbPages) : dbPages();
+}
+
 export async function readPage(slug: string): Promise<PageRow | null> {
-  const rows = await dbPages();
+  const rows = await publicPages();
   if (rows) {
     const row = rows.find((r) => r.slug === slug);
     if (!row || row.status !== "published") return null;
@@ -469,7 +501,7 @@ export async function readPage(slug: string): Promise<PageRow | null> {
 
 /** Footer links: published pages, standard pages first in reading order. */
 export async function readPageLinks(): Promise<{ slug: string; title: string; updatedAt?: string }[]> {
-  const rows = await dbPages();
+  const rows = await publicPages();
   const publishedRows = rows ? rows.filter((r) => r.status === "published") : STANDARD_PAGES.map((p) => ({ slug: p.slug, title: p.title, updated_at: "2026-10-18T00:00:00.000Z" }));
   const order = new Map(STANDARD_PAGES.map((p, i) => [p.slug, i]));
   return [...publishedRows]

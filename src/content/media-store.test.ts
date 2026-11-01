@@ -188,7 +188,7 @@ test("openMediaStore uses the MEDIA and DB bindings and refuses any other store"
     DB: {
       prepare(sql: string) {
         const exec = (params: unknown[]) => {
-          if (sql.startsWith("create")) return { results: [] as unknown[] };
+          if (sql.startsWith("create") || sql.includes("content_version")) return { results: [] as unknown[] };
           if (sql.startsWith("insert")) {
             rows.push({
               id: params[0],

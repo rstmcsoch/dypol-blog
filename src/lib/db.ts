@@ -1,4 +1,5 @@
 import { workerEnv, type D1Database } from "./cf-env.server";
+import { BUMP_CONTENT_VERSION_SQL, isContentWrite, noteContentWrite } from "./content-cache.server";
 
 /**
  * Server-only SQL client backed by the Cloudflare D1 binding `DB`
@@ -37,6 +38,8 @@ function toSql(db: D1Database): Sql {
     const statement = db.prepare(toSqlite(text));
     const bound = params.length ? statement.bind(...params.map(bindable)) : statement;
     const result = await bound.all<T>();
+    // t147: content writes invalidate the public read cache (this isolate + others).
+    if (isContentWrite(text)) await noteContentWrite(() => db.prepare(BUMP_CONTENT_VERSION_SQL).run());
     return result.results ?? [];
   };
   const sql = (async <T = Record<string, unknown>>(strings: TemplateStringsArray, ...values: unknown[]) => {
