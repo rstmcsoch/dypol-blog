@@ -7,28 +7,12 @@ const COOKIE = "dypol-analytics-consent";
 type Consent = "accept" | "reject" | null;
 
 /**
- * t161: when a certified consent tool owns consent (its head code is set in
- * Admin → Ads), our own bar stays off and GA loads only once the tool grants
- * analytics_storage through Google Consent Mode.
+ * When a certified consent tool owns consent (its head code is set in
+ * Admin → Ads), our own bar stays off and gtag.js always loads: Google Consent
+ * Mode, configured by that head code (region-scoped defaults + the tool's
+ * updates), decides what GA may store and send.
  */
-function watchCmpAnalytics(onGranted: () => void): () => void {
-  const w = window as unknown as { dataLayer?: unknown[] };
-  w.dataLayer ??= [];
-  const dl = w.dataLayer;
-  let granted = false;
-  const check = (entry: unknown) => {
-    if (granted || !entry || typeof entry !== "object") return;
-    const a = Array.from(entry as ArrayLike<unknown>);
-    const v = a[0] === "consent" && a[2] && typeof a[2] === "object" ? (a[2] as Record<string, unknown>).analytics_storage : undefined;
-    if (v === "granted") { granted = true; onGranted(); }
-  };
-  dl.forEach(check);
-  const push = dl.push;
-  dl.push = function (...items: unknown[]) { items.forEach(check); return push.apply(this, items); };
-  return () => { if (dl.push !== push) dl.push = push; };
-}
-
-/** No third-party request is made until a visitor has explicitly accepted. */
+/** Without a consent tool, no third-party request is made until a visitor has explicitly accepted. */
 export function GoogleAnalytics() {
   const { analytics } = useSite();
   const path = useRouterState({ select: (state) => state.location.pathname + state.location.searchStr });
@@ -39,8 +23,9 @@ export function GoogleAnalytics() {
   const cmp = !!useCmpHead();
   useEffect(() => {
     if (cmp) {
+      setConsent("accept");
       setReady(true);
-      return watchCmpAnalytics(() => setConsent("accept"));
+      return;
     }
     const value = document.cookie.split("; ").find((c) => c.startsWith(`${COOKIE}=`))?.split("=")[1];
     setConsent(value === "accept" || value === "reject" ? value : null);
