@@ -40,8 +40,9 @@ export function Cover({
         loading={priority ? "eager" : "lazy"}
         fetchPriority={priority ? "high" : undefined}
         decoding="async"
-        width={1200}
-        height={675}
+        width={image?.w || 1200}
+        height={image?.h || 675}
+        style={image?.c ? { backgroundColor: image.c } : undefined}
       />
     );
   if (fallback === "none") return null;

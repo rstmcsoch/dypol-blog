@@ -140,6 +140,7 @@ const ENSURE_MEDIA_VARIANT_COLUMNS = [
   "alter table media add column width integer not null default 0",
   "alter table media add column height integer not null default 0",
   "alter table media add column processing text not null default 'legacy'",
+  "alter table media add column dominant_color text",
 ];
 
 /**
@@ -356,6 +357,16 @@ export function createMediaStore(bucket: MediaBucket, db: MediaDatabase, options
         return null;
       }
       return { mime: object.contentType || (key.endsWith(".webp") ? "image/webp" : row.mime), bytes: object.bytes };
+    },
+    /** t147: best-effort; a database without the column just skips it. */
+    async setDominantColor(id: string, color: string | null): Promise<void> {
+      await ready;
+      if (!color) return;
+      try {
+        await db.run("update media set dominant_color = ? where id = ?", [color, id]);
+      } catch {
+        // pre-0023 database
+      }
     },
     async remove(id: string): Promise<boolean> {
       await ready;

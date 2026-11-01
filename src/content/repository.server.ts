@@ -25,6 +25,7 @@ import {
   type ArticleWrite,
 } from "./validate";
 import { getSql, withTransaction, type Sql } from "@/lib/db";
+import { safeColor } from "@/lib/dominant-color";
 import { REVISION_KEEP, buildRestoreInput, mergeActivityFeed, sanitizeNotFoundPath, type RevisionSnapshot } from "../lib/admin-followup.ts";
 import { assertAiCanAccess, assertAiPatchAllowed, type AiActor, type AiEditAction } from "@/lib/automation/ai-edit";
 import { cutoffFor, filterOldArticles, type OldArticleQuery } from "@/lib/old-articles";
@@ -274,13 +275,15 @@ async function coverMetaMap(sql: Sql, rows: ArticleRow[]): Promise<Map<string, C
       await Promise.all(
         chunks.map(async (chunk) => {
           const placeholders = chunk.map((_, i) => `$${i + 1}`).join(", ");
+          const base = "id, alt, object_key, hero_key, thumb_key, byte_size, hero_byte_size, thumb_byte_size, width, height";
           try {
-            return await sql.query<MediaMetaRow>(
-              `select id, alt, object_key, hero_key, thumb_key, byte_size, hero_byte_size, thumb_byte_size, width, height from media where id in (${placeholders})`,
-              chunk,
-            );
+            return await sql.query<MediaMetaRow>(`select ${base}, dominant_color from media where id in (${placeholders})`, chunk);
           } catch {
-            return await sql.query<MediaMetaRow>(`select id, alt from media where id in (${placeholders})`, chunk);
+            try {
+              return await sql.query<MediaMetaRow>(`select ${base} from media where id in (${placeholders})`, chunk);
+            } catch {
+              return await sql.query<MediaMetaRow>(`select id, alt from media where id in (${placeholders})`, chunk);
+            }
           }
         }),
       )
@@ -290,7 +293,7 @@ async function coverMetaMap(sql: Sql, rows: ArticleRow[]): Promise<Map<string, C
       const height = Number(m.height ?? 0);
       map.set(m.id, {
         alt: m.alt?.trim() || null,
-        image: m.object_key || m.hero_key ? { v: mediaVersion(m), w: width, h: height } : null,
+        image: m.object_key || m.hero_key ? { v: mediaVersion(m), w: width, h: height, c: safeColor(m.dominant_color) } : null,
       });
     }
   } catch {
@@ -309,6 +312,7 @@ type MediaMetaRow = {
   thumb_byte_size?: number | null;
   width?: number | null;
   height?: number | null;
+  dominant_color?: string | null;
 };
 
 function byNewest(a: Article, b: Article): number {
@@ -1541,7 +1545,7 @@ export async function uploadMediaBytes(input: {
   alt: string;
   bytes: Uint8Array;
 }): Promise<UploadMediaResult> {
-  const { processUploadImage } = await import("@/lib/image-pipeline.server");
+  const { processUploadImage, dominantColorOf } = await import("@/lib/image-pipeline.server");
   const { ImagePipelineError } = await import("@/lib/image-pipeline");
   let processed;
   try {
@@ -1572,6 +1576,7 @@ export async function uploadMediaBytes(input: {
     processing: processed.processing,
     createdAt: new Date().toISOString(),
   });
+  await library.setDominantColor(id, await dominantColorOf(processed.thumb.bytes));
   return {
     id,
     image: {
@@ -1660,6 +1665,10 @@ async function backfillOne(
     thumb: reuseHeroAsThumb ? null : { bytes: processed.thumb.bytes, contentType: processed.thumb.contentType },
     processing: processed.processing === "images-binding" ? "backfill-images-binding" : processed.processing,
   });
+  if (done) {
+    const { dominantColorOf } = await import("@/lib/image-pipeline.server");
+    await library.setDominantColor(id, await dominantColorOf(processed.thumb.bytes));
+  }
   return { done, transformCalls: processed.transformCalls };
 }
 

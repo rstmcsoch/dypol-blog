@@ -25,7 +25,7 @@ export function IndexList({
             <Link to="/articles/$slug" params={{ slug: article.slug }} className="index-row">
               <span className="index-row__num">{padIndex(start + i + 1)}</span>
               {article.coverMediaId ? (
-                <span className="index-row__thumb"><img src={thumbUrl(article.coverMediaId, article.coverImage?.v)} alt={article.coverAlt?.trim() ? article.coverAlt : article.title} loading="lazy" decoding="async" width={480} height={360} /></span>
+                <span className="index-row__thumb"><img src={thumbUrl(article.coverMediaId, article.coverImage?.v)} style={article.coverImage?.c ? { backgroundColor: article.coverImage.c } : undefined} alt={article.coverAlt?.trim() ? article.coverAlt : article.title} loading="lazy" decoding="async" width={480} height={360} /></span>
               ) : (
                 <span className="index-row__thumb index-row__thumb--empty" aria-hidden="true">{row?.categoryLabel ?? ""}</span>
               )}

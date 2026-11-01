@@ -92,6 +92,29 @@ const transformOnce: ImageTransformer = async ({ bytes, spec, quality, anim, pla
   }
 };
 
+/**
+ * t147: the image's dominant colour (opaque images only), for a placeholder
+ * painted behind the <img>. One extra 1x1 transform per upload; best-effort:
+ * any failure returns null and the page simply keeps its neutral background.
+ */
+export async function dominantColorOf(bytes: Uint8Array): Promise<string | null> {
+  try {
+    const env = await workerEnv();
+    const images = imagesBinding(env);
+    if (!images) return null;
+    const result = await images
+      .input(new Blob([bytes as BlobPart]).stream())
+      .transform({ width: 1, height: 1, fit: "squeeze" })
+      .output({ format: "image/png" });
+    const response = result.response();
+    if (!response.ok) return null;
+    const { colorFromOnePixelPng } = await import("./dominant-color.ts");
+    return await colorFromOnePixelPng(new Uint8Array(await response.arrayBuffer()));
+  } catch {
+    return null;
+  }
+}
+
 export type UploadProcessing = ProcessedImage & { processing: "images-binding" | "original-within-target" };
 
 /**
