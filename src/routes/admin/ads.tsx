@@ -9,6 +9,7 @@ import { adminPending } from "@/components/admin/pending";
 import { adminAds, adminAdStats, adminAdVersions, adminRestoreAdVersion, adminSaveAds, adminUploadBanner } from "@/content/ads-api";
 import {
   AD_SIZES,
+  codeDims,
   DEVICES,
   PAGE_TYPE_LABELS,
   PAGE_TYPES,
@@ -573,6 +574,27 @@ function CreativeEditor({ c, sponsors, onChange, onRemove, onDuplicate }: { c: C
   );
 }
 
+/** t167: the code states its own size (Adsterra atOptions); warn when the Size setting differs. */
+function CodeSizeCheck({ html, size, onUse }: { html: string; size: AdSize; onUse: (s: AdSize) => void }) {
+  const real = codeDims(html);
+  if (!real) return null;
+  const actual = `${real.w}x${real.h}`;
+  if (actual === size) return null;
+  const known = (AD_SIZES as readonly string[]).includes(actual);
+  return (
+    <div className="banner banner--warn ads-size-check" role="status" style={{ gridColumn: "1 / -1", margin: 0 }}>
+      <span>
+        This code is <strong>{actual}</strong> (from its width and height), but Size is set to <strong>{size}</strong>. The site shows the ad at {actual}, the code's size.
+      </span>
+      {known ? (
+        <button type="button" className="btn btn--sm" onClick={() => onUse(actual as AdSize)}>
+          Set Size to {actual}
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
 function DeviceCodeEditor({ c, d, onChange, sponsor }: { c: Creative; d: Device; onChange: (p: Partial<Creative>) => void; sponsor?: Sponsor }) {
   const v = c[d];
   const label = d === "mobile" ? "Phone" : d === "tablet" ? "Tablet" : "Desktop";
@@ -598,6 +620,7 @@ function DeviceCodeEditor({ c, d, onChange, sponsor }: { c: Creative; d: Device;
           <textarea rows={4} spellCheck={false} style={{ fontFamily: "ui-monospace, monospace", fontSize: "0.8rem" }} value={v.html} onChange={(e) => set({ html: e.target.value })} placeholder="Paste the ad unit code from your network" />
         </Field>
       ) : null}
+      {c.kind === "code" && !(d !== "desktop" && v.inherit) ? <CodeSizeCheck html={v.html} size={v.size} onUse={(size) => set({ size })} /> : null}
       {c.kind === "native" && !(d !== "desktop" && v.inherit) ? (
         <Field label={`${label} native widget code (optional)`} style={{ gridColumn: "1 / -1" }}>
           <textarea rows={2} spellCheck={false} style={{ fontFamily: "ui-monospace, monospace", fontSize: "0.8rem" }} value={v.html} onChange={(e) => set({ html: e.target.value })} />

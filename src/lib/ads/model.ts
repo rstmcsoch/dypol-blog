@@ -502,6 +502,22 @@ export function sizeDims(size: AdSize): { w: number; h: number } | null {
   return { w, h };
 }
 
+/**
+ * The size written in the ad code itself (Adsterra's atOptions width/height). The network
+ * draws its iframe at this size whatever the slot's Size setting says, so the frame
+ * should match it. Null when the code does not state one.
+ */
+export function codeDims(html: string | null | undefined): { w: number; h: number } | null {
+  if (!html || !/atOptions/.test(html)) return null;
+  const num = (k: string) => {
+    const m = new RegExp(`['"]?${k}['"]?\\s*:\\s*['"]?(\\d{2,4})`).exec(html);
+    return m ? Number(m[1]) : 0;
+  };
+  const w = num("width");
+  const h = num("height");
+  return w >= 20 && w <= 2000 && h >= 20 && h <= 2000 ? { w, h } : null;
+}
+
 export function deviceForWidth(width: number): Device {
   return width < 768 ? "mobile" : width < 1024 ? "tablet" : "desktop";
 }
