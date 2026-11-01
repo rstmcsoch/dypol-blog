@@ -245,3 +245,20 @@ test("openMediaStore uses the MEDIA and DB bindings and refuses any other store"
     root.env = previousAlias;
   }
 });
+
+test("t147: mediaVersion is stable and changes when the served objects change", async () => {
+  const { mediaVersion } = await import("./media-store.server.ts");
+  const legacy = { object_key: "media/a", hero_key: null, thumb_key: null, byte_size: 900_000, hero_byte_size: 0, thumb_byte_size: 0 };
+  const done = { ...legacy, hero_key: "media/a/hero.webp", thumb_key: "media/a/thumb.webp", hero_byte_size: 60_000, thumb_byte_size: 12_000 };
+  assert.equal(mediaVersion(legacy), mediaVersion({ ...legacy }));
+  assert.notEqual(mediaVersion(legacy), mediaVersion(done));
+  assert.match(mediaVersion(done), /^[0-9a-z]+$/);
+});
+
+test("t147: media URLs carry the version only when known", async () => {
+  const { mediaUrl, thumbUrl } = await import("../lib/media-url.ts");
+  assert.equal(mediaUrl("x"), "/media/x");
+  assert.equal(mediaUrl("x", "hero", "abc"), "/media/x?v=abc");
+  assert.equal(thumbUrl("x", "abc"), "/media/x?variant=thumb&v=abc");
+  assert.equal(thumbUrl("x"), "/media/x?variant=thumb");
+});

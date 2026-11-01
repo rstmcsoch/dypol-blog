@@ -68,7 +68,7 @@ function SearchPage() {
                 <Link to="/articles/$slug" params={{ slug: r.slug }} className="index-row">
                   <span className="index-row__num">{String(i + 1).padStart(2, "0")}</span>
                   {r.coverMediaId ? (
-                    <span className="index-row__thumb"><img src={thumbUrl(r.coverMediaId)} alt={r.coverAlt?.trim() ? r.coverAlt : r.title} loading="lazy" decoding="async" width={480} height={360} /></span>
+                    <span className="index-row__thumb"><img src={thumbUrl(r.coverMediaId, r.coverImage?.v)} alt={r.coverAlt?.trim() ? r.coverAlt : r.title} loading="lazy" decoding="async" width={480} height={360} /></span>
                   ) : (
                     <span className="index-row__thumb index-row__thumb--empty" aria-hidden="true">{r.topics[0] ?? ""}</span>
                   )}

@@ -57,8 +57,7 @@ export const Route = createFileRoute("/articles/$slug")({
       ],
       links: [
         { rel: "canonical", href: url },
-        // t88: preload the article hero (LCP element) alongside the eager img.
-        ...(cover ? [{ rel: "preload", as: "image", href: cover, fetchPriority: "high" } as const] : []),
+        // t147: React 19 hoists the hero <img> preload itself (fetchPriority=high).
       ],
       scripts: [
         { type: "application/ld+json", children: JSON.stringify(newsLd) },

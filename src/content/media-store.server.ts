@@ -142,8 +142,30 @@ const ENSURE_MEDIA_VARIANT_COLUMNS = [
   "alter table media add column processing text not null default 'legacy'",
 ];
 
-export function createMediaStore(bucket: MediaBucket, db: MediaDatabase) {
-  const ready = (async () => {
+/**
+ * t147: a short, stable token for a media row's served bytes. It changes
+ * whenever the objects behind /media/<id> change (backfill writes variants,
+ * a re-upload changes sizes), so `?v=<token>` URLs can be cached immutably.
+ */
+export function mediaVersion(row: {
+  object_key?: string | null;
+  hero_key?: string | null;
+  thumb_key?: string | null;
+  byte_size?: number | null;
+  hero_byte_size?: number | null;
+  thumb_byte_size?: number | null;
+}): string {
+  const source = [row.hero_key || row.object_key || "", row.thumb_key || "", Number(row.byte_size ?? 0), Number(row.hero_byte_size ?? 0), Number(row.thumb_byte_size ?? 0)].join("|");
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < source.length; i += 1) {
+    hash ^= source.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return hash.toString(36);
+}
+
+export function createMediaStore(bucket: MediaBucket, db: MediaDatabase, options: { ensureSchema?: boolean } = {}) {
+  const ready = options.ensureSchema === false ? Promise.resolve() : (async () => {
     await db.run(ENSURE_MEDIA_TABLE);
     for (const statement of ENSURE_MEDIA_VARIANT_COLUMNS) {
       try {
@@ -199,6 +221,7 @@ export function createMediaStore(bucket: MediaBucket, db: MediaDatabase) {
           "insert into media (id, object_key, filename, mime, alt, byte_size, created_at) values (?, ?, ?, ?, ?, ?, ?)",
           [input.id, key, input.filename, input.mime, input.alt, input.bytes.byteLength, input.createdAt],
         );
+        forgetServedMedia(input.id);
       } catch (error) {
         await bucket.delete(key).catch(() => undefined);
         throw error;
@@ -252,6 +275,7 @@ export function createMediaStore(bucket: MediaBucket, db: MediaDatabase) {
             input.processing,
           ],
         );
+        forgetServedMedia(input.id);
       } catch (error) {
         for (const key of [...new Set(written)]) {
           await bucket.delete(key).catch(() => undefined);
@@ -306,6 +330,7 @@ export function createMediaStore(bucket: MediaBucket, db: MediaDatabase) {
             input.id,
           ],
         );
+        forgetServedMedia(input.id);
       } catch (error) {
         for (const key of [...new Set(written)]) {
           await bucket.delete(key).catch(() => undefined);
@@ -344,6 +369,7 @@ export function createMediaStore(bucket: MediaBucket, db: MediaDatabase) {
         await bucket.delete(key);
       }
       await db.run("delete from media where id = ?", [id]);
+      forgetServedMedia(id);
       return true;
     },
   };
@@ -351,6 +377,8 @@ export function createMediaStore(bucket: MediaBucket, db: MediaDatabase) {
 
 type R2Object = {
   arrayBuffer?: () => Promise<ArrayBuffer>;
+  size?: number;
+  httpEtag?: string;
   httpMetadata?: { contentType?: string };
   body?: ReadableStream<Uint8Array> | null;
 };
@@ -463,7 +491,94 @@ function wrapDatabase(binding: D1Binding): MediaDatabase {
 export async function openMediaStore() {
   const env = await readMediaBindings();
   if (!env?.MEDIA || !env.DB) throw new MediaBindingError();
-  const store = createMediaStore(wrapBucket(env.MEDIA), wrapDatabase(env.DB));
+  // t147: the idempotent DDL used to run on every request (9 sequential D1
+  // round trips to the APAC primary per image). It now runs once per isolate;
+  // a plain flag, not a shared promise (see the note above).
+  const store = createMediaStore(wrapBucket(env.MEDIA), wrapDatabase(env.DB), { ensureSchema: !schemaChecked });
   await store.ready;
+  schemaChecked = true;
   return store;
+}
+
+let schemaChecked = false;
+
+type ServeRow = Pick<MediaRow, "object_key" | "mime" | "hero_key" | "thumb_key" | "byte_size" | "hero_byte_size" | "thumb_byte_size">;
+
+/** Per-isolate media row cache for the public /media route (t147). */
+const SERVE_TTL_MS = 5 * 60_000;
+const SERVE_MAX = 500;
+const serveRows = new Map<string, { row: ServeRow | null; at: number }>();
+
+/** Drops cached rows after a write in this isolate (other isolates expire by TTL; `?v=` mismatches re-read). */
+export function forgetServedMedia(id?: string): void {
+  if (id) serveRows.delete(id);
+  else serveRows.clear();
+}
+
+async function serveRow(db: D1Binding, id: string, fresh: boolean): Promise<ServeRow | null> {
+  const hit = serveRows.get(id);
+  if (!fresh && hit && Date.now() - hit.at < SERVE_TTL_MS) return hit.row;
+  const select = () =>
+    db.prepare("select object_key, mime, hero_key, thumb_key, byte_size, hero_byte_size, thumb_byte_size from media where id = ?").bind(id).all<ServeRow>();
+  let result: { results?: ServeRow[] };
+  try {
+    result = await select();
+  } catch {
+    // Pre-migration local database: create the table/columns once, then retry.
+    await openMediaStore();
+    result = await select();
+  }
+  const row = result.results?.[0] ?? null;
+  if (serveRows.size >= SERVE_MAX) {
+    const oldest = serveRows.keys().next().value;
+    if (oldest !== undefined) serveRows.delete(oldest);
+  }
+  serveRows.set(id, { row, at: Date.now() });
+  return row;
+}
+
+export type ServedMedia = {
+  /** Current version token (compare with ?v=). */
+  version: string;
+  etag: string;
+  mime: string;
+  /** null for a 304 (no R2 read was needed). */
+  body: ReadableStream<Uint8Array> | null;
+  size: number | null;
+};
+
+/**
+ * t147 fast path for GET /media/<id>: one D1 select (cached per isolate),
+ * one R2 get, and the R2 body streamed straight through (no buffering).
+ * `ifNoneMatch` short-circuits before R2 when the client already has it.
+ */
+export async function serveMedia(
+  id: string,
+  variant: "hero" | "thumb",
+  options: { requestedVersion?: string | null; ifNoneMatch?: string | null } = {},
+): Promise<ServedMedia | null> {
+  const env = await readMediaBindings();
+  if (!env?.MEDIA || !env.DB) throw new MediaBindingError();
+  let row = await serveRow(env.DB, id, false);
+  // A stale cached row must never be pinned under a newer immutable URL.
+  if (row && options.requestedVersion && options.requestedVersion !== mediaVersion(row)) row = await serveRow(env.DB, id, true);
+  if (!row) return null;
+  const version = mediaVersion(row);
+  const key = variant === "thumb" ? row.thumb_key || row.hero_key || row.object_key : row.hero_key || row.object_key;
+  const etag = `"${version}-${variant === "thumb" && row.thumb_key ? "t" : "h"}"`;
+  const fallbackMime = key.endsWith(".webp") ? "image/webp" : row.mime;
+  if (options.ifNoneMatch && options.ifNoneMatch.split(",").some((tag) => tag.trim().replace(/^W\//, "") === etag)) {
+    return { version, etag, mime: fallbackMime, body: null, size: null };
+  }
+  let object = await env.MEDIA.get(key);
+  let original = false;
+  if (!object && key !== row.object_key) {
+    // Variant object missing (partial legacy state): serve the original.
+    object = await env.MEDIA.get(row.object_key);
+    original = true;
+  }
+  if (!object) return null;
+  const mime = object.httpMetadata?.contentType || (original ? row.mime : fallbackMime);
+  const body = object.body ?? (object.arrayBuffer ? new Response(await object.arrayBuffer()).body : null);
+  return { version, etag: original ? `"${version}-o"` : etag, mime, body, size: typeof object.size === "number" ? object.size : null };
 }

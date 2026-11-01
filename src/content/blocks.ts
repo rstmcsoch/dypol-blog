@@ -14,6 +14,7 @@ export type Card = {
   topicLabels: string[];
   coverMediaId: string | null;
   coverAlt: string | null;
+  coverImage?: import("./types.ts").CoverImage | null;
   motif: Article["motif"];
   minutes: number;
   rank: number;
@@ -101,6 +102,7 @@ export function toCard(article: Article, live: Article[], categories: Category[]
     topicLabels: article.topicIds.map((id) => categories.find((c) => c.id === id)?.label ?? "").filter(Boolean),
     coverMediaId: article.coverMediaId ?? null,
     coverAlt: article.coverAlt ?? null,
+    coverImage: article.coverImage ?? null,
     motif: article.motif,
     minutes: readingMinutes(article),
     rank: live.findIndex((a) => a.id === article.id) + 1,

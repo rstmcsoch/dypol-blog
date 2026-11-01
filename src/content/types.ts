@@ -49,10 +49,15 @@ export type Article = {
   coverMediaId?: string | null;
   /** Descriptive alt text stored with the cover image in the media library. */
   coverAlt?: string | null;
+  /** t147: served-image facts for the cover (version token + real hero size; 0 = unknown). */
+  coverImage?: CoverImage | null;
   /** Admin grant: AI (via MCP) may edit this specific published article. Migration 0006; absent = false. */
   aiEditAllowed?: boolean;
   blocks: ArticleBlock[];
 };
+
+/** t147: `v` versions /media URLs (immutable caching); w/h are the hero's real pixels (0 = unknown). */
+export type CoverImage = { v: string; w: number; h: number };
 
 export type Category = {
   id: string;

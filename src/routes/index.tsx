@@ -21,13 +21,8 @@ export const Route = createFileRoute("/")({
       ],
       links: [
         { rel: "canonical", href: url },
-        // t88: preload the featured cover - it is the homepage LCP element.
-        ...(() => {
-          const lead = loaderData?.blocks?.find((b) => b.block.type === "featured")?.cards[0];
-          return lead?.coverMediaId
-            ? [{ rel: "preload", as: "image", href: `/media/${lead.coverMediaId}`, fetchPriority: "high" } as const]
-            : [];
-        })(),
+        // t147: no manual hero preload: React 19 already hoists one for the
+        // eager fetchPriority=high cover <img> (a second copy was a duplicate).
       ],
       scripts: [
         {
