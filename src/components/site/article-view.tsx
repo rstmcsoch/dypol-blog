@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import { Link } from "@tanstack/react-router";
 import { stripCreditsAndSources } from "@/lib/automation/body";
 import { ReadingProgress, TableOfContents, tocEntries } from "./reading-aids";
@@ -44,6 +44,8 @@ export function ArticleView({
   const blocks = sidebar;
   const fallback = site.appearance.coverFallback;
   const root = useRef<HTMLElement>(null);
+  const asideRef = useRef<HTMLElement>(null);
+  useAsideHeight(asideRef);
   const toc = tocEntries(stripCreditsAndSources(article.blocks));
   const chipTopics = topics.length ? topics : category ? [category] : [];
   const corrections = article.corrections?.trim();
@@ -122,7 +124,7 @@ export function ArticleView({
             }
           />
           {blocks.length > 0 ? (
-            <aside className="article-aside">
+            <aside className="article-aside" ref={asideRef}>
               <SidebarBlocks blocks={blocks} site={site} title={article.title} slug={article.slug} adAfterRelated={<AdSlot id="A3" />} />
               <AdSlot id="A3b" />
             </aside>
@@ -170,4 +172,26 @@ function useInTextAds(blocks: Article["blocks"]): Record<number, ReactNode> | un
     out[index] = n === 0 ? <AdSlot id="A1" /> : <AdSlot id="A2" occurrence={n - 1} />;
   });
   return out;
+}
+
+/** t167: publish the sidebar's height so its sticky offset can keep its bottom (the ad) on screen. */
+function useAsideHeight(ref: React.RefObject<HTMLElement | null>) {
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    // Up to the bottom of its last visible box (a trailing ad margin is not content).
+    const set = () => {
+      const top = el.getBoundingClientRect().top;
+      let bottom = 0;
+      for (const c of Array.from(el.children)) {
+        const r = c.getBoundingClientRect();
+        if (r.height > 0 && r.bottom - top > bottom) bottom = r.bottom - top;
+      }
+      el.style.setProperty("--aside-h", `${Math.ceil(bottom || el.offsetHeight)}px`);
+    };
+    set();
+    const ro = new ResizeObserver(set);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [ref]);
 }
