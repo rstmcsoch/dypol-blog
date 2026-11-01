@@ -4289,6 +4289,10 @@ html.nav-open .reading-progress { display: none; }
   flex-direction: column;
   align-items: center;
   gap: 0.4rem;
+  /* t167: always as wide as the column. With auto side margins a grid/flex item
+     shrinks to its content, and the ad frame (a % of the slot) then sized itself
+     to the "AD" label: a 160x600 unit was drawn at 16 px wide. */
+  width: 100%;
   max-width: 100%;
   margin: var(--ad-gap) auto;
   padding: 0;
@@ -4493,3 +4497,9 @@ body:has(.consent-bar) .ad-consent { display: none; }
 .head-code__dropped { margin: 0; font-size: 0.85rem; }
 .head-code__dropped ul { margin: 0.35rem 0 0; padding-left: 1.1rem; }
 .head-code__dropped code { overflow-wrap: anywhere; }
+
+/* t167: ad code size vs Size setting */
+.banner--warn { border-color: #f3d19c; background: #fff7e8; color: #7a4a00; }
+.desk .banner--warn { border-left: 3px solid var(--a-primary, #ff6a26); background: rgb(255 106 38 / 0.08); color: var(--a-text); }
+.ads-size-check { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.75rem; overflow-wrap: anywhere; }
+.ads-size-check > span { flex: 1 1 14rem; min-width: 0; }

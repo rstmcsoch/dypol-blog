@@ -144,3 +144,13 @@ test("pageTypeForPath: ad-free pages return null", () => {
   assert.equal(pageTypeForPath("/about"), "about");
   for (const p of ["/privacy-policy", "/terms", "/contact", "/cookie-policy", "/search", "/admin", "/admin/ads", "/nope/x"]) assert.equal(pageTypeForPath(p), null, p);
 });
+
+import { codeDims } from "./model.ts";
+test("t167: codeDims reads Adsterra atOptions width/height", () => {
+  const adsterra = `<script>\n  atOptions = {\n    'key' : '8a55',\n    'format' : 'iframe',\n    'height' : 600,\n    'width' : 160,\n    'params' : {}\n  };\n</script>\n<script src="https://www.highrevenueformat.com/8a55/invoke.js"></script>`;
+  assert.deepEqual(codeDims(adsterra), { w: 160, h: 600 });
+  assert.deepEqual(codeDims(`<script>atOptions={"key":"x","format":"iframe","height":"90","width":"728","params":{}}</script>`), { w: 728, h: 90 });
+  assert.equal(codeDims(`<ins class="adsbygoogle" style="width:300px;height:250px"></ins>`), null);
+  assert.equal(codeDims(""), null);
+  assert.equal(codeDims(`<script>atOptions={'key':'x'}</script>`), null);
+});

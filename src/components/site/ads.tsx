@@ -9,7 +9,7 @@
  */
 import { createContext, createElement, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
 import { getRouteApi, useRouterState } from "@tanstack/react-router";
-import { DEVICES, pageTypeForPath, pickCreative, seeded, sizeDims, slotDef, targets, type AdPageContext, type AdSize, type Device, type SlotId } from "@/lib/ads/model";
+import { codeDims, DEVICES, pageTypeForPath, pickCreative, seeded, sizeDims, slotDef, targets, type AdPageContext, type AdSize, type Device, type SlotId } from "@/lib/ads/model";
 import type { PublicAds, PublicCreative, PublicSlot } from "@/lib/ads/public";
 import { parseHeadHtml, reactProps } from "@/lib/ads/head-html";
 import {
@@ -161,7 +161,20 @@ function useFitStage(frameRef: React.RefObject<HTMLDivElement | null>, stageRef:
         frame.style.removeProperty("--ad-real-h");
         return;
       }
-      const scale = Math.min(1, frame.clientWidth / sw);
+      // t167: scale down only when the column really is narrower than the ad. The frame's own
+      // width can be wrong (a shrink-to-fit parent made it as narrow as the "AD" label, which
+      // drew a 160x600 unit at 10%), so measure the room the slot's parent actually offers and
+      // hold the frame at least that wide (never wider than the ad).
+      const host = frame.closest(".ad-slot")?.parentElement;
+      let room = frame.clientWidth;
+      if (host) {
+        const hs = getComputedStyle(host);
+        const inner = host.clientWidth - (parseFloat(hs.paddingLeft) || 0) - (parseFloat(hs.paddingRight) || 0);
+        if (inner > room) room = Math.min(inner, document.documentElement.clientWidth);
+      }
+      const want = Math.floor(Math.min(sw, room));
+      if (frame.style.minWidth || frame.clientWidth + 1 < want) frame.style.minWidth = `${want}px`;
+      const scale = Math.min(1, Math.max(frame.clientWidth, want) / sw);
       frame.style.setProperty("--ad-scale", String(scale));
       // Real creative height (largest iframe/img/ins) when it is shorter than the reserved size.
       let real = 0;
@@ -175,6 +188,8 @@ function useFitStage(frameRef: React.RefObject<HTMLDivElement | null>, stageRef:
     fit();
     const ro = new ResizeObserver(fit);
     ro.observe(frame);
+    const host = frame.closest(".ad-slot")?.parentElement;
+    if (host) ro.observe(host);
     const mo = new MutationObserver(() => {
       fit();
       for (const el of Array.from(stage.querySelectorAll("iframe, img, ins"))) ro.observe(el);
@@ -193,7 +208,8 @@ function sizeOf(c: PublicCreative, d: Device): { w: number; h: number } | null {
   const b = c.banners[d];
   if (b) return { w: b.w, h: b.h };
   const code = c.code[d];
-  return code ? sizeDims(code.size) : null;
+  // t167: the size in the code wins over the Size setting (the network draws that size anyway).
+  return code ? (codeDims(code.html) ?? sizeDims(code.size)) : null;
 }
 
 function wrapNode(wrap: Wrap, id: SlotId, occurrence: number, node: ReactNode, liRef?: React.Ref<HTMLLIElement>, hidden?: boolean): ReactNode {
