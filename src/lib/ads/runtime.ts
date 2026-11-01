@@ -3,6 +3,7 @@
  * script that throws, hangs or never fills can never break the page.
  */
 import { deviceForWidth, type AdRules, type Device } from "./model.ts";
+import { adOrigins } from "./head-html.ts";
 
 const CONSENT_KEY = "dypol-ad-consent";
 const CAP_KEY = "dypol-ad-cap";
@@ -80,14 +81,46 @@ let queue: Promise<void> = Promise.resolve();
 function cloneScript(old: HTMLScriptElement): HTMLScriptElement {
   const s = document.createElement("script");
   for (const a of Array.from(old.attributes)) s.setAttribute(a.name, a.value);
-  if (old.src && !old.hasAttribute("async")) s.async = false;
+  // Always async (never blocks parsing/LCP); order is kept by awaiting each external script below.
+  if (old.src) s.async = true;
   s.text = old.text;
   return s;
 }
 
-async function runScripts(root: ParentNode): Promise<void> {
+// ---------- hosts that failed to load on this visit (ad blocker / DNS block) ----------
+const blockedHosts = new Set<string>();
+const blockedListeners = new Set<() => void>();
+function noteBlocked(src: string): void {
+  try {
+    const origin = `https://${new URL(src, location.href).host}`;
+    if (blockedHosts.has(origin)) return;
+    blockedHosts.add(origin);
+    for (const fn of blockedListeners) safe(fn, undefined);
+  } catch {
+    /* ignore */
+  }
+}
+/** True when every external host this code loads from has already failed on this visit. */
+export function hostsBlocked(html: string): boolean {
+  if (!blockedHosts.size) return false;
+  const hosts = adOrigins([html]);
+  return hosts.length > 0 && hosts.every((h) => blockedHosts.has(h));
+}
+export function onHostBlocked(fn: () => void): () => void {
+  blockedListeners.add(fn);
+  return () => blockedListeners.delete(fn);
+}
+
+/** Result of running ad code: how many external scripts it had and how many failed (blocked / offline). */
+export type RunResult = { external: number; failed: number };
+
+async function runScripts(root: ParentNode, result: RunResult = { external: 0, failed: 0 }): Promise<RunResult> {
   for (const old of Array.from(root.querySelectorAll("script"))) {
     const s = cloneScript(old as HTMLScriptElement);
+    if (s.src) {
+      result.external += 1;
+      s.addEventListener("error", () => { result.failed += 1; noteBlocked(s.src); }, { once: true });
+    }
     const waitLoad = !!s.src && !old.hasAttribute("async") && !old.hasAttribute("defer");
     const loaded = waitLoad
       ? new Promise<void>((resolve) => {
@@ -103,21 +136,29 @@ async function runScripts(root: ParentNode): Promise<void> {
     }
     if (loaded) await loaded;
   }
+  return result;
 }
 
-export function injectHtml(target: HTMLElement, html: string): Promise<void> {
+/** Inserts slot code and runs its scripts (queued, so Adsterra-style globals never race). */
+export function injectHtml(target: HTMLElement, html: string): Promise<RunResult> {
+  const result: RunResult = { external: 0, failed: 0 };
   const job = async () => {
     try {
       const tpl = document.createElement("template");
       tpl.innerHTML = html;
       target.replaceChildren(tpl.content);
-      await runScripts(target);
+      await runScripts(target, result);
     } catch (error) {
       console.warn("[ads] code could not be inserted", error);
     }
   };
   queue = queue.then(job, job);
-  return queue;
+  return queue.then(() => result);
+}
+
+/** True when the network code could not load at all (ad blocker, DNS block, offline). */
+export function codeBlocked(r: RunResult): boolean {
+  return r.external > 0 && r.failed >= r.external;
 }
 
 /** Network code in its own sandboxed document (Adsterra-style globals, document.write). */
@@ -132,16 +173,29 @@ export function isolatedFrame(html: string, w: number, h: number): HTMLIFrameEle
   f.style.border = "0";
   f.style.display = "block";
   f.style.maxWidth = "100%";
-  f.srcdoc = `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;padding:0;overflow:hidden;background:transparent}</style></head><body>${html}</body></html>`;
+  f.srcdoc = `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;padding:0;overflow:hidden;background:transparent}</style>${FILL_REPORTER}</head><body>${html}</body></html>`;
   return f;
 }
 
-/** Global head/body code: appended once, scripts executed in order. */
+/* Inside an isolated frame: tell the page whether anything rendered (5 s), or right away when every script was blocked. */
+const FILL_REPORTER = `<script>(function(){var d=0,n=0,f=0;function has(){var l=document.querySelectorAll("iframe,img,video,canvas,object,embed");for(var i=0;i<l.length;i++){var r=l[i].getBoundingClientRect();if(r.width>1&&r.height>1)return 1}return 0}function s(v){if(d)return;d=1;try{parent.postMessage({dypolAdFill:v},"*")}catch(e){}}document.addEventListener("error",function(e){var t=e.target;if(t&&t.tagName==="SCRIPT"){f++;setTimeout(function(){n=document.querySelectorAll("script[src]").length;if(f>=n&&!has())s(0)},50)}},true);setTimeout(function(){s(has())},5000)})()<\/script>`;
+
+/** Collapse an isolated frame that reports no fill. */
+export function watchIsolated(frame: HTMLIFrameElement, onEmpty: () => void): () => void {
+  const onMsg = (e: MessageEvent) => {
+    if (e.source === frame.contentWindow && e.data && typeof e.data === "object" && "dypolAdFill" in e.data && !e.data.dypolAdFill) onEmpty();
+  };
+  window.addEventListener("message", onMsg);
+  return () => window.removeEventListener("message", onMsg);
+}
+
+/** Global head/body code: appended once, scripts executed in order. Static head tags the server already rendered are not repeated. */
 export function injectGlobal(html: string, where: "head" | "body", id: string): void {
   if (document.querySelector(`[data-ad-global="${CSS.escape(id)}"], [data-ad-global-item="${CSS.escape(id)}"]`)) return;
   const tpl = document.createElement("template");
   tpl.innerHTML = html;
-  const nodes = Array.from(tpl.content.childNodes);
+  const ssrStatic = !!document.querySelector(`[data-ad-head="${CSS.escape(id)}"]`);
+  const nodes = Array.from(tpl.content.childNodes).filter((n) => !(ssrStatic && n instanceof Element && !(n instanceof HTMLScriptElement)));
   const host = where === "head" ? document.head : document.body;
   const marker = document.createElement("template");
   marker.setAttribute("data-ad-global", id);
@@ -152,7 +206,7 @@ export function injectGlobal(html: string, where: "head" | "body", id: string): 
         if (n instanceof HTMLScriptElement) {
           const s = cloneScript(n);
           s.setAttribute("data-ad-global-item", id);
-          const wait = !!s.src && !n.hasAttribute("async");
+          const wait = !!s.src && !n.hasAttribute("async") && !n.hasAttribute("defer");
           const loaded = wait ? new Promise<void>((r) => { s.addEventListener("load", () => r(), { once: true }); s.addEventListener("error", () => r(), { once: true }); setTimeout(r, 8000); }) : null;
           host.appendChild(s);
           if (loaded) await loaded;
@@ -170,6 +224,12 @@ export function injectGlobal(html: string, where: "head" | "body", id: string): 
 }
 
 // ---------- fill detection ----------
+/** Text a reader would see (inline <script>/<style> code such as atOptions does not count as a fill). */
+function visibleText(el: HTMLElement): string {
+  const c = el.cloneNode(true) as HTMLElement;
+  c.querySelectorAll("script, style, noscript, template").forEach((n) => n.remove());
+  return (c.textContent ?? "").trim();
+}
 type GoogleTag = { cmd?: { push(fn: () => void): void }; pubads?: () => { addEventListener(name: string, fn: (e: { isEmpty: boolean; slot: { getSlotElementId(): string } }) => void): void } };
 
 /**
@@ -209,7 +269,7 @@ export function watchFill(frame: HTMLElement, opts: { timeoutMs?: number; onEmpt
     const filled = Array.from(frame.querySelectorAll("iframe, img, video, canvas, object, embed")).some((el) => {
       const r = (el as HTMLElement).getBoundingClientRect();
       return r.width > 1 && r.height > 1;
-    }) || (frame.textContent ?? "").trim().length > 0;
+    }) || visibleText(frame).length > 0;
     settle(!filled);
   }, opts.timeoutMs ?? 5000);
   check();
@@ -269,8 +329,8 @@ export function trackImpression(el: HTMLElement, slot: string, creative: string,
   };
 }
 
-/** Lazy start: resolves once the element is within 300 px of the viewport. */
-export function whenNear(el: HTMLElement, fn: () => void, rootMargin = "300px"): () => void {
+/** Lazy start: runs once the element is within rootMargin of the viewport (250 px default). */
+export function whenNear(el: HTMLElement, fn: () => void, rootMargin = "250px"): () => void {
   if (typeof IntersectionObserver === "undefined") {
     fn();
     return () => undefined;

@@ -4291,8 +4291,8 @@ html.nav-open .reading-progress { display: none; }
   gap: 0.4rem;
   max-width: 100%;
   margin: var(--ad-gap) auto;
-  padding-top: 0.45rem;
-  border-top: 1px solid var(--ad-rule);
+  padding: 0;
+  border: 0;
   box-shadow: none;
 }
 .ad-label {

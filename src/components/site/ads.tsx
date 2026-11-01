@@ -16,6 +16,9 @@ import {
   anchorClosed,
   capReached,
   closeAnchor,
+  codeBlocked,
+  hostsBlocked,
+  onHostBlocked,
   consentChoice,
   currentDevice,
   injectGlobal,
@@ -29,8 +32,10 @@ import {
   suppressedByRules,
   trackImpression,
   watchFill,
+  watchIsolated,
   whenNear,
 } from "@/lib/ads/runtime";
+import { adOrigins } from "@/lib/ads/head-html";
 
 const rootRoute = getRouteApi("__root__");
 
@@ -221,6 +226,9 @@ function useGridCell(enabled: boolean) {
   return ref;
 }
 
+const EAGER = new Set<string>(["G1"]);
+const IN_ARTICLE = new Set<string>(["A1", "A2"]);
+
 function AdBox({ r, id, occurrence, wrap }: { r: Resolved; id: SlotId; occurrence: number; wrap: Wrap }) {
   const { slot, list, house, ads } = r;
   const [creative, setCreative] = useState<PublicCreative | null>(r.creative);
@@ -234,7 +242,10 @@ function AdBox({ r, id, occurrence, wrap }: { r: Resolved; id: SlotId; occurrenc
   const cellRef = useGridCell(wrap === "cell");
   const def = slotDef(id);
   const showing = useHouse ? null : creative;
-  const devices = DEVICES.filter((d) => (showing ? !!(showing.code[d] || showing.banners[d]) : (def?.devices ?? DEVICES).includes(d) && slot.targeting.devices.includes(d)));
+  // The owner's "no ad above the headline on the first phone screen" rule: G1 always sits above
+  // the headline, so it is left out on phones by the server (CSS) instead of collapsing after paint (CLS).
+  const phoneTopOff = id === "G1" && ads.rules.firstMobileScreenOne;
+  const devices = DEVICES.filter((d) => !(phoneTopOff && d === "mobile") && (showing ? !!(showing.code[d] || showing.banners[d]) : (def?.devices ?? DEVICES).includes(d) && slot.targeting.devices.includes(d)));
   const dimsBy: Partial<Record<Device, { w: number; h: number } | null>> = {};
   if (showing) for (const d of devices) dimsBy[d] = showing.kind === "native" && !showing.code[d]?.html ? null : sizeOf(showing, d);
 
@@ -251,6 +262,24 @@ function AdBox({ r, id, occurrence, wrap }: { r: Resolved; id: SlotId; occurrenc
       done = true;
       if (!useHouse && house && slot.house) setUseHouse(true);
       else setCollapsed(true);
+    };
+    // An empty slot the reader is looking at would move the text if removed now (CLS):
+    // remove it as soon as it is out of view (scroll anchoring keeps the text still).
+    // Removing an empty slot moves the text when the slot is on screen or above it (CLS), so it is
+    // removed only while it sits below the screen (now, or whenever it is next below the screen).
+    const collapseOffscreen = () => {
+      if (done) return;
+      const fixed = wrap === "anchor" || wrap === "rail";
+      if (fixed || typeof IntersectionObserver === "undefined" || el.getBoundingClientRect().top >= window.innerHeight) return collapse();
+      const io = new IntersectionObserver((es) => {
+        const e = es[es.length - 1];
+        if (e && !e.isIntersecting && e.boundingClientRect.top >= window.innerHeight) {
+          io.disconnect();
+          collapse();
+        }
+      });
+      io.observe(el);
+      cleanups.push(() => io.disconnect());
     };
     const device = currentDevice();
     if (wrap === "anchor" && anchorClosed()) {
@@ -280,18 +309,32 @@ function AdBox({ r, id, occurrence, wrap }: { r: Resolved; id: SlotId; occurrenc
         if (choice === "no") return collapse();
         if (choice !== "yes") return; // re-runs when the visitor answers (consentTick)
       }
-      cleanups.push(
-        whenNear(el, () => {
-          if (showing.isolate) {
-            const d = dims ?? { w: frameRef.current?.clientWidth || frame.clientWidth || 300, h: 250 };
-            frame.replaceChildren(isolatedFrame(code.html, d.w, d.h));
-            return;
-          }
-          void injectHtml(frame, code.html).then(() => {
-            cleanups.push(watchFill(frame, { onEmpty: collapse }));
-          });
-        }),
-      );
+      const load = () => {
+        if (showing.isolate) {
+          const d = dims ?? { w: frameRef.current?.clientWidth || frame.clientWidth || 300, h: 250 };
+          const f = isolatedFrame(code.html, d.w, d.h);
+          cleanups.push(watchIsolated(f, collapseOffscreen));
+          frame.replaceChildren(f);
+          return;
+        }
+        void injectHtml(frame, code.html).then((res) => {
+          if (done) return;
+          // Every network script failed (ad blocker / DNS block): collapse now instead of after the fill timeout.
+          if (codeBlocked(res) && !frame.querySelector("iframe, img, video, ins[data-ad-status=filled]")) return collapseOffscreen();
+          cleanups.push(watchFill(frame, { onEmpty: collapseOffscreen }));
+        });
+      };
+      // Top / always-visible placements load at once; the rest when the reader gets close
+      // (250 px, 300 px for in-article slots).
+      if (EAGER.has(id) || wrap === "anchor" || wrap === "rail") return load();
+      // Once a host is known to be blocked on this visit, slots using only that host are removed
+      // while still far below the screen, before the reader reaches them.
+      if (hostsBlocked(code.html)) return collapseOffscreen();
+      let started = false;
+      cleanups.push(onHostBlocked(() => {
+        if (!started && hostsBlocked(code.html)) collapseOffscreen();
+      }));
+      cleanups.push(whenNear(el, () => { started = true; load(); }, IN_ARTICLE.has(id) ? "300px" : "250px"));
     });
     cleanups.push(() => cancelAnimationFrame(raf));
     return () => cleanups.forEach((fn) => fn());
@@ -466,17 +509,32 @@ export function AdsRuntime() {
 export function AdHeadCode() {
   const ads = useAds();
   const pageType = useAdPageType();
-  const [nodes] = useState(() => {
-    if (!ads || !pageType) return [];
-    return ads.scripts
+  const [{ nodes, hints }] = useState(() => {
+    if (!ads || !pageType) return { nodes: [], hints: [] as string[] };
+    // Static head tags only (verification meta, link, style). Scripts never run from SSR:
+    // AdsRuntime injects them async on the client.
+    const nodes = ads.scripts
       .filter((s) => s.placement === "head" && s.pages.includes(pageType) && s.devices.length === DEVICES.length && (!s.consent || !ads.consent))
-      .flatMap((s) => parseHeadHtml(s.code).map((n, i) => ({ ...n, key: `${s.id}-${i}`, id: s.id })));
+      .flatMap((s) => parseHeadHtml(s.code).filter((n) => n.tag !== "script").map((n, i) => ({ ...n, key: `${s.id}-${i}`, id: s.id })));
+    // Preconnect / dns-prefetch to the hosts the configured ad code uses on this page type.
+    // Skipped while a consent banner applies (no contact with ad hosts before the visitor agrees).
+    const hints = ads.consent
+      ? []
+      : adOrigins([
+          ...ads.scripts.filter((s) => s.pages.includes(pageType)).map((s) => s.code),
+          ...Object.values(ads.slots)
+            .filter((sl) => sl.targeting.pages.includes(pageType))
+            .flatMap((sl) => sl.creatives.flatMap((c) => Object.values(c.code).map((x) => x?.html ?? ""))),
+        ]);
+    return { nodes, hints };
   });
   return (
     <>
+      {hints.slice(0, 4).map((h) => <link key={`pc-${h}`} rel="preconnect" href={h} />)}
+      {hints.map((h) => <link key={`dp-${h}`} rel="dns-prefetch" href={h.replace(/^https:/, "")} />)}
       {nodes.map((n) => {
-        const props: Record<string, unknown> = { key: n.key, ...reactProps(n.attrs), "data-ad-global-item": n.id };
-        if (n.inner && (n.tag === "script" || n.tag === "style" || n.tag === "noscript")) props.dangerouslySetInnerHTML = { __html: n.inner };
+        const props: Record<string, unknown> = { key: n.key, ...reactProps(n.attrs), "data-ad-head": n.id };
+        if (n.inner && (n.tag === "style" || n.tag === "noscript")) props.dangerouslySetInnerHTML = { __html: n.inner };
         return createElement(n.tag, props);
       })}
     </>
