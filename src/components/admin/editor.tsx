@@ -25,6 +25,8 @@ type Draft = {
   seoTitle: string;
   seoDescription: string;
   corrections: string;
+  /** t169: byline override; sent only when the admin changed it. */
+  authorName: string;
   coverMediaId: string | null;
   publishedAt: string;
   scheduledAt: string;
@@ -62,6 +64,7 @@ function fromArticle(article: Article): Draft {
     seoTitle: article.seoTitle ?? "",
     seoDescription: article.seoDescription ?? "",
     corrections: article.corrections ?? "",
+    authorName: article.authorName ?? "",
     coverMediaId: article.coverMediaId ?? null,
     publishedAt: toLocal(article.publishedAt),
     scheduledAt: toLocal(article.scheduledAt),
@@ -84,6 +87,7 @@ function blank(categoryId: string): Draft {
     seoTitle: "",
     seoDescription: "",
     corrections: "",
+    authorName: "",
     coverMediaId: null,
     publishedAt: "",
     scheduledAt: "",
@@ -176,6 +180,7 @@ export function ArticleEditor({
           seoTitle: draft.seoTitle,
           seoDescription: draft.seoDescription,
           corrections: draft.corrections,
+          ...(draft.authorName.trim() !== (article?.authorName ?? "").trim() ? { authorName: draft.authorName } : {}),
           coverMediaId: draft.coverMediaId,
           publishedAt: fromLocal(draft.publishedAt),
           scheduledAt: fromLocal(draft.scheduledAt),
@@ -455,6 +460,11 @@ export function ArticleEditor({
             <span>SEO description</span>
             <textarea value={draft.seoDescription} onChange={(event) => update({ seoDescription: event.target.value })} />
             <span className="field-help">{draft.seoDescription.trim().length}/160 characters</span>
+          </label>
+          <label className="field">
+            <span>Author (byline)</span>
+            <input value={draft.authorName} maxLength={60} placeholder="DYPOL LABS" data-testid="article-author" onChange={(event) => update({ authorName: event.target.value })} />
+            <span className="field-help">Optional override. AI articles get the next name from their automation profile&apos;s author rotation when first published; a name typed here is kept instead.</span>
           </label>
           <label className="field">
             <span>Corrections note (optional)</span>

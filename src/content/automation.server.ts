@@ -1,4 +1,5 @@
 import { getSql } from "@/lib/db";
+import * as rotationHelpers from "@/lib/author-rotation";
 import {
   automationSettingsSchema,
   normalizeAutomationSettings,
@@ -289,8 +290,11 @@ export type ProfileSummary = {
   tokenHint: string | null;
   tokenCreatedAt: string | null;
   oauth: OauthClientPublic | null;
-  /** t141: byline for articles this profile creates (null = DYPOL LABS). */
+  /** t141: byline for articles this profile creates (null = DYPOL LABS). t169: = authors[0]. */
   authorName: string | null;
+  /** t169: rotating author list (admin order) and who the next published article gets. */
+  authors: string[];
+  nextAuthor: string | null;
 };
 
 type ProfileRow = { id: string; name: string; settings: string; token_hash: string | null; token_hint: string | null; token_created_at: string | null; author_name?: string | null };
@@ -320,26 +324,106 @@ export async function profileAuthorName(id: string): Promise<string | null> {
   }
 }
 
-/** t141: set (or clear with "") a profile's author name. Unique across profiles. */
+/** t141: set (or clear with "") a profile's single author name. t169: = a one-name rotation list. */
 export async function setProfileAuthor(id: string, raw: unknown): Promise<string | null> {
   checkId(id);
-  const { checkAuthorName, sameAuthor } = await import("@/lib/author-name");
+  const { checkAuthorName } = await import("@/lib/author-name");
   const checked = checkAuthorName(raw);
   if (!checked.ok) throw new ProfileError(checked.error);
-  const value = checked.value;
-  if (value) {
-    const taken = (await listProfiles()).find((p) => p.id !== id && sameAuthor(p.authorName, value));
-    if (taken) throw new ProfileError(`“${taken.name}” already uses the author name “${taken.authorName}”. Pick a different name.`);
+  const saved = await saveAuthorList(id, checked.value ? [checked.value] : []);
+  return saved.names[0] ?? null;
+}
+
+// ---- t169: rotating author names --------------------------------------------
+
+export type AuthorRotation = { names: string[]; nextIndex: number; nextUp: string | null };
+
+type RotationRow = { profile_id: string; names: string; next_index: number };
+
+function parseNames(raw: string | null | undefined): string[] {
+  try {
+    const v = JSON.parse(raw || "[]") as unknown;
+    return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string" && x.trim() !== "") : [];
+  } catch {
+    return [];
   }
+}
+
+async function rotationRows(): Promise<Map<string, RotationRow>> {
+  try {
+    const sql = await getSql();
+    const rows = await sql<RotationRow>`select profile_id, names, next_index from automation_authors`;
+    return new Map(rows.map((r) => [r.profile_id, r]));
+  } catch {
+    return new Map(); // pre-0026 database
+  }
+}
+
+function toRotation(row: RotationRow | undefined, single: string | null): AuthorRotation {
+  const { nextUpName } = rotationHelpers;
+  // No rotation row yet (pre-0026 or never saved): the single author name is a one-name list.
+  const names = row ? parseNames(row.names) : single ? [single] : [];
+  const nextIndex = row && names.length ? ((Number(row.next_index) % names.length) + names.length) % names.length : 0;
+  return { names, nextIndex, nextUp: nextUpName(names, nextIndex) };
+}
+
+
+export async function readAuthorRotation(id: string): Promise<AuthorRotation> {
+  checkId(id);
+  const rows = await rotationRows();
+  return toRotation(rows.get(id), await profileAuthorName(id));
+}
+
+/**
+ * Save a profile's ordered author list. Validated (trimmed, unique, 2-60
+ * chars, max 25) and unique across profiles. The person who was next up
+ * stays next up when the list is reordered; `reset` starts again at #1.
+ * The first name is mirrored into the single author column, which bylines
+ * of older articles with no stored author already fall back to.
+ */
+export async function saveAuthorList(id: string, raw: unknown, opts: { reset?: boolean } = {}): Promise<AuthorRotation> {
+  checkId(id);
+  const { checkAuthorList, cursorAfterEdit } = rotationHelpers;
+  const checked = checkAuthorList(raw);
+  if (!checked.ok) throw new ProfileError(checked.error);
+  const names = checked.names;
+  const profiles = await listProfiles();
+  const self = profiles.find((p) => p.id === id);
+  if (!self) throw new ProfileError("That automation profile no longer exists.");
+  for (const name of names) {
+    const taken = profiles.find((p) => p.id !== id && p.authors.some((n) => n.toLowerCase() === name.toLowerCase()));
+    if (taken) throw new ProfileError(`“${taken.name}” already uses the author name “${name}”. Pick a different name.`);
+  }
+  const current = await readAuthorRotation(id);
+  const nextIndex = opts.reset ? 0 : cursorAfterEdit(current.names, current.nextIndex, names);
   const sql = await getSql();
+  const now = new Date().toISOString();
+  await sql`insert into automation_authors (profile_id, names, next_index, updated_at) values (${id}, ${JSON.stringify(names)}, ${nextIndex}, ${now})
+    on conflict (profile_id) do update set names = excluded.names, next_index = excluded.next_index, updated_at = excluded.updated_at`;
+  const first = names[0] ?? null;
   if (id === "default") {
-    if (value) await sql`insert into site_settings (id, data) values (${DEFAULT_AUTHOR_KEY}, ${JSON.stringify(value)}) on conflict (id) do update set data = excluded.data`;
+    if (first) await sql`insert into site_settings (id, data) values (${DEFAULT_AUTHOR_KEY}, ${JSON.stringify(first)}) on conflict (id) do update set data = excluded.data`;
     else await sql`delete from site_settings where id = ${DEFAULT_AUTHOR_KEY}`;
-    return value;
+  } else {
+    await sql`update automation_profiles set author_name = ${first}, updated_at = ${now} where id = ${id}`;
   }
-  const done = await sql<{ id: string }>`update automation_profiles set author_name = ${value}, updated_at = ${new Date().toISOString()} where id = ${id} returning id`;
-  if (!done[0]) throw new ProfileError("That automation profile no longer exists.");
-  return value;
+  return { names, nextIndex, nextUp: rotationHelpers.nextUpName(names, nextIndex) };
+}
+
+/**
+ * Take the profile's next author for a newly published article. One atomic
+ * UPDATE ... RETURNING: concurrent publishes each get their own slot.
+ * Returns null when the profile has no author names (byline = fallback).
+ */
+export async function takeAuthorTurn(id: string): Promise<string | null> {
+  const sql = await getSql();
+  let rows: Array<{ names: string; next_index: number }>;
+  try {
+    rows = await sql.query<{ names: string; next_index: number }>(rotationHelpers.TAKE_TURN_SQL, [new Date().toISOString(), id]);
+  } catch {
+    return profileAuthorName(id); // pre-0026 database: the single author name
+  }
+  return rotationHelpers.nameFromTurnRow(rows[0]);
 }
 
 export const DEFAULT_PROFILE_NAME = "Default (master MCP token)";
@@ -362,12 +446,17 @@ export async function listProfiles(): Promise<ProfileSummary[]> {
   const rows = await profileRows();
   const oauth = await oauthByProfile();
   const defaultAuthor = await readDefaultAuthor();
+  const rotations = await rotationRows();
   const pub = (id: string): OauthClientPublic | null => oauth.get(id)?.public ?? null;
+  const rot = (id: string, single: string | null) => {
+    const r = toRotation(rotations.get(id), single);
+    return { authors: r.names, nextAuthor: r.nextUp };
+  };
   return [
-    { id: "default", name: DEFAULT_PROFILE_NAME, isDefault: true, enabled: def.enabled, paused: def.paused, hasToken: true, tokenHint: null, tokenCreatedAt: null, oauth: pub("default"), authorName: defaultAuthor },
+    { id: "default", name: DEFAULT_PROFILE_NAME, isDefault: true, enabled: def.enabled, paused: def.paused, hasToken: true, tokenHint: null, tokenCreatedAt: null, oauth: pub("default"), authorName: defaultAuthor, ...rot("default", defaultAuthor) },
     ...rows.map((r) => {
       const s = normalizeAutomationSettings(JSON.parse(r.settings || "{}"));
-      return { id: r.id, name: r.name, isDefault: false, enabled: s.enabled, paused: s.paused, hasToken: Boolean(r.token_hash), tokenHint: r.token_hint, tokenCreatedAt: r.token_created_at, oauth: pub(r.id), authorName: r.author_name?.trim() || null };
+      return { id: r.id, name: r.name, isDefault: false, enabled: s.enabled, paused: s.paused, hasToken: Boolean(r.token_hash), tokenHint: r.token_hint, tokenCreatedAt: r.token_created_at, oauth: pub(r.id), authorName: r.author_name?.trim() || null, ...rot(r.id, r.author_name?.trim() || null) };
     }),
   ];
 }
@@ -419,7 +508,7 @@ export async function createProfile(name: unknown): Promise<ProfileSummary> {
   const now = new Date().toISOString();
   const sql = await getSql();
   await sql`insert into automation_profiles (id, name, settings, created_at, updated_at) values (${id}, ${clean}, ${JSON.stringify(settings)}, ${now}, ${now})`;
-  return { id, name: clean, isDefault: false, enabled: false, paused: false, hasToken: false, tokenHint: null, tokenCreatedAt: null, oauth: null, authorName: null };
+  return { id, name: clean, isDefault: false, enabled: false, paused: false, hasToken: false, tokenHint: null, tokenCreatedAt: null, oauth: null, authorName: null, authors: [], nextAuthor: null };
 }
 
 export async function renameProfile(id: string, name: unknown): Promise<void> {
@@ -437,6 +526,7 @@ export async function deleteProfile(id: string): Promise<void> {
   if (id === "default") throw new ProfileError("The default profile can't be deleted.");
   const sql = await getSql();
   await sql`delete from automation_oauth_clients where profile_id = ${id}`.catch(() => undefined);
+  await sql`delete from automation_authors where profile_id = ${id}`.catch(() => undefined);
   await sql`delete from automation_profiles where id = ${id}`;
 }
 

@@ -205,9 +205,11 @@ export async function sweepDueScheduled(sql: Sql): Promise<number> {
   if (nowMs - lastScheduleSweep < 30_000) return 0;
   lastScheduleSweep = nowMs;
   try {
-    const due = await sql<{ id: string }>`select id from articles where status = 'draft' and scheduled_at is not null and scheduled_at <= ${new Date(nowMs).toISOString()} limit 20`;
+    const due = await sql<{ id: string; published_at: string | null }>`select id, published_at from articles where status = 'draft' and scheduled_at is not null and scheduled_at <= ${new Date(nowMs).toISOString()} limit 20`;
     for (const row of due) {
-      await sql`update articles set status = 'published', published_at = scheduled_at, scheduled_at = null, updated_at = ${new Date(nowMs).toISOString()} where id = ${row.id} and status = 'draft'`;
+      const flipped = await sql<{ id: string }>`update articles set status = 'published', published_at = scheduled_at, scheduled_at = null, updated_at = ${new Date(nowMs).toISOString()} where id = ${row.id} and status = 'draft' returning id`;
+      // t169: a scheduled AI draft takes its author turn when it goes live.
+      if (flipped[0] && !row.published_at) await assignRotatingAuthor(row.id);
     }
     return due.length;
   } catch {
@@ -1130,6 +1132,21 @@ export async function listNotFounds(limit = 12): Promise<Array<{ path: string; h
 
 export async function saveArticle(raw: unknown): Promise<{ id: string; slug: string; status: PublicationStatus }> {
   const input: ArticleWrite = scrubCitationsDeep(articleWriteSchema.parse(raw));
+  let authorOverride: string | null | undefined;
+  if (input.authorName !== undefined) {
+    const { checkAuthorName } = await import("@/lib/author-name");
+    const checked = checkAuthorName(input.authorName);
+    if (!checked.ok) throw new ContentError(checked.error);
+    authorOverride = checked.value;
+  }
+  let firstPublish = false;
+  const result = await saveArticleRows(input, (v) => { firstPublish = v; }, authorOverride);
+  // t169: an AI draft published for the first time takes its profile's next author.
+  if (firstPublish) await assignRotatingAuthor(result.id);
+  return result;
+}
+
+async function saveArticleRows(input: ArticleWrite, markFirstPublish: (v: boolean) => void, authorOverride: string | null | undefined): Promise<{ id: string; slug: string; status: PublicationStatus }> {
   if (input.intent === "publish") {
     const problem = publishProblems(input);
     if (problem) throw new ContentError(problem);
@@ -1169,6 +1186,7 @@ export async function saveArticle(raw: unknown): Promise<{ id: string; slug: str
     let status: PublicationStatus = previous?.status ?? "draft";
     let publishedAt = iso(previous?.published_at ?? null);
     if (input.intent === "publish") {
+      markFirstPublish(previous?.status !== "published" && !previous?.published_at);
       status = "published";
       publishedAt = input.publishedAt ?? publishedAt ?? new Date().toISOString();
     } else if (input.intent === "unpublish") {
@@ -1219,6 +1237,9 @@ export async function saveArticle(raw: unknown): Promise<{ id: string; slug: str
     }
     if (input.corrections !== undefined) {
       await sql`update articles set corrections = ${input.corrections || null} where id = ${id}`;
+    }
+    if (authorOverride !== undefined) {
+      await sql`update articles set author_name = ${authorOverride} where id = ${id}`;
     }
     await sql`delete from article_tags where article_id = ${id}`;
     for (const tagId of input.tagIds) {
@@ -1288,30 +1309,29 @@ async function aiOwnerProfileId(sql: Sql, articleId: string): Promise<string | n
 }
 
 /**
- * t141: store the acting automation profile's author name on an article.
- * Set on create; on update only when the article has no author yet and the
- * acting profile created it. Never overwrites. Returns the stored name.
+ * t169: give a newly published AI article its profile's next author from
+ * the rotation. Called once, on the article's FIRST publish (automatic,
+ * explicit MCP, scheduled, or the owner publishing an AI draft). Never
+ * overwrites a stored byline, so edits and re-publishes don't advance the
+ * rotation. Owner-created articles (no submission) are left alone.
  */
-export async function stampArticleAuthor(input: { articleId: string; kind: "create" | "update"; actingProfileId: string }): Promise<string | null> {
+export async function assignRotatingAuthor(articleId: string): Promise<string | null> {
   try {
     const sql = await getSql();
-    const { profileAuthorName } = await import("./automation.server");
-    const { authorToAssign } = await import("@/lib/author-name");
-    const rows = await sql<{ author_name: string | null }>`select author_name from articles where id = ${input.articleId}`;
+    const rows = await sql<{ author_name: string | null }>`select author_name from articles where id = ${articleId}`;
     if (!rows[0]) return null;
-    const owner = input.kind === "create" ? input.actingProfileId : await aiOwnerProfileId(sql, input.articleId);
-    const name = authorToAssign({
-      kind: input.kind,
-      currentAuthor: rows[0].author_name,
-      profileAuthor: await profileAuthorName(input.actingProfileId),
-      actingProfileId: input.actingProfileId,
-      ownerProfileId: owner,
-    });
-    if (!name) return rows[0].author_name ?? null;
-    await sql`update articles set author_name = ${name} where id = ${input.articleId} and (author_name is null or author_name = '')`;
-    return name;
-  } catch {
-    return null; // pre-0022 database: bylines stay DYPOL LABS
+    const stored = rows[0].author_name?.trim();
+    if (stored) return stored;
+    const owner = await aiOwnerProfileId(sql, articleId);
+    if (!owner) return null;
+    const { takeAuthorTurn } = await import("./automation.server");
+    const name = await takeAuthorTurn(owner);
+    if (!name) return null;
+    const done = await sql<{ author_name: string }>`update articles set author_name = ${name} where id = ${articleId} and (author_name is null or trim(author_name) = '') returning author_name`;
+    return done[0]?.author_name ?? null;
+  } catch (error) {
+    console.error("[author-rotation]", error);
+    return null; // byline falls back exactly as before
   }
 }
 

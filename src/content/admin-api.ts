@@ -607,6 +607,7 @@ type ProfileAction =
   | { action: "create"; name: string; connect?: "api-key" | "oauth"; redirectUris?: string[]; authorName?: string }
   | { action: "rename"; profileId: string; name: string }
   | { action: "author"; profileId: string; authorName: string }
+  | { action: "authors"; profileId: string; names: string[]; reset: boolean }
   | { action: "delete" | "token" | "revoke" | "oauth-revoke"; profileId: string }
   | { action: "oauth-create" | "oauth-redirects"; profileId: string; redirectUris: string[] };
 
@@ -622,6 +623,10 @@ export const adminProfileAction = createServerFn({ method: "POST" })
       return { action: "create", name, connect, authorName };
     }
     if (v.action === "rename") return { action: "rename", profileId: profileIdOf(v), name };
+    if (v.action === "authors") {
+      const names = Array.isArray(v.names) ? v.names.slice(0, 100).map((n) => (typeof n === "string" ? n.slice(0, 200) : "")) : [];
+      return { action: "authors", profileId: profileIdOf(v), names, reset: v.reset === true };
+    }
     if (v.action === "author") return { action: "author", profileId: profileIdOf(v), authorName: typeof v.authorName === "string" ? v.authorName.slice(0, 200) : "" };
     if (v.action === "delete" || v.action === "token" || v.action === "revoke" || v.action === "oauth-revoke") return { action: v.action, profileId: profileIdOf(v) };
     if (v.action === "oauth-create" || v.action === "oauth-redirects") {
@@ -662,6 +667,7 @@ export const adminProfileAction = createServerFn({ method: "POST" })
         return { ok: true as const, profile };
       }
       if (data.action === "rename") await store.renameProfile(data.profileId, data.name);
+      if (data.action === "authors") return { ok: true as const, rotation: await store.saveAuthorList(data.profileId, data.names, { reset: data.reset }) };
       if (data.action === "author") return { ok: true as const, authorName: await store.setProfileAuthor(data.profileId, data.authorName) };
       if (data.action === "delete") await store.deleteProfile(data.profileId);
       if (data.action === "revoke") await store.revokeProfileToken(data.profileId);

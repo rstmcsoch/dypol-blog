@@ -275,8 +275,9 @@ async function attemptAutoPublish(articleId: string, profileId: string, auth: st
     return { published: false, status: rows[0].status, reasons: [claimed.reason] };
   }
   const now = new Date().toISOString();
-  await sql`update articles set status = 'published', published_at = ${now}, updated_at = ${now} where id = ${articleId} and status = 'draft'`;
+  const flipped = await sql<{ id: string }>`update articles set status = 'published', published_at = ${now}, updated_at = ${now} where id = ${articleId} and status = 'draft' returning id`;
   await store.settleAiPublishClaim(claimed.claim.claimId, "published", { mode: "automatic", runKey: claimed.claim.run.runKey });
+  if (flipped[0]) await (await import("@/content/repository.server")).assignRotatingAuthor(articleId);
   return { published: true, status: "published", reasons: [] };
 }
 
@@ -298,7 +299,7 @@ async function explicitPublish(
   profileId: string,
   auth: string,
   runId?: string | null,
-): Promise<{ published: boolean; status: string; alreadyPublished?: boolean; reasons: string[]; warnings: string[]; slug?: string }> {
+): Promise<{ published: boolean; status: string; alreadyPublished?: boolean; reasons: string[]; warnings: string[]; slug?: string; author?: string }> {
   const store = await import("@/content/automation.server");
   const settings = await loadSettings(profileId);
   const blocked = await writeGate(settings);
@@ -355,10 +356,12 @@ async function explicitPublish(
     return { published: false, status: rows[0].status, reasons: [claimed.reason], warnings };
   }
   const now = new Date().toISOString();
-  await sql`update articles set status = 'published', published_at = ${rows[0].published_at ?? now}, updated_at = ${now}
-    where id = ${articleId} and status in ('draft', 'unpublished')`;
+  const flipped = await sql<{ id: string }>`update articles set status = 'published', published_at = ${rows[0].published_at ?? now}, updated_at = ${now}
+    where id = ${articleId} and status in ('draft', 'unpublished') returning id`;
   await store.settleAiPublishClaim(claimed.claim.claimId, "published_explicit", { mode: "explicit", warnings, runKey: claimed.claim.run.runKey });
-  return { published: true, status: "published", reasons: [], warnings, slug: rows[0].slug };
+  // t169: first publish only (a re-publish keeps whatever byline it had).
+  const author = flipped[0] && !rows[0].published_at ? await repo.assignRotatingAuthor(articleId) : null;
+  return { published: true, status: "published", reasons: [], warnings, slug: rows[0].slug, ...(author ? { author } : {}) };
 }
 
 /** All topic ids of an article, primary first. Falls back to [category_id] before migration 0007. */
@@ -701,8 +704,6 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
           await deleteDraft(saved.id); // lost a concurrent retry race: keep the first draft only
           return { ok: true, data: { duplicate: true, matchedBy: "idempotency_key", article_id: winner.articleId, flags: winner.flags, status: "unchanged" } };
         }
-        // t141: byline = this profile's author name (set once, on create).
-        const author = await (await import("@/content/repository.server")).stampArticleAuthor({ articleId: saved.id, kind: "create", actingProfileId: profileId });
         await store.recordRun({ profileId,
           tool: "submit_article_draft",
           outcome: "drafted",
@@ -725,13 +726,16 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
           if (usedIndex !== null) await store2.writeTopicCursor(profileId, advanceCursor(usedIndex, settings.topicSelection.step, settings.topicIdeas.length));
         }
         const auto = await attemptAutoPublish(saved.id, profileId, auth, input.run_id);
+        // t169: the byline comes from the profile's author rotation at FIRST publish.
+        const author = auto.published ? await (await import("@/content/repository.server")).assignRotatingAuthor(saved.id) : null;
         return {
           ok: true,
           data: {
             duplicate: false,
             article_id: saved.id,
             slug: saved.slug,
-            author: author ?? "DYPOL LABS",
+            author: author ?? (auto.published ? "DYPOL LABS" : null),
+            author_note: auto.published ? "Byline from this profile's author rotation." : "The byline is assigned from this profile's author rotation when the draft is first published.",
             topics: topicIds.map((id) => categories.find((c) => c.id === id)?.slug ?? id),
             topic_advice: {
               filed: topicIds.map((id) => categories.find((c) => c.id === id)?.slug ?? id),
@@ -784,7 +788,7 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
             status: result.status,
             mode: "explicit",
             ...(result.alreadyPublished ? { already_published: true, reasons: result.reasons } : {}),
-            ...(result.published ? { warnings: result.warnings, path: `/articles/${result.slug ?? ""}` } : {}),
+            ...(result.published ? { warnings: result.warnings, path: `/articles/${result.slug ?? ""}`, ...(result.author ? { author: result.author } : {}) } : {}),
           },
         };
       },
@@ -1047,8 +1051,6 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
             patch.blocks = [...stripSourcesSection(current.blocks), ...sourcesBlocks(validSources)];
           }
           const { updated, viaGrant } = await repo.updateArticleForAi(input.article_id, patch, actor);
-          // t141: fill a missing byline only for the profile that created the article.
-          await repo.stampArticleAuthor({ articleId: input.article_id, kind: "update", actingProfileId: profileId });
           if (submission && input.source_urls !== undefined) await store.updateSubmissionSources(input.article_id, validSources);
           const { flags, wouldPublish, publishReasons } = await refreshFlags(input.article_id, settings, droppedTags);
           const changed = Object.keys(input).filter((k) => k !== "article_id");
