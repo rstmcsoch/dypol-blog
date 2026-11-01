@@ -4,6 +4,7 @@ import { site, T96_HOME_BLOCKS } from "./site.ts";
 import { BLOCK_TYPES, publicationStatuses, type ContentBlock, type NavItem, type SiteConfig } from "./types.ts";
 import { SOCIAL_PLATFORMS, normalizeSocials, validSocialUrl } from "../lib/social-links.ts";
 import { SHARE_KINDS, customTemplateError, normalizeShareSettings } from "../lib/share-buttons.ts";
+import { checkHeadCode } from "../lib/ads/head-html.ts";
 
 export { isSafeHref, publishProblems, slugify } from "./rules.ts";
 
@@ -268,6 +269,7 @@ const siteSchema = z.object({
     )
     .max(7),
   aiDailyPublishLimit: z.number().int().min(0).max(100),
+  customHead: z.string().max(20000, "Custom head code is limited to 20,000 characters.").default("").transform((v) => checkHeadCode(v).code),
   share: z.object({
     buttons: z
       .array(
@@ -444,6 +446,7 @@ function normalizeCore(input: unknown): SiteConfig {
     analytics: { ...site.analytics, ...(raw.analytics ?? {}) },
     socials: normalizeSocials(raw.socials),
     aiDailyPublishLimit: typeof raw.aiDailyPublishLimit === "number" ? raw.aiDailyPublishLimit : 0,
+    customHead: typeof raw.customHead === "string" ? raw.customHead : site.customHead,
     share: normalizeShareSettings(raw.share),
   });
 }

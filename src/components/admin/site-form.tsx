@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from "react";
+import { checkHeadCode } from "@/lib/ads/head-html";
 import { useRouter } from "@tanstack/react-router";
 import { errorText } from "@/components/admin/gate";
 import { adminSaveSettings } from "@/content/admin-api";
@@ -21,6 +22,8 @@ export function useSiteForm(initial: SiteConfig) {
     setMessage(null);
     try {
       await adminSaveSettings({ data: site });
+      // The server keeps only head-valid tags; show the field the way it was stored.
+      setSite((current) => (typeof current.customHead === "string" ? { ...current, customHead: checkHeadCode(current.customHead).code } : current));
       setMessage(success);
       await router.invalidate();
     } catch (caught) {

@@ -139,6 +139,9 @@ export const site = {
   aiDailyPublishLimit: 0,
   share: defaultShareSettings(),
   analytics: { enabled: true, measurementId: "G-T1R0QJ2F0Z", consentText: "Allow anonymous Google Analytics cookies to help us understand how this site is used?" },
+  // t164: the Search Console tag used to be hard-coded in __root.tsx; it now
+  // lives here (Admin → Settings → Custom head code) so nothing is lost.
+  customHead: `<meta name="google-site-verification" content="cnBmFIzqzl0ubtj0Wd-0F5BvCxZMnaTRTrXfmVKkkhg" />`,
 } satisfies SiteConfig;
 
 /** Stable bundled asset fallbacks, used only when Media has no selection. */

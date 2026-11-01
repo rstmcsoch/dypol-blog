@@ -1,4 +1,4 @@
-import { parseHeadHtml, reactProps, type HeadNode } from "./head-html.ts";
+import { checkHeadCode, parseHeadHtml, reactProps, type HeadNode } from "./head-html.ts";
 
 /**
  * t161: pages that carry the certified consent tool's head code. The server
@@ -16,10 +16,21 @@ export function isCmpPath(pathname: string): boolean {
  * their own nodes instead of the consent tool's.
  */
 export function cmpMirrorNodes(code: string): HeadNode[] {
-  return parseHeadHtml(code).filter((n) => n.tag === "script" && !(n.attrs.src && n.attrs.async));
+  return parseHeadHtml(code).filter((n) => (n.tag === "script" && !(n.attrs.src && n.attrs.async)) || (n.tag === "style" && !n.attrs["data-precedence"]) || n.tag === "noscript");
+}
+
+/**
+ * t164: everything the server places at the top of <head>: the consent
+ * tool's block first (Admin → Ads), then the owner's custom head code
+ * (Admin → Settings), cleaned to head-valid tags. Server and hydration
+ * mirrors both use this, so they always describe the same nodes.
+ */
+export function headBlock(cmp: string, custom: string): string {
+  return [cmp.trim(), checkHeadCode(custom ?? "").code].filter(Boolean).join("\n");
 }
 
 export function mirrorProps(n: HeadNode): Record<string, unknown> {
+  // (script, style or noscript; see cmpMirrorNodes)
   const props: Record<string, unknown> = { ...reactProps(n.attrs), "data-cmp-mirror": "", suppressHydrationWarning: true };
   if (n.inner) props.dangerouslySetInnerHTML = { __html: n.inner };
   return props;

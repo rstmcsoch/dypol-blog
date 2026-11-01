@@ -254,4 +254,10 @@ export type SiteConfig = {
   /** t148: article share buttons (order, labels, on/off, custom). */
   share: import("../lib/share-buttons.ts").ShareSettings;
   analytics: { enabled: boolean; measurementId: string; consentText: string };
+  /**
+   * t164: owner tags (verification meta, scripts, links, styles) placed in
+   * <head> on every public page by the server, after the consent tool's
+   * block. Only meta/link/script/style/noscript are kept (see checkHeadCode).
+   */
+  customHead: string;
 };

@@ -235,6 +235,8 @@ function AdBox({ r, id, occurrence, wrap }: { r: Resolved; id: SlotId; occurrenc
   const [useHouse, setUseHouse] = useState(!r.creative);
   const [collapsed, setCollapsed] = useState(false);
   const [closed, setClosed] = useState(false);
+  // t164: no fill while the reader is looking at the slot: it stays (no layout shift) but shows nothing, not even the label.
+  const [empty, setEmpty] = useState(false);
   const consentTick = useConsentTick();
   const asideRef = useRef<HTMLElement>(null);
   const frameRef = useRef<HTMLDivElement>(null);
@@ -271,6 +273,7 @@ function AdBox({ r, id, occurrence, wrap }: { r: Resolved; id: SlotId; occurrenc
       if (done) return;
       const fixed = wrap === "anchor" || wrap === "rail";
       if (fixed || typeof IntersectionObserver === "undefined" || el.getBoundingClientRect().top >= window.innerHeight) return collapse();
+      setEmpty(true);
       const io = new IntersectionObserver((es) => {
         const e = es[es.length - 1];
         if (e && !e.isIntersecting && e.boundingClientRect.top >= window.innerHeight) {
@@ -348,11 +351,11 @@ function AdBox({ r, id, occurrence, wrap }: { r: Resolved; id: SlotId; occurrenc
   }, [wrap, collapsed, closed]);
 
   if (closed) return null;
-  const cls = ["ad-slot", `ad-slot--${id}`, ...DEVICES.filter((d) => !devices.includes(d)).map((d) => `ad-slot--no-${d}`), collapsed ? "is-collapsed" : ""].filter(Boolean).join(" ");
+  const cls = ["ad-slot", `ad-slot--${id}`, ...DEVICES.filter((d) => !devices.includes(d)).map((d) => `ad-slot--no-${d}`), collapsed ? "is-collapsed" : "", empty && !collapsed ? "is-empty" : ""].filter(Boolean).join(" ");
   const node = (
-    <aside ref={asideRef} className={cls} data-slot={id} aria-label="Advertisement" data-leave-guard="off">
+    <aside ref={asideRef} className={cls} data-slot={id} aria-label="Advertisement" data-leave-guard="off" style={frameVars(dimsBy)}>
       <span className="ad-label">{slot.label === "Advertisement" ? "AD" : slot.label}</span>
-      <div ref={frameRef} className={["ad-frame", ...DEVICES.filter((d) => dimsBy[d]).map((d) => `ad-fix-${d}`), showing?.kind === "sponsor" ? "ad-frame--img" : ""].filter(Boolean).join(" ")} style={frameVars(dimsBy)}>
+      <div ref={frameRef} className={["ad-frame", ...DEVICES.filter((d) => dimsBy[d]).map((d) => `ad-fix-${d}`), showing?.kind === "sponsor" ? "ad-frame--img" : ""].filter(Boolean).join(" ")}>
         <div ref={stageRef} className="ad-stage">
           {showing?.kind === "sponsor" ? <SponsorPicture c={showing} /> : null}
           {showing?.kind === "native" && !Object.values(showing.code).some((x) => x?.html) ? <NativeCard c={showing} /> : null}

@@ -1,6 +1,6 @@
 import { createMiddleware, createStart } from "@tanstack/react-start";
 import { workerEnv } from "@/lib/cf-env.server";
-import { compactHeadBlock, isCmpPath } from "@/lib/ads/cmp";
+import { compactHeadBlock, headBlock, isCmpPath } from "@/lib/ads/cmp";
 
 /**
  * t79 (SEC-008): baseline security headers on every HTML response.
@@ -69,14 +69,20 @@ const securityHeaders = createMiddleware().server(async ({ request, pathname, ne
     // t161: the certified consent tool's head code goes first in <head>
     // (right after <meta charset>), ahead of every other script, ad hint and
     // gtag/GTM tag, on every public page whether ads are on or off.
-    const { publicAdsSettings } = await import("@/lib/ads/ads.server");
-    const cmp = await publicAdsSettings().then((s) => s.consent.cmpHead.trim(), () => "");
-    if (cmp) {
-      const html = compactHeadBlock(cmp);
+    // t164: then the owner's Settings → Custom head code (verification tags,
+    // analytics, …), still inside <head> and independent of the ads switch.
+    const [{ publicAdsSettings }, { publicCustomHead }] = await Promise.all([import("@/lib/ads/ads.server"), import("@/content/repository.server")]);
+    const [cmp, custom] = await Promise.all([
+      publicAdsSettings().then((s) => s.consent.cmpHead.trim(), () => ""),
+      publicCustomHead().catch(async () => (await import("@/content/site")).site.customHead),
+    ]);
+    const block = headBlock(cmp, custom);
+    if (block) {
+      const html = compactHeadBlock(block);
       let placed = false;
       const response = new Rewriter()
         // React's hydration mirrors of the block (see CmpHeadMirror) are dropped from the HTML.
-        .on("script[data-cmp-mirror]", { element(el: RwEl) { el.remove(); } })
+        .on("[data-cmp-mirror]", { element(el: RwEl) { el.remove(); } })
         .on("meta[charset]", { element(el: RwEl) { if (!placed) { el.after(html, { html: true }); placed = true; } } })
         .on("head", { element(el: RwEl) { el.onEndTag((end: RwEl) => { if (!placed) { end.before(html, { html: true }); placed = true; } }); } })
         .transform(result.response);

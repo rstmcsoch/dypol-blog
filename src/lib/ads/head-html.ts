@@ -76,3 +76,65 @@ export function adOrigins(htmls: string[], self?: string): string[] {
   if (google) for (const o of GOOGLE_AD_ORIGINS) out.add(o);
   return [...out];
 }
+
+// ---------- t164: Settings → Custom head code ----------
+/** Tags allowed in the custom head code (no <base>: it would retarget every link). */
+export const HEAD_TAGS = ["meta", "link", "script", "style", "noscript"] as const;
+const HEAD_TOKEN = /<!--[\s\S]*?-->|<(script|style|noscript)\b[^>]*>[\s\S]*?<\/\1\s*>|<(meta|link)\b[^>]*>|<\/?[a-z!][^>]*>/gi;
+
+export type HeadCodeCheck = {
+  /** The kept tags, verbatim, one per line. */
+  code: string;
+  /** One line per kept tag, for the admin preview. */
+  tags: { tag: string; summary: string }[];
+  /** Tags or text that were removed (not allowed in <head>). */
+  dropped: string[];
+};
+
+function summarize(tag: string, attrs: Record<string, string | true>, inner: string): string {
+  const a = (k: string) => (typeof attrs[k] === "string" ? (attrs[k] as string) : "");
+  if (tag === "meta") return [a("name") || a("property") || a("http-equiv") || (attrs.charset ? "charset" : ""), a("content")].filter(Boolean).join(" = ").slice(0, 140);
+  if (tag === "link") return [a("rel"), a("href")].filter(Boolean).join(" → ").slice(0, 140);
+  if (tag === "script") {
+    const flags = ["async", "defer"].filter((k) => attrs[k]).join(", ");
+    return (a("src") ? `src ${a("src")}` : `inline, ${inner.trim().length} characters`) + (flags ? ` (${flags})` : "") + (a("type") ? ` type ${a("type")}` : "");
+  }
+  return `${inner.trim().length} characters`;
+}
+
+/**
+ * Keep only head-valid tags (meta, link, script, style, noscript), verbatim.
+ * Comments, a pasted </head>, <body>, <base>, <title> and any other markup
+ * or loose text are removed and listed in `dropped`.
+ */
+export function checkHeadCode(input: string): HeadCodeCheck {
+  const kept: string[] = [];
+  const tags: HeadCodeCheck["tags"] = [];
+  const dropped: string[] = [];
+  let last = 0;
+  const loose = (text: string) => {
+    const t = text.trim();
+    if (t) dropped.push(t.length > 60 ? `${t.slice(0, 57)}…` : t);
+  };
+  for (const m of input.matchAll(HEAD_TOKEN)) {
+    loose(input.slice(last, m.index));
+    last = (m.index ?? 0) + m[0].length;
+    if (m[0].startsWith("<!--")) continue;
+    const tag = (m[1] ?? m[2] ?? "").toLowerCase();
+    if (!tag) {
+      dropped.push(m[0].length > 60 ? `${m[0].slice(0, 57)}…` : m[0]);
+      continue;
+    }
+    const open = m[0].match(/^<[a-z]+\b([^>]*)>/i)?.[1] ?? "";
+    const inner = m[1] ? m[0].slice(m[0].indexOf(">") + 1, m[0].toLowerCase().lastIndexOf("</")) : "";
+    // In <head>, <noscript> may only hold link/meta/style (GTM's <iframe> fallback belongs in <body>).
+    if (tag === "noscript" && /<(?!\/?(?:link|meta|style)\b)[a-z/]/i.test(inner)) {
+      dropped.push("<noscript> with body content (e.g. GTM's iframe) — that part goes in <body>, not <head>");
+      continue;
+    }
+    kept.push(m[0]);
+    tags.push({ tag, summary: summarize(tag, parseAttrs(open.replace(/\/\s*$/, "")), inner) });
+  }
+  loose(input.slice(last));
+  return { code: kept.join("\n"), tags, dropped };
+}
