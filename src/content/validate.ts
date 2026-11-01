@@ -77,6 +77,8 @@ export const articleWriteSchema = z.object({
   scheduledAt: z.string().datetime().nullable().optional(),
   /** t115: absent = leave the stored note unchanged; "" clears it. */
   corrections: z.string().trim().max(2000).optional(),
+  /** t169: manual byline override. Absent = unchanged; "" = clear (rotation / fallback decides). */
+  authorName: z.string().max(200).optional(),
   blocks: z.array(blockSchema).max(80),
   intent: z.enum(["save", "publish", "unpublish"]),
 });

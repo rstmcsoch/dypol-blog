@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { adminPending } from "@/components/admin/pending";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { errorText } from "@/components/admin/gate";
@@ -7,6 +7,7 @@ import { SERVER_API_PROVIDERS, type AutomationSettings } from "@/lib/automation/
 import { PROVIDER_KEY_SECRETS, PROVIDER_LABELS } from "@/lib/automation/provider";
 import { nextExpectedRun } from "@/lib/automation/schedule";
 import { checkAuthorName, sameAuthor } from "@/lib/author-name";
+import { AuthorRotationCard } from "@/components/admin/author-rotation-card";
 
 export const Route = createFileRoute("/admin/automation")({
   ...adminPending,
@@ -91,12 +92,12 @@ function Profiles() {
         </div>
       ) : null}
       <div className="adm-scroll-x"><table className="desk-table">
-        <thead><tr><th>Profile</th><th>Author name</th><th>Status</th><th>API key</th><th>OAuth</th><th>Actions</th></tr></thead>
+        <thead><tr><th>Profile</th><th>Authors</th><th>Status</th><th>API key</th><th>OAuth</th><th>Actions</th></tr></thead>
         <tbody>
           {data.profiles.map((p) => (
             <tr key={p.id} aria-current={p.id === data.profileId ? "true" : undefined} style={p.id === data.profileId ? { fontWeight: 650 } : undefined}>
               <td>{p.name}</td>
-              <td><AuthorCell profileId={p.id} profileName={p.name} initial={p.authorName ?? ""} others={data.profiles.filter((o) => o.id !== p.id)} onSaved={() => router.invalidate()} /></td>
+              <td><AuthorSummary authors={p.authors} nextAuthor={p.nextAuthor} /></td>
               <td>{!p.enabled ? "Off" : p.paused ? "Paused" : "On"}</td>
               <td>{p.isDefault ? "MCP_TOKEN secret" : p.hasToken ? `…${p.tokenHint ?? ""}` : "none"}</td>
               <td>{p.oauth ? <span title={p.oauth.redirectUris.join("\n")}>{p.oauth.clientId.slice(0, 10)}… secret …{p.oauth.secretHint ?? ""}</span> : "none"}</td>
@@ -241,43 +242,14 @@ function authorError(value: string, others: ProfileLite[]): string | null {
   return taken ? `“${taken.name}” already uses this author name.` : null;
 }
 
-/** t141: inline author-name editor for one profile row. */
-function AuthorCell(props: { profileId: string; profileName: string; initial: string; others: ProfileLite[]; onSaved: () => unknown }) {
-  const [value, setValue] = useState(props.initial);
-  const [busy, setBusy] = useState(false);
-  const [serverError, setServerError] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
-  useEffect(() => setValue(props.initial), [props.initial]);
-  const localError = authorError(value, props.others);
-  const dirty = value.trim() !== props.initial.trim();
-  const error = localError ?? serverError;
+/** t169: profiles table cell: the rotation at a glance (edited in the profile's Authors card). */
+function AuthorSummary({ authors, nextAuthor }: { authors: string[]; nextAuthor: string | null }) {
+  if (!authors.length) return <span className="desk-note" style={{ margin: 0 }}>none (DYPOL LABS)</span>;
   return (
-    <form
-      className="author-cell"
-      data-testid={`author-${props.profileId}`}
-      onSubmit={(e) => {
-        e.preventDefault();
-        if (localError || !dirty) return;
-        setBusy(true);
-        setServerError(null);
-        setSaved(false);
-        adminProfileAction({ data: { action: "author", profileId: props.profileId, authorName: value } })
-          .then(async () => { setSaved(true); await props.onSaved(); })
-          .catch((caught: unknown) => setServerError(errorText(caught)))
-          .finally(() => setBusy(false));
-      }}
-    >
-      <input
-        aria-label={`Author name for ${props.profileName}`}
-        value={value}
-        maxLength={60}
-        placeholder="DYPOL LABS"
-        aria-invalid={error ? true : undefined}
-        onChange={(e) => { setValue(e.target.value); setSaved(false); setServerError(null); }}
-      />
-      <button type="submit" className="btn" disabled={busy || !dirty || Boolean(localError)} title={dirty ? "Save this author name" : "Type a name, then Save"}>{busy ? "Saving…" : "Save"}</button>
-      {error ? <small className="author-cell__error" role="alert">{error}</small> : saved ? <small className="author-cell__ok" role="status">Saved ✓ bylines updated</small> : null}
-    </form>
+    <span className="arot-cell" data-testid="author-summary">
+      <span className="arot-cell__names">{authors[0]}{authors.length > 1 ? ` +${authors.length - 1}` : ""}</span>
+      {authors.length > 1 && nextAuthor ? <span className="arot-cell__next">Next: {nextAuthor}</span> : null}
+    </span>
   );
 }
 
@@ -301,15 +273,26 @@ function AutomationDesk() {
   const nextRun = nextExpectedRun(s.schedule);
   const current = data.profiles.find((p) => p.id === data.profileId);
   const profileName = current?.name ?? "";
-  const savedAuthor = current?.authorName ?? "";
-  const [author, setAuthor] = useState(savedAuthor);
-  useEffect(() => setAuthor(savedAuthor), [savedAuthor]);
-  const authorProblem = authorError(author, data.profiles.filter((o) => o.id !== data.profileId));
 
   return (
     <>
       <p className="desk-kicker">AI connector</p>
       <h1 className="desk-title">Automation: {profileName}</h1>
+      {current ? (
+        <AuthorRotationCard
+          profileId={data.profileId}
+          profileName={profileName}
+          authors={current.authors}
+          nextAuthor={current.nextAuthor}
+          others={data.profiles.filter((o) => o.id !== data.profileId).map((o) => ({ name: o.name, authors: o.authors }))}
+          save={async (names, reset) => {
+            const r = await adminProfileAction({ data: { action: "authors", profileId: data.profileId, names, reset } });
+            if (!("rotation" in r) || !r.rotation) throw new Error("Could not save the authors.");
+            return r.rotation;
+          }}
+          onSaved={() => router.invalidate()}
+        />
+      ) : null}
       <p className="desk-note">
         Any AI app that supports MCP connectors (Claude, ChatGPT, Grok, Cursor, Claude Code, Gemini CLI, VS Code, ...) drafts
         articles through this site&apos;s MCP endpoint (<code>/mcp</code>). The schedule is configured in your AI app, not here.
@@ -329,17 +312,9 @@ function AutomationDesk() {
           setPending(true);
           setError(null);
           setMessage(null);
-          if (authorProblem) { setError(authorProblem); setPending(false); return; }
-          const authorChanged = author.trim() !== savedAuthor.trim();
           void adminSaveAutomation({ data: { profileId: data.profileId, settings: { ...s, topicIdeas: lines(ideas), topicSources: lines(sources), extraClientHosts: lines(hosts) } } })
             .then(async () => {
-              let note = "";
-              if (authorChanged) {
-                const r = await adminProfileAction({ data: { action: "author", profileId: data.profileId, authorName: author } });
-                const stored = "authorName" in r ? r.authorName : null;
-                note = stored ? ` Author name saved: articles from this profile now show “by ${stored}”.` : " Author name cleared: articles from this profile show “by DYPOL LABS”.";
-              }
-              setMessage(`Saved.${note || " Automation settings saved."}`);
+              setMessage("Saved. Automation settings saved.");
               await router.invalidate();
             })
             .catch((caught: unknown) => setError(errorText(caught)))
@@ -348,11 +323,6 @@ function AutomationDesk() {
       >
         <fieldset className="block-card">
           <legend>Status</legend>
-          <label className="field">
-            <span>Author name (byline on this profile&apos;s articles, new and existing)</span>
-            <input value={author} maxLength={60} placeholder="DYPOL LABS" data-testid="profile-author" aria-invalid={authorProblem ? true : undefined} onChange={(e) => { setAuthor(e.target.value); setMessage(null); }} />
-            {authorProblem ? <small className="author-cell__error" role="alert">{authorProblem}</small> : <small className="field-help">Empty = “by DYPOL LABS”. Saved with the “Save automation” button below.</small>}
-          </label>
           <Check checked={s.enabled} onChange={(e) => setS({ ...s, enabled: e.target.checked })} label="Enabled" />
           <Check checked={s.paused} onChange={(e) => setS({ ...s, paused: e.target.checked })} label="Paused" />
           {isDefault ? (<>
