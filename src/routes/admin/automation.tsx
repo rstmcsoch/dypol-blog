@@ -213,7 +213,7 @@ function Profiles() {
         }}
       >
         <label className="field"><span>New profile name</span><input value={name} maxLength={60} placeholder="Gemini daily tech" onChange={(e) => setName(e.target.value)} /></label>
-        <label className="field"><span>Author name (byline on this profile's articles)</span><input value={authorName} maxLength={60} placeholder="John Daniel" data-testid="new-profile-author" onChange={(e) => setAuthorName(e.target.value)} />
+        <label className="field"><span>First author name (optional; add more in the profile&apos;s Authors card)</span><input value={authorName} maxLength={60} placeholder="John Daniel" data-testid="new-profile-author" onChange={(e) => setAuthorName(e.target.value)} />
           {authorError(authorName, data.profiles) ? <small className="author-cell__error" role="alert">{authorError(authorName, data.profiles)}</small> : null}
         </label>
         <fieldset className="field">
@@ -232,13 +232,13 @@ function Profiles() {
   );
 }
 
-type ProfileLite = { id: string; name: string; authorName: string | null };
+type ProfileLite = { id: string; name: string; authorName: string | null; authors: string[] };
 
 /** Client-side mirror of src/lib/author-name.ts (server re-checks everything). */
 function authorError(value: string, others: ProfileLite[]): string | null {
   const r = checkAuthorName(value);
   if (!r.ok) return r.error;
-  const taken = r.value ? others.find((o) => sameAuthor(o.authorName, r.value)) : undefined;
+  const taken = r.value ? others.find((o) => o.authors.some((a) => sameAuthor(a, r.value))) : undefined;
   return taken ? `“${taken.name}” already uses this author name.` : null;
 }
 

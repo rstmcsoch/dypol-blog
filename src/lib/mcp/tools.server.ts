@@ -788,7 +788,7 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
             status: result.status,
             mode: "explicit",
             ...(result.alreadyPublished ? { already_published: true, reasons: result.reasons } : {}),
-            ...(result.published ? { warnings: result.warnings, path: `/articles/${result.slug ?? ""}` } : {}),
+            ...(result.published ? { warnings: result.warnings, path: `/articles/${result.slug ?? ""}`, ...(result.author ? { author: result.author } : {}) } : {}),
           },
         };
       },
