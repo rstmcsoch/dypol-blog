@@ -48,17 +48,6 @@ export function ArticleView({
       <ReadingProgress target={root} />
       <div className="container">
         <header className="article-top">
-          {chipTopics.length ? (
-            <ul className="topic-chips" aria-label="Topics">
-              {chipTopics.map((topic) => (
-                <li key={topic.id}>
-                  <Link to="/topics/$slug" params={{ slug: topic.slug }} className="topic-chip">
-                    {topic.label}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          ) : null}
           <h1 className="article-title">{article.title}</h1>
           <p className="lede">{article.excerpt}</p>
           <p className="meta">
@@ -91,6 +80,17 @@ export function ArticleView({
             before={toc.length ? <TableOfContents entries={toc} /> : null}
             after={
               <>
+                {chipTopics.length ? (
+                  <ul className="topic-chips topic-chips--end" aria-label="Topics">
+                    {chipTopics.map((topic) => (
+                      <li key={topic.id}>
+                        <Link to="/topics/$slug" params={{ slug: topic.slug }} className="topic-chip">
+                          {topic.label}
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
                 {inlineRelated.length >= 2 ? (
                   <aside className="article-related" aria-labelledby="article-related-title">
                     <h2 id="article-related-title">Related</h2>
