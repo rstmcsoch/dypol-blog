@@ -6,6 +6,7 @@
  * There is no second bucket, no local file store, and no image blob column.
  * Postgres keeps references only (cover, logo, favicon).
  */
+import { BUMP_CONTENT_VERSION_SQL, isContentWrite, noteContentWrite } from "../lib/content-cache.server.ts";
 
 export const MEDIA_BUCKET_NAME = "dypol-blog-media";
 export const D1_DATABASE_NAME = "dypol-blog-db";
@@ -491,6 +492,8 @@ function wrapDatabase(binding: D1Binding): MediaDatabase {
     },
     async run(sql: string, params: unknown[] = []) {
       await statement(sql, params).run();
+      // t147: alt text, variants and colours feed the cached public catalog.
+      if (isContentWrite(sql)) await noteContentWrite(() => binding.prepare(BUMP_CONTENT_VERSION_SQL).run());
     },
   };
 }
