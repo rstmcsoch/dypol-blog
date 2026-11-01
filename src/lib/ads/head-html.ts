@@ -49,3 +49,30 @@ export function reactProps(attrs: Record<string, string | true>): Record<string,
   }
   return out;
 }
+
+// ---------- t156: resource hints for the configured ad hosts ----------
+const AD_SRC = /<(?:script|iframe|img|source)\b[^>]*?\bsrc\s*=\s*["']?((?:https?:)?\/\/[^"'\s>]+)/gi;
+const GOOGLE_AD_CODE = /adsbygoogle|googlesyndication\.com|data-ad-client/i;
+/** AdSense loader + its auction/creative hosts; only used when AdSense code is present. */
+export const GOOGLE_AD_ORIGINS = ["https://pagead2.googlesyndication.com", "https://googleads.g.doubleclick.net", "https://tpc.googlesyndication.com"];
+
+/** Unique https origins that the given ad code loads scripts/frames/images from (order kept). */
+export function adOrigins(htmls: string[], self?: string): string[] {
+  const out = new Set<string>();
+  let google = false;
+  for (const html of htmls) {
+    if (!html) continue;
+    if (GOOGLE_AD_CODE.test(html)) google = true;
+    for (const m of html.matchAll(AD_SRC)) {
+      try {
+        const u = new URL(m[1].startsWith("//") ? `https:${m[1]}` : m[1]);
+        const origin = `https://${u.host}`;
+        if (u.host && origin !== self) out.add(origin);
+      } catch {
+        /* not a URL */
+      }
+    }
+  }
+  if (google) for (const o of GOOGLE_AD_ORIGINS) out.add(o);
+  return [...out];
+}
