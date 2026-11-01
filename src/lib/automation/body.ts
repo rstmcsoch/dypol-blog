@@ -264,6 +264,18 @@ export function bodyToBlocks(body: string): ArticleBlock[] {
 
 /** Credit / source lines that belong in metadata, never in the public body. */
 const CREDIT_LINE_RE = /^\s*(\*\*|_)?\s*(cover image|cover photo|featured image|header image|image|photo|image credit|photo credit|image source|credit|credits|via)\s*(\*\*|_)?\s*[:：]/i;
+/**
+ * t166: the "At a glance" summary box always opens the article (house structure:
+ * summary box, intro, H2 sections, closing Key takeaway callout, cover credit).
+ * A takeaways box written anywhere else is moved to the top; only the first one is kept
+ * in front, any later duplicates stay where they are. Everything else keeps its order.
+ */
+export function placeSummaryFirst(blocks: ArticleBlock[]): ArticleBlock[] {
+  const at = blocks.findIndex((b) => b.type === "takeaways");
+  if (at <= 0) return blocks;
+  return [blocks[at], ...blocks.slice(0, at), ...blocks.slice(at + 1)];
+}
+
 const SOURCES_HEADING_RE = /^(sources?|references|further reading|citations|credits|image credits?)\s*:?$/i;
 
 /**

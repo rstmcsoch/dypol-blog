@@ -5,7 +5,7 @@ import { getSql } from "@/lib/db";
 import { workerEnv } from "@/lib/cf-env.server";
 import { writesAllowed } from "@/lib/write-guard.server";
 import { automationActive, type AutomationSettings } from "@/lib/automation/settings";
-import { bodyToBlocks, contentHash, stripCreditsAndSources, wordCount } from "@/lib/automation/body";
+import { bodyToBlocks, contentHash, placeSummaryFirst, stripCreditsAndSources, wordCount } from "@/lib/automation/body";
 import { draftFlags, publishDecision, sourceProblems, type DraftFlag } from "@/lib/automation/policy";
 import { effectiveRun, limitVerdict, type EffectiveRun } from "@/lib/automation/publish-limits";
 import { assertUsableCover, decodeBase64Image, fetchImage, ImageIntakeError, MAX_IMAGE_BYTES, type ImageMime } from "@/lib/automation/image-fetch";
@@ -40,7 +40,7 @@ const submitSchema = z.object({
     .string()
     .min(1)
     .max(MAX_BODY_CHARS)
-    .describe("Article body in markdown (no HTML). Paragraphs separated by blank lines (1-3 sentences each); '## ' / '### ' / '#### ' headings; '- ' or '1. ' lists (indent 2 spaces for a sub-item); **bold**, *italic*, ~~strike~~, `code`; [descriptive anchor](https://url) links; GFM pipe tables (| A | B | / |---|---:|); a key-specs card as a ```specs fence of 'Label: Value' lines (or a '### Key specs' heading + 2-column table); callouts '> **Note:** …' / '> **Key takeaway:** …'; '## At a glance' + 3 bullets = summary box; '---' divider. Social embeds: put a YouTube (watch/youtu.be/shorts/live), X/Twitter post or video (/status/), Instagram post/reel, TikTok video, Threads post, Facebook post/video, Vimeo or Spotify URL ALONE on its own line (blank line before and after, bare URL or [label](url)) and it renders as an embed; a link inside a sentence stays a normal link. Never paste embed HTML or scripts. Do NOT add a Sources/References section or 'Cover image:'/credit lines: sources go in source_urls, credits in the cover credit field; such sections are removed automatically."),
+    .describe("Article body in markdown (no HTML). Paragraphs separated by blank lines (1-3 sentences each); '## ' / '### ' / '#### ' headings; '- ' or '1. ' lists (indent 2 spaces for a sub-item); **bold**, *italic*, ~~strike~~, `code`; [descriptive anchor](https://url) links; GFM pipe tables (| A | B | / |---|---:|); a key-specs card as a ```specs fence of 'Label: Value' lines (or a '### Key specs' heading + 2-column table); callouts '> **Note:** …' / '> **Key takeaway:** …'; '## At a glance' + 3 bullets = summary box, placed FIRST (before the opening paragraph; it is moved to the top automatically); body sections use '## ' headings; '---' divider. Social embeds: put a YouTube (watch/youtu.be/shorts/live), X/Twitter post or video (/status/), Instagram post/reel, TikTok video, Threads post, Facebook post/video, Vimeo or Spotify URL ALONE on its own line (blank line before and after, bare URL or [label](url)) and it renders as an embed; a link inside a sentence stays a normal link. Never paste embed HTML or scripts. Do NOT add a Sources/References section or 'Cover image:'/credit lines: sources go in source_urls, credits in the cover credit field; such sections are removed automatically."),
   topics: z
     .array(z.string().trim().min(1).max(120))
     .min(1)
@@ -638,7 +638,7 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
             return { ok: false, error: nearDup.error, data: { near_duplicate_of: { article_id: nearDup.id, slug: nearDup.slug } } };
           }
         }
-        const bodyBlocks = stripCreditsAndSources(bodyToBlocks(input.body));
+        const bodyBlocks = placeSummaryFirst(stripCreditsAndSources(bodyToBlocks(input.body)));
         if (bodyBlocks.length === 0) return { ok: false, error: "The body is empty." };
         const blocks = [...bodyBlocks, ...sourcesBlocks(sources)];
         if (blocks.length > 80) return { ok: false, error: "The body has too many blocks (max 78 plus sources)." };
@@ -1038,7 +1038,7 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
           const effectiveSources = input.source_urls ?? submission?.sourceUrls ?? [];
           const { valid: validSources } = sourceProblems(effectiveSources);
           if (input.body !== undefined) {
-            const bodyBlocks = stripCreditsAndSources(bodyToBlocks(input.body));
+            const bodyBlocks = placeSummaryFirst(stripCreditsAndSources(bodyToBlocks(input.body)));
             if (bodyBlocks.length === 0) return { ok: false, error: "The body is empty." };
             const blocks = [...bodyBlocks, ...sourcesBlocks(validSources)];
             if (blocks.length > 80) return { ok: false, error: "The body has too many blocks (max 78 plus sources)." };

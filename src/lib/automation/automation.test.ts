@@ -353,3 +353,11 @@ test("t106: inline markdown — bold/italic/links/entities, unsafe links stay te
   assert.equal(isExternalHref("https://other.example/x", ["dypol.example"]), true);
   assert.equal(isExternalHref("/articles/x", ["dypol.example"]), false);
 });
+
+test("t166: an At a glance box written after the body moves to the top; order is otherwise kept", async () => {
+  const { bodyToBlocks, placeSummaryFirst } = await import("./body.ts");
+  const blocks = placeSummaryFirst(bodyToBlocks("First para.\n\nSecond para.\n\n## At a glance\n- One\n- Two\n\n> **Key takeaway:** Done."));
+  assert.deepEqual(blocks.map((b) => b.type), ["takeaways", "paragraph", "paragraph", "callout"]);
+  const already = bodyToBlocks("## At a glance\n- One\n\nIntro.");
+  assert.equal(placeSummaryFirst(already), already);
+});
