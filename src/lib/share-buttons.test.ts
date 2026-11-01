@@ -7,17 +7,21 @@ const TITLE = "Tom & Jerry: 100% \"fun\"?";
 const eu = encodeURIComponent(URL_);
 const et = encodeURIComponent(TITLE);
 
-test("defaults are exactly the old five buttons, same order and hrefs", () => {
-  assert.deepEqual(DEFAULT_SHARE_BUTTONS.map((b) => b.kind), ["x", "linkedin", "facebook", "email", "copy"]);
-  const hrefs = DEFAULT_SHARE_BUTTONS.map((b) => shareHref(b, URL_, TITLE));
-  assert.deepEqual(hrefs, [
-    `https://x.com/intent/post?url=${eu}&text=${et}`,
-    `https://www.linkedin.com/sharing/share-offsite/?url=${eu}`,
-    `https://www.facebook.com/sharer/sharer.php?u=${eu}`,
-    `mailto:?subject=${et}&body=${eu}`,
-    null,
-  ]);
-  assert.deepEqual(DEFAULT_SHARE_BUTTONS.map((b) => shareLabel(b, "Copy link")), ["X", "LinkedIn", "Facebook", "Email", "Copy link"]);
+test("t150: defaults are every built-in network, Copy link and Share…", () => {
+  assert.deepEqual(DEFAULT_SHARE_BUTTONS.map((b) => b.kind), ["x", "linkedin", "facebook", "whatsapp", "telegram", "reddit", "threads", "bluesky", "pinterest", "hackernews", "email", "copy", "native"]);
+  assert.ok(DEFAULT_SHARE_BUTTONS.every((b) => b.enabled));
+  assert.equal(shareHref(DEFAULT_SHARE_BUTTONS[0], URL_, TITLE), `https://x.com/intent/post?url=${eu}&text=${et}`);
+  assert.deepEqual(DEFAULT_SHARE_BUTTONS.slice(-3).map((b) => shareLabel(b, "Copy link")), ["Email", "Copy link", "Share…"]);
+});
+
+test("t150: an untouched old five-button setting migrates to the new default; edited ones are kept", () => {
+  const old = ["x", "linkedin", "facebook", "email", "copy"].map((k) => ({ id: `share-${k}`, kind: k, enabled: true, label: k === "x" ? "X" : "", template: "" }));
+  assert.equal(normalizeShareSettings({ buttons: old }).buttons.length, 13);
+  const renamed = old.map((b) => (b.kind === "x" ? { ...b, label: "Post on X" } : b));
+  assert.equal(normalizeShareSettings({ buttons: renamed }).buttons.length, 5);
+  const off = old.map((b) => (b.kind === "email" ? { ...b, enabled: false } : b));
+  assert.equal(normalizeShareSettings({ buttons: off }).buttons.length, 5);
+  assert.equal(normalizeShareSettings({ buttons: old.slice(0, 4) }).buttons.length, 4);
 });
 
 test("every built-in network encodes url and title and is https", () => {
@@ -45,7 +49,7 @@ test("custom templates: http(s) only, values encoded, no script urls", () => {
 });
 
 test("normalize: missing -> defaults; bad entries dropped; labels trimmed", () => {
-  assert.deepEqual(normalizeShareSettings(undefined).buttons.map((b) => b.kind), ["x", "linkedin", "facebook", "email", "copy"]);
+  assert.deepEqual(normalizeShareSettings(undefined).buttons.map((b) => b.kind), DEFAULT_SHARE_BUTTONS.map((b) => b.kind));
   const n = normalizeShareSettings({
     buttons: [
       { id: "a", kind: "reddit", enabled: false, label: "  Post it  " },
@@ -62,7 +66,7 @@ test("normalize: missing -> defaults; bad entries dropped; labels trimmed", () =
 test("site settings: legacy rows get the default share buttons; saving rejects script templates", async () => {
   const { normalizeSite, parseSite } = await import("../content/validate.ts");
   const legacy = normalizeSite({});
-  assert.deepEqual(legacy.share.buttons.map((b) => b.kind), ["x", "linkedin", "facebook", "email", "copy"]);
+  assert.deepEqual(legacy.share.buttons.map((b) => b.kind), DEFAULT_SHARE_BUTTONS.map((b) => b.kind));
   const bad = { ...legacy, share: { buttons: [{ id: "c", kind: "custom", enabled: true, label: "x", template: "javascript:alert(1)" }] } };
   assert.throws(() => parseSite(bad));
   const ok = { ...legacy, share: { buttons: [{ id: "c", kind: "custom", enabled: true, label: "Mine", template: "https://e.com/?u={url}" }, { id: "w", kind: "whatsapp", enabled: false, label: "", template: "" }] } };

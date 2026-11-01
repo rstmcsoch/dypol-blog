@@ -58,8 +58,21 @@ export const SHARE_KIND_NAMES: Record<ShareKind, string> = {
 
 const b = (id: string, kind: ShareKind): ShareButton => ({ id, kind, enabled: true, label: "", template: "" });
 
-/** Exactly the five buttons the site always had, in the same order. */
-export const DEFAULT_SHARE_BUTTONS: ShareButton[] = [b("share-x", "x"), b("share-linkedin", "linkedin"), b("share-facebook", "facebook"), b("share-email", "email"), b("share-copy", "copy")];
+/** The five buttons the site had before t150 (used to migrate untouched settings). */
+export const LEGACY_SHARE_KINDS: ShareKind[] = ["x", "linkedin", "facebook", "email", "copy"];
+
+/** t150: every built-in network is on by default; Share… only shows where the browser supports it. */
+export const DEFAULT_SHARE_BUTTONS: ShareButton[] = (
+  ["x", "linkedin", "facebook", "whatsapp", "telegram", "reddit", "threads", "bluesky", "pinterest", "hackernews", "email", "copy", "native"] as ShareKind[]
+).map((kind) => b(`share-${kind}`, kind));
+
+/** True when stored buttons are the old five-button default, untouched (labels empty or the built-in name). */
+export function isLegacyDefault(buttons: ShareButton[]): boolean {
+  return (
+    buttons.length === LEGACY_SHARE_KINDS.length &&
+    buttons.every((x, i) => x.kind === LEGACY_SHARE_KINDS[i] && x.id === `share-${x.kind}` && x.enabled && !x.template && (!x.label || x.label === SHARE_KIND_NAMES[x.kind]))
+  );
+}
 
 export function defaultShareSettings(): ShareSettings {
   return { buttons: DEFAULT_SHARE_BUTTONS.map((x) => ({ ...x })) };
@@ -120,5 +133,6 @@ export function normalizeShareSettings(raw: unknown): ShareSettings {
     seen.add(id);
     buttons.push({ id, kind, enabled: item.enabled !== false, label: typeof item.label === "string" ? item.label.trim().slice(0, 40) : "", template });
   }
-  return { buttons };
+  // t150: settings that still equal the old five-button default move to the new default.
+  return isLegacyDefault(buttons) ? defaultShareSettings() : { buttons };
 }

@@ -217,24 +217,42 @@ export async function sweepDueScheduled(sql: Sql): Promise<number> {
 
 let lastScheduleSweep = 0;
 
+/** t150: stored byline, else the creating automation profile's author name (null = publisher). */
+export const RESOLVED_AUTHOR_SQL = `coalesce(nullif(trim(author_name), ''), (
+  select case when coalesce(s.profile_id, 'default') = 'default'
+    then (select nullif(trim(json_extract(d.data, '$')), '') from site_settings d where d.id = 'automation_default_author')
+    else (select nullif(trim(p.author_name), '') from automation_profiles p where p.id = s.profile_id) end
+  from automation_submissions s where s.article_id = articles.id order by s.created_at limit 1))`;
+
 async function loadArticles(sql: Sql, where = "", params: unknown[] = []): Promise<Article[]> {
   await sweepDueScheduled(sql);
   let rows: ArticleRow[];
   try {
     try {
+      // t150: an AI article without a stored byline shows its automation profile's
+      // current author name (resolved at read time, so renaming a profile updates them).
+      rows = await sql.query<ArticleRow>(
+        `select id, slug, title, excerpt, status, published_at, updated_at, category_id, motif, featured,
+                seo_title, seo_description, cover_media_id, scheduled_at, corrections, ${RESOLVED_AUTHOR_SQL} as author_name, blocks
+         from articles ${where}`,
+        params,
+      );
+    } catch {
+     try {
       rows = await sql.query<ArticleRow>(
         `select id, slug, title, excerpt, status, published_at, updated_at, category_id, motif, featured,
                 seo_title, seo_description, cover_media_id, scheduled_at, corrections, author_name, blocks
          from articles ${where}`,
         params,
       );
-    } catch {
+     } catch {
       rows = await sql.query<ArticleRow>(
         `select id, slug, title, excerpt, status, published_at, updated_at, category_id, motif, featured,
                 seo_title, seo_description, cover_media_id, scheduled_at, corrections, blocks
          from articles ${where}`,
         params,
       );
+     }
     }
   } catch {
     rows = await sql.query<ArticleRow>(

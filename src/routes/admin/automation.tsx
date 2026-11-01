@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { adminPending } from "@/components/admin/pending";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { errorText } from "@/components/admin/gate";
@@ -247,6 +247,7 @@ function AuthorCell(props: { profileId: string; profileName: string; initial: st
   const [busy, setBusy] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  useEffect(() => setValue(props.initial), [props.initial]);
   const localError = authorError(value, props.others);
   const dirty = value.trim() !== props.initial.trim();
   const error = localError ?? serverError;
@@ -274,8 +275,8 @@ function AuthorCell(props: { profileId: string; profileName: string; initial: st
         aria-invalid={error ? true : undefined}
         onChange={(e) => { setValue(e.target.value); setSaved(false); setServerError(null); }}
       />
-      <button type="submit" className="btn btn--ghost" disabled={busy || !dirty || Boolean(localError)}>{busy ? "Saving…" : "Save"}</button>
-      {error ? <small className="author-cell__error" role="alert">{error}</small> : saved ? <small className="author-cell__ok" role="status">Saved</small> : null}
+      <button type="submit" className="btn" disabled={busy || !dirty || Boolean(localError)} title={dirty ? "Save this author name" : "Type a name, then Save"}>{busy ? "Saving…" : "Save"}</button>
+      {error ? <small className="author-cell__error" role="alert">{error}</small> : saved ? <small className="author-cell__ok" role="status">Saved ✓ bylines updated</small> : null}
     </form>
   );
 }
@@ -298,7 +299,12 @@ function AutomationDesk() {
   const setPolicy = (next: Partial<AutomationSettings["policy"]>) => setS((c) => ({ ...c, policy: { ...c.policy, ...next } }));
   const isDefault = data.profileId === "default";
   const nextRun = nextExpectedRun(s.schedule);
-  const profileName = data.profiles.find((p) => p.id === data.profileId)?.name ?? "";
+  const current = data.profiles.find((p) => p.id === data.profileId);
+  const profileName = current?.name ?? "";
+  const savedAuthor = current?.authorName ?? "";
+  const [author, setAuthor] = useState(savedAuthor);
+  useEffect(() => setAuthor(savedAuthor), [savedAuthor]);
+  const authorProblem = authorError(author, data.profiles.filter((o) => o.id !== data.profileId));
 
   return (
     <>
@@ -323,9 +329,17 @@ function AutomationDesk() {
           setPending(true);
           setError(null);
           setMessage(null);
+          if (authorProblem) { setError(authorProblem); setPending(false); return; }
+          const authorChanged = author.trim() !== savedAuthor.trim();
           void adminSaveAutomation({ data: { profileId: data.profileId, settings: { ...s, topicIdeas: lines(ideas), topicSources: lines(sources), extraClientHosts: lines(hosts) } } })
             .then(async () => {
-              setMessage("Automation settings saved.");
+              let note = "";
+              if (authorChanged) {
+                const r = await adminProfileAction({ data: { action: "author", profileId: data.profileId, authorName: author } });
+                const stored = "authorName" in r ? r.authorName : null;
+                note = stored ? ` Author name saved: articles from this profile now show “by ${stored}”.` : " Author name cleared: articles from this profile show “by DYPOL LABS”.";
+              }
+              setMessage(`Saved.${note || " Automation settings saved."}`);
               await router.invalidate();
             })
             .catch((caught: unknown) => setError(errorText(caught)))
@@ -334,6 +348,11 @@ function AutomationDesk() {
       >
         <fieldset className="block-card">
           <legend>Status</legend>
+          <label className="field">
+            <span>Author name (byline on this profile&apos;s articles, new and existing)</span>
+            <input value={author} maxLength={60} placeholder="DYPOL LABS" data-testid="profile-author" aria-invalid={authorProblem ? true : undefined} onChange={(e) => { setAuthor(e.target.value); setMessage(null); }} />
+            {authorProblem ? <small className="author-cell__error" role="alert">{authorProblem}</small> : <small className="field-help">Empty = “by DYPOL LABS”. Saved with the “Save automation” button below.</small>}
+          </label>
           <Check checked={s.enabled} onChange={(e) => setS({ ...s, enabled: e.target.checked })} label="Enabled" />
           <Check checked={s.paused} onChange={(e) => setS({ ...s, paused: e.target.checked })} label="Paused" />
           {isDefault ? (<>
@@ -506,7 +525,10 @@ function AutomationDesk() {
           <Check checked={policy.requireSources} onChange={(e) => setPolicy({ requireSources: e.target.checked })} label="Require sources" />
           <Check checked={policy.requireFeaturedImage} onChange={(e) => setPolicy({ requireFeaturedImage: e.target.checked })} label="Require a featured image" />
         </fieldset>
-        <button className="btn" type="submit" disabled={pending}>{pending ? "Saving…" : "Save automation"}</button>
+        <div className="save-row" style={{ display: "flex", gap: "0.75rem", alignItems: "center", flexWrap: "wrap" }}>
+          <button className="btn" type="submit" disabled={pending}>{pending ? "Saving…" : "Save automation"}</button>
+          {error ? <span className="banner banner--bad" role="alert" style={{ margin: 0 }}>{error}</span> : message ? <span className="banner" role="status" style={{ margin: 0 }}>{message}</span> : null}
+        </div>
       </form>
       <h2 className="desk-kicker" style={{ marginTop: "2rem" }}>Recent runs</h2>
       {data.runs.length === 0 ? (

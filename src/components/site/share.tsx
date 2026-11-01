@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { CANONICAL_ORIGIN } from "@/lib/seo";
+import { ShareIcon } from "./share-icons";
 import { DEFAULT_SHARE_BUTTONS, shareHref, shareLabel, type ShareButton } from "@/lib/share-buttons";
 
 /**
@@ -32,14 +33,15 @@ export function ShareLinks({
   return (
     <div className="aside-block" data-block="share">
       {label ? <h2 className="aside-head">{label}</h2> : null}
-      <ul className="share-list">
+      <ul className="share-list" data-share-count={shown.length}>
         {shown.map((b) => {
           const name = shareLabel(b, copyLabel);
           if (b.kind === "copy") {
             return (
               <li key={b.id}>
-                <button type="button" onClick={() => void navigator.clipboard?.writeText(url).then(() => setCopied(true))}>
-                  {copied ? copiedLabel : name}
+                <button type="button" aria-label={copied ? copiedLabel : name} title={name} onClick={() => void navigator.clipboard?.writeText(url).then(() => setCopied(true))}>
+                  <ShareIcon kind="copy" />
+                  <span className="share-label">{copied ? copiedLabel : name}</span>
                 </button>
               </li>
             );
@@ -47,8 +49,9 @@ export function ShareLinks({
           if (b.kind === "native") {
             return (
               <li key={b.id} hidden={!canNative}>
-                <button type="button" onClick={() => void navigator.share?.({ title, url }).catch(() => undefined)}>
-                  {name}
+                <button type="button" aria-label={name} title={name} onClick={() => void navigator.share?.({ title, url }).catch(() => undefined)}>
+                  <ShareIcon kind="native" />
+                  <span className="share-label">{name}</span>
                 </button>
               </li>
             );
@@ -57,8 +60,9 @@ export function ShareLinks({
           if (!href) return null;
           return (
             <li key={b.id}>
-              <a href={href} target="_blank" rel="noopener noreferrer">
-                {name}
+              <a href={href} target="_blank" rel="noopener noreferrer" aria-label={name} title={name}>
+                <ShareIcon kind={b.kind} />
+                <span className="share-label">{name}</span>
               </a>
             </li>
           );
