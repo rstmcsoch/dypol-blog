@@ -1,4 +1,5 @@
 import type { BlockType, ContentBlock, NavItem, SiteConfig } from "./types";
+import { defaultShareSettings } from "../lib/share-buttons.ts";
 
 /** A block with every field filled. */
 export function block(id: string, type: BlockType, over: Partial<ContentBlock> = {}): ContentBlock {
@@ -136,6 +137,7 @@ export const site = {
   defaultOgMediaId: null,
   socials: [],
   aiDailyPublishLimit: 0,
+  share: defaultShareSettings(),
   analytics: { enabled: true, measurementId: "G-T1R0QJ2F0Z", consentText: "Allow anonymous Google Analytics cookies to help us understand how this site is used?" },
 } satisfies SiteConfig;
 

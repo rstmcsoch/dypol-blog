@@ -402,7 +402,7 @@ export function SidebarBlocks({ blocks, site, title, slug }: { blocks: ResolvedB
       {blocks.map((r) => {
         const t = r.block.type;
         if (t === "share") {
-          return <ShareLinks key={r.block.id} title={title} path={`/articles/${slug}`} label={r.title} copyLabel={site.labels.copyLink} copiedLabel={site.labels.linkCopied} />;
+          return <ShareLinks key={r.block.id} title={title} path={`/articles/${slug}`} label={r.title} copyLabel={site.labels.copyLink} copiedLabel={site.labels.linkCopied} buttons={site.share?.buttons} />;
         }
         return (
           <div className="aside-block" key={r.block.id} data-block={t}>

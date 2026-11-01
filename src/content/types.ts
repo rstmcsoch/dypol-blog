@@ -251,5 +251,7 @@ export type SiteConfig = {
   socials: import("../lib/social-links.ts").SocialLink[];
   /** t64: whole-website daily cap on AI/MCP publishes (auto + explicit, all profiles). 0 = no limit. Admin manual publishing is never counted. */
   aiDailyPublishLimit: number;
+  /** t148: article share buttons (order, labels, on/off, custom). */
+  share: import("../lib/share-buttons.ts").ShareSettings;
   analytics: { enabled: boolean; measurementId: string; consentText: string };
 };

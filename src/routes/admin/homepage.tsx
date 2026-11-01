@@ -65,6 +65,8 @@ function HomepageAdmin() {
                 prefix="side"
                 blocks={side.blocks}
                 onChange={(blocks) => patch({ articleSidebar: { ...side, blocks } })}
+                share={site.share}
+                onShareChange={(share) => patch({ share })}
                 types={SIDEBAR_BLOCK_TYPES}
                 categories={categories}
                 tags={tags}
