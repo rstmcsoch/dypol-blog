@@ -3551,6 +3551,29 @@ iframe, embed {
 @media (max-width: 359px) {
   .search-btn { width: 2.2rem; height: 2.2rem; }
 }
+/* t143: phones in portrait: icon-only theme toggle, square like .search-btn; menu search row inset like the list */
+@media (max-width: 767px) and (orientation: portrait) {
+  .theme-switch__label {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+  }
+  .theme-switch__btn {
+    position: relative;
+    width: calc(2.5rem - 2 * var(--line));
+    min-width: 0;
+    height: calc(2.5rem - 2 * var(--line));
+    min-height: 0;
+    padding: 0;
+  }
+  .theme-switch__btn svg { width: 1rem; height: 1rem; }
+  .theme-switch__mark { position: absolute; top: 3px; right: 3px; width: 0.36rem; height: 0.36rem; border-width: 1.5px; }
+}
+@media (max-width: 359px) and (orientation: portrait) {
+  .theme-switch__btn { width: calc(2.2rem - 2 * var(--line)); height: calc(2.2rem - 2 * var(--line)); }
+}
+@media (max-width: 959px) {
+  .site-nav.is-open .site-nav__search { margin: 1rem 0 0.5rem; padding-inline: clamp(1rem, 4vw, 2.5rem); }
+}
 /* t115: contact form */
 .contact-form { margin: 2.5rem 0 1rem; padding-top: 1.5rem; border-top: 1px solid color-mix(in srgb, currentColor 18%, transparent); }
 .contact-form h2 { margin: 0 0 1rem; }
