@@ -218,6 +218,7 @@ const siteSchema = z.object({
     whiteness: z.number().int().min(85).max(100),
     accent: z.string().regex(/^#[0-9a-fA-F]{6}$/, "Use a #rrggbb color.").transform((v) => v.toLowerCase()),
     coverFallback: z.enum(["plate", "minimal", "none"]),
+    accentText: z.enum(["black", "white", "black-white", "white-black"]).default("black"),
   }),
   footer: z.object({
     columns: z.array(z.object({

@@ -36,11 +36,34 @@ test("accent ink picks the more readable of black and white", () => {
 });
 
 test("appearanceCss only emits validated colours and covers every theme selector", () => {
-  const css = appearanceCss({ darkness: 80, whiteness: 95, accent: "#00AA88", coverFallback: "minimal" });
+  const css = appearanceCss({ darkness: 80, whiteness: 95, accent: "#00AA88", coverFallback: "minimal", accentText: "black" });
   assert.match(css, /--accent:#00aa88/);
   assert.match(css, /:root\[data-theme="dark"\]\{--paper:#333333;/);
   assert.match(css, /prefers-color-scheme: dark/);
   const evil = appearanceCss({ darkness: 90, whiteness: 100, accent: "red;}</style><script>", coverFallback: "plate" } as never);
   assert.doesNotMatch(evil, /script|red;/);
   assert.match(evil, /--accent:#ff4d00/);
+});
+
+test("t145: text on orange maps each option to day/night colours; unknown = black both", async () => {
+  const { accentTextColors, ACCENT_TEXT_OPTIONS } = await import("./appearance.ts");
+  assert.deepEqual(accentTextColors("black"), { light: "#111111", dark: "#111111" });
+  assert.deepEqual(accentTextColors("white"), { light: "#ffffff", dark: "#ffffff" });
+  assert.deepEqual(accentTextColors("black-white"), { light: "#111111", dark: "#ffffff" });
+  assert.deepEqual(accentTextColors("white-black"), { light: "#ffffff", dark: "#111111" });
+  assert.deepEqual(accentTextColors(undefined), { light: "#111111", dark: "#111111" });
+  assert.deepEqual(accentTextColors("<script>"), { light: "#111111", dark: "#111111" });
+  assert.equal(ACCENT_TEXT_OPTIONS.length, 4);
+});
+
+test("t145: appearanceCss writes --accent-ink per theme so the toggle switches it live", () => {
+  const css = appearanceCss({ darkness: 92, whiteness: 100, accent: "#ff7100", coverFallback: "minimal", accentText: "black-white" });
+  const [root, media, light, dark] = css.split("\n");
+  assert.match(root, /--accent-ink:#111111/);
+  assert.match(media, /--accent-ink:#ffffff/);
+  assert.match(light, /--accent-ink:#111111/);
+  assert.match(dark, /--accent-ink:#ffffff/);
+  // Default (missing) = black in both modes, the original look.
+  const def = appearanceCss({ darkness: 92, whiteness: 100, accent: "#ff7100", coverFallback: "minimal" } as never);
+  assert.equal((def.match(/--accent-ink:#111111/g) ?? []).length, 4);
 });

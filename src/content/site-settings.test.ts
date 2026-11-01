@@ -161,3 +161,9 @@ test("t96: the default homepage is the long sectioned page", () => {
   assert.deepEqual(types, ["featured", "also", "river", "topicRows", "quickReads", "related", "topics", "moreStories", "tags"]);
   assert.deepEqual(normalizeSite({ home: site.home }).home, site.home);
 });
+
+test("t145: accentText validates; missing defaults to black, bad value falls back", () => {
+  assert.equal(normalizeSite({ appearance: { darkness: 92, whiteness: 100, accent: "#ff7100", coverFallback: "minimal" } }).appearance.accentText, "black");
+  assert.equal(normalizeSite({ appearance: { ...site.appearance, accentText: "white-black" } }).appearance.accentText, "white-black");
+  assert.equal(normalizeSite({ appearance: { ...site.appearance, accentText: "pink" } }).appearance.accentText, "black");
+});

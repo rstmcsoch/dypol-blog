@@ -187,6 +187,9 @@ export type TickerItem = { id: string; text: string; href: string };
 
 export type CoverFallback = "plate" | "minimal" | "none";
 
+/** Text on orange (accent) surfaces: day theme colour, then night theme colour. */
+export type AccentText = "black" | "white" | "black-white" | "white-black";
+
 export type Appearance = {
   /** 75-100: how dark the night theme page is (100 = pure black). */
   darkness: number;
@@ -196,6 +199,8 @@ export type Appearance = {
   accent: string;
   /** What an article without a cover image shows. */
   coverFallback: CoverFallback;
+  /** Text/icon colour on orange surfaces per theme (t145). Default "black". */
+  accentText: AccentText;
 };
 
 /** Canonical public configuration. The journal and the desk both read this. */

@@ -1,4 +1,4 @@
-import type { Appearance } from "@/content/types";
+import type { AccentText, Appearance } from "@/content/types";
 
 /**
  * Turns the owner's appearance settings into CSS variables for the public site.
@@ -55,16 +55,40 @@ export function accentInk(accent: string): string {
   return contrast("#111111", accent) >= contrast("#ffffff", accent) ? "#111111" : "#ffffff";
 }
 
+export const ACCENT_TEXT_OPTIONS: { value: AccentText; label: string }[] = [
+  { value: "black", label: "Black in both modes" },
+  { value: "white", label: "White in both modes" },
+  { value: "black-white", label: "Black in day, white in night" },
+  { value: "white-black", label: "White in day, black in night" },
+];
+
+const ON_ACCENT_BLACK = "#111111";
+const ON_ACCENT_WHITE = "#ffffff";
+
+/** Text colour on orange surfaces for each theme. Unknown values fall back to black in both (the original look). */
+export function accentTextColors(mode: unknown): { light: string; dark: string } {
+  switch (mode) {
+    case "white":
+      return { light: ON_ACCENT_WHITE, dark: ON_ACCENT_WHITE };
+    case "black-white":
+      return { light: ON_ACCENT_BLACK, dark: ON_ACCENT_WHITE };
+    case "white-black":
+      return { light: ON_ACCENT_WHITE, dark: ON_ACCENT_BLACK };
+    default:
+      return { light: ON_ACCENT_BLACK, dark: ON_ACCENT_BLACK };
+  }
+}
+
 /** CSS that overrides the theme variables. Inputs are validated hex/number values only. */
 export function appearanceCss(a: Appearance): string {
   const { light, dark } = themeColors(a);
   const accent = /^#[0-9a-f]{6}$/i.test(a.accent) ? a.accent.toLowerCase() : "#ff4d00";
-  const vars = (c: ThemeColors) => `--paper:${c.paper};--ink:${c.ink};--muted:${c.muted};`;
-  const ink = accentInk(accent);
+  const on = accentTextColors(a.accentText);
+  const vars = (c: ThemeColors, accentInkColor: string) => `--paper:${c.paper};--ink:${c.ink};--muted:${c.muted};--accent-ink:${accentInkColor};`;
   return [
-    `:root{--accent:${accent};--accent-ink:${ink};--swatch-day:${light.paper};--swatch-day-ink:${light.ink};--swatch-night:${dark.paper};--swatch-night-ink:${dark.ink};${vars(light)}}`,
-    `@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){${vars(dark)}}}`,
-    `:root[data-theme="light"]{${vars(light)}}`,
-    `:root[data-theme="dark"]{${vars(dark)}}`,
+    `:root{--accent:${accent};--swatch-day:${light.paper};--swatch-day-ink:${light.ink};--swatch-night:${dark.paper};--swatch-night-ink:${dark.ink};${vars(light, on.light)}}`,
+    `@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){${vars(dark, on.dark)}}}`,
+    `:root[data-theme="light"]{${vars(light, on.light)}}`,
+    `:root[data-theme="dark"]{${vars(dark, on.dark)}}`,
   ].join("\n");
 }
