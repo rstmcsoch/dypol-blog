@@ -13,6 +13,16 @@ async function requestOrigin(): Promise<string> {
 }
 
 /** t148: live ads for this request (null = no ad markup anywhere, the plain site). */
+/** t161: the certified consent tool's head code (empty when none is set). */
+async function shellCmpHead(): Promise<string> {
+  try {
+    const { publicAdsSettings } = await import("@/lib/ads/ads.server");
+    return (await publicAdsSettings()).consent.cmpHead.trim();
+  } catch {
+    return "";
+  }
+}
+
 async function shellAds(): Promise<import("@/lib/ads/public").PublicAds | null> {
   try {
     const { getRequest } = await import("@tanstack/react-start/server");
@@ -32,13 +42,13 @@ async function shellAds(): Promise<import("@/lib/ads/public").PublicAds | null> 
 export const getShell = createServerFn({ method: "GET" }).handler(async () => {
   try {
     const { readShell } = await import("./repository.server");
-    const [shell, ads] = await Promise.all([readShell(), shellAds()]);
-    return { ...shell, ads };
+    const [shell, ads, cmpHead] = await Promise.all([readShell(), shellAds(), shellCmpHead()]);
+    return { ...shell, ads, cmpHead };
   } catch (error) {
     // The site frame must always render, even if the content layer is broken.
     console.error("[shell] falling back to the built-in site config.", error);
     const { site } = await import("./site");
-    return { site, trending: [] as import("./ticker").TickerEntry[], pages: [] as { slug: string; title: string }[], menuTopics: null as { slug: string; label: string; count: number }[] | null, storyCount: 0, ads: null as import("@/lib/ads/public").PublicAds | null };
+    return { site, trending: [] as import("./ticker").TickerEntry[], pages: [] as { slug: string; title: string }[], menuTopics: null as { slug: string; label: string; count: number }[] | null, storyCount: 0, ads: null as import("@/lib/ads/public").PublicAds | null, cmpHead: "" };
   }
 });
 

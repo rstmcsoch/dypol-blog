@@ -1,5 +1,6 @@
 import { createMiddleware, createStart } from "@tanstack/react-start";
 import { workerEnv } from "@/lib/cf-env.server";
+import { compactHeadBlock, isCmpPath } from "@/lib/ads/cmp";
 
 /**
  * t79 (SEC-008): baseline security headers on every HTML response.
@@ -9,6 +10,11 @@ import { workerEnv } from "@/lib/cf-env.server";
  * (OAuth consent and /media already set their own stricter headers —
  * `set` here only fills the gaps, it does not weaken existing values.)
  */
+// Workers' streaming HTML rewriter (workerd global; absent in plain Node).
+type RwEl = { remove(): void; after(h: string, o: { html: boolean }): void; before(h: string, o: { html: boolean }): void; onEndTag(fn: (e: RwEl) => void): void };
+type Rw = { on(sel: string, h: { element(el: RwEl): void }): Rw; transform(r: Response): Response };
+const Rewriter = (globalThis as unknown as { HTMLRewriter?: new () => Rw }).HTMLRewriter;
+
 const securityHeaders = createMiddleware().server(async ({ request, pathname, next }) => {
   // Grok discovers OAuth by probing the MCP path, not only the issuer root.
   // An HTML 404 on any of these aborts connect before the consent page opens.
@@ -51,7 +57,7 @@ const securityHeaders = createMiddleware().server(async ({ request, pathname, ne
     }
     return oauth.authorizationServerMetadata(request);
   }
-  const result = await next();
+  let result = await next();
   const headers = result.response.headers;
   // t140: only the canonical host is indexable. Version / branch preview
   // hosts (*-blog.dypol.workers.dev etc.) get noindex on every response.
@@ -59,6 +65,26 @@ const securityHeaders = createMiddleware().server(async ({ request, pathname, ne
     try { headers.set("x-robots-tag", "noindex, nofollow"); } catch { /* immutable headers */ }
   }
   const type = headers.get("content-type") ?? "";
+  if (type.includes("text/html") && request.method === "GET" && isCmpPath(path) && Rewriter) {
+    // t161: the certified consent tool's head code goes first in <head>
+    // (right after <meta charset>), ahead of every other script, ad hint and
+    // gtag/GTM tag, on every public page whether ads are on or off.
+    const { publicAdsSettings } = await import("@/lib/ads/ads.server");
+    const cmp = await publicAdsSettings().then((s) => s.consent.cmpHead.trim(), () => "");
+    if (cmp) {
+      const html = compactHeadBlock(cmp);
+      let placed = false;
+      const response = new Rewriter()
+        // React's hydration mirrors of the block (see CmpHeadMirror) are dropped from the HTML.
+        .on("script[data-cmp-mirror]", { element(el: RwEl) { el.remove(); } })
+        .on("meta[charset]", { element(el: RwEl) { if (!placed) { el.after(html, { html: true }); placed = true; } } })
+        .on("head", { element(el: RwEl) { el.onEndTag((end: RwEl) => { if (!placed) { end.before(html, { html: true }); placed = true; } }); } })
+        .transform(result.response);
+      // Hand the SSR stream's cleanup ownership to the rewritten body.
+      const { transferResponseBodyOwnership } = await import("@tanstack/react-start/server");
+      result = { ...result, response: transferResponseBodyOwnership(result.response, response) };
+    }
+  }
   if (type.includes("text/html")) {
     // Admin, preview and auth pages must never be cached. Public pages get a
     // short shared cache so they stay fast while settings changes still show

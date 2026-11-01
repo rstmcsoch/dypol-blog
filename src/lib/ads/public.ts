@@ -123,7 +123,7 @@ export function buildPublicAds(settings: AdsSettings, nowMs: number, opts: { cou
     .filter((s) => s.enabled && s.code.trim() && inSchedule(s.schedule, nowMs))
     .map((s) => ({ id: s.id, placement: s.placement, code: s.code, pages: s.pages, devices: s.devices, consent: s.requiresConsent }));
   const country = (opts.country ?? "").toUpperCase();
-  const needsConsent = settings.consent.enabled && (settings.consent.scope === "all" || !country || EEA_UK.has(country)) && (networkCode || scripts.some((s) => s.consent));
+  const needsConsent = !settings.consent.cmpHead.trim() && settings.consent.enabled && (settings.consent.scope === "all" || !country || EEA_UK.has(country)) && (networkCode || scripts.some((s) => s.consent));
   const sponsored: Record<string, string> = {};
   for (const a of settings.sponsoredArticles) {
     const sp = sponsors.get(a.sponsorId);

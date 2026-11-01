@@ -939,6 +939,17 @@ function SettingsTab({ s, setS }: { s: AdsSettings; setS: (n: AdsSettings) => vo
       </fieldset>
 
       <fieldset className="block-card">
+        <legend>Certified consent tool (CMP) head code</legend>
+        <p className="field-help">
+          Paste the consent tool’s code (Consent Mode default + the CMP loader) exactly as the provider gives it. It is placed first in &lt;head&gt; on every public page, before any ad,
+          gtag or GTM code, whether ads are on or off. While it is set, the simple banner below and the analytics cookie bar are switched off so visitors see one consent prompt.
+        </p>
+        <Field label="Head code">
+          <textarea rows={8} spellCheck={false} value={c.cmpHead} onChange={(e) => setC({ cmpHead: e.target.value })} placeholder="<script>…gtag('consent', 'default', …)</script>" />
+        </Field>
+      </fieldset>
+
+      <fieldset className="block-card">
         <legend>Consent banner</legend>
         <p className="field-help">
           A simple accept/decline banner that holds back ad code until the visitor accepts. It is not a certified Google CMP; for personalised Google ads in the EEA/UK paste a

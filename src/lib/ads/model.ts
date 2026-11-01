@@ -178,6 +178,13 @@ export type ConsentSettings = {
   text: string;
   accept: string;
   reject: string;
+  /**
+   * t161: a certified consent tool's head code (Consent Mode default + CMP
+   * loader). Inserted verbatim right after <meta charset> on every public
+   * page, ads on or off, ahead of all other scripts. When set, the simple
+   * banner above and the analytics cookie bar stay off (the CMP owns consent).
+   */
+  cmpHead: string;
 };
 
 export type HouseAd = { title: string; text: string; url: string; cta: string };
@@ -272,6 +279,7 @@ export function defaultAdsSettings(): AdsSettings {
       text: "We and our advertising partners use cookies to show and measure ads. You can accept or decline; the site works either way.",
       accept: "Accept",
       reject: "Decline",
+      cmpHead: "",
     },
     house: { title: "", text: "", url: "", cta: "Learn more" },
     sponsoredArticles: [],
@@ -456,6 +464,7 @@ export function normalizeAdsSettings(raw: unknown): AdsSettings {
       text: str(consent.text, 600) || d.consent.text,
       accept: str(consent.accept, 40) || d.consent.accept,
       reject: str(consent.reject, 40) || d.consent.reject,
+      cmpHead: str(consent.cmpHead, 20000),
     },
     house: {
       title: str(house.title, 120),
