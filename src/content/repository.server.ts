@@ -1,13 +1,13 @@
 const randomUUID = () => crypto.randomUUID();
 import { articles as seedArticles } from "./articles";
 import { readingMinutes, type ArticleMeta } from "./present";
-import { MediaBindingError, openMediaStore } from "./media-store.server";
+import { MediaBindingError, mediaVersion, openMediaStore } from "./media-store.server";
 import { site } from "./site";
 import { categories as seedCategories, tags as seedTags } from "./taxonomy";
 import { tickerEntries } from "./ticker";
 import { STANDARD_PAGES, standardPage } from "./pages-seed";
 import { related as relatedArticles, resolveBlocks } from "./blocks";
-import type { Article, ArticleBlock, Category, PublicationStatus, SiteConfig, Tag } from "./types";
+import type { Article, ArticleBlock, Category, CoverImage, PublicationStatus, SiteConfig, Tag } from "./types";
 import { blockPlainText, blocksPlainText } from "./block-text.ts";
 import { stripCreditsAndSources } from "../lib/automation/body.ts";
 import { inlinePlain } from "../lib/inline-markdown.ts";
@@ -245,9 +245,11 @@ async function loadArticles(sql: Sql, where = "", params: unknown[] = []): Promi
   const ids = rows.map((row) => row.id);
   // Independent lookups run together: each D1 round-trip is a network hop,
   // so serial awaits were the article page's main server-side cost (t56).
-  const [tags, topics, coverAlts] = await Promise.all([tagMap(sql, ids), topicMap(sql, ids), coverAltMap(sql, rows)]);
+  const [tags, topics, covers] = await Promise.all([tagMap(sql, ids), topicMap(sql, ids), coverMetaMap(sql, rows)]);
   return rows.map((row) => {
-    const article = mapArticle(row, tags.get(row.id) ?? [], topics.get(row.id) ?? [], row.cover_media_id ? (coverAlts.get(row.cover_media_id) ?? null) : null);
+    const cover = row.cover_media_id ? covers.get(row.cover_media_id) : undefined;
+    const article = mapArticle(row, tags.get(row.id) ?? [], topics.get(row.id) ?? [], cover?.alt ?? null);
+    if (cover?.image) article.coverImage = cover.image;
     // The primary topic always leads, even if the join table is stale.
     if (article.topicIds[0] !== article.categoryId) {
       article.topicIds = [article.categoryId, ...article.topicIds.filter((id) => id !== article.categoryId)];
@@ -256,23 +258,58 @@ async function loadArticles(sql: Sql, where = "", params: unknown[] = []): Promi
   });
 }
 
-/** media id -> stored alt text for cover images. Never throws (older DBs just fall back to titles). */
-async function coverAltMap(sql: Sql, rows: ArticleRow[]): Promise<Map<string, string>> {
-  const map = new Map<string, string>();
+/**
+ * media id -> stored alt text and served-image facts (t147: version token for
+ * immutable URLs, real dimensions). Never throws (older DBs fall back to titles).
+ */
+type CoverMeta = { alt: string | null; image: CoverImage | null };
+async function coverMetaMap(sql: Sql, rows: ArticleRow[]): Promise<Map<string, CoverMeta>> {
+  const map = new Map<string, CoverMeta>();
   const mediaIds = [...new Set(rows.map((r) => r.cover_media_id).filter((v): v is string => Boolean(v)))];
   if (mediaIds.length === 0) return map;
   try {
-    for (let start = 0; start < mediaIds.length; start += 50) {
-      const chunk = mediaIds.slice(start, start + 50);
-      const placeholders = chunk.map((_, i) => `$${i + 1}`).join(", ");
-      const found = await sql.query<{ id: string; alt: string }>(`select id, alt from media where id in (${placeholders})`, chunk);
-      for (const m of found) if (m.alt?.trim()) map.set(m.id, m.alt.trim());
+    const chunks: string[][] = [];
+    for (let start = 0; start < mediaIds.length; start += 50) chunks.push(mediaIds.slice(start, start + 50));
+    const found = (
+      await Promise.all(
+        chunks.map(async (chunk) => {
+          const placeholders = chunk.map((_, i) => `$${i + 1}`).join(", ");
+          try {
+            return await sql.query<MediaMetaRow>(
+              `select id, alt, object_key, hero_key, thumb_key, byte_size, hero_byte_size, thumb_byte_size, width, height from media where id in (${placeholders})`,
+              chunk,
+            );
+          } catch {
+            return await sql.query<MediaMetaRow>(`select id, alt from media where id in (${placeholders})`, chunk);
+          }
+        }),
+      )
+    ).flat();
+    for (const m of found) {
+      const width = Number(m.width ?? 0);
+      const height = Number(m.height ?? 0);
+      map.set(m.id, {
+        alt: m.alt?.trim() || null,
+        image: m.object_key || m.hero_key ? { v: mediaVersion(m), w: width, h: height } : null,
+      });
     }
   } catch {
     return map;
   }
   return map;
 }
+type MediaMetaRow = {
+  id: string;
+  alt: string;
+  object_key?: string | null;
+  hero_key?: string | null;
+  thumb_key?: string | null;
+  byte_size?: number | null;
+  hero_byte_size?: number | null;
+  thumb_byte_size?: number | null;
+  width?: number | null;
+  height?: number | null;
+};
 
 function byNewest(a: Article, b: Article): number {
   return Date.parse(b.publishedAt ?? "") - Date.parse(a.publishedAt ?? "");

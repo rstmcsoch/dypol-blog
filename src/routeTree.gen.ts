@@ -19,6 +19,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as ManifestDotwebmanifestRouteImport } from './routes/manifest[.]webmanifest'
 import { Route as McpRouteImport } from './routes/mcp'
 import { Route as NewsSitemapDotxmlRouteImport } from './routes/news-sitemap[.]xml'
+import { Route as PhotolabRouteImport } from './routes/photolab'
 import { Route as RobotsDottxtRouteImport } from './routes/robots[.]txt'
 import { Route as SearchRouteImport } from './routes/search'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
@@ -48,6 +49,7 @@ import { Route as MediaIdRouteImport } from './routes/media/$id'
 import { Route as OauthAuthorizeRouteImport } from './routes/oauth/authorize'
 import { Route as OauthRegisterRouteImport } from './routes/oauth/register'
 import { Route as OauthTokenRouteImport } from './routes/oauth/token'
+import { Route as PhotolabFileRouteImport } from './routes/photolab.$file'
 import { Route as PreviewIdRouteImport } from './routes/preview/$id'
 import { Route as PreviewHomeRouteImport } from './routes/preview/home'
 import { Route as TopicsIndexRouteImport } from './routes/topics/index'
@@ -110,6 +112,11 @@ const McpRoute = McpRouteImport.update({
 const NewsSitemapDotxmlRoute = NewsSitemapDotxmlRouteImport.update({
   id: '/news-sitemap.xml',
   path: '/news-sitemap.xml',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PhotolabRoute = PhotolabRouteImport.update({
+  id: '/photolab',
+  path: '/photolab',
   getParentRoute: () => rootRouteImport,
 } as any)
 const RobotsDottxtRoute = RobotsDottxtRouteImport.update({
@@ -259,6 +266,11 @@ const OauthTokenRoute = OauthTokenRouteImport.update({
   path: '/oauth/token',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PhotolabFileRoute = PhotolabFileRouteImport.update({
+  id: '/$file',
+  path: '/$file',
+  getParentRoute: () => PhotolabRoute,
+} as any)
 const PreviewIdRoute = PreviewIdRouteImport.update({
   id: '/preview/$id',
   path: '/preview/$id',
@@ -337,6 +349,7 @@ export interface FileRoutesByFullPath {
   '/manifest.webmanifest': typeof ManifestDotwebmanifestRoute
   '/mcp': typeof McpRoute
   '/news-sitemap.xml': typeof NewsSitemapDotxmlRoute
+  '/photolab': typeof PhotolabRouteWithChildren
   '/robots.txt': typeof RobotsDottxtRoute
   '/search': typeof SearchRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
@@ -364,6 +377,7 @@ export interface FileRoutesByFullPath {
   '/oauth/authorize': typeof OauthAuthorizeRoute
   '/oauth/register': typeof OauthRegisterRoute
   '/oauth/token': typeof OauthTokenRoute
+  '/photolab/$file': typeof PhotolabFileRoute
   '/preview/$id': typeof PreviewIdRoute
   '/preview/home': typeof PreviewHomeRoute
   '/topics/$slug': typeof TopicsSlugRoute
@@ -390,6 +404,7 @@ export interface FileRoutesByTo {
   '/manifest.webmanifest': typeof ManifestDotwebmanifestRoute
   '/mcp': typeof McpRoute
   '/news-sitemap.xml': typeof NewsSitemapDotxmlRoute
+  '/photolab': typeof PhotolabRouteWithChildren
   '/robots.txt': typeof RobotsDottxtRoute
   '/search': typeof SearchRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
@@ -417,6 +432,7 @@ export interface FileRoutesByTo {
   '/oauth/authorize': typeof OauthAuthorizeRoute
   '/oauth/register': typeof OauthRegisterRoute
   '/oauth/token': typeof OauthTokenRoute
+  '/photolab/$file': typeof PhotolabFileRoute
   '/preview/$id': typeof PreviewIdRoute
   '/preview/home': typeof PreviewHomeRoute
   '/topics/$slug': typeof TopicsSlugRoute
@@ -445,6 +461,7 @@ export interface FileRoutesById {
   '/manifest.webmanifest': typeof ManifestDotwebmanifestRoute
   '/mcp': typeof McpRoute
   '/news-sitemap.xml': typeof NewsSitemapDotxmlRoute
+  '/photolab': typeof PhotolabRouteWithChildren
   '/robots.txt': typeof RobotsDottxtRoute
   '/search': typeof SearchRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
@@ -472,6 +489,7 @@ export interface FileRoutesById {
   '/oauth/authorize': typeof OauthAuthorizeRoute
   '/oauth/register': typeof OauthRegisterRoute
   '/oauth/token': typeof OauthTokenRoute
+  '/photolab/$file': typeof PhotolabFileRoute
   '/preview/$id': typeof PreviewIdRoute
   '/preview/home': typeof PreviewHomeRoute
   '/topics/$slug': typeof TopicsSlugRoute
@@ -501,6 +519,7 @@ export interface FileRouteTypes {
     | '/manifest.webmanifest'
     | '/mcp'
     | '/news-sitemap.xml'
+    | '/photolab'
     | '/robots.txt'
     | '/search'
     | '/sitemap.xml'
@@ -528,6 +547,7 @@ export interface FileRouteTypes {
     | '/oauth/authorize'
     | '/oauth/register'
     | '/oauth/token'
+    | '/photolab/$file'
     | '/preview/$id'
     | '/preview/home'
     | '/topics/$slug'
@@ -554,6 +574,7 @@ export interface FileRouteTypes {
     | '/manifest.webmanifest'
     | '/mcp'
     | '/news-sitemap.xml'
+    | '/photolab'
     | '/robots.txt'
     | '/search'
     | '/sitemap.xml'
@@ -581,6 +602,7 @@ export interface FileRouteTypes {
     | '/oauth/authorize'
     | '/oauth/register'
     | '/oauth/token'
+    | '/photolab/$file'
     | '/preview/$id'
     | '/preview/home'
     | '/topics/$slug'
@@ -608,6 +630,7 @@ export interface FileRouteTypes {
     | '/manifest.webmanifest'
     | '/mcp'
     | '/news-sitemap.xml'
+    | '/photolab'
     | '/robots.txt'
     | '/search'
     | '/sitemap.xml'
@@ -635,6 +658,7 @@ export interface FileRouteTypes {
     | '/oauth/authorize'
     | '/oauth/register'
     | '/oauth/token'
+    | '/photolab/$file'
     | '/preview/$id'
     | '/preview/home'
     | '/topics/$slug'
@@ -663,6 +687,7 @@ export interface RootRouteChildren {
   ManifestDotwebmanifestRoute: typeof ManifestDotwebmanifestRoute
   McpRoute: typeof McpRoute
   NewsSitemapDotxmlRoute: typeof NewsSitemapDotxmlRoute
+  PhotolabRoute: typeof PhotolabRouteWithChildren
   RobotsDottxtRoute: typeof RobotsDottxtRoute
   SearchRoute: typeof SearchRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
@@ -755,6 +780,13 @@ declare module '@tanstack/react-router' {
       path: '/news-sitemap.xml'
       fullPath: '/news-sitemap.xml'
       preLoaderRoute: typeof NewsSitemapDotxmlRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/photolab': {
+      id: '/photolab'
+      path: '/photolab'
+      fullPath: '/photolab'
+      preLoaderRoute: typeof PhotolabRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/robots.txt': {
@@ -960,6 +992,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OauthTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/photolab/$file': {
+      id: '/photolab/$file'
+      path: '/$file'
+      fullPath: '/photolab/$file'
+      preLoaderRoute: typeof PhotolabFileRouteImport
+      parentRoute: typeof PhotolabRoute
+    }
     '/preview/$id': {
       id: '/preview/$id'
       path: '/preview/$id'
@@ -1104,6 +1143,18 @@ const AdminRouteChildren: AdminRouteChildren = {
 
 const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
 
+interface PhotolabRouteChildren {
+  PhotolabFileRoute: typeof PhotolabFileRoute
+}
+
+const PhotolabRouteChildren: PhotolabRouteChildren = {
+  PhotolabFileRoute: PhotolabFileRoute,
+}
+
+const PhotolabRouteWithChildren = PhotolabRoute._addFileChildren(
+  PhotolabRouteChildren,
+)
+
 interface DotwellKnownOauthProtectedResourceRouteChildren {
   DotwellKnownOauthProtectedResourceMcpRoute: typeof DotwellKnownOauthProtectedResourceMcpRoute
 }
@@ -1130,6 +1181,7 @@ const rootRouteChildren: RootRouteChildren = {
   ManifestDotwebmanifestRoute: ManifestDotwebmanifestRoute,
   McpRoute: McpRoute,
   NewsSitemapDotxmlRoute: NewsSitemapDotxmlRoute,
+  PhotolabRoute: PhotolabRouteWithChildren,
   RobotsDottxtRoute: RobotsDottxtRoute,
   SearchRoute: SearchRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,

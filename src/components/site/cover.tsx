@@ -1,4 +1,4 @@
-import type { CoverFallback, CoverMotif } from "@/content/types";
+import type { CoverFallback, CoverImage, CoverMotif } from "@/content/types";
 import { CoverPlate } from "./cover-plate";
 import { mediaUrl } from "@/lib/media-url";
 
@@ -15,6 +15,7 @@ export function Cover({
   category,
   title,
   alt,
+  image,
   priority = false,
 }: {
   mediaId: string | null | undefined;
@@ -25,6 +26,8 @@ export function Cover({
   title: string;
   /** Stored descriptive alt for the image; falls back to the article title. */
   alt?: string | null;
+  /** t147: version token + real size from the media row. */
+  image?: CoverImage | null;
   /** True only for the article hero (likely LCP): load eagerly, high priority. */
   priority?: boolean;
 }) {
@@ -32,7 +35,7 @@ export function Cover({
     return (
       <img
         className="article-cover"
-        src={mediaUrl(mediaId)}
+        src={mediaUrl(mediaId, "hero", image?.v)}
         alt={alt?.trim() ? alt : title}
         loading={priority ? "eager" : "lazy"}
         fetchPriority={priority ? "high" : undefined}

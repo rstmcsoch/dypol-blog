@@ -65,6 +65,7 @@ export function ArticleView({
             <Cover
               mediaId={article.coverMediaId}
               alt={article.coverAlt}
+              image={article.coverImage}
               priority
               fallback={fallback}
               motif={article.motif}

@@ -80,6 +80,7 @@ export const getSearch = createServerFn({ method: "GET" })
           publishedAt: article.publishedAt,
           coverMediaId: article.coverMediaId ?? null,
           coverAlt: article.coverAlt ?? null,
+          coverImage: article.coverImage ?? null,
           snippet,
           topics: meta[article.id]?.topicLabels ?? [],
           minutes: meta[article.id]?.minutes ?? 1,
