@@ -308,7 +308,7 @@ function AdBox({ r, id, occurrence, wrap }: { r: Resolved; id: SlotId; occurrenc
   const cls = ["ad-slot", `ad-slot--${id}`, ...DEVICES.filter((d) => !devices.includes(d)).map((d) => `ad-slot--no-${d}`), collapsed ? "is-collapsed" : ""].filter(Boolean).join(" ");
   const node = (
     <aside ref={asideRef} className={cls} data-slot={id} aria-label="Advertisement" data-leave-guard="off">
-      <span className="ad-label">{slot.label}</span>
+      <span className="ad-label">{slot.label === "Advertisement" ? "AD" : slot.label}</span>
       <div ref={frameRef} className={["ad-frame", ...DEVICES.filter((d) => dimsBy[d]).map((d) => `ad-fix-${d}`), showing?.kind === "sponsor" ? "ad-frame--img" : ""].filter(Boolean).join(" ")} style={frameVars(dimsBy)}>
         <div ref={stageRef} className="ad-stage">
           {showing?.kind === "sponsor" ? <SponsorPicture c={showing} /> : null}

@@ -324,7 +324,7 @@ function SlotEditor({
           </label>
           <Field label="Label above the ad">
             <select value={slot.label} onChange={(e) => onChange({ label: e.target.value as SlotBody["label"] })}>
-              <option>Advertisement</option>
+              <option value="Advertisement">AD</option>
               <option>Sponsored</option>
             </select>
           </Field>
