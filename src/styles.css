@@ -2888,7 +2888,8 @@ img, video, iframe, embed, object, svg {
 img, video {
   height: auto;
 }
-iframe, embed {
+/* Ad iframes keep their own width/height attributes (a 728x90 must stay 90px tall). */
+iframe:not(.ad-frame iframe), embed:not(.ad-frame embed) {
   aspect-ratio: 16 / 9;
   height: auto;
 }
@@ -4301,31 +4302,34 @@ html.nav-open .reading-progress { display: none; }
   text-transform: uppercase;
   color: var(--muted);
 }
-.ad-frame {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  width: 100%;
-  max-width: 100%;
-  min-height: var(--ad-h-desktop, 0px);
-  overflow: hidden;
-  background: var(--ad-bg);
-}
-.ad-frame:empty { background: var(--ad-bg); }
+/* t154: the frame hugs the creative. Fixed sizes reserve exactly the current
+   breakpoint's width x height (server-rendered vars, no CLS) and scale down
+   when the column is narrower; responsive creatives take their own height. */
+.ad-frame { position: relative; display: block; width: 100%; max-width: 100%; margin-inline: auto; overflow: hidden; background: transparent; }
+.ad-stage { display: flex; flex-direction: column; align-items: center; max-width: 100%; }
+.ad-stage > * { max-width: 100%; }
+.ad-frame iframe { display: block; border: 0; }
 .ad-frame img { display: block; max-width: 100%; height: auto; }
-.ad-frame iframe { display: block; max-width: 100%; border: 0; }
 .ad-link { display: block; line-height: 0; }
+.ad-frame--img > .ad-stage { position: static !important; width: 100% !important; height: auto !important; transform: none !important; }
+.ad-frame--img img { width: 100%; height: auto; }
+@media (min-width: 1024px) {
+  .ad-fix-desktop { width: min(100%, var(--ad-w-desktop)); aspect-ratio: var(--ad-ar-desktop); height: var(--ad-real-h, auto); --ad-sw: var(--ad-w-desktop); --ad-sh: var(--ad-h-desktop); }
+  .ad-fix-desktop > .ad-stage { position: absolute; top: 0; left: 0; width: var(--ad-w-desktop); height: var(--ad-h-desktop); max-width: none; transform: scale(var(--ad-scale, 1)); transform-origin: 0 0; }
+}
+@media (min-width: 768px) and (max-width: 1023px) {
+  .ad-fix-tablet { width: min(100%, var(--ad-w-tablet)); aspect-ratio: var(--ad-ar-tablet); height: var(--ad-real-h, auto); --ad-sw: var(--ad-w-tablet); --ad-sh: var(--ad-h-tablet); }
+  .ad-fix-tablet > .ad-stage { position: absolute; top: 0; left: 0; width: var(--ad-w-tablet); height: var(--ad-h-tablet); max-width: none; transform: scale(var(--ad-scale, 1)); transform-origin: 0 0; }
+}
+@media (max-width: 767px) {
+  .ad-fix-mobile { width: min(100%, var(--ad-w-mobile)); aspect-ratio: var(--ad-ar-mobile); height: var(--ad-real-h, auto); --ad-sw: var(--ad-w-mobile); --ad-sh: var(--ad-h-mobile); }
+  .ad-fix-mobile > .ad-stage { position: absolute; top: 0; left: 0; width: var(--ad-w-mobile); height: var(--ad-h-mobile); max-width: none; transform: scale(var(--ad-scale, 1)); transform-origin: 0 0; }
+}
 .ad-slot.is-collapsed { display: none !important; }
 .ad-anchor:has(> .is-collapsed), .ad-rail:has(.is-collapsed), .ad-li:has(> .is-collapsed), .ad-cell:has(> .is-collapsed) { display: none !important; }
 @media (min-width: 1024px) { .ad-slot--no-desktop { display: none !important; } }
-@media (min-width: 768px) and (max-width: 1023px) {
-  .ad-frame { min-height: var(--ad-h-tablet, var(--ad-h-desktop, 0px)); }
-  .ad-slot--no-tablet { display: none !important; }
-}
-@media (max-width: 767px) {
-  .ad-frame { min-height: var(--ad-h-mobile, 0px); }
-  .ad-slot--no-mobile { display: none !important; }
-}
+@media (min-width: 768px) and (max-width: 1023px) { .ad-slot--no-tablet { display: none !important; } }
+@media (max-width: 767px) { .ad-slot--no-mobile { display: none !important; } }
 .ad-wrap > .ad-slot { margin-block: var(--ad-gap); }
 .article-body .ad-slot { margin: 2rem auto; }
 .article-body .ad-slot + * { margin-top: 0; }
@@ -4370,7 +4374,6 @@ main:has(> .ad-rail) { position: relative; }
   border-top: 1px solid var(--ad-rule);
 }
 .ad-anchor .ad-slot { position: relative; width: min(100%, 22rem); margin: 0; padding: 0; border: 0; gap: 0.2rem; }
-.ad-anchor .ad-frame { min-height: var(--ad-h-mobile, 50px); }
 .ad-close {
   position: absolute;
   top: -0.25rem;
