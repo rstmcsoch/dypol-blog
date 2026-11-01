@@ -540,6 +540,8 @@ async function serveRow(db: D1Binding, id: string, fresh: boolean): Promise<Serv
 export type ServedMedia = {
   /** Current version token (compare with ?v=). */
   version: string;
+  /** True when the row has no variants yet (the original is being served). */
+  legacy: boolean;
   etag: string;
   mime: string;
   /** null for a 304 (no R2 read was needed). */
@@ -555,11 +557,11 @@ export type ServedMedia = {
 export async function serveMedia(
   id: string,
   variant: "hero" | "thumb",
-  options: { requestedVersion?: string | null; ifNoneMatch?: string | null } = {},
+  options: { requestedVersion?: string | null; ifNoneMatch?: string | null; fresh?: boolean } = {},
 ): Promise<ServedMedia | null> {
   const env = await readMediaBindings();
   if (!env?.MEDIA || !env.DB) throw new MediaBindingError();
-  let row = await serveRow(env.DB, id, false);
+  let row = await serveRow(env.DB, id, options.fresh === true);
   // A stale cached row must never be pinned under a newer immutable URL.
   if (row && options.requestedVersion && options.requestedVersion !== mediaVersion(row)) row = await serveRow(env.DB, id, true);
   if (!row) return null;
@@ -568,7 +570,15 @@ export async function serveMedia(
   const etag = `"${version}-${variant === "thumb" && row.thumb_key ? "t" : "h"}"`;
   const fallbackMime = key.endsWith(".webp") ? "image/webp" : row.mime;
   if (options.ifNoneMatch && options.ifNoneMatch.split(",").some((tag) => tag.trim().replace(/^W\//, "") === etag)) {
-    return { version, etag, mime: fallbackMime, body: null, size: null };
+    return { version, legacy: !row.hero_key, etag, mime: fallbackMime, body: null, size: null };
+  }
+  const cacheKey = `${key}|${version}`;
+  const cached = byteCache.get(cacheKey);
+  if (cached) {
+    // Refresh LRU position.
+    byteCache.delete(cacheKey);
+    byteCache.set(cacheKey, cached);
+    return { version, legacy: !row.hero_key, etag: cached.etag, mime: cached.mime, body: new Response(cached.bytes).body, size: cached.bytes.byteLength };
   }
   let object = await env.MEDIA.get(key);
   let original = false;
@@ -579,6 +589,32 @@ export async function serveMedia(
   }
   if (!object) return null;
   const mime = object.httpMetadata?.contentType || (original ? row.mime : fallbackMime);
+  const servedEtag = original ? `"${version}-o"` : etag;
+  const size = typeof object.size === "number" ? object.size : null;
+  if (!original && row.hero_key && size !== null && size <= BYTE_CACHE_ENTRY_MAX && object.arrayBuffer) {
+    // Small optimized variants are kept in isolate memory (keyed by version,
+    // so a changed image can never be served from here).
+    const bytes = new Uint8Array(await object.arrayBuffer());
+    rememberBytes(cacheKey, { bytes, mime, etag: servedEtag });
+    return { version, legacy: false, etag: servedEtag, mime, body: new Response(bytes).body, size: bytes.byteLength };
+  }
   const body = object.body ?? (object.arrayBuffer ? new Response(await object.arrayBuffer()).body : null);
-  return { version, etag: original ? `"${version}-o"` : etag, mime, body, size: typeof object.size === "number" ? object.size : null };
+  return { version, legacy: !row.hero_key, etag: servedEtag, mime, body, size };
+}
+
+/** t147: per-isolate LRU of small variant bytes (~all covers fit in a few MB). */
+const BYTE_CACHE_ENTRY_MAX = 300_000;
+const BYTE_CACHE_BUDGET = 24_000_000;
+let byteCacheTotal = 0;
+const byteCache = new Map<string, { bytes: Uint8Array<ArrayBuffer>; mime: string; etag: string }>();
+function rememberBytes(key: string, entry: { bytes: Uint8Array<ArrayBuffer>; mime: string; etag: string }): void {
+  if (byteCache.has(key)) return;
+  byteCache.set(key, entry);
+  byteCacheTotal += entry.bytes.byteLength;
+  while (byteCacheTotal > BYTE_CACHE_BUDGET) {
+    const oldest = byteCache.keys().next().value;
+    if (oldest === undefined) break;
+    byteCacheTotal -= byteCache.get(oldest)?.bytes.byteLength ?? 0;
+    byteCache.delete(oldest);
+  }
 }

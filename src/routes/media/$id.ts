@@ -19,7 +19,13 @@ export const Route = createFileRoute("/media/$id")({
           const url = new URL(request.url);
           const variant = url.searchParams.get("variant") === "thumb" ? "thumb" : "hero";
           const requested = url.searchParams.get("v");
-          const file = await serveMedia(params.id, variant, { requestedVersion: requested, ifNoneMatch: request.headers.get("if-none-match") });
+          const ifNoneMatch = request.headers.get("if-none-match");
+          let file = await serveMedia(params.id, variant, { requestedVersion: requested, ifNoneMatch });
+          if (file?.legacy) {
+            // t147: optimize a legacy original once, then serve the new variant.
+            const { backfillMediaOnDemand } = await import("@/content/repository.server");
+            if (await backfillMediaOnDemand(params.id)) file = await serveMedia(params.id, variant, { requestedVersion: requested, ifNoneMatch, fresh: true });
+          }
           if (!file) return new Response("Not found", { status: 404 });
           const cacheControl = requested ? (requested === file.version ? IMMUTABLE : MISMATCH) : UNVERSIONED;
           const headers: Record<string, string> = {
