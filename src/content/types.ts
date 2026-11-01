@@ -57,7 +57,7 @@ export type Article = {
 };
 
 /** t147: `v` versions /media URLs (immutable caching); w/h are the hero's real pixels (0 = unknown). */
-export type CoverImage = { v: string; w: number; h: number };
+export type CoverImage = { v: string; w: number; h: number; /** dominant colour (#rrggbb) of an opaque image, painted while it loads */ c?: string | null };
 
 export type Category = {
   id: string;
