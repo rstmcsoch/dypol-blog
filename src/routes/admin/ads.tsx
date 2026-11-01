@@ -57,7 +57,6 @@ function fmtIst(iso: string | null): string {
   return `${new Date(Date.parse(iso) + IST_MS).toISOString().slice(0, 16).replace("T", " ")} IST`;
 }
 
-const STATUS_COLOR: Record<SlotStatus, string> = { Live: "#165c3a", Off: "#6b7280", Hidden: "#8a5a00", Scheduled: "#1d4ed8", Expired: "#8a1f1f", "No code": "#6b7280" };
 
 function AdsAdmin() {
   const data = Route.useLoaderData();
@@ -98,12 +97,16 @@ function AdsAdmin() {
           page exactly as it is today. How many ads to run is your call: the rules under Settings are editable defaults and only produce warnings.
         </p>
       </div>
-      <div className="adm-filters">
-        <label className="check-row" style={{ fontWeight: 600 }}>
-          <input type="checkbox" checked={s.master} onChange={(e) => setS({ ...s, master: e.target.checked })} data-testid="ads-master" />
-          Ads master switch {s.master ? "(on)" : "(off — no ads anywhere)"}
+      <div className="ads-head">
+        <label className="ads-switch ads-switch--lg">
+          <input type="checkbox" role="switch" checked={s.master} onChange={(e) => setS({ ...s, master: e.target.checked })} data-testid="ads-master" />
+          <span className="ads-switch__track" aria-hidden="true" />
+          <span className="ads-head__text">
+            <strong>Ads master switch</strong>
+            <small>{s.master ? "On: slots that are on and have code can show." : "Off: no ads anywhere on the site."}</small>
+          </span>
         </label>
-        <div className="adm-row-actions">
+        <div className="ads-head__actions">
           <a className="btn btn--ghost" href="/?adpreview=1" target="_blank" rel="noopener">
             Preview placements
           </a>
@@ -112,7 +115,7 @@ function AdsAdmin() {
           </a>
         </div>
       </div>
-      <div className="adm-filters__presets" role="tablist" aria-label="Ads sections">
+      <div className="ads-tabs" role="tablist" aria-label="Ads sections">
         {TABS.map((t) => (
           <button key={t} type="button" role="tab" aria-selected={tab === t} className={`adm-chip${tab === t ? " adm-chip--active" : ""}`} onClick={() => setTab(t)}>
             {t}
@@ -154,7 +157,7 @@ function AdsAdmin() {
       {tab === "History" ? <HistoryTab audit={data.audit} onRestored={(n) => { setSaved(n); setS(n); }} /> : null}
       {tab === "Test code" ? <SandboxTab /> : null}
 
-      <div className="inline-actions adm-savebar">
+      <div className="inline-actions adm-savebar ads-savebar">
         <button className="btn" type="button" disabled={busy || !dirty} onClick={() => void save()} data-testid="ads-save">
           {busy ? "Saving…" : dirty ? "Save changes" : "Saved"}
         </button>
@@ -174,66 +177,69 @@ function AdsAdmin() {
 }
 
 // ---------------- Slots ----------------
+const STATUS_TONE: Record<SlotStatus, string> = { Live: "live", Off: "off", Hidden: "hidden", Scheduled: "scheduled", Expired: "expired", "No code": "nocode" };
+
+function sizeChips(def: NonNullable<ReturnType<typeof slotDef>>): string[] {
+  return [...new Set([...def.sizes.desktop, ...def.sizes.tablet, ...def.sizes.mobile])];
+}
+
 function SlotList({ s, now, onEdit, setSlot }: { s: AdsSettings; now: number; onEdit: (id: string) => void; setSlot: (id: string, p: Partial<SlotConfig>) => void }) {
   return (
-    <div className="table-wrap">
-      <table className="data-table">
-        <thead>
-          <tr>
-            <th>Slot</th>
-            <th>Where</th>
-            <th>Status</th>
-            <th>On</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {s.slots.map((sl) => {
-            const def = slotDef(sl.id)!;
-            const status = slotStatus(sl, s, now);
-            return (
-              <tr key={sl.id} data-slot-row={sl.id}>
-                <td>
-                  <strong>{sl.id}</strong> · {def.name}
-                  {def.optional ? <span className="adm-muted"> (optional)</span> : null}
-                  {sl.draft ? <span className="adm-muted"> · draft saved</span> : null}
-                </td>
-                <td className="adm-muted" style={{ maxWidth: "22rem" }}>
-                  {def.where}
-                  <br />
-                  <small>{def.devices.join(", ")} · {def.sizes.desktop[0] ?? def.sizes.mobile[0]}</small>
-                </td>
-                <td>
-                  <span style={{ color: STATUS_COLOR[status], fontWeight: 700 }}>{status}</span>
-                  {sl.creatives.length ? <small className="adm-muted"> · {sl.creatives.length} creative{sl.creatives.length > 1 ? "s" : ""}</small> : null}
-                </td>
-                <td>
-                  <input type="checkbox" aria-label={`${sl.id} on`} checked={sl.enabled} onChange={(e) => setSlot(sl.id, { enabled: e.target.checked })} />
-                </td>
-                <td>
-                  <div className="adm-row-actions">
-                    <button type="button" className="btn btn--ghost btn--sm" onClick={() => onEdit(sl.id)}>
-                      Edit
-                    </button>
-                    <button type="button" className="btn btn--ghost btn--sm" onClick={() => setSlot(sl.id, { hidden: !sl.hidden })}>
-                      {sl.hidden ? "Unhide" : "Hide"}
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            );
-          })}
-          <tr>
-            <td>
-              <strong>G3 on About</strong>
-            </td>
-            <td className="adm-muted" colSpan={4}>
-              The above-footer banner (G3) is off on the About page by default. Tick “About” in G3 → Where it shows to use it there. Legal pages, contact, 404, empty searches and
-              the admin never show ads.
-            </td>
-          </tr>
-        </tbody>
-      </table>
+    <div className="ads-slots" data-testid="ads-slot-list">
+      {s.slots.map((sl) => {
+        const def = slotDef(sl.id)!;
+        const status = slotStatus(sl, s, now);
+        return (
+          <article key={sl.id} className="ads-slot" data-slot-row={sl.id}>
+            <div className="ads-slot__main">
+              <div className="ads-slot__title">
+                <span className="ads-slot__id">{sl.id}</span>
+                <strong>{def.name}</strong>
+                {def.optional ? <span className="ads-tag">Optional</span> : null}
+                {sl.draft ? <span className="ads-tag">Draft saved</span> : null}
+              </div>
+              <p className="ads-slot__where">{def.where}</p>
+              <div className="ads-slot__chips">
+                {def.devices.map((d) => (
+                  <span key={d} className="ads-chip ads-chip--device">
+                    {d === "mobile" ? "Phone" : d === "tablet" ? "Tablet" : "Desktop"}
+                  </span>
+                ))}
+                {sizeChips(def).map((z) => (
+                  <span key={z} className="ads-chip">
+                    {z}
+                  </span>
+                ))}
+              </div>
+            </div>
+            <div className="ads-slot__status">
+              <span className={`ads-pill ads-pill--${STATUS_TONE[status]}`}>{status}</span>
+              {sl.creatives.length ? (
+                <small className="adm-muted">
+                  {sl.creatives.length} creative{sl.creatives.length > 1 ? "s" : ""}
+                </small>
+              ) : null}
+            </div>
+            <div className="ads-slot__actions">
+              <label className="ads-switch">
+                <input type="checkbox" role="switch" aria-label={`${sl.id} on`} checked={sl.enabled} onChange={(e) => setSlot(sl.id, { enabled: e.target.checked })} />
+                <span className="ads-switch__track" aria-hidden="true" />
+                <span className="ads-switch__text">{sl.enabled ? "On" : "Off"}</span>
+              </label>
+              <button type="button" className="btn btn--ghost btn--sm" onClick={() => onEdit(sl.id)}>
+                Edit
+              </button>
+              <button type="button" className="btn btn--ghost btn--sm" onClick={() => setSlot(sl.id, { hidden: !sl.hidden })}>
+                {sl.hidden ? "Unhide" : "Hide"}
+              </button>
+            </div>
+          </article>
+        );
+      })}
+      <p className="ads-note">
+        <strong>G3 on About:</strong> the above-footer banner (G3) is off on the About page by default. Tick “About” in G3 → Where it shows to use it there. Legal pages, contact, 404,
+        empty searches and the admin never show ads.
+      </p>
     </div>
   );
 }
@@ -328,7 +334,7 @@ function SlotEditor({
               <option value="sponsor-first">Sponsor first, network as fallback</option>
             </select>
           </Field>
-          <Field label="Frequency cap (views per visitor per day, 0 = none)" style={{ maxWidth: "16rem" }}>
+          <Field label="Frequency cap (views per visitor per day, 0 = none)">
             <input type="number" min={0} max={100} value={slot.frequencyCap} onChange={(e) => onChange({ frequencyCap: Number(e.target.value) })} />
           </Field>
           <label className="check-row">
@@ -472,14 +478,14 @@ function ScheduleEditor({ sched, setSched }: { sched: Schedule; setSched: (p: Pa
         <Field label="End (IST)" help={sched.end ? `Stored as ${sched.end} UTC` : "Empty = no end"}>
           <input type="datetime-local" value={isoToIstInput(sched.end)} onChange={(e) => setSched({ end: istInputToIso(e.target.value) })} />
         </Field>
-        <Field label="Daily from (IST)" style={{ maxWidth: "10rem" }}>
+        <Field label="Daily from (IST)">
           <input type="time" value={sched.from} onChange={(e) => setSched({ from: e.target.value })} />
         </Field>
-        <Field label="Daily to (IST)" style={{ maxWidth: "10rem" }}>
+        <Field label="Daily to (IST)">
           <input type="time" value={sched.to} onChange={(e) => setSched({ to: e.target.value })} />
         </Field>
       </div>
-      <div className="filters">
+      <div className="filters ads-inline">
         {DAYS.map((d, i) => (
           <label key={d} className="check-row">
             <input type="checkbox" checked={sched.days.includes(i)} onChange={(e) => setSched({ days: e.target.checked ? [...sched.days, i].sort() : sched.days.filter((x) => x !== i) })} />
@@ -500,7 +506,7 @@ function CreativeEditor({ c, sponsors, onChange, onRemove, onDuplicate }: { c: C
         <Field label="Name">
           <input value={c.name} onChange={(e) => onChange({ name: e.target.value })} />
         </Field>
-        <Field label="Type" style={{ maxWidth: "12rem" }}>
+        <Field label="Type">
           <select value={c.kind} onChange={(e) => onChange({ kind: e.target.value as Creative["kind"] })}>
             <option value="code">Network / custom code</option>
             <option value="sponsor">Direct sponsor banner</option>
@@ -508,7 +514,7 @@ function CreativeEditor({ c, sponsors, onChange, onRemove, onDuplicate }: { c: C
           </select>
         </Field>
         {c.kind !== "sponsor" ? (
-          <Field label="Network" style={{ maxWidth: "11rem" }}>
+          <Field label="Network">
             <select value={c.network} onChange={(e) => onChange({ network: e.target.value as Creative["network"], isolate: e.target.value === "adsense" ? false : c.isolate })}>
               <option value="adsense">Google AdSense</option>
               <option value="adsterra">Adsterra</option>
@@ -517,7 +523,7 @@ function CreativeEditor({ c, sponsors, onChange, onRemove, onDuplicate }: { c: C
             </select>
           </Field>
         ) : null}
-        <Field label="Weight" style={{ maxWidth: "6rem" }}>
+        <Field label="Weight">
           <input type="number" min={0} max={1000} value={c.weight} onChange={(e) => onChange({ weight: Number(e.target.value) })} />
         </Field>
         <label className="check-row">
@@ -574,8 +580,8 @@ function DeviceCodeEditor({ c, d, onChange, sponsor }: { c: Creative; d: Device;
   const banner = sponsor?.banners.find((b) => b.size === v.size);
   return (
     <div className="filters" style={{ alignItems: "start" }}>
-      <strong style={{ minWidth: "5rem", paddingTop: "1.6rem" }}>{label}</strong>
-      <Field label="Size" style={{ maxWidth: "9rem" }}>
+      <strong className="ads-device-label">{label}</strong>
+      <Field label="Size">
         <select value={v.size} onChange={(e) => set({ size: e.target.value as AdSize })}>
           {AD_SIZES.map((x) => (
             <option key={x}>{x}</option>
@@ -583,22 +589,22 @@ function DeviceCodeEditor({ c, d, onChange, sponsor }: { c: Creative; d: Device;
         </select>
       </Field>
       {d !== "desktop" ? (
-        <label className="check-row" style={{ paddingTop: "1.6rem" }}>
+        <label className="check-row">
           <input type="checkbox" checked={v.inherit} onChange={(e) => set({ inherit: e.target.checked })} /> Use desktop
         </label>
       ) : null}
       {c.kind === "code" && !(d !== "desktop" && v.inherit) ? (
-        <Field label={`${label} code`} style={{ flex: 3 }}>
+        <Field label={`${label} code`} style={{ gridColumn: "1 / -1" }}>
           <textarea rows={4} spellCheck={false} style={{ fontFamily: "ui-monospace, monospace", fontSize: "0.8rem" }} value={v.html} onChange={(e) => set({ html: e.target.value })} placeholder="Paste the ad unit code from your network" />
         </Field>
       ) : null}
       {c.kind === "native" && !(d !== "desktop" && v.inherit) ? (
-        <Field label={`${label} native widget code (optional)`} style={{ flex: 3 }}>
+        <Field label={`${label} native widget code (optional)`} style={{ gridColumn: "1 / -1" }}>
           <textarea rows={2} spellCheck={false} style={{ fontFamily: "ui-monospace, monospace", fontSize: "0.8rem" }} value={v.html} onChange={(e) => set({ html: e.target.value })} />
         </Field>
       ) : null}
       {c.kind === "sponsor" && !(d !== "desktop" && v.inherit) ? (
-        <p className="field-help" style={{ paddingTop: "1.6rem" }}>
+        <p className="field-help" style={{ gridColumn: "1 / -1", margin: 0 }}>
           {banner ? `Uses ${sponsor!.name}'s ${v.size} banner.` : sponsor ? `${sponsor.name} has no ${v.size} banner yet — upload one in Sponsors.` : "Pick a sponsor."}
         </p>
       ) : null}
@@ -724,7 +730,7 @@ function BannerList({ sp, onChange }: { sp: Sponsor; onChange: (b: Sponsor["bann
       <span className="adm-group__label">Banners</span>
       {sp.banners.map((b) => (
         <div key={b.size} className="filters" style={{ alignItems: "center" }}>
-          <img src={`/ad-media/${b.key.replace(/^ads\//, "")}`} alt={b.alt} style={{ maxWidth: 160, maxHeight: 80, border: "1px solid #ddd" }} />
+          <img src={`/ad-media/${b.key.replace(/^ads\//, "")}`} alt={b.alt} style={{ maxWidth: 160, maxHeight: 80, border: "1px solid var(--a-line)", borderRadius: 6 }} />
           <span>
             {b.size} · {Math.round(b.bytes / 1024)} KB · {b.mime}
             {b.key2x && b.key2x !== b.key ? " · 2× ready" : ""}
@@ -738,7 +744,7 @@ function BannerList({ sp, onChange }: { sp: Sponsor; onChange: (b: Sponsor["bann
         </div>
       ))}
       <div className="filters" style={{ alignItems: "end" }}>
-        <Field label="Size" style={{ maxWidth: "9rem" }}>
+        <Field label="Size">
           <select value={size} onChange={(e) => setSize(e.target.value as AdSize)}>
             {AD_SIZES.filter((x) => x !== "responsive").map((x) => (
               <option key={x}>{x}</option>
@@ -825,7 +831,7 @@ function ScriptsTab({ s, setS }: { s: AdsSettings; setS: (n: AdsSettings) => voi
             <Field label="Name">
               <input value={sc.name} onChange={(e) => setSc(sc.id, { name: e.target.value })} />
             </Field>
-            <Field label="Placement" style={{ maxWidth: "12rem" }}>
+            <Field label="Placement">
               <select value={sc.placement} onChange={(e) => setSc(sc.id, { placement: e.target.value as GlobalScript["placement"] })}>
                 <option value="head">Head</option>
                 <option value="body">Body end</option>
@@ -841,7 +847,7 @@ function ScriptsTab({ s, setS }: { s: AdsSettings; setS: (n: AdsSettings) => voi
           <Field label="Code">
             <textarea rows={5} spellCheck={false} style={{ fontFamily: "ui-monospace, monospace", fontSize: "0.8rem" }} value={sc.code} onChange={(e) => setSc(sc.id, { code: e.target.value })} />
           </Field>
-          <div className="filters">
+          <div className="filters ads-inline">
             {PAGE_TYPES.map((p) => (
               <label key={p} className="check-row">
                 <input type="checkbox" checked={sc.pages.includes(p)} onChange={(e) => setSc(sc.id, { pages: e.target.checked ? [...sc.pages, p] : sc.pages.filter((x) => x !== p) })} />
@@ -849,7 +855,7 @@ function ScriptsTab({ s, setS }: { s: AdsSettings; setS: (n: AdsSettings) => voi
               </label>
             ))}
           </div>
-          <div className="filters">
+          <div className="filters ads-inline">
             {DEVICES.map((d) => (
               <label key={d} className="check-row">
                 <input type="checkbox" checked={sc.devices.includes(d)} onChange={(e) => setSc(sc.id, { devices: e.target.checked ? [...sc.devices, d] : sc.devices.filter((x) => x !== d) })} />
@@ -926,7 +932,7 @@ function SettingsTab({ s, setS }: { s: AdsSettings; setS: (n: AdsSettings) => vo
           <label className="check-row">
             <input type="checkbox" checked={r.continueAutoload} disabled onChange={(e) => setR({ continueAutoload: e.target.checked })} /> Continue reading auto-load (not available yet: the site has no infinite article scroll)
           </label>
-          <Field label="Max auto-loaded articles" style={{ maxWidth: "12rem" }}>
+          <Field label="Max auto-loaded articles">
             <input type="number" min={0} max={10} value={r.continueMax} onChange={(e) => setR({ continueMax: Number(e.target.value) })} />
           </Field>
         </div>
@@ -1057,8 +1063,8 @@ function StatsTab({ s }: { s: AdsSettings }) {
       {err ? <p className="banner banner--bad">{err}</p> : null}
       {rows ? (
         bySlot.length ? (
-          <div className="table-wrap">
-            <table className="data-table">
+          <div className="adm-table-wrap">
+            <table className="desk-table adm-table--compact">
               <thead>
                 <tr>
                   <th>Slot</th>
@@ -1098,7 +1104,7 @@ function HistoryTab({ audit, onRestored }: { audit: { createdAt: string; actor: 
       <fieldset className="block-card">
         <legend>Slot versions (last 10 per slot)</legend>
         <div className="filters" style={{ alignItems: "end" }}>
-          <Field label="Slot" style={{ maxWidth: "12rem" }}>
+          <Field label="Slot">
             <select value={slot} onChange={(e) => { setSlot(e.target.value); setVersions(null); }}>
               {SLOT_CATALOG.map((d) => (
                 <option key={d.id} value={d.id}>
@@ -1134,7 +1140,7 @@ function HistoryTab({ audit, onRestored }: { audit: { createdAt: string; actor: 
       <fieldset className="block-card">
         <legend>Audit log</legend>
         {audit.length === 0 ? <p className="field-help">No changes yet.</p> : null}
-        <ul style={{ margin: 0, paddingLeft: "1rem" }}>
+        <ul className="ads-audit">
           {audit.map((a, i) => (
             <li key={i}>
               <small className="adm-muted">{fmtIst(a.createdAt)}</small> · {a.actor ?? "editor"} · <strong>{a.action}</strong> — {a.detail}
@@ -1160,7 +1166,7 @@ function SandboxTab() {
         result here is not always a problem.
       </p>
       <div className="filters" style={{ alignItems: "end" }}>
-        <Field label="Size" style={{ maxWidth: "9rem" }}>
+        <Field label="Size">
           <select value={size} onChange={(e) => setSize(e.target.value as AdSize)}>
             {AD_SIZES.map((x) => (
               <option key={x}>{x}</option>
