@@ -44,8 +44,22 @@ function imagesBinding(env: { IMAGES?: unknown }): ImagesBinding | null {
   return candidate && typeof candidate.input === "function" ? candidate : null;
 }
 
-/** Production transformer backed by the IMAGES binding. */
-export const cloudflareImageTransformer: ImageTransformer = async ({ bytes, spec, quality, anim, planned }) => {
+/**
+ * Production transformer backed by the IMAGES binding. t147: one retry on a
+ * transient transform failure (never on quota or invalid input) before the
+ * upload fails loudly — nothing is ever stored unoptimized by accident.
+ */
+export const cloudflareImageTransformer: ImageTransformer = async (args) => {
+  try {
+    return await transformOnce(args);
+  } catch (error) {
+    if (!(error instanceof ImagePipelineError) || error.code !== "transform-failed") throw error;
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    return transformOnce(args);
+  }
+};
+
+const transformOnce: ImageTransformer = async ({ bytes, spec, quality, anim, planned }) => {
   const env = await workerEnv();
   const images = imagesBinding(env);
   if (!images) {

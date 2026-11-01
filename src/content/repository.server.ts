@@ -1619,25 +1619,13 @@ export async function backfillMediaVariants(raw: { apply?: boolean; limit?: numb
   const { processUploadImage } = await import("@/lib/image-pipeline.server");
   for (const item of legacy) {
     try {
-      const original = await library.read(item.id);
-      if (!original) {
+      const result = await backfillOne(library, item.id, processUploadImage);
+      if (result === "missing") {
         report.failures.push({ id: item.id, filename: item.filename, error: "Original object is missing from R2." });
         continue;
       }
-      const processed = await processUploadImage(original.bytes);
-      const reuseHeroAsThumb = processed.processing === "original-within-target";
-      const done = await library.recordVariants({
-        id: item.id,
-        hero: {
-          bytes: processed.hero.bytes,
-          contentType: processed.hero.contentType,
-          width: processed.hero.width,
-          height: processed.hero.height,
-        },
-        thumb: reuseHeroAsThumb ? null : { bytes: processed.thumb.bytes, contentType: processed.thumb.contentType },
-        processing: processed.processing === "images-binding" ? "backfill-images-binding" : processed.processing,
-      });
-      report.transformsUsed += processed.transformCalls;
+      report.transformsUsed += result.transformCalls;
+      const done = result.done;
       if (done) report.processed += 1;
       else report.skipped += 1;
     } catch (error) {
@@ -1647,6 +1635,51 @@ export async function backfillMediaVariants(raw: { apply?: boolean; limit?: numb
     }
   }
   return report;
+}
+
+type MediaLibrary = Awaited<ReturnType<typeof openMediaStore>>;
+
+/** One legacy row -> hero/thumb variants via the upload pipeline (IMAGES binding). */
+async function backfillOne(
+  library: MediaLibrary,
+  id: string,
+  processUploadImage: typeof import("@/lib/image-pipeline.server").processUploadImage,
+): Promise<"missing" | { done: boolean; transformCalls: number }> {
+  const original = await library.read(id);
+  if (!original) return "missing";
+  const processed = await processUploadImage(original.bytes);
+  const reuseHeroAsThumb = processed.processing === "original-within-target";
+  const done = await library.recordVariants({
+    id,
+    hero: {
+      bytes: processed.hero.bytes,
+      contentType: processed.hero.contentType,
+      width: processed.hero.width,
+      height: processed.hero.height,
+    },
+    thumb: reuseHeroAsThumb ? null : { bytes: processed.thumb.bytes, contentType: processed.thumb.contentType },
+    processing: processed.processing === "images-binding" ? "backfill-images-binding" : processed.processing,
+  });
+  return { done, transformCalls: processed.transformCalls };
+}
+
+// t147: self-healing backfill. A legacy row (no variants) is optimized the
+// first time it is requested, at most once per isolate, so oversized
+// originals never keep shipping to readers. Bounded: only rows without
+// variants qualify, and every upload path already stores variants.
+const lazyBackfillTried = new Set<string>();
+export async function backfillMediaOnDemand(id: string): Promise<boolean> {
+  if (lazyBackfillTried.has(id) || lazyBackfillTried.size > 200) return false;
+  lazyBackfillTried.add(id);
+  try {
+    const { processUploadImage } = await import("@/lib/image-pipeline.server");
+    const library = await openMediaStore();
+    const result = await backfillOne(library, id, processUploadImage);
+    return result !== "missing" && result.done;
+  } catch (error) {
+    console.error("[media] on-demand backfill failed", id, error instanceof Error ? error.message : error);
+    return false;
+  }
 }
 
 export async function deleteMedia(id: string): Promise<void> {
