@@ -19,7 +19,11 @@ test("isContentWrite matches reader-visible tables only", () => {
     "update articles_fts set x = 1",
     "alter table media add column dominant_color text",
     "insert into content_version (id, v) values (1, 1)",
+    "insert into site_settings (id, data) values ('head_code_names', $1)\n    on conflict (id) do update set data = excluded.data",
   ]) assert.equal(isContentWrite(s), false, s);
+  // t189: only the literal admin-only names row is exempt; the public site row still bumps.
+  assert.equal(isContentWrite("insert into site_settings (id, data) values ($1, $2)"), true);
+  assert.equal(isContentWrite("insert into site_settings (id, data) values ('site', $1)"), true);
 });
 
 function fakeSql(version: { v: number | null }) {

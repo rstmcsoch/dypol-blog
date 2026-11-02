@@ -3,7 +3,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { checkHeadCode } from "./head-html.ts";
 import {
-  addHeadEntry, cleanHeadNames, defaultHeadName, headEntries, headEntryKey, headNameFor, joinHeadEntries, moveHeadEntry, removeHeadEntry, replaceHeadEntry,
+  addHeadEntry, cleanHeadNames, defaultHeadName, headEntries, headEntryKey, headNameFor, joinHeadEntries, moveHeadEntry, removeHeadEntry, renameHeadEntry, replaceHeadEntry,
+  sameHeadNames, shownHeadNames,
 } from "./head-entries.ts";
 
 const META = `<meta name="google-site-verification" content="cnBmFIzqzl0ubtj0Wd-0F5BvCxZMnaTRTrXfmVKkkhg" />`;
@@ -85,4 +86,29 @@ test("cleanHeadNames keeps only short string names for present entries", () => {
   assert.equal(n[headEntryKey(META)], "GSC tag");
   assert.equal(n[headEntryKey(POSTHOG)]!.length, 80);
   assert.deepEqual(cleanHeadNames("bad", STORED), {});
+});
+
+test("t189: Edit + Save with the code untouched returns the stored head code itself (no re-extraction), names unchanged", () => {
+  const r = ok(replaceHeadEntry(STORED, {}, 1, CLARITY, ""));
+  assert.equal(r.code, STORED);
+  assert.ok(sameHeadNames(r.names, shownHeadNames(STORED, {})));
+});
+
+test("t189: rename only changes just that entry's name and never the head code", () => {
+  const r = ok(replaceHeadEntry(STORED, {}, 1, CLARITY, "  Clarity   heatmaps "));
+  assert.equal(r.code, STORED);
+  assert.equal(r.names[headEntryKey(CLARITY)], "Clarity heatmaps");
+  assert.equal(r.names[headEntryKey(META)], "Google Search Console verification");
+  assert.deepEqual(renameHeadEntry(STORED, {}, 1, "Clarity heatmaps"), r.names);
+  assert.equal(sameHeadNames(r.names, shownHeadNames(STORED, {})), false);
+});
+
+test("t189: code is compared exactly — a one-character edit is a real change, a trailing-space edit is not trimmed away silently", () => {
+  const edited = CLARITY.replace("z7ffle8eda", "z7ffle8edb");
+  const r = ok(replaceHeadEntry(STORED, {}, 1, edited, ""));
+  assert.notEqual(r.code, STORED);
+  assert.equal(r.code, [META, edited, POSTHOG].join("\n"));
+  // whitespace inside the tag is part of its bytes, so it counts as a change
+  const spaced = CLARITY.replace("(function", "( function");
+  assert.notEqual(ok(replaceHeadEntry(STORED, {}, 1, spaced, "")).code, STORED);
 });

@@ -31,9 +31,16 @@ export const CACHE_MAX_MS = 5 * 60_000;
 export const UNVERIFIED_MS = 30_000;
 const TOKEN_MEMO_MS = 1_000;
 
+/**
+ * t189: the admin-only head-code names row (`site_settings` id 'head_code_names') is never
+ * read by public pages, so writing it must not bump content_version. Only this exact
+ * statement shape (literal id) is exempt; any other site_settings write still bumps.
+ */
+const ADMIN_ONLY_WRITE = /^\s*insert\s+into\s+site_settings\s*\(\s*id\s*,\s*data\s*\)\s*values\s*\(\s*'head_code_names'\s*,/i;
+
 /** True for statements that change what readers see (not analytics or view counters). */
 export function isContentWrite(text: string): boolean {
-  return CONTENT_WRITE.test(text);
+  return CONTENT_WRITE.test(text) && !ADMIN_ONLY_WRITE.test(text);
 }
 
 let localGeneration = 0;

@@ -388,6 +388,19 @@ export const adminSaveHeadCode = createServerFn({ method: "POST" })
     return saveHeadCode(data);
   });
 
+/** t189: rename Settings → Custom head code entries without touching the head code itself. */
+export const adminSaveHeadNames = createServerFn({ method: "POST" })
+  .validator((input: unknown) => {
+    const v = (input ?? {}) as { expected?: unknown; names?: unknown };
+    if (typeof v.expected !== "string") throw new Error("Invalid head code request.");
+    return { expected: v.expected, names: v.names };
+  })
+  .handler(async ({ data }) => {
+    await writeGuard();
+    const { saveHeadNames } = await import("./head-code.server");
+    return saveHeadNames(data);
+  });
+
 export const adminMedia = createServerFn({ method: "GET" })
   .handler(async () => {
     await guard();
