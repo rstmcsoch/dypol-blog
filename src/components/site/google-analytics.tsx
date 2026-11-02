@@ -15,7 +15,8 @@ type Consent = "accept" | "reject" | null;
 /** Without a consent tool, no third-party request is made until a visitor has explicitly accepted. */
 export function GoogleAnalytics() {
   const { analytics } = useSite();
-  const path = useRouterState({ select: (state) => state.location.pathname + state.location.searchStr });
+  // The resolved location changes once the new page has loaded and rendered, so document.title is already the new page's.
+  const path = useRouterState({ select: (state) => { const location = state.resolvedLocation ?? state.location; return location.pathname + location.searchStr; } });
   const [consent, setConsent] = useState<Consent>(null);
   const [ready, setReady] = useState(false);
   const configured = useRef("");
@@ -52,7 +53,7 @@ export function GoogleAnalytics() {
       document.head.append(script);
     }
     if (lastPage.current !== `${id}:${path}`) {
-      window.gtag("event", "page_view", { send_to: id, page_path: path, page_location: window.location.href, page_title: document.title });
+      window.gtag("event", "page_view", { send_to: id, page_path: path, page_location: `${window.location.origin}${path}`, page_title: document.title });
       lastPage.current = `${id}:${path}`;
     }
     return () => { flags[`ga-disable-${id}`] = true; };
