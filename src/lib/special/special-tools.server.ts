@@ -15,7 +15,7 @@ import { keyFor, type KeyEnv } from "@/lib/automation/provider";
 import { MAX_TOPICS_PER_ARTICLE, resolveTopicRefs } from "@/lib/topics";
 import type { ToolDefinition, ToolResult } from "@/lib/mcp/protocol";
 import { markdownToSpecialBlocks, specialBlocksToMarkdown, type SpecialBody, type SpecialSource } from "./body";
-import { categoryGate, specialBrief, specialModeFor, type SpecialSettings } from "./settings";
+import { assignmentOf, categoryGate, specialBrief, specialModeFor, type ProfileAssignment, type SpecialSettings } from "./settings";
 import {
   academicSearch, checkClaim, guardedFetch, htmlToText, injectionSignals, parseFeed, qualityReport, untrusted, validateLinks, webSearch,
   type ClaimCheck, type LinkCheck, type Paper,
@@ -41,6 +41,22 @@ export async function specialToolContext(profileId: string): Promise<SpecialCtx 
   } catch {
     return null;
   }
+}
+
+/**
+ * t178: per-request special context plus the profile's exclusive assignment.
+ * If the settings cannot be read the profile is treated as Normal, which is the
+ * legacy behaviour (never blocks the live normal automation).
+ */
+export async function specialRequestContext(profileId: string): Promise<{ special: SpecialCtx | null; assignment: ProfileAssignment }> {
+  let assignment: ProfileAssignment = "normal";
+  try {
+    const { readSpecialSettings } = await import("@/content/special-settings.server");
+    assignment = assignmentOf(await readSpecialSettings(), profileId);
+  } catch {
+    assignment = "normal";
+  }
+  return { special: assignment === "special" ? await specialToolContext(profileId) : null, assignment };
 }
 
 export type SpecialDeps = {

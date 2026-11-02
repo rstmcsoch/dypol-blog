@@ -25,8 +25,14 @@ export const specialSettingsSchema = z
   .object({
     /** 1. Master switch for AI special articles (admin-written specials always work). */
     enabled: z.boolean(),
-    /** Profiles allowed to write specials. Empty = every automation profile. */
+    /**
+     * t178: profiles ASSIGNED to Special. Exclusive: a listed profile writes only
+     * specials, every other profile writes only normal articles. Empty = no profile
+     * may write AI specials (the normal automation is untouched).
+     */
     profileIds: z.array(z.string().trim().min(1).max(80)).max(50),
+    /** t178 marker: profileIds use the exclusive semantics. Stored rows without it are migrated on read. */
+    profileAssignment: z.literal("exclusive"),
     /** 2. Category gate: AI specials may only be filed under these topic ids. Empty = none (AI cannot write specials). */
     eligibleCategoryIds: z.array(z.string().trim().min(1).max(80)).max(60),
     /** 3. Owner guidance handed to the AI with every special run. */
@@ -86,6 +92,7 @@ export type SpecialSettings = z.infer<typeof specialSettingsSchema>;
 export const DEFAULT_SPECIAL_SETTINGS: SpecialSettings = {
   enabled: false,
   profileIds: [],
+  profileAssignment: "exclusive",
   eligibleCategoryIds: [],
   topicInstructions: "",
   researchDepth: "deep",
@@ -107,6 +114,15 @@ export function normalizeSpecialSettings(raw: unknown): SpecialSettings {
   const base = structuredClone(DEFAULT_SPECIAL_SETTINGS);
   if (!raw || typeof raw !== "object") return base;
   const merged = { ...base, ...(raw as Record<string, unknown>) } as Record<string, unknown>;
+  // t178 migration: before t178, profileIds meant "allowed to ALSO write specials" and an
+  // empty list meant "every profile". Under the exclusive model a listed profile stops
+  // writing normal articles, so carrying an old list over could silently stop the live
+  // normal automation. A legacy row therefore starts with no profile assigned to Special;
+  // the owner assigns profiles explicitly (with a confirmation) on the Special tab.
+  if ((raw as Record<string, unknown>).profileAssignment !== "exclusive") {
+    merged.profileIds = [];
+    merged.profileAssignment = "exclusive";
+  }
   for (const key of ["schedule", "sources", "cloud", "images", "seo"] as const) {
     const v = (raw as Record<string, unknown>)[key];
     merged[key] = { ...base[key], ...(v && typeof v === "object" ? v : {}) };
@@ -124,10 +140,34 @@ export function normalizeSpecialSettings(raw: unknown): SpecialSettings {
 
 export type SpecialMode = { on: true; settings: SpecialSettings } | { on: false; reason: string };
 
+export type ProfileAssignment = "normal" | "special";
+
+/** t178: every profile is either Normal or Special, never both. Unlisted = Normal (the legacy default). */
+export function assignmentOf(settings: Pick<SpecialSettings, "profileIds">, profileId: string): ProfileAssignment {
+  return settings.profileIds.includes(profileId) ? "special" : "normal";
+}
+
+export const ASSIGNED_NORMAL_MESSAGE =
+  "This automation profile is assigned to Normal articles, so it cannot write special articles. Submit without article_type (or with article_type: 'regular'). The owner can move it to Special in Automation → Special → Profiles.";
+export const ASSIGNED_SPECIAL_MESSAGE =
+  "This automation profile is assigned to Special articles, so it cannot write normal articles. Submit with article_type: 'special'. The owner can move it back to Normal in Automation → Special → Profiles.";
+
+/** t178: the profileIds list after assigning one profile to a section (pure; deduplicated, order kept). */
+export function withAssignment(profileIds: readonly string[], profileId: string, section: ProfileAssignment): string[] {
+  const rest = [...new Set(profileIds)].filter((id) => id !== profileId);
+  return section === "special" ? [...rest, profileId] : rest;
+}
+
+/** t178: drop assignments of profiles that no longer exist (a deleted profile is never "special"). */
+export function pruneAssignments(profileIds: readonly string[], knownProfileIds: readonly string[]): string[] {
+  const known = new Set(knownProfileIds);
+  return [...new Set(profileIds)].filter((id) => known.has(id));
+}
+
 /** Whether `profileId` may write AI specials right now. */
 export function specialModeFor(settings: SpecialSettings, profileId: string): SpecialMode {
+  if (assignmentOf(settings, profileId) !== "special") return { on: false, reason: ASSIGNED_NORMAL_MESSAGE };
   if (!settings.enabled) return { on: false, reason: "Special articles are not enabled for automation (Automation → Special)." };
-  if (settings.profileIds.length && !settings.profileIds.includes(profileId)) return { on: false, reason: "This automation profile is not allowed to write special articles." };
   if (settings.eligibleCategoryIds.length === 0) return { on: false, reason: "No categories are approved for AI special articles yet." };
   return { on: true, settings };
 }

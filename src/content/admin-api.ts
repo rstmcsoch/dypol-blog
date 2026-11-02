@@ -150,10 +150,14 @@ export const adminSaveSpecialSettings = createServerFn({ method: "POST" })
   .validator((input: unknown) => input)
   .handler(async ({ data }) => {
     await writeGuard();
-    const { saveSpecialSettings } = await import("./special-settings.server");
+    const { readSpecialSettings, saveSpecialSettings } = await import("./special-settings.server");
     const { logAdminAction } = await import("./repository.server");
     try {
-      const saved = await saveSpecialSettings(data);
+      // t178: profile assignments change only through the "section" profile action (one
+      // source of truth, with its own confirmation); a settings save keeps the stored list.
+      const stored = await readSpecialSettings();
+      const payload = data && typeof data === "object" ? { ...(data as Record<string, unknown>), profileIds: stored.profileIds, profileAssignment: "exclusive" } : data;
+      const saved = await saveSpecialSettings(payload);
       await logAdminAction("special.settings", `Special automation ${saved.enabled ? "on" : "off"}: ${saved.eligibleCategoryIds.length} categories, ${saved.publishBehaviour}`).catch(() => undefined);
       return { ok: true as const, settings: saved };
     } catch (error) {
@@ -763,6 +767,8 @@ export const adminAutomation = createServerFn({ method: "GET" })
       mcpTokenConfigured: mcpConfigured(env.MCP_TOKEN),
       // t177: the website daily cap is one global cap over Normal + Special.
       publishUsage: await (await import("./automation.server")).combinedPublishUsage(),
+      // t178: exclusive Normal/Special assignment (for the tabs, pills and profile table).
+      special: await (await import("./special-settings.server")).readSpecialSettings().then((sp) => ({ enabled: sp.enabled, profileIds: sp.profileIds })),
     };
   });
 
@@ -780,7 +786,8 @@ export const adminSaveAutomation = createServerFn({ method: "POST" })
   });
 
 type ProfileAction =
-  | { action: "create"; name: string; connect?: "api-key" | "oauth"; redirectUris?: string[]; authorName?: string }
+  | { action: "create"; name: string; connect?: "api-key" | "oauth"; redirectUris?: string[]; authorName?: string; section: "normal" | "special" }
+  | { action: "section"; profileId: string; section: "normal" | "special" }
   | { action: "rename"; profileId: string; name: string }
   | { action: "author"; profileId: string; authorName: string }
   | { action: "authors"; profileId: string; names: string[]; reset: boolean }
@@ -793,10 +800,17 @@ export const adminProfileAction = createServerFn({ method: "POST" })
     const v = (input ?? {}) as Record<string, unknown>;
     const name = typeof v.name === "string" ? v.name.slice(0, 200) : "";
     const connect = v.connect === "oauth" || v.connect === "api-key" ? v.connect : undefined;
+    // t178/t179: Normal (default, the legacy behaviour) or Special. Anything else is rejected.
+    const section = v.section === undefined || v.section === "normal" ? "normal" : v.section === "special" ? "special" : null;
     if (v.action === "create") {
+      if (!section) throw new Error("Section must be 'normal' or 'special'.");
       const authorName = typeof v.authorName === "string" ? v.authorName.slice(0, 200) : "";
-      if (connect === "oauth") return { action: "create", name, connect, redirectUris: parseAdminRedirects(v.redirectUris), authorName };
-      return { action: "create", name, connect, authorName };
+      if (connect === "oauth") return { action: "create", name, connect, redirectUris: parseAdminRedirects(v.redirectUris), authorName, section };
+      return { action: "create", name, connect, authorName, section };
+    }
+    if (v.action === "section") {
+      if (!section || v.section === undefined) throw new Error("Section must be 'normal' or 'special'.");
+      return { action: "section", profileId: profileIdOf(v), section };
     }
     if (v.action === "rename") return { action: "rename", profileId: profileIdOf(v), name };
     if (v.action === "authors") {
@@ -824,6 +838,7 @@ export const adminProfileAction = createServerFn({ method: "POST" })
         let profile = created;
         try {
           if (data.authorName?.trim()) profile = { ...created, authorName: await store.setProfileAuthor(created.id, data.authorName) };
+          if (data.section === "special") await (await import("./special-settings.server")).setProfileAssignment(created.id, "special");
           if (data.connect === "api-key") {
             const issued = await store.issueProfileToken(profile.id);
             return { ok: true as const, profile: { ...profile, hasToken: true, tokenHint: issued.hint }, token: issued.token, hint: issued.hint };
@@ -842,10 +857,22 @@ export const adminProfileAction = createServerFn({ method: "POST" })
         }
         return { ok: true as const, profile };
       }
+      if (data.action === "section") {
+        const profiles = await store.listProfiles();
+        const target = profiles.find((p) => p.id === data.profileId);
+        if (!target) throw new Error("Unknown profile.");
+        const saved = await (await import("./special-settings.server")).setProfileAssignment(data.profileId, data.section);
+        const { logAdminAction } = await import("./repository.server");
+        await logAdminAction("special.assignment", `Profile ${target.name} assigned to ${data.section === "special" ? "Special" : "Normal"} articles`).catch(() => undefined);
+        return { ok: true as const, section: data.section, specialProfileIds: saved.profileIds };
+      }
       if (data.action === "rename") await store.renameProfile(data.profileId, data.name);
       if (data.action === "authors") return { ok: true as const, rotation: await store.saveAuthorList(data.profileId, data.names, { reset: data.reset }) };
       if (data.action === "author") return { ok: true as const, authorName: await store.setProfileAuthor(data.profileId, data.authorName) };
-      if (data.action === "delete") await store.deleteProfile(data.profileId);
+      if (data.action === "delete") {
+        await store.deleteProfile(data.profileId);
+        await (await import("./special-settings.server")).setProfileAssignment(data.profileId, "normal").catch(() => undefined);
+      }
       if (data.action === "revoke") await store.revokeProfileToken(data.profileId);
       if (data.action === "token") return { ok: true as const, ...(await store.issueProfileToken(data.profileId)) };
       if (data.action === "oauth-revoke") await store.revokeOauthClient(data.profileId);
