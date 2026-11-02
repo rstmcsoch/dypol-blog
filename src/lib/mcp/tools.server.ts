@@ -154,7 +154,7 @@ function invalid(error: z.ZodError): ToolResult {
   };
 }
 
-type Ctx = { auth: string; profileId?: string; /** t173: precomputed special mode (null/absent = off). */ special?: SpecialCtx | null };
+type Ctx = { auth: string; profileId?: string; /** t173: precomputed special mode (null/absent = off). */ special?: SpecialCtx | null; /** t178: exclusive Normal/Special assignment (absent = normal, the legacy behaviour). */ assignment?: "normal" | "special" };
 
 async function loadSettings(profileId: string) {
   const { readProfileSettings } = await import("@/content/automation.server");
@@ -1252,5 +1252,5 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
       return specialBrief(special!.settings, cats);
     },
     research: () => specialResearchTools(special!, deps),
-  });
+  }, ctx.assignment ?? "normal");
 }

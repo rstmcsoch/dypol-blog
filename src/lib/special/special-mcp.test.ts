@@ -8,7 +8,8 @@ import {
   checkClaim, guardedFetch, htmlToText, injectionSignals, parseArxiv, parseBrave, parseCrossref, parseDuckDuckGo, parseFeed, parseOpenAlex,
   parsePubmedSummary, parseWikipediaSearch, qualityReport, untrusted, validateLinks, webSearch, academicSearch, UNTRUSTED_NOTICE, type FetchLike,
 } from "./research.ts";
-import { applySpecialTools, SPECIAL_OFF_MESSAGE, type SpecialHandlers } from "./mcp-wiring.ts";
+import { applySpecialTools, type SpecialHandlers } from "./mcp-wiring.ts";
+import { ASSIGNED_NORMAL_MESSAGE } from "./settings.ts";
 import type { ToolDefinition, ToolResult } from "../mcp/protocol.ts";
 import { markdownToSpecialBlocks } from "./body.ts";
 
@@ -24,9 +25,9 @@ test("defaults are safe: off, no categories, owner review", () => {
   assert.equal(specialModeFor(DEFAULT_SPECIAL_SETTINGS, "default").on, false);
 });
 
-test("special mode needs enabled + at least one approved category + an allowed profile", () => {
-  assert.equal(specialModeFor(on({ eligibleCategoryIds: [] }), "default").on, false);
-  assert.equal(specialModeFor(on(), "grok").on, true);
+test("special mode needs enabled + at least one approved category + a profile assigned to Special", () => {
+  assert.equal(specialModeFor(on({ eligibleCategoryIds: [], profileIds: ["default"] }), "default").on, false);
+  assert.equal(specialModeFor(on(), "grok").on, false, "t178: none selected = no profile writes specials");
   assert.equal(specialModeFor(on({ profileIds: ["mistral"] }), "grok").on, false);
   assert.equal(specialModeFor(on({ profileIds: ["mistral"] }), "mistral").on, true);
 });
@@ -243,7 +244,7 @@ test("special mode off: tools/list is byte-identical and legacy submits pass thr
   assert.deepEqual(calls.at(-1), ["submit_article_draft", args], "same object, no added keys");
   assert.equal(calls.at(-1)![1 as never], args);
   const refused = await submit.run({ ...args, article_type: "special" });
-  assert.deepEqual(refused, { ok: false, error: SPECIAL_OFF_MESSAGE });
+  assert.deepEqual(refused, { ok: false, error: ASSIGNED_NORMAL_MESSAGE }, "t178: a Normal profile is told it is assigned to Normal");
   await submit.run({ ...args, article_type: "regular" });
   assert.deepEqual(calls.at(-1), ["submit_article_draft", args], "'regular' strips the field and runs the original");
   assert.equal((await submit.run({ ...args, article_type: "weird" })).ok, false);
@@ -252,14 +253,13 @@ test("special mode off: tools/list is byte-identical and legacy submits pass thr
 test("special mode on: submit advertises article_type, routes specials, appends research tools", async () => {
   const log: string[] = [];
   const calls: unknown[] = [];
-  const wrapped = applySpecialTools(legacyTools(calls), true, handlers(log, new Set(["sp1"])));
+  const wrapped = applySpecialTools(legacyTools(calls), true, handlers(log, new Set(["sp1"])), "special");
   assert.deepEqual(wrapped.slice(0, 12).map((t) => t.name), legacyTools([]).map((t) => t.name), "existing tools keep their order");
   assert.equal(wrapped.at(-1)!.name, "web_search");
   const submit = wrapped.find((t) => t.name === "submit_article_draft")!;
   assert.ok((submit.inputSchema.properties as Record<string, unknown>).article_type);
   assert.ok((submit.inputSchema.properties as Record<string, unknown>).title, "original properties kept");
-  await submit.run({ title: "x" });
-  assert.deepEqual(calls.at(-1), ["submit_article_draft", { title: "x" }]);
+  assert.equal((await submit.run({ title: "x" })).ok, false, "t178: a Special profile cannot submit normal articles");
   await submit.run({ title: "x", article_type: "special" });
   assert.deepEqual(log, ["special-submit"]);
   const settings = await wrapped.find((t) => t.name === "get_blog_settings")!.run({});

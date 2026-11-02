@@ -8,8 +8,8 @@ import { CombinedLimitNote } from "@/components/admin/special/combined-limit";
 import { SERVER_API_PROVIDERS, type AutomationSettings } from "@/lib/automation/settings";
 import { PROVIDER_KEY_SECRETS, PROVIDER_LABELS } from "@/lib/automation/provider";
 import { nextExpectedRun } from "@/lib/automation/schedule";
-import { checkAuthorName, sameAuthor } from "@/lib/author-name";
 import { AuthorRotationCard } from "@/components/admin/author-rotation-card";
+import { assignSection, AutomationTabs, lines, NewProfileForm, SectionPicker, SectionTag, SPECIAL_SECTION_NOTE, type Section } from "@/components/admin/automation-sections";
 
 type AutomationSearch = { profile?: string; tab?: "special"; cloud?: string; connected?: "1"; error?: string };
 
@@ -18,6 +18,7 @@ export const Route = createFileRoute("/admin/automation")({
   validateSearch: (search: Record<string, unknown>): AutomationSearch => {
     const out: AutomationSearch = typeof search.profile === "string" && /^(default|p[0-9a-f]{8})$/.test(search.profile) ? { profile: search.profile } : {};
     // t173: Normal | Special tabs. Without ?tab=special the page is exactly the Normal automation page.
+    // t178: ?profile= is kept on both tabs so switching never reloads the data (smooth slide).
     if (search.tab === "special") {
       out.tab = "special";
       if (typeof search.cloud === "string" && /^[a-z-]{2,20}$/.test(search.cloud)) out.cloud = search.cloud;
@@ -26,11 +27,11 @@ export const Route = createFileRoute("/admin/automation")({
     }
     return out;
   },
-  loaderDeps: ({ search }) => ({ profile: search.profile, tab: search.tab }),
+  // t178: both tabs' data load together, so switching tabs is instant (no skeleton) and animates.
+  loaderDeps: ({ search }) => ({ profile: search.profile }),
   loader: async ({ deps }) => {
-    if (deps.tab !== "special") return { normal: await adminAutomation({ data: { profileId: deps.profile ?? "default" } }), special: null };
-    const [special, cloud] = await Promise.all([adminSpecialSettings(), adminCloudStatus()]);
-    return { normal: null, special: { ...special, cloud } };
+    const [normal, special, cloud] = await Promise.all([adminAutomation({ data: { profileId: deps.profile ?? "default" } }), adminSpecialSettings(), adminCloudStatus()]);
+    return { normal, special: { ...special, cloud } };
   },
   component: AutomationPage,
 });
@@ -42,42 +43,40 @@ function useNormalData() {
   return data;
 }
 
-function AutomationTabs({ active }: { active: "normal" | "special" }) {
-  return (
-    <nav className="sp-tabs" aria-label="Automation type">
-      <div className="sp-tabs__list" role="tablist">
-        <Link to="/admin/automation" search={{}} role="tab" aria-selected={active === "normal"} className={`sp-tabs__tab${active === "normal" ? " is-active" : ""}`} data-testid="tab-normal">Normal</Link>
-        <Link to="/admin/automation" search={{ tab: "special" }} role="tab" aria-selected={active === "special"} className={`sp-tabs__tab${active === "special" ? " is-active" : ""}`} data-testid="tab-special">Special</Link>
-      </div>
-    </nav>
-  );
+/** t178: a profile's exclusive section (one source of truth: the special settings' profileIds). */
+function sectionOf(specialIds: string[], profileId: string): Section {
+  return specialIds.includes(profileId) ? "special" : "normal";
 }
 
 function AutomationPage() {
   const loaded = Route.useLoaderData();
   const search = Route.useSearch();
-  if (loaded.special) {
-    return (
-      <>
-        <AutomationTabs active="special" />
-        <SpecialAutomation
-          settings={loaded.special.settings}
-          categories={loaded.special.categories}
-          profiles={loaded.special.profiles}
-          keys={loaded.special.keys}
-          publishUsage={loaded.special.publishUsage}
-          cloud={loaded.special.cloud}
-          flash={{ provider: search.cloud, connected: search.connected === "1", error: search.error }}
-        />
-      </>
-    );
-  }
-  const data = loaded.normal!;
+  const active: Section = search.tab === "special" ? "special" : "normal";
+  const normal = loaded.normal;
+  const specialIds = normal.special.profileIds;
+  const specialCount = normal.profiles.filter((p) => specialIds.includes(p.id)).length;
+  // The tabs stay mounted across switches (same position in both branches), so the indicator slides.
   return (
     <>
-      <AutomationTabs active="normal" />
-      <Profiles />
-      <AutomationDesk key={data.profileId} />
+      <AutomationTabs active={active} normalCount={normal.profiles.length - specialCount} specialCount={specialCount} specialOn={normal.special.enabled} profile={search.profile} />
+      <div key={active} id="auto-panel" role="tabpanel" aria-labelledby={`auto-tab-${active}`} className={`auto-panel auto-panel--${active}`} data-testid={`panel-${active}`}>
+        {active === "special" ? (
+          <SpecialAutomation
+            settings={loaded.special.settings}
+            categories={loaded.special.categories}
+            profiles={normal.profiles.map((p) => ({ id: p.id, name: p.name, authors: p.authors }))}
+            keys={loaded.special.keys}
+            publishUsage={loaded.special.publishUsage}
+            cloud={loaded.special.cloud}
+            flash={{ provider: search.cloud, connected: search.connected === "1", error: search.error }}
+          />
+        ) : (
+          <>
+            <Profiles />
+            <AutomationDesk key={normal.profileId} />
+          </>
+        )}
+      </div>
     </>
   );
 }
@@ -87,10 +86,6 @@ function Profiles() {
   const data = useNormalData();
   const router = useRouter();
   const navigate = Route.useNavigate();
-  const [name, setName] = useState("");
-  const [authorName, setAuthorName] = useState("");
-  const [connect, setConnect] = useState<"api-key" | "oauth">("api-key");
-  const [redirects, setRedirects] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [shown, setShown] = useState<
@@ -109,6 +104,7 @@ function Profiles() {
       .finally(() => setBusy(false));
   };
   const editingOauth = data.profiles.find((p) => p.id === oauthFor) ?? null;
+  const specialIds = data.special.profileIds;
   return (
     <section className="block-card" aria-labelledby="profiles-h" style={{ marginBottom: "1.5rem" }}>
       <h2 id="profiles-h" className="desk-kicker">Automation profiles</h2>
@@ -120,6 +116,24 @@ function Profiles() {
         Two ways to connect, and a profile can have both. <strong>API key</strong>: paste a bearer token into the AI app (<code>Authorization: Bearer …</code>). <strong>OAuth client</strong>: for apps that ask for a client ID and client secret, such as Gemini's custom connector. Paste the redirect URL the app shows (Gemini: Copy redirect URL), then copy the ID and secret back into the app. The MCP address is this site's <code>/mcp</code>.
       </p>
       {error ? <p className="banner banner--bad" role="alert">{error}</p> : null}
+      <div className="auto-assign" data-testid="normal-assign">
+        <p className="desk-note" style={{ margin: 0 }}>Profiles writing <strong>normal</strong> articles. A profile is either Normal or Special, never both.</p>
+        <div className="sp-chips" role="list">
+          {data.profiles.map((p) => {
+            const special = sectionOf(specialIds, p.id) === "special";
+            return special ? (
+              <span key={p.id} role="listitem" className="auto-xpill" data-testid={`normal-pill-${p.id}`}>
+                <button type="button" className="sp-chip auto-xpill__chip" disabled aria-disabled="true" title={`${p.name} is assigned to Special articles`}>{p.name} <SectionTag section="special" /></button>
+                <button type="button" className="auto-xpill__link" disabled={busy} data-testid={`switch-normal-${p.id}`} onClick={() => void run(() => assignSection(p, "normal"))}>Switch to Normal</button>
+              </span>
+            ) : (
+              <span key={p.id} role="listitem">
+                <button type="button" className={`sp-chip${p.id === data.profileId ? " is-on" : ""}`} aria-pressed={p.id === data.profileId} data-testid={`normal-pill-${p.id}`} onClick={() => void navigate({ search: { profile: p.id } })}>{p.name}</button>
+              </span>
+            );
+          })}
+        </div>
+      </div>
       {shown?.kind === "token" ? (
         <div className="banner" role="status" data-testid="new-token">
           <p style={{ margin: 0 }}>
@@ -146,11 +160,12 @@ function Profiles() {
         </div>
       ) : null}
       <div className="adm-scroll-x"><table className="desk-table">
-        <thead><tr><th>Profile</th><th>Authors</th><th>Status</th><th>API key</th><th>OAuth</th><th>Actions</th></tr></thead>
+        <thead><tr><th>Profile</th><th>Section</th><th>Authors</th><th>Status</th><th>API key</th><th>OAuth</th><th>Actions</th></tr></thead>
         <tbody>
           {data.profiles.map((p) => (
             <tr key={p.id} aria-current={p.id === data.profileId ? "true" : undefined} style={p.id === data.profileId ? { fontWeight: 650 } : undefined}>
               <td>{p.name}</td>
+              <td><SectionTag section={sectionOf(specialIds, p.id)} /></td>
               <td><AuthorSummary authors={p.authors} nextAuthor={p.nextAuthor} /></td>
               <td>{!p.enabled ? "Off" : p.paused ? "Paused" : "On"}</td>
               <td>{p.isDefault ? "MCP_TOKEN secret" : p.hasToken ? `…${p.tokenHint ?? ""}` : "none"}</td>
@@ -245,55 +260,16 @@ function Profiles() {
           </div>
         </form>
       ) : null}
-      <form
-        className="stack"
-        style={{ marginTop: "0.75rem" }}
-        onSubmit={(e) => {
-          e.preventDefault();
-          const uris = lines(redirects);
-          if (connect === "oauth" && uris.length < 1) {
-            setError("Paste the redirect URL from the AI app before creating an OAuth profile.");
-            return;
-          }
-          void run(async () => {
-            const r = await adminProfileAction({ data: connect === "oauth" ? { action: "create", name, connect, redirectUris: uris, authorName } : { action: "create", name, connect: "api-key", authorName } });
-            setName("");
-            setAuthorName("");
-            setRedirects("");
-            if ("token" in r && r.token) setShown({ kind: "token", token: r.token });
-            if ("oauth" in r && r.oauth) setShown({ kind: "oauth", clientId: r.oauth.clientId, clientSecret: r.oauth.clientSecret, redirectUris: r.oauth.redirectUris });
-            if ("profile" in r && r.profile) await navigate({ search: { profile: r.profile.id } });
-          });
+      <NewProfileForm
+        profiles={data.profiles}
+        defaultSection="normal"
+        onCreated={async (id, section) => {
+          await router.invalidate();
+          await navigate({ search: section === "special" ? { profile: id, tab: "special" } : { profile: id } });
         }}
-      >
-        <label className="field"><span>New profile name</span><input value={name} maxLength={60} placeholder="Gemini daily tech" onChange={(e) => setName(e.target.value)} /></label>
-        <label className="field"><span>First author name (optional; add more in the profile&apos;s Authors card)</span><input value={authorName} maxLength={60} placeholder="John Daniel" data-testid="new-profile-author" onChange={(e) => setAuthorName(e.target.value)} />
-          {authorError(authorName, data.profiles) ? <small className="author-cell__error" role="alert">{authorError(authorName, data.profiles)}</small> : null}
-        </label>
-        <fieldset className="field">
-          <legend>How should this AI app connect?</legend>
-          <label style={checkRow}><input style={{ width: "auto" }} type="radio" name="connect-method" checked={connect === "api-key"} onChange={() => setConnect("api-key")} /> API key (bearer token)</label>
-          <label style={checkRow}><input style={{ width: "auto" }} type="radio" name="connect-method" checked={connect === "oauth"} onChange={() => setConnect("oauth")} /> OAuth client ID and secret</label>
-        </fieldset>
-        {connect === "oauth" ? (
-          <label className="field"><span>Redirect URL from the AI app (one per line)</span>
-            <textarea value={redirects} onChange={(e) => setRedirects(e.target.value)} placeholder="Paste the redirect URL from the AI app" />
-          </label>
-        ) : <p className="desk-note">An API key is created with the profile and shown once. You can add an OAuth client later from the same row.</p>}
-        <button className="btn" type="submit" disabled={busy || name.trim().length < 2 || Boolean(authorError(authorName, data.profiles))}>Add profile</button>
-      </form>
+      />
     </section>
   );
-}
-
-type ProfileLite = { id: string; name: string; authorName: string | null; authors: string[] };
-
-/** Client-side mirror of src/lib/author-name.ts (server re-checks everything). */
-function authorError(value: string, others: ProfileLite[]): string | null {
-  const r = checkAuthorName(value);
-  if (!r.ok) return r.error;
-  const taken = r.value ? others.find((o) => o.authors.some((a) => sameAuthor(a, r.value))) : undefined;
-  return taken ? `“${taken.name}” already uses this author name.` : null;
 }
 
 /** t169: profiles table cell: the rotation at a glance (edited in the profile's Authors card). */
@@ -306,8 +282,6 @@ function AuthorSummary({ authors, nextAuthor }: { authors: string[]; nextAuthor:
     </span>
   );
 }
-
-const lines = (value: string) => value.split("\n").map((v) => v.trim()).filter(Boolean);
 
 function AutomationDesk() {
   const data = useNormalData();
@@ -327,11 +301,36 @@ function AutomationDesk() {
   const nextRun = nextExpectedRun(s.schedule);
   const current = data.profiles.find((p) => p.id === data.profileId);
   const profileName = current?.name ?? "";
+  const section = sectionOf(data.special.profileIds, data.profileId);
+  const [sectionBusy, setSectionBusy] = useState(false);
 
   return (
     <>
       <p className="desk-kicker">AI connector</p>
       <h1 className="desk-title">Automation: {profileName}</h1>
+      <section className="block-card auto-section-card" aria-labelledby="section-h" data-testid="profile-section">
+        <h2 id="section-h" className="desk-kicker" style={{ marginTop: 0 }}>Section</h2>
+        <SectionPicker
+          value={section}
+          name="profile-section"
+          testId="edit-section"
+          disabled={sectionBusy || !current}
+          onChange={(to) => {
+            if (!current || to === section) return;
+            setSectionBusy(true);
+            setError(null);
+            void assignSection(current, to)
+              .then((changed) => (changed ? router.invalidate() : undefined))
+              .catch((caught: unknown) => setError(errorText(caught)))
+              .finally(() => setSectionBusy(false));
+          }}
+        />
+        {section === "special" ? (
+          <p className="banner auto-seg__note" role="status" data-testid="special-profile-banner">
+            {SPECIAL_SECTION_NOTE} Its key, OAuth client and author rotation below still apply; its special settings live on the <Link to="/admin/automation" search={{ profile: data.profileId, tab: "special" }}>Special tab</Link>.
+          </p>
+        ) : null}
+      </section>
       {current ? (
         <AuthorRotationCard
           profileId={data.profileId}

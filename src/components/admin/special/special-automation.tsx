@@ -9,11 +9,12 @@ import { adminCloudAction, adminCloudConnect, adminSaveSpecialSettings } from "@
 import { CLOUD_PROVIDERS, IMAGE_PROVIDERS, PUBLISH_BEHAVIOURS, RESEARCH_DEPTHS, type SpecialSettings } from "@/lib/special/settings";
 import type { CloudStatus } from "@/content/cloud.server";
 import { CombinedLimitNote, type PublishUsageView } from "./combined-limit";
+import { assignSection, NewProfileForm, SectionTag } from "@/components/admin/automation-sections";
 
 type Props = {
   settings: SpecialSettings;
   categories: Array<{ id: string; slug: string; label: string }>;
-  profiles: Array<{ id: string; name: string }>;
+  profiles: Array<{ id: string; name: string; authors: string[] }>;
   keys: { xai: boolean; openai: boolean; brave: boolean };
   cloud: CloudStatus[];
   publishUsage: PublishUsageView;
@@ -62,6 +63,19 @@ export function SpecialAutomation(props: Props) {
     }
   };
 
+  // t178: assignments save at once (with a confirmation), separately from the settings form.
+  const [assignBusy, setAssignBusy] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const specialIds = props.settings.profileIds;
+  const assign = (p: { id: string; name: string }, to: "normal" | "special") => {
+    setAssignBusy(true);
+    setError(null);
+    void assignSection(p, to)
+      .then((changed) => (changed ? router.invalidate() : undefined))
+      .catch((caught: unknown) => setError(errorText(caught)))
+      .finally(() => setAssignBusy(false));
+  };
+
   const gateOff = s.enabled && s.eligibleCategoryIds.length === 0;
   return (
     <div className="sp-auto" data-testid="special-automation">
@@ -94,12 +108,24 @@ export function SpecialAutomation(props: Props) {
 
         <section className="sp-card" aria-labelledby="sp-c1">
           <h3 id="sp-c1" className="sp-card__title"><span className="sp-num">2</span> Profiles</h3>
-          <p className="desk-note">Which automation profiles may write specials. None selected = all profiles.</p>
-          <div className="sp-chips">
-            {props.profiles.map((p) => (
-              <button key={p.id} type="button" className={`sp-chip${s.profileIds.includes(p.id) ? " is-on" : ""}`} aria-pressed={s.profileIds.includes(p.id)} onClick={() => set("profileIds", toggle(s.profileIds, p.id))}>{p.name}</button>
-            ))}
+          <p className="desk-note">Profiles assigned to Special write <strong>only</strong> special articles; every other profile stays Normal. None selected = no profile may write AI specials. Changes save at once.</p>
+          <div className="sp-chips" role="group" aria-label="Profiles assigned to Special" data-testid="special-assign">
+            {props.profiles.map((p) => {
+              const isSpecial = specialIds.includes(p.id);
+              return (
+                <button key={p.id} type="button" disabled={assignBusy} className={`sp-chip auto-assign-chip${isSpecial ? " is-on" : ""}`} aria-pressed={isSpecial} data-testid={`special-pill-${p.id}`}
+                  title={isSpecial ? `${p.name} writes special articles only. Click to move it back to Normal.` : `${p.name} writes normal articles. Click to assign it to Special.`}
+                  onClick={() => assign(p, isSpecial ? "normal" : "special")}>
+                  {p.name}{isSpecial ? null : <SectionTag section="normal" />}
+                </button>
+              );
+            })}
           </div>
+          {adding ? (
+            <NewProfileForm profiles={props.profiles} defaultSection="special" onCreated={async () => { setAdding(false); await router.invalidate(); }} />
+          ) : (
+            <button type="button" className="btn btn--ghost" style={{ marginTop: "0.6rem" }} onClick={() => setAdding(true)} data-testid="special-new-profile">+ New special profile</button>
+          )}
         </section>
 
         <section className="sp-card sp-span-2" aria-labelledby="sp-c3">

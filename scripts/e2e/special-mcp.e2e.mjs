@@ -49,7 +49,11 @@ async function rpc(method, params) {
   if (json.error) throw new Error(JSON.stringify(json.error));
   return json.result;
 }
-async function call(name, args, { nopace } = {}) {
+// t178: profiles are exclusive (Normal or Special). The suite uses one token (the Default
+// profile), so it assigns Default to the section each submit needs unless `raw` is set.
+const assign = (section) => setSpecial({ profileAssignment: "exclusive", profileIds: section === "special" ? ["default"] : [] });
+async function call(name, args, { nopace, raw } = {}) {
+  if (!raw && name === "submit_article_draft") assign(args?.article_type === "special" ? "special" : "normal");
   const res = await rpc("tools/call", { name, arguments: args });
   return { isError: Boolean(res.isError), data: res.structuredContent ?? JSON.parse(res.content[0].text) };
 }
@@ -68,7 +72,7 @@ const lastRun = (articleId) => db.prepare("select outcome, reason from automatio
 
 try {
   putRow("automation", { ...getRow("automation"), enabled: true, paused: false, mode: "mcp-connector", policy: { ...(getRow("automation").policy ?? {}), autoPublish: true, allowedCategoryIds: [AI], minWords: 120, requireSources: true, minSources: 2, requireFeaturedImage: false, maxPublishedPerRun: 0 } });
-  setSpecial({ enabled: true, profileIds: [], eligibleCategoryIds: [AI], minWords: 300, targetWords: 600, maxPerWeek: 0, maxPublishedPerDay: 0, sources: { minSources: 2, minAcademic: 0, requireVerification: false }, seo: { requireFeaturedImage: false, requireAltText: true, minSections: 2, maxTitleChars: 65, minDescriptionChars: 20 }, publishBehaviour: "auto-if-passes" });
+  setSpecial({ enabled: true, profileAssignment: "exclusive", profileIds: ["default"], eligibleCategoryIds: [AI], minWords: 300, targetWords: 600, maxPerWeek: 0, maxPublishedPerDay: 0, sources: { minSources: 2, minAcademic: 0, requireVerification: false }, seo: { requireFeaturedImage: false, requireAltText: true, minSections: 2, maxTitleChars: 65, minDescriptionChars: 20 }, publishBehaviour: "auto-if-passes" });
   setSiteCap(0);
 
   await check("special on: submit schema gains article_type; research tools listed", async () => {
@@ -171,6 +175,7 @@ try {
     const used = usedToday();
     setSiteCap(used + 2);
     await pace();
+    assign("normal");
     const res = await Promise.all(Array.from({ length: 6 }, (_, i) => fetch(`${BASE}/mcp`, { method: "POST", headers: { authorization: `Bearer ${TOKEN}`, "content-type": "application/json", accept: "application/json, text/event-stream" }, body: JSON.stringify({ jsonrpc: "2.0", id: 900 + i, method: "tools/call", params: { name: "submit_article_draft", arguments: normal(`par${i}`) } }) }).then((r) => r.json())));
     const statuses = res.map((j) => (j.result.structuredContent ?? JSON.parse(j.result.content[0].text)).status);
     assert.equal(statuses.filter((s) => s === "published").length, 2, statuses.join(","));
@@ -178,12 +183,35 @@ try {
     setSiteCap(0);
   });
 
+  await check("t178: a Special-only profile is refused normal submits; a Normal profile is refused specials", async () => {
+    assign("special");
+    const n = await call("submit_article_draft", normal("x-n"), { raw: true });
+    assert.equal(n.isError, true);
+    assert.match(n.data.error, /assigned to Special/);
+    const r = await call("submit_article_draft", { ...normal("x-r"), article_type: "regular" }, { raw: true });
+    assert.match(r.data.error, /assigned to Special/);
+    assign("normal");
+    const { tools } = await rpc("tools/list", {});
+    assert.ok(!tools.some((t) => t.name === "web_search"), "a Normal profile sees the legacy tool list");
+    const s = await call("submit_article_draft", special("x-s"), { raw: true });
+    assert.equal(s.isError, true);
+    assert.match(s.data.error, /assigned to Normal/);
+  });
+
+  await check("t178: legacy settings row (no marker, 'none = all') migrates to no special profile", async () => {
+    putRow("special_automation", { ...getRow("special_automation"), profileAssignment: undefined, profileIds: ["default"] });
+    const s = await call("submit_article_draft", special("legacy-row"), { raw: true });
+    assert.match(s.data.error, /assigned to Normal/);
+  });
+
   await check("special off: special submit refused with a clear message; legacy still works", async () => {
-    setSpecial({ enabled: false });
+    setSpecial({ enabled: false, profileAssignment: "exclusive" });
+    assign("special");
     const { tools } = await rpc("tools/list", {});
     assert.ok(!tools.some((t) => t.name === "web_search"));
     assert.equal(tools.find((t) => t.name === "submit_article_draft").inputSchema.properties.article_type, undefined);
     const s = await call("submit_article_draft", special("off"));
+    assign("normal");
     assert.equal(s.isError, true);
     assert.match(s.data.error, /not enabled/);
     const n = await call("submit_article_draft", normal("off-n"));
