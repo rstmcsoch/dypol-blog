@@ -394,12 +394,24 @@ export async function saveAuthorList(id: string, raw: unknown, opts: { reset?: b
     const taken = profiles.find((p) => p.id !== id && p.authors.some((n) => n.toLowerCase() === name.toLowerCase()));
     if (taken) throw new ProfileError(`“${taken.name}” already uses the author name “${name}”. Pick a different name.`);
   }
-  const current = await readAuthorRotation(id);
-  const nextIndex = opts.reset ? 0 : cursorAfterEdit(current.names, current.nextIndex, names);
   const sql = await getSql();
   const now = new Date().toISOString();
-  await sql`insert into automation_authors (profile_id, names, next_index, updated_at) values (${id}, ${JSON.stringify(names)}, ${nextIndex}, ${now})
-    on conflict (profile_id) do update set names = excluded.names, next_index = excluded.next_index, updated_at = excluded.updated_at`;
+  const single = await profileAuthorName(id);
+  let nextIndex = 0;
+  let saved = false;
+  for (let attempt = 0; attempt < 6 && !saved; attempt++) {
+    // t171: read the RAW row, compute, then compare-and-set against it, so a
+    // publish that took a turn in between is never overwritten.
+    const raw = (await sql<RotationRow>`select profile_id, names, next_index from automation_authors where profile_id = ${id}`)[0];
+    const current = toRotation(raw, single);
+    nextIndex = opts.reset ? 0 : cursorAfterEdit(current.names, current.nextIndex, names);
+    const params = [JSON.stringify(names), nextIndex, now, id];
+    const done = raw
+      ? await sql.query<{ profile_id: string }>(rotationHelpers.SAVE_LIST_CAS_SQL, [...params, raw.names, raw.next_index])
+      : await sql.query<{ profile_id: string }>(rotationHelpers.SAVE_LIST_INSERT_SQL, params);
+    saved = done.length > 0;
+  }
+  if (!saved) throw new ProfileError("Articles were being published while you saved. Please try again.");
   const first = names[0] ?? null;
   if (id === "default") {
     if (first) await sql`insert into site_settings (id, data) values (${DEFAULT_AUTHOR_KEY}, ${JSON.stringify(first)}) on conflict (id) do update set data = excluded.data`;

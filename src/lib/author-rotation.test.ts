@@ -4,7 +4,7 @@ import { readFileSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { checkAuthorList, cursorAfterEdit, MAX_AUTHORS, moveItem, nameFromTurnRow, nextUpName, slotFor, takeTurn, TAKE_TURN_SQL } from "./author-rotation.ts";
+import { checkAuthorList, cursorAfterEdit, MAX_AUTHORS, moveItem, nameFromTurnRow, nextUpName, SAVE_LIST_CAS_SQL, SAVE_LIST_INSERT_SQL, slotFor, takeTurn, TAKE_TURN_SQL } from "./author-rotation.ts";
 
 const run = (names: string[], n: number, start = 0) => {
   const out: string[] = [];
@@ -119,4 +119,43 @@ test("concurrency: parallel publishes across two connections never share or skip
   // completion order is the assignment order: strictly cyclic
   got.forEach((n, i) => assert.equal(n, "ABCD"[i % 4]));
   assert.equal((a.prepare("select next_index from automation_authors").get() as { next_index: number }).next_index, 0);
+});
+
+test("t172: 6 authors, 4 articles a day for 3 days cycles through ALL names (no per-day or per-run reset)", () => {
+  const db = freshDb();
+  db.exec(readFileSync(new URL("../../migrations/d1/0026_author_rotation.sql", import.meta.url), "utf8"));
+  const names = ["N1", "N2", "N3", "N4", "N5", "N6"];
+  db.prepare("insert into automation_authors values ('default', ?, 0, '')").run(JSON.stringify(names));
+  const take = (day: number) => nameFromTurnRow(db.prepare(toSqlite(TAKE_TURN_SQL)).get(`2026-11-0${day}T06:00:00Z`, "default") as { names: string; next_index: number });
+  const days = [1, 2, 3].map((day) => [1, 2, 3, 4].map(() => take(day))); // each day a separate run
+  assert.deepEqual(days, [
+    ["N1", "N2", "N3", "N4"],
+    ["N5", "N6", "N1", "N2"],
+    ["N3", "N4", "N5", "N6"],
+  ]);
+  assert.equal(new Set(days.flat()).size, 6); // #5 and #6 are reached
+  // the pure helper agrees, and the pointer is modulo the FULL list (never capped at 4)
+  assert.deepEqual(run(names, 12).out, days.flat());
+  assert.equal((db.prepare("select next_index n from automation_authors").get() as { n: number }).n, 0);
+});
+
+test("t171: admin save is compare-and-set, so a publish between read and write is never lost", () => {
+  const db = freshDb();
+  db.exec(readFileSync(new URL("../../migrations/d1/0026_author_rotation.sql", import.meta.url), "utf8"));
+  const names = JSON.stringify(["A", "B", "C"]);
+  assert.ok(db.prepare(toSqlite(SAVE_LIST_INSERT_SQL)).get(names, 0, "t", "p1"));
+  assert.equal(db.prepare(toSqlite(SAVE_LIST_INSERT_SQL)).get(names, 2, "t", "p1"), undefined); // never clobbers an existing row
+  // admin reads (names, 0) and computes a reorder ...
+  const snapshot = db.prepare("select names, next_index from automation_authors where profile_id = 'p1'").get() as { names: string; next_index: number };
+  // ... meanwhile an article is published and takes A
+  assert.equal(nameFromTurnRow(db.prepare(toSqlite(TAKE_TURN_SQL)).get("t", "p1") as { names: string; next_index: number }), "A");
+  // the stale save is refused
+  const reordered = JSON.stringify(["C", "B", "A"]);
+  const stale = db.prepare(toSqlite(SAVE_LIST_CAS_SQL)).get(reordered, cursorAfterEdit(["A", "B", "C"], snapshot.next_index, ["C", "B", "A"]), "t", "p1", snapshot.names, snapshot.next_index);
+  assert.equal(stale, undefined);
+  // retry from a fresh read keeps B (the real next-up) next
+  const fresh = db.prepare("select names, next_index from automation_authors where profile_id = 'p1'").get() as { names: string; next_index: number };
+  const cursor = cursorAfterEdit(JSON.parse(fresh.names), fresh.next_index, ["C", "B", "A"]);
+  assert.ok(db.prepare(toSqlite(SAVE_LIST_CAS_SQL)).get(reordered, cursor, "t", "p1", fresh.names, fresh.next_index));
+  assert.equal(nameFromTurnRow(db.prepare(toSqlite(TAKE_TURN_SQL)).get("t", "p1") as { names: string; next_index: number }), "B");
 });
