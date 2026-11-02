@@ -17,6 +17,7 @@ export const Route = createFileRoute("/feed.xml")({
         const data = await readSitemap();
         const articles = data.articles.slice(0, 20).map((article) => ({
           slug: article.slug,
+          ...(article.path.startsWith("/special/") ? { path: article.path } : {}),
           title: article.title,
           excerpt: article.excerpt,
           description: article.excerpt,

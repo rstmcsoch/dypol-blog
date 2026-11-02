@@ -54,6 +54,168 @@ export const adminSaveArticle = createServerFn({ method: "POST" })
     return out;
   });
 
+/* ---------- t173: special articles (admin only; R2 body + D1 metadata) ---------- */
+
+export const adminSpecialEditorData = createServerFn({ method: "GET" })
+  .validator((input: { id: string | null }) => ({ id: input?.id ? String(input.id).slice(0, 80) : null }))
+  .handler(async ({ data }) => {
+    await guard();
+    const { adminEditor, articleTypeOf } = await import("./repository.server");
+    const base = await adminEditor(data.id);
+    if (data.id) {
+      const type = await articleTypeOf(data.id);
+      if (type === null) return { ...base, article: null, special: null, notSpecial: false };
+      if (type !== "special") return { ...base, article: null, special: null, notSpecial: true };
+      const { specialEditorBody } = await import("./special.server");
+      return { ...base, special: await specialEditorBody(data.id), notSpecial: false };
+    }
+    return { ...base, special: null, notSpecial: false };
+  });
+
+export const adminSaveSpecialArticle = createServerFn({ method: "POST" })
+  .validator((input: unknown) => input)
+  .handler(async ({ data }) => {
+    await writeGuard();
+    const { saveSpecialArticle } = await import("./special.server");
+    const { logAdminAction } = await import("./repository.server");
+    const out = await saveSpecialArticle(data, "admin");
+    await logAdminAction("special.save", `Saved special article ${out.slug} v${out.version} (${out.status})`);
+    return out;
+  });
+
+export const adminAutosaveSpecial = createServerFn({ method: "POST" })
+  .validator((input: { id: string; content: unknown }) => ({ id: String(input?.id ?? "").slice(0, 80), content: input?.content }))
+  .handler(async ({ data }) => {
+    await writeGuard();
+    const { autosaveSpecial } = await import("./special.server");
+    return autosaveSpecial(data.id, data.content);
+  });
+
+export const adminRestoreSpecialVersion = createServerFn({ method: "POST" })
+  .validator((input: { id: string; version: number }) => ({ id: String(input?.id ?? "").slice(0, 80), version: Math.max(1, Math.floor(Number(input?.version) || 0)) }))
+  .handler(async ({ data }) => {
+    await writeGuard();
+    const { restoreSpecialVersion } = await import("./special.server");
+    const { logAdminAction } = await import("./repository.server");
+    const out = await restoreSpecialVersion(data.id, data.version, "admin");
+    await logAdminAction("special.restore", `Restored special article version v${data.version} as v${out?.version}`);
+    return out;
+  });
+
+export const adminSpecialVersionBody = createServerFn({ method: "GET" })
+  .validator((input: { id: string; version: number }) => ({ id: String(input?.id ?? "").slice(0, 80), version: Math.max(1, Math.floor(Number(input?.version) || 0)) }))
+  .handler(async ({ data }) => {
+    await guard();
+    const { readSpecialVersion } = await import("./special.server");
+    return readSpecialVersion(data.id, data.version);
+  });
+
+export const adminPublishSpecial = createServerFn({ method: "POST" })
+  .validator((input: { id: string; publish: boolean }) => ({ id: String(input?.id ?? "").slice(0, 80), publish: input?.publish !== false }))
+  .handler(async ({ data }) => {
+    await writeGuard();
+    const { publishSpecialArticle, unpublishSpecialArticle } = await import("./special.server");
+    const { logAdminAction } = await import("./repository.server");
+    if (data.publish) await publishSpecialArticle(data.id);
+    else await unpublishSpecialArticle(data.id);
+    await logAdminAction("special.status", `${data.publish ? "Published" : "Unpublished"} special article ${data.id}`);
+    return { ok: true as const };
+  });
+
+/** Special research notebook for an article (sources / claims / reports) — never public. */
+export const adminSpecialResearch = createServerFn({ method: "GET" })
+  .validator((input: { id: string }) => ({ id: String(input?.id ?? "").slice(0, 80) }))
+  .handler(async ({ data }) => {
+    await guard();
+    const { readResearch } = await import("@/lib/special/research.server");
+    return readResearch(`article:${data.id}`);
+  });
+
+/** t173: Automation → Special settings (admin only). */
+export const adminSpecialSettings = createServerFn({ method: "GET" }).handler(async () => {
+  await guard();
+  const { readSpecialSettings } = await import("./special-settings.server");
+  const { listProfiles } = await import("./automation.server");
+  const { getSql } = await import("@/lib/db");
+  const sql = await getSql();
+  const categories = await sql<{ id: string; slug: string; label: string }>`select id, slug, label from categories order by label`;
+  const profiles = (await listProfiles().catch(() => [])).map((p: { id: string; name?: string; label?: string }) => ({ id: p.id, name: String(p.name ?? p.label ?? p.id) }));
+  const env = (await (await import("@/lib/cf-env.server")).workerEnv()) as Record<string, unknown>;
+  const keys = { xai: Boolean(env.XAI_API_KEY), openai: Boolean(env.OPENAI_API_KEY), brave: Boolean(env.BRAVE_SEARCH_API_KEY) };
+  const publishUsage = await (await import("./automation.server")).combinedPublishUsage();
+  return { settings: await readSpecialSettings(), categories, profiles, keys, publishUsage };
+});
+
+export const adminSaveSpecialSettings = createServerFn({ method: "POST" })
+  .validator((input: unknown) => input)
+  .handler(async ({ data }) => {
+    await writeGuard();
+    const { saveSpecialSettings } = await import("./special-settings.server");
+    const { logAdminAction } = await import("./repository.server");
+    try {
+      const saved = await saveSpecialSettings(data);
+      await logAdminAction("special.settings", `Special automation ${saved.enabled ? "on" : "off"}: ${saved.eligibleCategoryIds.length} categories, ${saved.publishBehaviour}`).catch(() => undefined);
+      return { ok: true as const, settings: saved };
+    } catch (error) {
+      const { ZodError } = await import("zod");
+      if (error instanceof ZodError) return { ok: false as const, error: error.issues.slice(0, 6).map((i) => `${i.path.join(".")}: ${i.message}`).join("; ") };
+      throw error;
+    }
+  });
+
+/** t173: cloud connectors (admin only). Tokens never leave the server; statuses are honest. */
+export const adminCloudStatus = createServerFn({ method: "GET" }).handler(async () => {
+  await guard();
+  const { cloudStatuses } = await import("./cloud.server");
+  return cloudStatuses();
+});
+
+export const adminCloudConnect = createServerFn({ method: "POST" })
+  .validator((input: { provider: string; share?: boolean; upload?: boolean }) => ({ provider: String(input?.provider ?? ""), share: Boolean(input?.share), upload: Boolean(input?.upload) }))
+  .handler(async ({ data }) => {
+    await writeGuard();
+    const cloud = await import("./cloud.server");
+    if (!cloud.isOAuthCloud(data.provider)) return { ok: false as const, error: "Unknown provider." };
+    const { getRequest } = await import("@tanstack/react-start/server");
+    const origin = new URL(getRequest().url).origin;
+    try {
+      const caps = [...(data.share ? (["share"] as const) : []), ...(data.upload ? (["upload"] as const) : [])];
+      return { ok: true as const, url: await cloud.startCloudConnect(data.provider, origin, caps) };
+    } catch (error) {
+      return { ok: false as const, error: error instanceof Error ? error.message : "Could not start the connection." };
+    }
+  });
+
+export const adminCloudAction = createServerFn({ method: "POST" })
+  .validator((input: { provider: string; action: "disconnect" | "test" | "folders" | "browse" | "proton-add" | "proton-remove"; folderId?: string | null; folders?: Array<{ id: string; name: string; path?: string | null }>; title?: string; url?: string; id?: string }) => input)
+  .handler(async ({ data }) => {
+    await writeGuard();
+    const cloud = await import("./cloud.server");
+    const p = String(data.provider ?? "");
+    try {
+      if (data.action === "proton-add") return { ok: true as const, links: await cloud.addProtonLink(String(data.title ?? ""), String(data.url ?? "")) };
+      if (data.action === "proton-remove") return { ok: true as const, links: await cloud.removeProtonLink(String(data.id ?? "")) };
+      if (p !== "proton-drive" && !cloud.isOAuthCloud(p)) return { ok: false as const, error: "Unknown provider." };
+      if (data.action === "disconnect") {
+        await cloud.disconnectCloud(p as "proton-drive");
+        const { logAdminAction } = await import("./repository.server");
+        await logAdminAction("cloud.disconnect", `Disconnected ${p}`).catch(() => undefined);
+        return { ok: true as const };
+      }
+      if (data.action === "test") return { ok: true as const, test: await cloud.testCloud(p as "proton-drive") };
+      if (!cloud.isOAuthCloud(p)) return { ok: false as const, error: "Folders are not available for this provider." };
+      if (data.action === "folders") {
+        await cloud.setCloudFolders(p, Array.isArray(data.folders) ? data.folders : []);
+        return { ok: true as const };
+      }
+      const { api } = await cloud.cloudClient(p);
+      const items = (await api.list(data.folderId ?? null)).filter((f) => f.kind === "folder").slice(0, 100).map((f) => ({ id: f.id, name: f.name, path: f.path }));
+      return { ok: true as const, items };
+    } catch (error) {
+      return { ok: false as const, error: error instanceof Error ? error.message : "The cloud action failed." };
+    }
+  });
+
 export const adminDeleteDraft = createServerFn({ method: "POST" })
   .validator((input: { id: string }) => input)
   .handler(async ({ data }) => {
@@ -113,6 +275,18 @@ export const adminPreview = createServerFn({ method: "GET" })
     await guard();
     const { readPreview, readShell } = await import("./repository.server");
     const preview = await readPreview(data.id);
+    const shell = await readShell();
+    return preview ? { ...preview, site: shell.site } : null;
+  });
+
+/** t173: admin preview of a special article (any status). */
+export const adminSpecialPreview = createServerFn({ method: "GET" })
+  .validator((input: { id: string }) => input)
+  .handler(async ({ data }) => {
+    await guard();
+    const { readSpecialPreview } = await import("./special.server");
+    const { readShell } = await import("./repository.server");
+    const preview = await readSpecialPreview(data.id);
     const shell = await readShell();
     return preview ? { ...preview, site: shell.site } : null;
   });
@@ -587,6 +761,8 @@ export const adminAutomation = createServerFn({ method: "GET" })
       provider: providerStatus(settings, env),
       // Only whether it is set; the value never leaves the server.
       mcpTokenConfigured: mcpConfigured(env.MCP_TOKEN),
+      // t177: the website daily cap is one global cap over Normal + Special.
+      publishUsage: await (await import("./automation.server")).combinedPublishUsage(),
     };
   });
 

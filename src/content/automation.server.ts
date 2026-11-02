@@ -240,15 +240,58 @@ export async function readWebsiteAiDailyLimit(): Promise<number> {
  * automations see each other's in-flight publishes. Settle it to the
  * final outcome after the flip; delete it when the publish is aborted.
  */
-export async function claimAiPublish(input: { profileId: string; runKey: string; mode: "automatic" | "explicit"; articleId: string; auth: string }): Promise<string | null> {
-  return recordRun({
+export async function claimAiPublish(input: {
+  profileId: string;
+  runKey: string;
+  mode: "automatic" | "explicit";
+  articleId: string;
+  auth: string;
+  /** t177: caps enforced atomically by the claim insert itself (0 = none). */
+  limits?: { websiteCap: number; specialCap: number; articleType: "regular" | "special" };
+}): Promise<string | null | { blocked: true }> {
+  const details = { runKey: input.runKey, mode: input.mode, claimed: true, ...(input.limits?.articleType === "special" ? { articleType: "special" } : {}) };
+  const limits = input.limits;
+  if (!limits || (limits.websiteCap <= 0 && limits.specialCap <= 0)) {
+    return recordRun({ profileId: input.profileId, tool: "publish_article_if_allowed", outcome: "publish_claim", articleId: input.articleId, auth: input.auth, details });
+  }
+  const { atomicClaimStatement, capWindowStart } = await import("@/lib/automation/publish-limits");
+  const stmt = atomicClaimStatement({
+    id: crypto.randomUUID(),
+    createdAt: new Date().toISOString(),
     profileId: input.profileId,
-    tool: "publish_article_if_allowed",
-    outcome: "publish_claim",
     articleId: input.articleId,
     auth: input.auth,
-    details: { runKey: input.runKey, mode: input.mode, claimed: true },
+    details: JSON.stringify(details),
+    since: capWindowStart(),
+    websiteCap: limits.websiteCap,
+    specialCap: limits.articleType === "special" ? limits.specialCap : 0,
   });
+  try {
+    const sql = await getSql();
+    const rows = await sql.query<{ id: string }>(stmt.text, stmt.params);
+    return rows[0]?.id ?? { blocked: true };
+  } catch (error) {
+    // Pre-0004 database (no profile column) or similar: fall back to the
+    // t64 claim + recount guard, which still never exceeds the caps.
+    console.error("[automation] atomic claim failed, using recount guard", error instanceof Error ? error.message : "unknown");
+    return recordRun({ profileId: input.profileId, tool: "publish_article_if_allowed", outcome: "publish_claim", articleId: input.articleId, auth: input.auth, details });
+  }
+}
+
+/** t177: today's (UTC) AI publishes of SPECIAL articles (claims included). */
+export async function specialPublishUsageToday(): Promise<number> {
+  const since = new Date();
+  since.setUTCHours(0, 0, 0, 0);
+  try {
+    const sql = await getSql();
+    const rows = await sql<{ n: number }>`
+      select count(*) as n from automation_runs r join articles a on a.id = r.article_id
+      where r.tool = 'publish_article_if_allowed' and r.outcome in ('published', 'published_explicit', 'publish_claim')
+        and a.article_type = 'special' and r.created_at >= ${since.toISOString()}`;
+    return Number(rows[0]?.n ?? 0);
+  } catch {
+    return 0; // pre-0027 database: no special articles exist
+  }
 }
 
 export async function settleAiPublishClaim(claimId: string | null, outcome: "published" | "published_explicit", details: Record<string, unknown>): Promise<void> {
@@ -746,3 +789,10 @@ export const profileResolver: ProfileResolver = {
     return (await profileRows()).some((p) => p.id === profileId);
   },
 };
+
+/** t177: today's combined AI publish usage for the admin UI (UTC day, same window as the cap). */
+export type CombinedPublishUsage = { websiteCap: number; used: number; specialUsed: number; normalUsed: number };
+export async function combinedPublishUsage(): Promise<CombinedPublishUsage> {
+  const [all, specialUsed, websiteCap] = await Promise.all([aiPublishUsageToday(), specialPublishUsageToday(), readWebsiteAiDailyLimit()]);
+  return { websiteCap, used: all.length, specialUsed, normalUsed: Math.max(0, all.length - specialUsed) };
+}

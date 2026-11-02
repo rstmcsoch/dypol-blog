@@ -84,11 +84,38 @@ export const getArticle = createServerFn({ method: "GET" })
     const { readArticle, resolveRedirect } = await import("./repository.server");
     const result = await readArticle(data.slug);
     if (!result) {
+      // t173: a special article's slug answers /articles/:slug with a 301 to /special/:slug.
+      const { isPublishedSpecialSlug } = await import("./repository.server");
+      if (await isPublishedSpecialSlug(data.slug)) return { redirectTo: data.slug, special: true as const };
       // t115: an old or merged slug answers with a 301 to its canonical story.
       const to = await resolveRedirect(data.slug);
       return to ? { redirectTo: to } : null;
     }
     return { ...result, origin: await requestOrigin() };
+  });
+
+/** t173: /special/:slug — a published special article with its R2 body. */
+export const getSpecialArticle = createServerFn({ method: "GET" })
+  .validator((input: { slug: string }) => ({ slug: String(input?.slug ?? "").slice(0, 120) }))
+  .handler(async ({ data }) => {
+    const { readSpecialArticle } = await import("./special.server");
+    const result = await readSpecialArticle(data.slug);
+    if (!result) {
+      const { resolveRedirect, isPublishedSpecialSlug } = await import("./repository.server");
+      const to = await resolveRedirect(data.slug);
+      if (to && (await isPublishedSpecialSlug(to))) return { redirectTo: to };
+      return null;
+    }
+    return { ...result, origin: await requestOrigin() };
+  });
+
+/** t173: /special/ archive (12 per page, optional ?topic=). */
+export const getSpecialArchive = createServerFn({ method: "GET" })
+  .validator((input: { page?: number; topic?: string }) => ({ page: Number(input?.page ?? 1) || 1, topic: typeof input?.topic === "string" ? input.topic.slice(0, 80) : undefined }))
+  .handler(async ({ data }) => {
+    const { readSpecialArchive } = await import("./repository.server");
+    const result = await readSpecialArchive(data.page, data.topic);
+    return result ? { ...result, origin: await requestOrigin() } : null;
   });
 
 /** t115: /search?q= — ranked FTS5 results with highlighted snippets (light payload). */
@@ -104,6 +131,7 @@ export const getSearch = createServerFn({ method: "GET" })
         results: results.map(({ article, snippet }) => ({
           id: article.id,
           slug: article.slug,
+          ...(article.articleType === "special" ? { special: true as const } : {}),
           title: article.title,
           publishedAt: article.publishedAt,
           coverMediaId: article.coverMediaId ?? null,

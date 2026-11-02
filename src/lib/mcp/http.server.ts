@@ -103,7 +103,9 @@ async function handleMcpInner(request: Request, env: { MCP_TOKEN?: string; MCP_L
   } catch {
     return rpcError(400, RPC.PARSE, "Parse error.");
   }
-  const reply = await handleRpc(body, buildTools({ auth: auth.client ? `oauth:${auth.client}` : auth.via, profileId: auth.profile.id }));
+  // t173: special mode is resolved once per request (buildTools stays synchronous).
+  const special = await import("@/lib/special/special-tools.server").then((m) => m.specialToolContext(auth.profile.id)).catch(() => null);
+  const reply = await handleRpc(body, buildTools({ auth: auth.client ? `oauth:${auth.client}` : auth.via, profileId: auth.profile.id, special }));
   if (reply === null) return new Response(null, { status: 202 });
   return json(reply);
 }

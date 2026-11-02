@@ -95,7 +95,9 @@ function SettingsAdmin() {
           </label>
           <p className="field-help">
             Counts every article published by AI automation (automatic and explicit MCP publishes, all automation
-            profiles together) per calendar day (UTC). When the limit is reached, AI publishing stops until the next
+            profiles together, Normal and Special articles combined) per calendar day (UTC). This main limit overrides
+            the Normal and Special automation tabs' own limits: an article goes live only if it passes all of them, and
+            anything over a limit stays a draft. When the limit is reached, AI publishing stops until the next
             day; drafts are unaffected. Publishing manually here in the admin panel is never counted or blocked.
             Set 0 for no limit.
           </p>

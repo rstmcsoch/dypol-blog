@@ -63,6 +63,8 @@ export type SeoArticle = {
   authorName?: string | null;
   /** t91 Phase 3: plain-text article body for full-text RSS (optional). */
   bodyText?: string;
+  /** t173: public path when not /articles/:slug (special articles live at /special/:slug). */
+  path?: string;
 };
 
 /** The one public host. Any workers.dev hostname (production, the retired
@@ -89,7 +91,7 @@ function isoOrNull(value: string | null | undefined): string | null {
 /** NewsArticle JSON-LD for an article page (Google Article rich results + Discover). */
 export function articleJsonLd(input: { origin: string; siteName: string; publisher: string; authorName?: string; logoMediaId?: string | null; article: SeoArticle }) {
   const { origin, publisher, authorName, article } = input;
-  const url = absoluteUrl(origin, `/articles/${article.slug}`);
+  const url = absoluteUrl(origin, article.path ?? `/articles/${article.slug}`);
   const published = isoOrNull(article.publishedAt);
   const modified = isoOrNull(article.updatedAt) ?? published;
   return {
@@ -198,7 +200,7 @@ export function newsSitemapXml(input: { origin: string; publicationName: string;
       const published = isoOrNull(a.publishedAt) ?? now.toISOString();
       return [
         "  <url>",
-        `    <loc>${xmlEscape(absoluteUrl(input.origin, `/articles/${a.slug}`))}</loc>`,
+        `    <loc>${xmlEscape(absoluteUrl(input.origin, a.path ?? `/articles/${a.slug}`))}</loc>`,
         "    <news:news>",
         `      <news:publication><news:name>${xmlEscape(input.publicationName)}</news:name><news:language>en</news:language></news:publication>`,
         `      <news:publication_date>${published}</news:publication_date>`,
@@ -216,7 +218,7 @@ export function rssXml(input: { origin: string; siteTitle: string; description: 
   const home = absoluteUrl(input.origin, "/");
   const items = input.articles
     .map((a) => {
-      const url = absoluteUrl(input.origin, `/articles/${a.slug}`);
+      const url = absoluteUrl(input.origin, a.path ?? `/articles/${a.slug}`);
       const pubDate = a.publishedAt ? new Date(a.publishedAt).toUTCString() : new Date(a.updatedAt).toUTCString();
       const cats = a.topics.map((t) => `      <category>${xmlEscape(t)}</category>`).join("\n");
       const cover = a.coverMediaId ? `      <media:content url="${xmlEscape(absoluteUrl(input.origin, `/media/${a.coverMediaId}`))}" medium="image" />` : "";

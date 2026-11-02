@@ -12,6 +12,7 @@ type Search = {
   categoryId?: string;
   tagId?: string;
   sort?: "updated" | "published" | "title";
+  type?: "special" | "regular";
 };
 
 export const Route = createFileRoute("/admin/articles/")({
@@ -22,9 +23,13 @@ export const Route = createFileRoute("/admin/articles/")({
     categoryId: typeof search.categoryId === "string" && search.categoryId ? search.categoryId : undefined,
     tagId: typeof search.tagId === "string" && search.tagId ? search.tagId : undefined,
     sort: search.sort === "published" || search.sort === "title" || search.sort === "updated" ? search.sort : undefined,
+    type: search.type === "special" || search.type === "regular" ? search.type : undefined,
   }),
   loaderDeps: ({ search }) => search,
-  loader: ({ deps }) => adminArticles({ data: deps }),
+  loader: ({ deps }) => {
+    const { type, ...rest } = deps;
+    return adminArticles({ data: type ? { ...rest, articleType: type } : rest });
+  },
   component: ArticleIndex,
 });
 
@@ -37,6 +42,24 @@ function ArticleIndex() {
     <>
       <p className="desk-kicker">Content</p>
       <h1 className="desk-title">Articles</h1>
+      <div className="sp-chooser" role="group" aria-label="Create an article">
+        <Link to="/admin/articles/new" className="sp-choice" data-testid="new-normal-article">
+          <span className="sp-choice__icon" aria-hidden="true">✎</span>
+          <span className="sp-choice__body">
+            <strong>New Normal Article</strong>
+            <span>The everyday editor: news, explainers and quick reads.</span>
+          </span>
+          <span className="sp-choice__go" aria-hidden="true">→</span>
+        </Link>
+        <Link to="/admin/special/new" className="sp-choice sp-choice--special" data-testid="new-special-article">
+          <span className="sp-choice__icon" aria-hidden="true">★</span>
+          <span className="sp-choice__body">
+            <strong>New Special Article</strong>
+            <span>Long-form research: sections and contents, images with captions, tables, charts, references and documents.</span>
+          </span>
+          <span className="sp-choice__go" aria-hidden="true">→</span>
+        </Link>
+      </div>
       <form
         className="filters"
         style={{ marginTop: "1rem" }}
@@ -55,6 +78,7 @@ function ArticleIndex() {
               categoryId: read("categoryId"),
               tagId: read("tagId"),
               sort: read("sort") === "title" || read("sort") === "published" ? (read("sort") as "title" | "published") : undefined,
+              type: read("type") === "special" || read("type") === "regular" ? (read("type") as "special" | "regular") : undefined,
             },
           });
         }}
@@ -97,6 +121,14 @@ function ArticleIndex() {
           </select>
         </label>
         <label className="field">
+          <span>Type</span>
+          <select name="type" defaultValue={search.type ?? ""}>
+            <option value="">All</option>
+            <option value="regular">Normal</option>
+            <option value="special">Special</option>
+          </select>
+        </label>
+        <label className="field">
           <span>Sort</span>
           <select name="sort" defaultValue={search.sort ?? "updated"}>
             <option value="updated">Updated</option>
@@ -108,11 +140,6 @@ function ArticleIndex() {
           Filter
         </button>
       </form>
-      <p style={{ margin: "1rem 0" }}>
-        <Link to="/admin/articles/new" className="btn">
-          New article
-        </Link>
-      </p>
       {data.articles.length === 0 ? (
         <p className="desk-note">Nothing matches.</p>
       ) : (
@@ -136,10 +163,19 @@ function ArticleIndex() {
               {data.articles.map((article) => (
                 <tr key={article.id}>
                   <td>
-                    <Link to="/admin/articles/$id" params={{ id: article.id }}>
-                      {article.title}
-                    </Link>
-                    <div className="desk-note">{article.slug}</div>
+                    {article.articleType === "special" ? (
+                      <Link to="/admin/special/$id" params={{ id: article.id }}>
+                        {article.title}
+                      </Link>
+                    ) : (
+                      <Link to="/admin/articles/$id" params={{ id: article.id }}>
+                        {article.title}
+                      </Link>
+                    )}
+                    <div className="desk-note">
+                      {article.articleType === "special" ? <span className="sp-badge">Special</span> : null}
+                      {article.slug}
+                    </div>
                   </td>
                   <td>
                     <span className={article.status === "published" ? "desk-status desk-status--published" : "desk-status"}>
@@ -157,11 +193,17 @@ function ArticleIndex() {
                   <td>{formatDate(article.updatedAt)}</td>
                   <td>
                     <div className="adm-row-actions">
-                      <Link to="/admin/articles/$id" params={{ id: article.id }} className="btn btn--ghost">
-                        Edit
-                      </Link>
+                      {article.articleType === "special" ? (
+                        <Link to="/admin/special/$id" params={{ id: article.id }} className="btn btn--ghost">
+                          Edit
+                        </Link>
+                      ) : (
+                        <Link to="/admin/articles/$id" params={{ id: article.id }} className="btn btn--ghost">
+                          Edit
+                        </Link>
+                      )}
                       {article.status === "published" ? (
-                        <a href={`/articles/${article.slug}`} target="_blank" rel="noreferrer" className="btn btn--ghost">
+                        <a href={article.articleType === "special" ? `/special/${article.slug}` : `/articles/${article.slug}`} target="_blank" rel="noreferrer" className="btn btn--ghost">
                           View
                         </a>
                       ) : null}
@@ -171,7 +213,11 @@ function ArticleIndex() {
                         title="Copy this article into a new draft"
                         onClick={() => {
                           void adminDuplicateArticle({ data: { id: article.id } })
-                            .then((copy) => router.navigate({ to: "/admin/articles/$id", params: { id: copy.id } }))
+                            .then((copy) =>
+                              article.articleType === "special"
+                                ? router.navigate({ to: "/admin/special/$id", params: { id: copy.id } })
+                                : router.navigate({ to: "/admin/articles/$id", params: { id: copy.id } }),
+                            )
                             .catch(() => router.invalidate());
                         }}
                       >

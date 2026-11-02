@@ -19,7 +19,8 @@ export const Route = createFileRoute("/sitemap.xml")({
             { path: "/topics", lastmod: newestTopic },
             { path: "/about", lastmod: (entries.pages ?? []).find((p) => p.slug === "about")?.lastmod ?? null },
             ...(entries.pages ?? []).filter((p) => p.slug !== "about").map((p) => ({ path: `/${p.slug}`, lastmod: p.lastmod ?? null })),
-            ...entries.articles.map((a) => ({ path: `/articles/${a.slug}`, lastmod: a.lastmod, imagePath: a.coverMediaId ? `/media/${a.coverMediaId}` : null, imageTitle: a.title })),
+            ...(entries.articles.some((a) => a.path.startsWith("/special/")) ? [{ path: "/special", lastmod: entries.articles.find((a) => a.path.startsWith("/special/"))?.lastmod ?? null }] : []),
+            ...entries.articles.map((a) => ({ path: a.path, lastmod: a.lastmod, imagePath: a.coverMediaId ? `/media/${a.coverMediaId}` : null, imageTitle: a.title })),
             ...entries.topics.filter((t) => (t.count ?? 0) > 0).map((t) => ({ path: `/topics/${t.slug}`, lastmod: t.lastmod })),
           ],
         });
