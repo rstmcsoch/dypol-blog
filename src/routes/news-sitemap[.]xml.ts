@@ -14,7 +14,7 @@ export const Route = createFileRoute("/news-sitemap.xml")({
           origin,
           publicationName: site.name,
           articles: entries.articles.map((a) => ({
-            slug: a.slug, title: a.title, excerpt: a.excerpt, description: a.excerpt,
+            slug: a.slug, ...(a.path.startsWith("/special/") ? { path: a.path } : {}), title: a.title, excerpt: a.excerpt, description: a.excerpt,
             publishedAt: a.publishedAt, updatedAt: a.updatedAt, topics: a.topics, coverMediaId: a.coverMediaId,
           })),
         });

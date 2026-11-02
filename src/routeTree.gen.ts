@@ -57,17 +57,24 @@ import { Route as OauthTokenRouteImport } from './routes/oauth/token'
 import { Route as PhotolabFileRouteImport } from './routes/photolab.$file'
 import { Route as PreviewIdRouteImport } from './routes/preview/$id'
 import { Route as PreviewHomeRouteImport } from './routes/preview/home'
+import { Route as SpecialIndexRouteImport } from './routes/special/index'
+import { Route as SpecialSlugRouteImport } from './routes/special/$slug'
 import { Route as TopicsIndexRouteImport } from './routes/topics/index'
 import { Route as TopicsSlugRouteImport } from './routes/topics/$slug'
 import { Route as DotwellKnownOauthProtectedResourceMcpRouteImport } from './routes/[.]well-known/oauth-protected-resource.mcp'
 import { Route as AdminArticlesIndexRouteImport } from './routes/admin/articles/index'
 import { Route as AdminArticlesIdRouteImport } from './routes/admin/articles/$id'
 import { Route as AdminArticlesNewRouteImport } from './routes/admin/articles/new'
+import { Route as AdminSpecialIdRouteImport } from './routes/admin/special/$id'
+import { Route as AdminSpecialNewRouteImport } from './routes/admin/special/new'
 import { Route as ApiAnalyticsBeaconRouteImport } from './routes/api/analytics/beacon'
 import { Route as ApiAnalyticsExportRouteImport } from './routes/api/analytics/export'
 import { Route as ApiViewsSlugRouteImport } from './routes/api/views/$slug'
+import { Route as PreviewSpecialIdRouteImport } from './routes/preview/special.$id'
+import { Route as SpecialChartsSlugChartIdRouteImport } from './routes/special-charts.$slug.$chartId'
 import { Route as AdminApiStatsDigestRouteImport } from './routes/admin/api/stats/digest'
 import { Route as AdminStatsArticleIdRouteImport } from './routes/admin/stats_.article.$id'
+import { Route as AdminApiCloudCallbackProviderRouteImport } from './routes/admin/api/cloud/callback/$provider'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -311,6 +318,16 @@ const PreviewHomeRoute = PreviewHomeRouteImport.update({
   path: '/preview/home',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SpecialIndexRoute = SpecialIndexRouteImport.update({
+  id: '/special/',
+  path: '/special/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SpecialSlugRoute = SpecialSlugRouteImport.update({
+  id: '/special/$slug',
+  path: '/special/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const TopicsIndexRoute = TopicsIndexRouteImport.update({
   id: '/topics/',
   path: '/topics/',
@@ -342,6 +359,16 @@ const AdminArticlesNewRoute = AdminArticlesNewRouteImport.update({
   path: '/articles/new',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminSpecialIdRoute = AdminSpecialIdRouteImport.update({
+  id: '/special/$id',
+  path: '/special/$id',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminSpecialNewRoute = AdminSpecialNewRouteImport.update({
+  id: '/special/new',
+  path: '/special/new',
+  getParentRoute: () => AdminRoute,
+} as any)
 const ApiAnalyticsBeaconRoute = ApiAnalyticsBeaconRouteImport.update({
   id: '/api/analytics/beacon',
   path: '/api/analytics/beacon',
@@ -357,6 +384,17 @@ const ApiViewsSlugRoute = ApiViewsSlugRouteImport.update({
   path: '/api/views/$slug',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PreviewSpecialIdRoute = PreviewSpecialIdRouteImport.update({
+  id: '/preview/special/$id',
+  path: '/preview/special/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SpecialChartsSlugChartIdRoute =
+  SpecialChartsSlugChartIdRouteImport.update({
+    id: '/special-charts/$slug/$chartId',
+    path: '/special-charts/$slug/$chartId',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const AdminApiStatsDigestRoute = AdminApiStatsDigestRouteImport.update({
   id: '/api/stats/digest',
   path: '/api/stats/digest',
@@ -367,6 +405,12 @@ const AdminStatsArticleIdRoute = AdminStatsArticleIdRouteImport.update({
   path: '/stats/article/$id',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminApiCloudCallbackProviderRoute =
+  AdminApiCloudCallbackProviderRouteImport.update({
+    id: '/api/cloud/callback/$provider',
+    path: '/api/cloud/callback/$provider',
+    getParentRoute: () => AdminRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -415,19 +459,26 @@ export interface FileRoutesByFullPath {
   '/photolab/$file': typeof PhotolabFileRoute
   '/preview/$id': typeof PreviewIdRoute
   '/preview/home': typeof PreviewHomeRoute
+  '/special/$slug': typeof SpecialSlugRoute
   '/topics/$slug': typeof TopicsSlugRoute
   '/admin/': typeof AdminIndexRoute
   '/articles/': typeof ArticlesIndexRoute
+  '/special/': typeof SpecialIndexRoute
   '/topics/': typeof TopicsIndexRoute
   '/.well-known/oauth-protected-resource/mcp': typeof DotwellKnownOauthProtectedResourceMcpRoute
   '/admin/articles/$id': typeof AdminArticlesIdRoute
   '/admin/articles/new': typeof AdminArticlesNewRoute
+  '/admin/special/$id': typeof AdminSpecialIdRoute
+  '/admin/special/new': typeof AdminSpecialNewRoute
   '/api/analytics/beacon': typeof ApiAnalyticsBeaconRoute
   '/api/analytics/export': typeof ApiAnalyticsExportRoute
   '/api/views/$slug': typeof ApiViewsSlugRoute
+  '/preview/special/$id': typeof PreviewSpecialIdRoute
+  '/special-charts/$slug/$chartId': typeof SpecialChartsSlugChartIdRoute
   '/admin/articles/': typeof AdminArticlesIndexRoute
   '/admin/api/stats/digest': typeof AdminApiStatsDigestRoute
   '/admin/stats/article/$id': typeof AdminStatsArticleIdRoute
+  '/admin/api/cloud/callback/$provider': typeof AdminApiCloudCallbackProviderRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -475,19 +526,26 @@ export interface FileRoutesByTo {
   '/photolab/$file': typeof PhotolabFileRoute
   '/preview/$id': typeof PreviewIdRoute
   '/preview/home': typeof PreviewHomeRoute
+  '/special/$slug': typeof SpecialSlugRoute
   '/topics/$slug': typeof TopicsSlugRoute
   '/admin': typeof AdminIndexRoute
   '/articles': typeof ArticlesIndexRoute
+  '/special': typeof SpecialIndexRoute
   '/topics': typeof TopicsIndexRoute
   '/.well-known/oauth-protected-resource/mcp': typeof DotwellKnownOauthProtectedResourceMcpRoute
   '/admin/articles/$id': typeof AdminArticlesIdRoute
   '/admin/articles/new': typeof AdminArticlesNewRoute
+  '/admin/special/$id': typeof AdminSpecialIdRoute
+  '/admin/special/new': typeof AdminSpecialNewRoute
   '/api/analytics/beacon': typeof ApiAnalyticsBeaconRoute
   '/api/analytics/export': typeof ApiAnalyticsExportRoute
   '/api/views/$slug': typeof ApiViewsSlugRoute
+  '/preview/special/$id': typeof PreviewSpecialIdRoute
+  '/special-charts/$slug/$chartId': typeof SpecialChartsSlugChartIdRoute
   '/admin/articles': typeof AdminArticlesIndexRoute
   '/admin/api/stats/digest': typeof AdminApiStatsDigestRoute
   '/admin/stats/article/$id': typeof AdminStatsArticleIdRoute
+  '/admin/api/cloud/callback/$provider': typeof AdminApiCloudCallbackProviderRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -537,19 +595,26 @@ export interface FileRoutesById {
   '/photolab/$file': typeof PhotolabFileRoute
   '/preview/$id': typeof PreviewIdRoute
   '/preview/home': typeof PreviewHomeRoute
+  '/special/$slug': typeof SpecialSlugRoute
   '/topics/$slug': typeof TopicsSlugRoute
   '/admin/': typeof AdminIndexRoute
   '/articles/': typeof ArticlesIndexRoute
+  '/special/': typeof SpecialIndexRoute
   '/topics/': typeof TopicsIndexRoute
   '/.well-known/oauth-protected-resource/mcp': typeof DotwellKnownOauthProtectedResourceMcpRoute
   '/admin/articles/$id': typeof AdminArticlesIdRoute
   '/admin/articles/new': typeof AdminArticlesNewRoute
+  '/admin/special/$id': typeof AdminSpecialIdRoute
+  '/admin/special/new': typeof AdminSpecialNewRoute
   '/api/analytics/beacon': typeof ApiAnalyticsBeaconRoute
   '/api/analytics/export': typeof ApiAnalyticsExportRoute
   '/api/views/$slug': typeof ApiViewsSlugRoute
+  '/preview/special/$id': typeof PreviewSpecialIdRoute
+  '/special-charts/$slug/$chartId': typeof SpecialChartsSlugChartIdRoute
   '/admin/articles/': typeof AdminArticlesIndexRoute
   '/admin/api/stats/digest': typeof AdminApiStatsDigestRoute
   '/admin/stats_/article/$id': typeof AdminStatsArticleIdRoute
+  '/admin/api/cloud/callback/$provider': typeof AdminApiCloudCallbackProviderRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -600,19 +665,26 @@ export interface FileRouteTypes {
     | '/photolab/$file'
     | '/preview/$id'
     | '/preview/home'
+    | '/special/$slug'
     | '/topics/$slug'
     | '/admin/'
     | '/articles/'
+    | '/special/'
     | '/topics/'
     | '/.well-known/oauth-protected-resource/mcp'
     | '/admin/articles/$id'
     | '/admin/articles/new'
+    | '/admin/special/$id'
+    | '/admin/special/new'
     | '/api/analytics/beacon'
     | '/api/analytics/export'
     | '/api/views/$slug'
+    | '/preview/special/$id'
+    | '/special-charts/$slug/$chartId'
     | '/admin/articles/'
     | '/admin/api/stats/digest'
     | '/admin/stats/article/$id'
+    | '/admin/api/cloud/callback/$provider'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -660,19 +732,26 @@ export interface FileRouteTypes {
     | '/photolab/$file'
     | '/preview/$id'
     | '/preview/home'
+    | '/special/$slug'
     | '/topics/$slug'
     | '/admin'
     | '/articles'
+    | '/special'
     | '/topics'
     | '/.well-known/oauth-protected-resource/mcp'
     | '/admin/articles/$id'
     | '/admin/articles/new'
+    | '/admin/special/$id'
+    | '/admin/special/new'
     | '/api/analytics/beacon'
     | '/api/analytics/export'
     | '/api/views/$slug'
+    | '/preview/special/$id'
+    | '/special-charts/$slug/$chartId'
     | '/admin/articles'
     | '/admin/api/stats/digest'
     | '/admin/stats/article/$id'
+    | '/admin/api/cloud/callback/$provider'
   id:
     | '__root__'
     | '/'
@@ -721,19 +800,26 @@ export interface FileRouteTypes {
     | '/photolab/$file'
     | '/preview/$id'
     | '/preview/home'
+    | '/special/$slug'
     | '/topics/$slug'
     | '/admin/'
     | '/articles/'
+    | '/special/'
     | '/topics/'
     | '/.well-known/oauth-protected-resource/mcp'
     | '/admin/articles/$id'
     | '/admin/articles/new'
+    | '/admin/special/$id'
+    | '/admin/special/new'
     | '/api/analytics/beacon'
     | '/api/analytics/export'
     | '/api/views/$slug'
+    | '/preview/special/$id'
+    | '/special-charts/$slug/$chartId'
     | '/admin/articles/'
     | '/admin/api/stats/digest'
     | '/admin/stats_/article/$id'
+    | '/admin/api/cloud/callback/$provider'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -766,12 +852,16 @@ export interface RootRouteChildren {
   OauthTokenRoute: typeof OauthTokenRoute
   PreviewIdRoute: typeof PreviewIdRoute
   PreviewHomeRoute: typeof PreviewHomeRoute
+  SpecialSlugRoute: typeof SpecialSlugRoute
   TopicsSlugRoute: typeof TopicsSlugRoute
   ArticlesIndexRoute: typeof ArticlesIndexRoute
+  SpecialIndexRoute: typeof SpecialIndexRoute
   TopicsIndexRoute: typeof TopicsIndexRoute
   ApiAnalyticsBeaconRoute: typeof ApiAnalyticsBeaconRoute
   ApiAnalyticsExportRoute: typeof ApiAnalyticsExportRoute
   ApiViewsSlugRoute: typeof ApiViewsSlugRoute
+  PreviewSpecialIdRoute: typeof PreviewSpecialIdRoute
+  SpecialChartsSlugChartIdRoute: typeof SpecialChartsSlugChartIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -1112,6 +1202,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PreviewHomeRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/special/': {
+      id: '/special/'
+      path: '/special'
+      fullPath: '/special/'
+      preLoaderRoute: typeof SpecialIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/special/$slug': {
+      id: '/special/$slug'
+      path: '/special/$slug'
+      fullPath: '/special/$slug'
+      preLoaderRoute: typeof SpecialSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/topics/': {
       id: '/topics/'
       path: '/topics'
@@ -1154,6 +1258,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminArticlesNewRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/special/$id': {
+      id: '/admin/special/$id'
+      path: '/special/$id'
+      fullPath: '/admin/special/$id'
+      preLoaderRoute: typeof AdminSpecialIdRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/special/new': {
+      id: '/admin/special/new'
+      path: '/special/new'
+      fullPath: '/admin/special/new'
+      preLoaderRoute: typeof AdminSpecialNewRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/api/analytics/beacon': {
       id: '/api/analytics/beacon'
       path: '/api/analytics/beacon'
@@ -1175,6 +1293,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiViewsSlugRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/preview/special/$id': {
+      id: '/preview/special/$id'
+      path: '/preview/special/$id'
+      fullPath: '/preview/special/$id'
+      preLoaderRoute: typeof PreviewSpecialIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/special-charts/$slug/$chartId': {
+      id: '/special-charts/$slug/$chartId'
+      path: '/special-charts/$slug/$chartId'
+      fullPath: '/special-charts/$slug/$chartId'
+      preLoaderRoute: typeof SpecialChartsSlugChartIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/api/stats/digest': {
       id: '/admin/api/stats/digest'
       path: '/api/stats/digest'
@@ -1187,6 +1319,13 @@ declare module '@tanstack/react-router' {
       path: '/stats/article/$id'
       fullPath: '/admin/stats/article/$id'
       preLoaderRoute: typeof AdminStatsArticleIdRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/api/cloud/callback/$provider': {
+      id: '/admin/api/cloud/callback/$provider'
+      path: '/api/cloud/callback/$provider'
+      fullPath: '/admin/api/cloud/callback/$provider'
+      preLoaderRoute: typeof AdminApiCloudCallbackProviderRouteImport
       parentRoute: typeof AdminRoute
     }
   }
@@ -1212,9 +1351,12 @@ interface AdminRouteChildren {
   AdminIndexRoute: typeof AdminIndexRoute
   AdminArticlesIdRoute: typeof AdminArticlesIdRoute
   AdminArticlesNewRoute: typeof AdminArticlesNewRoute
+  AdminSpecialIdRoute: typeof AdminSpecialIdRoute
+  AdminSpecialNewRoute: typeof AdminSpecialNewRoute
   AdminArticlesIndexRoute: typeof AdminArticlesIndexRoute
   AdminApiStatsDigestRoute: typeof AdminApiStatsDigestRoute
   AdminStatsArticleIdRoute: typeof AdminStatsArticleIdRoute
+  AdminApiCloudCallbackProviderRoute: typeof AdminApiCloudCallbackProviderRoute
 }
 
 const AdminRouteChildren: AdminRouteChildren = {
@@ -1237,9 +1379,12 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminIndexRoute: AdminIndexRoute,
   AdminArticlesIdRoute: AdminArticlesIdRoute,
   AdminArticlesNewRoute: AdminArticlesNewRoute,
+  AdminSpecialIdRoute: AdminSpecialIdRoute,
+  AdminSpecialNewRoute: AdminSpecialNewRoute,
   AdminArticlesIndexRoute: AdminArticlesIndexRoute,
   AdminApiStatsDigestRoute: AdminApiStatsDigestRoute,
   AdminStatsArticleIdRoute: AdminStatsArticleIdRoute,
+  AdminApiCloudCallbackProviderRoute: AdminApiCloudCallbackProviderRoute,
 }
 
 const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
@@ -1303,12 +1448,16 @@ const rootRouteChildren: RootRouteChildren = {
   OauthTokenRoute: OauthTokenRoute,
   PreviewIdRoute: PreviewIdRoute,
   PreviewHomeRoute: PreviewHomeRoute,
+  SpecialSlugRoute: SpecialSlugRoute,
   TopicsSlugRoute: TopicsSlugRoute,
   ArticlesIndexRoute: ArticlesIndexRoute,
+  SpecialIndexRoute: SpecialIndexRoute,
   TopicsIndexRoute: TopicsIndexRoute,
   ApiAnalyticsBeaconRoute: ApiAnalyticsBeaconRoute,
   ApiAnalyticsExportRoute: ApiAnalyticsExportRoute,
   ApiViewsSlugRoute: ApiViewsSlugRoute,
+  PreviewSpecialIdRoute: PreviewSpecialIdRoute,
+  SpecialChartsSlugChartIdRoute: SpecialChartsSlugChartIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

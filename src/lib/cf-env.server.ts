@@ -44,6 +44,16 @@ export type WorkerBindings = {
   /** Optional. Together with CLOUDFLARE_API_TOKEN, stamps the daily count against R2 analytics. */
   CLOUDFLARE_ACCOUNT_ID?: string;
   CLOUDFLARE_API_TOKEN?: string;
+  /** t173 special articles: cloud connectors (OAuth apps) + token encryption key. Names only ever shown. */
+  GOOGLE_DRIVE_CLIENT_ID?: string;
+  GOOGLE_DRIVE_CLIENT_SECRET?: string;
+  MICROSOFT_ONEDRIVE_CLIENT_ID?: string;
+  MICROSOFT_ONEDRIVE_CLIENT_SECRET?: string;
+  DROPBOX_APP_KEY?: string;
+  DROPBOX_APP_SECRET?: string;
+  CLOUD_TOKEN_KEY?: string;
+  /** t173: optional Brave Search key for special research (free tier). Unset = Wikipedia + DuckDuckGo only. */
+  BRAVE_SEARCH_API_KEY?: string;
 };
 
 // No promise is cached across requests: workerd hangs a request that awaits a

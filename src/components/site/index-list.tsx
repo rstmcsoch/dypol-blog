@@ -29,7 +29,7 @@ export function IndexList({
         return (
           <Fragment key={article.id}>
           <li>
-            <Link to="/articles/$slug" params={{ slug: article.slug }} className="index-row">
+            <Link to={article.articleType === "special" ? "/special/$slug" : "/articles/$slug"} params={{ slug: article.slug }} className="index-row">
               <span className="index-row__num">{padIndex(start + i + 1)}</span>
               {article.coverMediaId ? (
                 <span className="index-row__thumb"><img src={thumbUrl(article.coverMediaId, article.coverImage?.v)} style={article.coverImage?.c ? { backgroundColor: article.coverImage.c } : undefined} alt={article.coverAlt?.trim() ? article.coverAlt : article.title} loading="lazy" decoding="async" width={480} height={360} /></span>

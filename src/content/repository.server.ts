@@ -8,6 +8,7 @@ import { tickerEntries } from "./ticker";
 import { STANDARD_PAGES, standardPage } from "./pages-seed";
 import { related as relatedArticles, resolveBlocks } from "./blocks";
 import type { Article, ArticleBlock, Category, CoverImage, PublicationStatus, SiteConfig, Tag } from "./types";
+import { articlePath } from "./types";
 import { blockPlainText, blocksPlainText } from "./block-text.ts";
 import { stripCreditsAndSources } from "../lib/automation/body.ts";
 import { inlinePlain } from "../lib/inline-markdown.ts";
@@ -206,7 +207,14 @@ export async function sweepDueScheduled(sql: Sql): Promise<number> {
   lastScheduleSweep = nowMs;
   try {
     const due = await sql<{ id: string; published_at: string | null }>`select id, published_at from articles where status = 'draft' and scheduled_at is not null and scheduled_at <= ${new Date(nowMs).toISOString()} limit 20`;
+    // t173: a scheduled special only goes live when its body pointer exists (pre-0027 dbs: query fails, nothing filtered).
+    const unready = new Set<string>();
+    if (due.length) {
+      const rows = await sql<{ id: string }>`select a.id from articles a left join special_article_state s on s.article_id = a.id where a.article_type = 'special' and s.article_id is null`.catch(() => [] as { id: string }[]);
+      for (const r of rows) unready.add(r.id);
+    }
     for (const row of due) {
+      if (unready.has(row.id)) continue;
       const flipped = await sql<{ id: string }>`update articles set status = 'published', published_at = scheduled_at, scheduled_at = null, updated_at = ${new Date(nowMs).toISOString()} where id = ${row.id} and status = 'draft' returning id`;
       // t169: a scheduled AI draft takes its author turn when it goes live.
       if (flipped[0] && !row.published_at) await assignRotatingAuthor(row.id);
@@ -267,17 +275,45 @@ async function loadArticles(sql: Sql, where = "", params: unknown[] = []): Promi
   const ids = rows.map((row) => row.id);
   // Independent lookups run together: each D1 round-trip is a network hop,
   // so serial awaits were the article page's main server-side cost (t56).
-  const [tags, topics, covers] = await Promise.all([tagMap(sql, ids), topicMap(sql, ids), coverMetaMap(sql, rows)]);
+  const [tags, topics, covers, specials] = await Promise.all([tagMap(sql, ids), topicMap(sql, ids), coverMetaMap(sql, rows), specialMap(sql, ids.length)]);
   return rows.map((row) => {
     const cover = row.cover_media_id ? covers.get(row.cover_media_id) : undefined;
     const article = mapArticle(row, tags.get(row.id) ?? [], topics.get(row.id) ?? [], cover?.alt ?? null);
     if (cover?.image) article.coverImage = cover.image;
+    const special = specials.get(row.id);
+    if (special) {
+      article.articleType = "special";
+      article.wordCount = special.words;
+      article.specialVersion = special.version;
+    }
     // The primary topic always leads, even if the join table is stale.
     if (article.topicIds[0] !== article.categoryId) {
       article.topicIds = [article.categoryId, ...article.topicIds.filter((id) => id !== article.categoryId)];
     }
     return article;
   });
+}
+
+/**
+ * t173: article id -> special-article facts. A separate, guarded query so the
+ * main article SELECT (and every regular article) is untouched; a database
+ * without migration 0027 simply has no special articles.
+ */
+async function specialMap(sql: Sql, count: number): Promise<Map<string, { words: number; version: number }>> {
+  const map = new Map<string, { words: number; version: number }>();
+  if (count === 0) return map;
+  try {
+    const rows = await sql.query<{ id: string; words: number | null; version: number | null }>(
+      `select a.id, s.word_count as words, s.current_version as version
+         from articles a left join special_article_state s on s.article_id = a.id
+        where a.article_type = 'special'`,
+      [],
+    );
+    for (const r of rows) map.set(r.id, { words: Number(r.words ?? 0), version: Number(r.version ?? 0) });
+  } catch {
+    /* pre-0027 database */
+  }
+  return map;
 }
 
 /**
@@ -627,9 +663,55 @@ export async function readTopic(slug: string, page = 1) {
 export async function readArticle(slug: string) {
   const data = await publicCatalog();
   const live = published(data.articles);
-  const article = live.find((item) => item.slug === slug);
+  const article = live.find((item) => item.slug === slug && item.articleType !== "special");
   if (!article) return null;
   return articlePayload(data, article, live);
+}
+
+/** t173: true when a published special article owns this slug (/articles/:slug answers 301 -> /special/:slug). */
+export async function isPublishedSpecialSlug(slug: string): Promise<boolean> {
+  const data = await publicCatalog();
+  return published(data.articles).some((a) => a.slug === slug && a.articleType === "special");
+}
+
+/** t173: public special article page payload (same related/sidebar logic as normal articles, plus related specials). */
+export async function readSpecialPayload(slug: string) {
+  const data = await publicCatalog();
+  const live = published(data.articles);
+  const article = live.find((item) => item.slug === slug && item.articleType === "special");
+  if (!article) return null;
+  return { ...(await articlePayload(data, article, live)), relatedSpecial: relatedSpecials(article, live) };
+}
+
+/** t173: admin preview of a special in any status (uncached catalog). */
+export async function readSpecialPreviewPayload(id: string) {
+  const data = await catalog();
+  const article = data.articles.find((item) => item.id === id && item.articleType === "special");
+  if (!article) return null;
+  const live = published(data.articles);
+  return { ...(await articlePayload(data, article, live)), relatedSpecial: relatedSpecials(article, live) };
+}
+
+function relatedSpecials(article: Article, live: Article[]) {
+  const specials = live.filter((a) => a.articleType === "special" && a.id !== article.id);
+  const shares = (a: Article) => a.topicIds.filter((id) => article.topicIds.includes(id)).length + a.tagIds.filter((id) => article.tagIds.includes(id)).length * 0.5;
+  return [...specials].sort((a, b) => shares(b) - shares(a) || byNewest(a, b)).slice(0, 4)
+    .map((a) => ({ id: a.id, slug: a.slug, title: a.title, excerpt: a.excerpt, publishedAt: a.publishedAt, coverMediaId: a.coverMediaId ?? null, coverAlt: a.coverAlt ?? null, wordCount: a.wordCount ?? 0 }));
+}
+
+/** t173: /special/ archive, newest first, 12 per page; optional topic filter. */
+export async function readSpecialArchive(page = 1, topic?: string) {
+  const data = await publicCatalog();
+  const all = published(data.articles);
+  const category = topic ? categoryOf(data.categories, topic) : undefined;
+  const specials = all.filter((a) => a.articleType === "special" && (!category || a.topicIds.includes(category.id)));
+  const p = paginate(specials, page);
+  if (!p) return null;
+  const allSpecials = all.filter((a) => a.articleType === "special");
+  const topics = data.categories
+    .map((c) => ({ id: c.id, slug: c.slug, label: c.label, count: allSpecials.filter((a) => a.topicIds.includes(c.id)).length }))
+    .filter((t) => t.count > 0);
+  return { site: { ...data.site, aiDailyPublishLimit: 0 }, articles: p.items, meta: metaFor(p.items, all, data.categories), page: p.page, pages: p.pages, total: p.total, start: p.start, topics, topic: category ?? null };
 }
 
 // ---------- redirects (t115): old slug -> new slug, served as 301 ----------
@@ -728,6 +810,7 @@ export async function readSitemap() {
     pages: pageLinks.map((p) => ({ slug: p.slug, lastmod: p.updatedAt ?? null })),
     articles: live.map((article) => ({
       slug: article.slug,
+      path: articlePath(article),
       lastmod: article.updatedAt,
       publishedAt: article.publishedAt,
       updatedAt: article.updatedAt,
@@ -760,6 +843,7 @@ export async function readFeed(limit = 20) {
     .slice(0, limit)
     .map((article) => ({
       slug: article.slug,
+      path: articlePath(article),
       title: article.title,
       excerpt: article.excerpt,
       description: article.seoDescription ?? article.excerpt,
@@ -792,6 +876,8 @@ export type ArticleSummary = {
   scheduledAt: string | null;
   /** t72: draft flagged topic_review by the automation signal check. */
   topicReview?: boolean;
+  /** t173: "special" for long-form special articles; absent = regular. */
+  articleType?: "special";
 };
 
 export async function adminOverview() {
@@ -916,8 +1002,9 @@ function summarize(article: Article, categories: Category[], grants: Set<string>
     hasCover: Boolean(article.coverMediaId),
     aiEditAllowed: grants.has(article.id),
     views,
-    words: articleWordCount(article),
+    words: article.articleType === "special" ? (article.wordCount ?? 0) : articleWordCount(article),
     scheduledAt: article.scheduledAt ?? null,
+    ...(article.articleType === "special" ? { articleType: "special" as const } : {}),
   };
 }
 
@@ -927,10 +1014,14 @@ export async function adminList(input: {
   categoryId?: string;
   tagId?: string;
   sort?: "updated" | "published" | "title";
+  /** t173: "special" | "regular"; absent = all. */
+  articleType?: "special" | "regular";
 }) {
   const data = await catalog();
   const q = input.q?.trim().toLowerCase() ?? "";
   let rows = data.articles.filter((article) => {
+    if (input.articleType === "special" && article.articleType !== "special") return false;
+    if (input.articleType === "regular" && article.articleType === "special") return false;
     if (input.status && article.status !== input.status) return false;
     if (input.categoryId && !article.topicIds.includes(input.categoryId)) return false;
     if (input.tagId && !article.tagIds.includes(input.tagId)) return false;
@@ -963,6 +1054,10 @@ export async function duplicateArticle(id: string): Promise<{ id: string; slug: 
   const data = await catalog();
   const source = data.articles.find((a) => a.id === id);
   if (!source) throw new ContentError("That article no longer exists.", 404);
+  if (source.articleType === "special") {
+    const { duplicateSpecialArticle } = await import("./special.server");
+    return duplicateSpecialArticle(id);
+  }
   return saveArticle({
     id: null,
     title: source.title,
@@ -1132,6 +1227,8 @@ export async function listNotFounds(limit = 12): Promise<Array<{ path: string; h
 
 export async function saveArticle(raw: unknown): Promise<{ id: string; slug: string; status: PublicationStatus }> {
   const input: ArticleWrite = scrubCitationsDeep(articleWriteSchema.parse(raw));
+  // t173: special articles keep their body in R2; the normal save path must never overwrite them.
+  if (input.id && (await articleTypeOf(input.id)) === "special") throw new ContentError("This is a special article. Edit it in the special editor.", 409);
   let authorOverride: string | null | undefined;
   if (input.authorName !== undefined) {
     const { checkAuthorName } = await import("@/lib/author-name");
@@ -1146,7 +1243,21 @@ export async function saveArticle(raw: unknown): Promise<{ id: string; slug: str
   return result;
 }
 
-async function saveArticleRows(input: ArticleWrite, markFirstPublish: (v: boolean) => void, authorOverride: string | null | undefined): Promise<{ id: string; slug: string; status: PublicationStatus }> {
+/** t173: "special" | "regular" for an article id (null = missing). Pre-0027 databases are all regular. */
+export async function articleTypeOf(id: string): Promise<"special" | "regular" | null> {
+  const sql = await getSql();
+  try {
+    const rows = await sql<{ t: string }>`select article_type as t from articles where id = ${id}`;
+    return rows.length ? (rows[0].t === "special" ? "special" : "regular") : null;
+  } catch {
+    return "regular";
+  }
+}
+
+/** t173: internal options for the special-article save path. Absent = the normal path, unchanged. */
+export type ArticleRowsOptions = { newId?: string; articleType?: "special" };
+
+export async function saveArticleRows(input: ArticleWrite, markFirstPublish: (v: boolean) => void, authorOverride: string | null | undefined, options?: ArticleRowsOptions): Promise<{ id: string; slug: string; status: PublicationStatus }> {
   if (input.intent === "publish") {
     const problem = publishProblems(input);
     if (problem) throw new ContentError(problem);
@@ -1180,7 +1291,7 @@ async function saveArticleRows(input: ArticleWrite, markFirstPublish: (v: boolea
       : [];
     if (input.id && existing.length === 0) throw new ContentError("That article no longer exists.", 404);
 
-    const id = input.id ?? randomUUID();
+    const id = input.id ?? options?.newId ?? randomUUID();
     const slug = await uniqueSlug(sql, input.slug || input.title, id);
     const previous = existing[0];
     let status: PublicationStatus = previous?.status ?? "draft";
@@ -1231,6 +1342,8 @@ async function saveArticleRows(input: ArticleWrite, markFirstPublish: (v: boolea
         ${categoryId}, ${input.motif}, ${input.featured}, ${seoTitle}, ${seoDescription},
         ${input.coverMediaId}, ${blocks}::jsonb, ${scheduledAt}
       )`;
+      // t173: a new special article is marked right after insert (column from migration 0027).
+      if (options?.articleType === "special") await sql`update articles set article_type = 'special' where id = ${id}`;
     }
     if (input.featured) {
       await sql`update articles set featured = false where id <> ${id} and featured = true`;
@@ -1277,10 +1390,15 @@ export async function deleteArticle(id: string, options: { deleteCover?: boolean
   const rows = await sql<{ cover_media_id: string | null }>`select cover_media_id from articles where id = ${id}`;
   if (rows.length === 0) throw new ContentError("That article no longer exists.", 404);
   const cover = rows[0]?.cover_media_id ?? null;
+  // t173: special bodies live in R2; collect their keys before the cascade removes the version rows.
+  const specialCleanup = (await articleTypeOf(id)) === "special" ? await import("./special.server").then((m) => m.prepareSpecialDelete(id)).catch(() => null) : null;
   await sql`delete from article_tags where article_id = ${id}`;
   await sql`delete from article_topics where article_id = ${id}`.catch(() => undefined);
   await sql`delete from automation_submissions where article_id = ${id}`.catch(() => undefined);
+  await sql`delete from special_article_versions where article_id = ${id}`.catch(() => undefined);
+  await sql`delete from special_article_state where article_id = ${id}`.catch(() => undefined);
   await sql`delete from articles where id = ${id}`;
+  if (specialCleanup) await specialCleanup().catch((e) => console.error("[special] cleanup", e));
   let coverDeleted = false;
   if (options.deleteCover && cover) {
     try {
@@ -1416,7 +1534,14 @@ export async function updateArticleForAi(articleId: string, patch: AiArticlePatc
     const clash = await sql<{ id: string }>`select id from articles where slug = ${patch.slug} and id <> ${articleId} limit 1`;
     if (clash.length) throw new ContentError(`The slug “${patch.slug}” is already used by another article. Choose a different slug.`);
   }
-  const saved = await saveArticle({
+  // t173: special articles keep their body in R2 — metadata-only patches (cover, SEO, topics)
+  // go through the special-aware row writer; body edits must create a new version instead.
+  const isSpecialArticle = (await articleTypeOf(article.id)) === "special";
+  if (isSpecialArticle && patch.blocks) throw new ContentError("This is a special article: send `body` as markdown to update_article_draft (a new version is created).", 409);
+  const write = isSpecialArticle
+    ? (input: ArticleWrite) => saveArticleRows(input, () => undefined, undefined, { articleType: "special" })
+    : saveArticle;
+  const saved = await write({
     id: article.id,
     title: patch.title ?? article.title,
     slug: patch.slug ?? article.slug,
@@ -1430,7 +1555,7 @@ export async function updateArticleForAi(articleId: string, patch: AiArticlePatc
     seoDescription: patch.seoDescription ?? article.seoDescription ?? "",
     coverMediaId: patch.coverMediaId !== undefined ? patch.coverMediaId : (article.coverMediaId ?? null),
     publishedAt: article.publishedAt,
-    blocks: patch.blocks ?? article.blocks,
+    blocks: isSpecialArticle ? [] : (patch.blocks ?? article.blocks),
     intent: "save",
   });
   const data = await catalog();
@@ -1809,14 +1934,21 @@ export function ftsQuery(raw: string): string | null {
 }
 
 async function ensureSearchIndex(sql: Sql, live: Article[], categories: Category[]): Promise<void> {
-  const signature = `${live.length}:${live.reduce((m, a) => (a.updatedAt > m ? a.updatedAt : m), "")}:${live.map((a) => a.id.slice(0, 4)).join("")}`;
+  const signature = `${live.length}:${live.reduce((m, a) => (a.updatedAt > m ? a.updatedAt : m), "")}:${live.map((a) => a.id.slice(0, 4) + (a.specialVersion ? `v${a.specialVersion}` : "")).join("")}`;
   const meta = await sql<{ signature: string }>`select signature from search_meta where id = 'articles'`;
   if (meta[0]?.signature === signature) return;
   const label = new Map(categories.map((c) => [c.id, c.label]));
+  // t173: special bodies are indexed from their stored plain text (R2 body is not re-read here).
+  const specialText = new Map<string, string>();
+  if (live.some((a) => a.articleType === "special")) {
+    const rows = await sql<{ article_id: string; search_text: string | null }>`select article_id, search_text from special_article_state`.catch(() => []);
+    for (const r of rows) specialText.set(r.article_id, r.search_text ?? "");
+  }
   await sql`delete from articles_fts`;
   for (const a of live) {
     const topics = a.topicIds.map((id) => label.get(id) ?? "").filter(Boolean).join(" ");
-    await sql`insert into articles_fts (article_id, title, excerpt, body, topics) values (${a.id}, ${a.title}, ${a.excerpt}, ${articleBodyText(a)}, ${topics})`;
+    const body = a.articleType === "special" ? (specialText.get(a.id) ?? "") : articleBodyText(a);
+    await sql`insert into articles_fts (article_id, title, excerpt, body, topics) values (${a.id}, ${a.title}, ${a.excerpt}, ${body}, ${topics})`;
   }
   const now = new Date().toISOString();
   await sql`insert into search_meta (id, signature, built_at) values ('articles', ${signature}, ${now})

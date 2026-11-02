@@ -53,8 +53,21 @@ export type Article = {
   coverImage?: CoverImage | null;
   /** Admin grant: AI (via MCP) may edit this specific published article. Migration 0006; absent = false. */
   aiEditAllowed?: boolean;
+  /** t173: 'special' = long-form body stored as versioned JSON in R2 (blocks stays []). Absent = regular. */
+  articleType?: ArticleType;
+  /** t173: special articles only: words in the live R2 body (reading time without loading it). */
+  wordCount?: number;
+  /** t173: special articles only: the live body version number. */
+  specialVersion?: number;
   blocks: ArticleBlock[];
 };
+
+export type ArticleType = "regular" | "special";
+
+/** t173: the public URL of an article (special articles live under /special/). */
+export function articlePath(article: { slug: string; articleType?: ArticleType | null }): string {
+  return article.articleType === "special" ? `/special/${article.slug}` : `/articles/${article.slug}`;
+}
 
 /** t147: `v` versions /media URLs (immutable caching); w/h are the hero's real pixels (0 = unknown). */
 export type CoverImage = { v: string; w: number; h: number; /** dominant colour (#rrggbb) of an opaque image, painted while it loads */ c?: string | null };

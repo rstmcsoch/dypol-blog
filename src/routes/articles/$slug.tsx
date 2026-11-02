@@ -12,6 +12,7 @@ export const Route = createFileRoute("/articles/$slug")({
   loader: async ({ params }) => {
     const data = await getArticle({ data: { slug: params.slug } });
     if (!data) throw notFound();
+    if ("special" in data && data.special) throw redirect({ to: "/special/$slug", params: { slug: data.redirectTo }, statusCode: 301 });
     if ("redirectTo" in data && data.redirectTo) throw redirect({ to: "/articles/$slug", params: { slug: data.redirectTo }, statusCode: 301 });
     if (!("article" in data) || !data.article) throw notFound();
     return data;

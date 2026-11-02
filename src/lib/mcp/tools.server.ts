@@ -1,3 +1,7 @@
+import { applySpecialTools } from "@/lib/special/mcp-wiring";
+import {
+  SPECIAL_SUBMIT_PROPERTIES, specialArticleView, specialPublishBlock, specialBrief, specialResearchTools, submitSpecialDraft, updateSpecialDraft, type SpecialCtx,
+} from "@/lib/special/special-tools.server";
 import type { KeyEnv } from "@/lib/automation/provider";
 import { SOCIAL_EMBED_GUIDANCE } from "@/lib/automation/embed-guidance";
 import { z } from "zod";
@@ -7,7 +11,7 @@ import { writesAllowed } from "@/lib/write-guard.server";
 import { automationActive, type AutomationSettings } from "@/lib/automation/settings";
 import { bodyToBlocks, contentHash, placeSummaryFirst, stripCreditsAndSources, wordCount } from "@/lib/automation/body";
 import { draftFlags, publishDecision, sourceProblems, type DraftFlag } from "@/lib/automation/policy";
-import { effectiveRun, limitVerdict, type EffectiveRun } from "@/lib/automation/publish-limits";
+import { combinedLimitVerdict, effectiveRun, type ArticleKind, type EffectiveRun } from "@/lib/automation/publish-limits";
 import { assertUsableCover, decodeBase64Image, fetchImage, ImageIntakeError, MAX_IMAGE_BYTES, type ImageMime } from "@/lib/automation/image-fetch";
 import { providerStatus } from "@/lib/automation/provider";
 import { advanceCursor, computeTopicSelection } from "@/lib/automation/topic-selection";
@@ -150,7 +154,7 @@ function invalid(error: z.ZodError): ToolResult {
   };
 }
 
-type Ctx = { auth: string; profileId?: string };
+type Ctx = { auth: string; profileId?: string; /** t173: precomputed special mode (null/absent = off). */ special?: SpecialCtx | null };
 
 async function loadSettings(profileId: string) {
   const { readProfileSettings } = await import("@/content/automation.server");
@@ -199,16 +203,40 @@ async function recentNearDuplicate(title: string, sourceUrls: string[]): Promise
   return hit ? { id: hit.story.id, slug: hit.story.slug, error: nearDuplicateError(hit) } : null;
 }
 
-async function publishLimitContext(profileId: string, policy: AutomationSettings["policy"], runId?: string | null) {
+async function publishLimitContext(profileId: string, policy: AutomationSettings["policy"], runId?: string | null, articleId?: string) {
   const store = await import("@/content/automation.server");
-  const [all, mine, websiteCap] = await Promise.all([
+  // t177: the website cap is one global cap over Normal + Special AI publishes;
+  // special articles also face the Special tab's own daily cap.
+  const kind = articleId ? await articleKindOf(articleId) : "regular";
+  const [all, mine, websiteCap, specialUsed, specialCap] = await Promise.all([
     store.aiPublishUsageToday(),
     store.aiPublishUsageToday(profileId),
     store.readWebsiteAiDailyLimit(),
+    kind === "special" ? store.specialPublishUsageToday() : Promise.resolve(0),
+    kind === "special" ? specialDailyCap() : Promise.resolve(0),
   ]);
   const run = effectiveRun(profileId, runId, mine);
-  const verdict = limitVerdict({ websiteUsed: all.length, websiteCap, runUsed: run.used, runCap: policy.maxPublishedPerRun });
-  return { store, run, websiteCap, websiteUsed: all.length, verdict };
+  const verdict = combinedLimitVerdict({ kind, websiteUsed: all.length, websiteCap, runUsed: run.used, runCap: policy.maxPublishedPerRun, specialUsed, specialCap });
+  return { store, run, websiteCap, websiteUsed: all.length, specialUsed, specialCap, kind, verdict };
+}
+
+async function articleKindOf(articleId: string): Promise<ArticleKind> {
+  try {
+    const sql = await getSql();
+    const rows = await sql<{ article_type: string | null }>`select article_type from articles where id = ${articleId}`;
+    return rows[0]?.article_type === "special" ? "special" : "regular";
+  } catch {
+    return "regular"; // pre-0027 database
+  }
+}
+
+async function specialDailyCap(): Promise<number> {
+  try {
+    const { readSpecialSettings } = await import("@/content/special-settings.server");
+    return (await readSpecialSettings()).maxPublishedPerDay;
+  } catch {
+    return 0;
+  }
 }
 
 type PublishClaim = { claimId: string | null; run: EffectiveRun };
@@ -220,18 +248,29 @@ async function claimPublish(
   input: { articleId: string; auth: string; mode: "automatic" | "explicit"; runId?: string | null },
 ): Promise<{ ok: true; claim: PublishClaim } | { ok: false; reason: string }> {
   if (ctx.verdict.blocked) {
-    return { ok: false, reason: ctx.verdict.websiteReason ?? ctx.verdict.runReason ?? "Publish limit reached." };
+    return { ok: false, reason: ctx.verdict.websiteReason ?? ctx.verdict.specialReason ?? ctx.verdict.runReason ?? "Publish limit reached." };
   }
-  const claimId = await ctx.store.claimAiPublish({ profileId, runKey: ctx.run.runKey, mode: input.mode, articleId: input.articleId, auth: input.auth });
+  // t177: the claim insert itself re-checks the website (and special) caps
+  // atomically, so concurrent publishers from any profile/type cannot both
+  // take the last slot.
+  const claimed = await ctx.store.claimAiPublish({ profileId, runKey: ctx.run.runKey, mode: input.mode, articleId: input.articleId, auth: input.auth, limits: { websiteCap: ctx.websiteCap, specialCap: ctx.specialCap, articleType: ctx.kind } });
+  if (claimed && typeof claimed === "object") {
+    const again = await publishLimitContext(profileId, policy, input.runId, input.articleId);
+    return { ok: false, reason: again.verdict.websiteReason ?? again.verdict.specialReason ?? "Publish limit reached." };
+  }
+  const claimId = claimed;
   // Recount including other in-flight claims; abort if a concurrent
   // publish pushed usage over a cap in the meantime. Our own claim is
   // excluded from the recount (it is the publish being attempted).
-  const recount = await publishLimitContext(profileId, policy, input.runId);
-  const othersBlocked = limitVerdict({
+  const recount = await publishLimitContext(profileId, policy, input.runId, input.articleId);
+  const othersBlocked = combinedLimitVerdict({
+    kind: recount.kind,
     websiteUsed: Math.max(0, recount.websiteUsed - 1),
     websiteCap: recount.websiteCap,
     runUsed: Math.max(0, recount.run.used - 1),
     runCap: policy.maxPublishedPerRun,
+    specialUsed: Math.max(0, recount.specialUsed - 1),
+    specialCap: recount.specialCap,
   }).blocked;
   if (othersBlocked) {
     await ctx.store.releaseAiPublishClaim(claimId);
@@ -256,15 +295,17 @@ async function attemptAutoPublish(articleId: string, profileId: string, auth: st
   const sql = await getSql();
   const rows = await sql<{ status: string; category_id: string; slug: string }>`select status, category_id, slug from articles where id = ${articleId}`;
   if (!rows[0]) return { published: false, status: "missing", reasons: ["That article no longer exists."] };
+  const specialBlock = await specialPublishBlock(articleId, "automatic");
+  if (specialBlock) return { published: false, status: rows[0].status, reasons: [specialBlock] };
   const policy = await decisionPolicy(settings);
-  const ctx = await publishLimitContext(profileId, policy, runId);
+  const ctx = await publishLimitContext(profileId, policy, runId, articleId);
   const decision = publishDecision({ active: automationActive(settings), policy, status: rows[0].status, categoryIds: await topicIdsOf(articleId, rows[0].category_id), flags: submission.flags as DraftFlag[], publishedThisRun: ctx.run.used });
   if (!decision.publish) {
     await store.recordRun({ profileId, tool: "publish_article_if_allowed", outcome: "kept_draft", reason: decision.reasons.join(" "), articleId, auth, details: { mode: "automatic", runKey: ctx.run.runKey } });
     return { published: false, status: rows[0].status, reasons: decision.reasons };
   }
   if (ctx.verdict.blocked) {
-    const reason = ctx.verdict.websiteReason ?? ctx.verdict.runReason ?? "Publish limit reached.";
+    const reason = ctx.verdict.websiteReason ?? ctx.verdict.specialReason ?? ctx.verdict.runReason ?? "Publish limit reached.";
     await store.recordRun({ profileId, tool: "publish_article_if_allowed", outcome: "kept_draft", reason, articleId, auth, details: { mode: "automatic", runKey: ctx.run.runKey } });
     return { published: false, status: rows[0].status, reasons: [reason] };
   }
@@ -330,10 +371,16 @@ async function explicitPublish(
     await store.recordRun({ profileId, tool: "publish_article_if_allowed", outcome: "refused", reason: message, articleId, auth, details: { mode: "explicit" } });
     return { published: false, status: rows[0].status, reasons: [message], warnings: [] };
   }
+  // t173: special articles need the owner's auto-publish setting, a stored R2 body and a passing quality report.
+  const specialBlock = await specialPublishBlock(articleId, "explicit");
+  if (specialBlock) {
+    await store.recordRun({ profileId, tool: "publish_article_if_allowed", outcome: "refused", reason: specialBlock, articleId, auth, details: { mode: "explicit", articleType: "special" } });
+    return { published: false, status: rows[0].status, reasons: [specialBlock], warnings: [] };
+  }
   // Warnings only: what the AUTOMATIC policy would have said. Never blocks.
   const submission = await store.findSubmission({ articleId });
   const policy = await decisionPolicy(settings);
-  const ctx = await publishLimitContext(profileId, policy, runId);
+  const ctx = await publishLimitContext(profileId, policy, runId, articleId);
   const decision = publishDecision({
     active: automationActive(settings),
     policy,
@@ -346,7 +393,7 @@ async function explicitPublish(
   // The owner's hard limits DO block explicit publishes (t64): the
   // whole-website daily cap and the per-run cap count every AI publish.
   if (ctx.verdict.blocked) {
-    const reason = ctx.verdict.websiteReason ?? ctx.verdict.runReason ?? "Publish limit reached.";
+    const reason = ctx.verdict.websiteReason ?? ctx.verdict.specialReason ?? ctx.verdict.runReason ?? "Publish limit reached.";
     await store.recordRun({ profileId, tool: "publish_article_if_allowed", outcome: "refused", reason, articleId, auth, details: { mode: "explicit", runKey: ctx.run.runKey } });
     return { published: false, status: rows[0].status, reasons: [reason], warnings };
   }
@@ -437,6 +484,11 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
   /** Recomputes quality flags after an edit and stores them on the submission (if any). Never publishes. */
   async function refreshFlags(articleId: string, settings: AutomationSettings, droppedTags = 0): Promise<{ flags: DraftFlag[]; wouldPublish: boolean; publishReasons: string[] }> {
     const store = await import("@/content/automation.server");
+    // t173: special articles are scored by their quality report, not the block-based flags.
+    if ((await (await import("@/content/repository.server")).articleTypeOf(articleId)) === "special") {
+      const submission = await store.findSubmission({ articleId });
+      return { flags: (submission?.flags ?? []) as DraftFlag[], wouldPublish: false, publishReasons: ["Special articles are published by the owner (or by the quality-gated auto-publish when enabled)."] };
+    }
     const submission = await store.findSubmission({ articleId });
     const sql = await getSql();
     const rows = await sql<{ title: string; status: string; category_id: string; cover_media_id: string | null; blocks: string }>`select title, status, category_id, cover_media_id, blocks from articles where id = ${articleId}`;
@@ -478,7 +530,7 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
     return { ok: false, error: message };
   }
 
-  return [
+  const tools: ToolDefinition[] = [
     {
       name: "get_blog_settings",
       title: "Get blog settings",
@@ -1186,4 +1238,19 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
       },
     },
   ];
+  // t173: special-article additions. With special mode off the list is exactly the one above.
+  const special = ctx.special ?? null;
+  const deps = { profileId, auth, loadSettings, attemptAutoPublish };
+  return applySpecialTools(tools, Boolean(special), {
+    submitProperties: SPECIAL_SUBMIT_PROPERTIES,
+    submit: (args) => submitSpecialDraft(args, special!, deps),
+    update: (args) => updateSpecialDraft(args, special, deps),
+    isSpecial: async (id) => (await (await import("@/content/repository.server")).articleTypeOf(id)) === "special",
+    view: (id) => specialArticleView(id),
+    brief: async () => {
+      const cats = await (await getSql())<{ id: string; slug: string; label: string; description: string }>`select id, slug, label, description from categories order by label`;
+      return specialBrief(special!.settings, cats);
+    },
+    research: () => specialResearchTools(special!, deps),
+  });
 }

@@ -483,6 +483,7 @@ export const articleListSchema = z.object({
   categoryId: z.string().max(80).optional(),
   tagId: z.string().max(80).optional(),
   sort: z.enum(["updated", "published", "title"]).optional(),
+  articleType: z.enum(["special", "regular"]).optional(),
 });
 
 export function decodeImage(dataBase64: string, mime: string): Buffer {

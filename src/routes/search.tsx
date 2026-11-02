@@ -65,7 +65,7 @@ function SearchPage() {
           <ol className="index-list search-results">
             {results.map((r, i) => (
               <li key={r.id}>
-                <Link to="/articles/$slug" params={{ slug: r.slug }} className="index-row">
+                <Link to={"special" in r && r.special ? "/special/$slug" : "/articles/$slug"} params={{ slug: r.slug }} className="index-row">
                   <span className="index-row__num">{String(i + 1).padStart(2, "0")}</span>
                   {r.coverMediaId ? (
                     <span className="index-row__thumb"><img src={thumbUrl(r.coverMediaId, r.coverImage?.v)} style={r.coverImage?.c ? { backgroundColor: r.coverImage.c } : undefined} alt={r.coverAlt?.trim() ? r.coverAlt : r.title} loading="lazy" decoding="async" width={480} height={360} /></span>

@@ -97,3 +97,83 @@ export function limitVerdict(input: {
       : null;
   return { blocked: Boolean(websiteReason ?? runReason), websiteReason, runReason };
 }
+
+/*
+ * t177: the website daily cap (Settings) is ONE global hard cap across
+ * Normal + Special AI publishes combined. Each tab's own limit still applies
+ * (Normal: per-run cap; Special: its per-day cap), and an article publishes
+ * only when it passes ALL of them. Blocked articles stay drafts.
+ */
+export type ArticleKind = "regular" | "special";
+
+export function combinedLimitVerdict(input: {
+  kind: ArticleKind;
+  /** All AI publishes today (UTC), both types, claims included. */
+  websiteUsed: number;
+  websiteCap: number;
+  runUsed: number;
+  runCap: number;
+  /** Special AI publishes today (UTC), claims included. Ignored for regular. */
+  specialUsed?: number;
+  specialCap?: number;
+}): LimitVerdict & { specialReason: string | null } {
+  // Regular articles: exactly the pre-t177 verdict (same order, same text).
+  if (input.kind !== "special") return { ...limitVerdict(input), specialReason: null };
+  const websiteReason =
+    input.websiteCap > 0 && input.websiteUsed >= input.websiteCap
+      ? `Website daily publish limit reached (${input.websiteCap}) — this main limit counts Normal + Special articles combined. Kept as a draft.`
+      : null;
+  const specialCap = input.specialCap ?? 0;
+  const specialReason =
+    !websiteReason && specialCap > 0 && (input.specialUsed ?? 0) >= specialCap
+      ? `Special-article daily publish limit reached (${specialCap}). Kept as a draft.`
+      : null;
+  const runReason =
+    !websiteReason && !specialReason && input.runCap > 0 && input.runUsed >= input.runCap
+      ? `Per-run publish limit reached (${input.runCap}) for this automation run.`
+      : null;
+  return { blocked: Boolean(websiteReason ?? specialReason ?? runReason), websiteReason, runReason, specialReason };
+}
+
+/** Start of the cap window: the current UTC day (same window as the website cap since t64). */
+export function capWindowStart(now = new Date()): string {
+  const since = new Date(now.getTime());
+  since.setUTCHours(0, 0, 0, 0);
+  return since.toISOString();
+}
+
+const COUNTED = "tool = 'publish_article_if_allowed' and outcome in ('published', 'published_explicit', 'publish_claim')";
+
+/**
+ * One statement that inserts the publish claim ONLY if the caps still have
+ * room, counting every other claim/publish in the window at write time.
+ * SQLite/D1 executes a single statement atomically, so two concurrent
+ * publishers can never both take the last slot. Zero rows = blocked.
+ */
+export function atomicClaimStatement(input: {
+  id: string;
+  createdAt: string;
+  profileId: string;
+  articleId: string;
+  auth: string;
+  details: string;
+  since: string;
+  websiteCap: number;
+  /** Only for special articles; 0 = no special cap. */
+  specialCap: number;
+}): { text: string; params: unknown[] } {
+  const params: unknown[] = [input.id, input.createdAt, input.articleId, input.auth, input.details, input.profileId];
+  const conds: string[] = [];
+  if (input.websiteCap > 0) {
+    params.push(input.since, input.websiteCap);
+    conds.push(`(select count(*) from automation_runs where ${COUNTED} and created_at >= $${params.length - 1}) < $${params.length}`);
+  }
+  if (input.specialCap > 0) {
+    params.push(input.since, input.specialCap);
+    conds.push(`(select count(*) from automation_runs r join articles a on a.id = r.article_id where r.${COUNTED.replace(/ and outcome/, " and r.outcome")} and a.article_type = 'special' and r.created_at >= $${params.length - 1}) < $${params.length}`);
+  }
+  const text = `insert into automation_runs (id, created_at, tool, outcome, reason, article_id, auth, details, profile_id)
+    select $1, $2, 'publish_article_if_allowed', 'publish_claim', '', $3, $4, $5, $6
+    ${conds.length ? `where ${conds.join(" and ")}` : ""} returning id`;
+  return { text, params };
+}

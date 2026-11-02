@@ -1,27 +1,81 @@
 import { useState } from "react";
 import { adminPending } from "@/components/admin/pending";
-import { createFileRoute, useRouter } from "@tanstack/react-router";
+import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { errorText } from "@/components/admin/gate";
-import { adminAutomation, adminProfileAction, adminSaveAutomation } from "@/content/admin-api";
+import { adminAutomation, adminCloudStatus, adminProfileAction, adminSaveAutomation, adminSpecialSettings } from "@/content/admin-api";
+import { SpecialAutomation } from "@/components/admin/special/special-automation";
+import { CombinedLimitNote } from "@/components/admin/special/combined-limit";
 import { SERVER_API_PROVIDERS, type AutomationSettings } from "@/lib/automation/settings";
 import { PROVIDER_KEY_SECRETS, PROVIDER_LABELS } from "@/lib/automation/provider";
 import { nextExpectedRun } from "@/lib/automation/schedule";
 import { checkAuthorName, sameAuthor } from "@/lib/author-name";
 import { AuthorRotationCard } from "@/components/admin/author-rotation-card";
 
+type AutomationSearch = { profile?: string; tab?: "special"; cloud?: string; connected?: "1"; error?: string };
+
 export const Route = createFileRoute("/admin/automation")({
   ...adminPending,
-  validateSearch: (search: Record<string, unknown>): { profile?: string } =>
-    typeof search.profile === "string" && /^(default|p[0-9a-f]{8})$/.test(search.profile) ? { profile: search.profile } : {},
-  loaderDeps: ({ search }) => ({ profile: search.profile }),
-  loader: ({ deps }) => adminAutomation({ data: { profileId: deps.profile ?? "default" } }),
+  validateSearch: (search: Record<string, unknown>): AutomationSearch => {
+    const out: AutomationSearch = typeof search.profile === "string" && /^(default|p[0-9a-f]{8})$/.test(search.profile) ? { profile: search.profile } : {};
+    // t173: Normal | Special tabs. Without ?tab=special the page is exactly the Normal automation page.
+    if (search.tab === "special") {
+      out.tab = "special";
+      if (typeof search.cloud === "string" && /^[a-z-]{2,20}$/.test(search.cloud)) out.cloud = search.cloud;
+      if (search.connected === "1" || search.connected === 1) out.connected = "1";
+      if (typeof search.error === "string") out.error = search.error.slice(0, 200);
+    }
+    return out;
+  },
+  loaderDeps: ({ search }) => ({ profile: search.profile, tab: search.tab }),
+  loader: async ({ deps }) => {
+    if (deps.tab !== "special") return { normal: await adminAutomation({ data: { profileId: deps.profile ?? "default" } }), special: null };
+    const [special, cloud] = await Promise.all([adminSpecialSettings(), adminCloudStatus()]);
+    return { normal: null, special: { ...special, cloud } };
+  },
   component: AutomationPage,
 });
 
+/** The Normal tab's data (the original loader result, unchanged). */
+function useNormalData() {
+  const data = Route.useLoaderData().normal;
+  if (!data) throw new Error("Normal automation data is not loaded.");
+  return data;
+}
+
+function AutomationTabs({ active }: { active: "normal" | "special" }) {
+  return (
+    <nav className="sp-tabs" aria-label="Automation type">
+      <div className="sp-tabs__list" role="tablist">
+        <Link to="/admin/automation" search={{}} role="tab" aria-selected={active === "normal"} className={`sp-tabs__tab${active === "normal" ? " is-active" : ""}`} data-testid="tab-normal">Normal</Link>
+        <Link to="/admin/automation" search={{ tab: "special" }} role="tab" aria-selected={active === "special"} className={`sp-tabs__tab${active === "special" ? " is-active" : ""}`} data-testid="tab-special">Special</Link>
+      </div>
+    </nav>
+  );
+}
+
 function AutomationPage() {
-  const data = Route.useLoaderData();
+  const loaded = Route.useLoaderData();
+  const search = Route.useSearch();
+  if (loaded.special) {
+    return (
+      <>
+        <AutomationTabs active="special" />
+        <SpecialAutomation
+          settings={loaded.special.settings}
+          categories={loaded.special.categories}
+          profiles={loaded.special.profiles}
+          keys={loaded.special.keys}
+          publishUsage={loaded.special.publishUsage}
+          cloud={loaded.special.cloud}
+          flash={{ provider: search.cloud, connected: search.connected === "1", error: search.error }}
+        />
+      </>
+    );
+  }
+  const data = loaded.normal!;
   return (
     <>
+      <AutomationTabs active="normal" />
       <Profiles />
       <AutomationDesk key={data.profileId} />
     </>
@@ -30,7 +84,7 @@ function AutomationPage() {
 
 /** Named automation profiles. Each AI app connects with an API key, an OAuth client, or both. */
 function Profiles() {
-  const data = Route.useLoaderData();
+  const data = useNormalData();
   const router = useRouter();
   const navigate = Route.useNavigate();
   const [name, setName] = useState("");
@@ -256,7 +310,7 @@ function AuthorSummary({ authors, nextAuthor }: { authors: string[]; nextAuthor:
 const lines = (value: string) => value.split("\n").map((v) => v.trim()).filter(Boolean);
 
 function AutomationDesk() {
-  const data = Route.useLoaderData();
+  const data = useNormalData();
   const router = useRouter();
   const [s, setS] = useState<AutomationSettings>(data.settings);
   const [ideas, setIdeas] = useState(data.settings.topicIdeas.join("\n"));
@@ -481,6 +535,7 @@ function AutomationDesk() {
             run. This limit covers automatic and explicit MCP publishes. The whole-website daily limit lives in
             Settings. Set 0 for no per-run limit.
           </p>
+          <CombinedLimitNote usage={data.publishUsage} tab="normal" />
           <Check
             checked={s.aiMayEditAllDrafts}
             onChange={(e) => setS((c) => ({ ...c, aiMayEditAllDrafts: e.target.checked }))}

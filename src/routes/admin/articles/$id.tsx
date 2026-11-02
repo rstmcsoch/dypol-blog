@@ -1,4 +1,4 @@
-import { createFileRoute, notFound } from "@tanstack/react-router";
+import { createFileRoute, notFound, redirect } from "@tanstack/react-router";
 import { adminPending } from "@/components/admin/pending";
 import { ArticleEditor } from "@/components/admin/editor";
 import { adminEditorData } from "@/content/admin-api";
@@ -8,6 +8,8 @@ export const Route = createFileRoute("/admin/articles/$id")({
   loader: async ({ params }) => {
     const data = await adminEditorData({ data: { id: params.id } });
     if (!data.article) throw notFound();
+    // t173: special articles have their own editor (R2-backed body).
+    if (data.article.articleType === "special") throw redirect({ to: "/admin/special/$id", params: { id: params.id } });
     return data;
   },
   component: EditPiece,
