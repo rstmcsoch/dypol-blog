@@ -344,6 +344,8 @@ export const adminSettings = createServerFn({ method: "GET" })
     const { listGrants } = await import("@/lib/auth/admin.server");
     const { MediaBindingError } = await import("./media-store.server");
     const settings = await readSettings();
+    const { readHeadNames } = await import("./head-code.server");
+    const headNames = await readHeadNames();
     let media: Awaited<ReturnType<typeof listMedia>> = [];
     let mediaNotice: string | null = null;
     try {
@@ -354,6 +356,7 @@ export const adminSettings = createServerFn({ method: "GET" })
     }
     return {
       ...settings,
+      headNames,
       media,
       mediaNotice,
       mode: session.mode,
@@ -369,6 +372,20 @@ export const adminSaveSettings = createServerFn({ method: "POST" })
     const { saveSettings } = await import("./repository.server");
     await saveSettings(data);
     return { ok: true };
+  });
+
+/** t183: save Settings → Custom head code entries (add / edit / delete / reorder) at once. */
+export const adminSaveHeadCode = createServerFn({ method: "POST" })
+  .validator((input: unknown) => {
+    const v = (input ?? {}) as { code?: unknown; expected?: unknown; names?: unknown };
+    if (typeof v.code !== "string" || typeof v.expected !== "string") throw new Error("Invalid head code request.");
+    if (v.code.length > 20000) throw new Error("Custom head code is limited to 20,000 characters.");
+    return { code: v.code, expected: v.expected, names: v.names };
+  })
+  .handler(async ({ data }) => {
+    await writeGuard();
+    const { saveHeadCode } = await import("./head-code.server");
+    return saveHeadCode(data);
   });
 
 export const adminMedia = createServerFn({ method: "GET" })

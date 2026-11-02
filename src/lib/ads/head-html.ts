@@ -86,7 +86,7 @@ export type HeadCodeCheck = {
   /** The kept tags, verbatim, one per line. */
   code: string;
   /** One line per kept tag, for the admin preview. */
-  tags: { tag: string; summary: string }[];
+  tags: { tag: string; summary: string; /** t183: the tag's exact source, verbatim. */ code: string }[];
   /** Tags or text that were removed (not allowed in <head>). */
   dropped: string[];
 };
@@ -133,7 +133,7 @@ export function checkHeadCode(input: string): HeadCodeCheck {
       continue;
     }
     kept.push(m[0]);
-    tags.push({ tag, summary: summarize(tag, parseAttrs(open.replace(/\/\s*$/, "")), inner) });
+    tags.push({ tag, summary: summarize(tag, parseAttrs(open.replace(/\/\s*$/, "")), inner), code: m[0] });
   }
   loose(input.slice(last));
   return { code: kept.join("\n"), tags, dropped };
