@@ -2,10 +2,10 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "@tanstack/react-router";
 import { errorText } from "@/components/admin/gate";
-import { adminSaveHeadCode } from "@/content/admin-api";
+import { adminSaveHeadCode, adminSaveHeadNames } from "@/content/admin-api";
 import { checkHeadCode } from "@/lib/ads/head-html";
 import {
-  addHeadEntry, headEntries, headEntryKey, headNameFor, HEAD_NAME_MAX, moveHeadEntry, removeHeadEntry, replaceHeadEntry,
+  addHeadEntry, headEntries, headEntryKey, headNameFor, HEAD_NAME_MAX, moveHeadEntry, removeHeadEntry, replaceHeadEntry, sameHeadNames, shownHeadNames,
   type HeadChange, type HeadNames,
 } from "@/lib/ads/head-entries";
 
@@ -23,14 +23,26 @@ export function HeadCodeCards({ value, names, onSaved, confirm = (m) => window.c
 
   const apply = async (change: HeadChange, success: string, after?: () => void) => {
     if ("error" in change) { setStatus({ ok: false, text: change.error }); return false; }
+    // t189: the code is byte-identical to what is stored → never send or rewrite the head code.
+    const codeSame = change.code === value;
+    if (codeSame && sameHeadNames(change.names, shownHeadNames(value, names))) {
+      after?.();
+      setStatus({ ok: true, text: "No changes. The head code was not touched." });
+      return true;
+    }
     setBusy(true);
     setStatus(null);
     try {
-      const saved = await adminSaveHeadCode({ data: { code: change.code, expected: value, names: change.names } });
+      const saved = codeSame
+        ? await adminSaveHeadNames({ data: { expected: value, names: change.names } })
+        : await adminSaveHeadCode({ data: { code: change.code, expected: value, names: change.names } });
       onSaved(saved.customHead, saved.names);
       after?.();
-      setStatus({ ok: true, text: success });
-      void router.invalidate();
+      const text = saved.codeChanged ? success
+        : saved.namesChanged ? "Name saved. The head code was not touched."
+        : "No changes. The head code was not touched.";
+      setStatus({ ok: true, text });
+      if (saved.codeChanged) void router.invalidate();
       return true;
     } catch (caught) {
       setStatus({ ok: false, text: errorText(caught) });

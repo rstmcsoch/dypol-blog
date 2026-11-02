@@ -91,12 +91,33 @@ export function addHeadEntry(stored: string, names: HeadNames, snippet: string, 
 export function replaceHeadEntry(stored: string, names: HeadNames, index: number, snippet: string, name = ""): HeadChange {
   const list = headEntries(stored).map((e) => e.code);
   if (index < 0 || index >= list.length) return { error: "That head code entry no longer exists. Reload the page." };
+  const old = list[index]!;
+  // t189: code text identical (exact compare, no trimming) → keep the stored head code as is,
+  // without re-extracting it; only the name may change.
+  if (snippet === old) return { code: stored, names: renameHeadEntry(stored, names, index, name) };
   const repl = snippetCodes(snippet);
   if (!Array.isArray(repl)) return { error: `${repl.error} To remove this entry, use Delete.` };
-  const old = list[index]!;
   const keep = cleanName(name) || names[headEntryKey(old)] || defaultHeadName({ code: old, tag: headEntries(old)[0]?.tag ?? "tag" }, index);
   list.splice(index, 1, ...repl);
   return { code: joinHeadEntries(list), names: namesFor(list, named(repl, keep, names)) };
+}
+
+/** Names after renaming entry `index` (blank keeps the current name). The head code is not touched. */
+export function renameHeadEntry(stored: string, names: HeadNames, index: number, name: string): HeadNames {
+  const list = headEntries(stored).map((e) => e.code);
+  const shown = namesFor(list, names);
+  const n = cleanName(name);
+  const key = list[index] === undefined ? undefined : headEntryKey(list[index]!);
+  return key && n ? { ...shown, [key]: n } : shown;
+}
+
+/** The names as shown now for every entry (explicit names plus defaults). */
+export const shownHeadNames = (stored: string, names: HeadNames): HeadNames => namesFor(headEntries(stored).map((e) => e.code), names);
+
+/** Same names (ignoring key order)? Used to skip writes that would change nothing. */
+export function sameHeadNames(a: HeadNames, b: HeadNames): boolean {
+  const ka = Object.keys(a), kb = Object.keys(b);
+  return ka.length === kb.length && ka.every((k) => a[k] === b[k]);
 }
 
 export function removeHeadEntry(stored: string, names: HeadNames, index: number): HeadChange {
