@@ -91,3 +91,21 @@ export function nameFromTurnRow(row: { names: string; next_index: number } | und
   const slot = slotFor(Number(row.next_index) - 1, names.length);
   return typeof names[slot] === "string" ? names[slot] : null;
 }
+
+/**
+ * t171: the admin save is a compare-and-set. It only writes when the row
+ * still holds the names and raw pointer it was computed from, so a publish
+ * that takes a turn between the read and the write is never overwritten
+ * (the caller re-reads and retries). Params: $1 names JSON, $2 next_index,
+ * $3 updated_at, $4 profile_id, $5 expected names JSON, $6 expected next_index.
+ */
+export const SAVE_LIST_CAS_SQL = `update automation_authors
+  set names = $1, next_index = $2, updated_at = $3
+  where profile_id = $4 and names = $5 and next_index = $6
+  returning profile_id`;
+
+/** First save for a profile with no row yet. Params as SAVE_LIST_CAS_SQL $1-$4. */
+export const SAVE_LIST_INSERT_SQL = `insert into automation_authors (profile_id, names, next_index, updated_at)
+  values ($4, $1, $2, $3)
+  on conflict (profile_id) do nothing
+  returning profile_id`;
