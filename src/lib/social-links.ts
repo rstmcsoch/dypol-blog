@@ -57,7 +57,7 @@ export function normalizeSocials(input: unknown): SocialLink[] {
   return SOCIAL_PLATFORMS.filter((p) => byPlatform.has(p)).map((p) => byPlatform.get(p) as SocialLink);
 }
 
-/** What the footer actually renders: URL set + toggled on. */
+/** True when a non-RSS/email URL is only the platform homepage (no profile path). */
 export function isRootSocialUrl(platform: SocialPlatform, value: string): boolean {
   if (platform === "rss" || platform === "email" || !value.trim()) return false;
   try {
@@ -66,8 +66,13 @@ export function isRootSocialUrl(platform: SocialPlatform, value: string): boolea
   } catch { return false; }
 }
 
+/** What the footer actually renders: a URL is set and Show is on.
+ * A platform homepage (https://x.com/) still renders when the editor
+ * turned Show on. The admin form warns that it is not a profile; the
+ * toggle is the source of truth, otherwise enabled icons never appear.
+ */
 export function visibleSocials(socials: SocialLink[] | undefined): SocialLink[] {
-  return normalizeSocials(socials).filter((s) => s.visible && s.url.length > 0 && !isRootSocialUrl(s.platform, s.url));
+  return normalizeSocials(socials).filter((s) => s.visible && s.url.length > 0);
 }
 
 export type FooterColumn = { heading: string; links: { label: string; href: string; newTab?: boolean }[] };

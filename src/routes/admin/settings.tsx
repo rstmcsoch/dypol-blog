@@ -72,7 +72,7 @@ function SettingsAdmin() {
                     placeholder={platform === "email" ? "mailto:hello@example.com" : platform === "rss" ? "/feed.xml" : "https://…"}
                     onChange={(e) => update({ url: e.target.value })}
                   />
-                  {isRootSocialUrl(platform, current.url) ? <span className="field-help" role="status">This is a platform homepage, not a profile. It will remain hidden until you enter your account URL.</span> : null}
+                  {isRootSocialUrl(platform, current.url) ? <span className="field-help" role="status">This is a platform homepage, not a profile. The icon will still show. Paste your account URL so it opens your page.</span> : null}
                 </label>
                 <label className="field">
                   <span>Show</span>

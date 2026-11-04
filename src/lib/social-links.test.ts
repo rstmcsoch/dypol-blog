@@ -18,6 +18,19 @@ test("normalizeSocials: canonical order, dedupe, invalid URLs dropped to hidden"
   assert.deepEqual(visibleSocials(out).map((s) => s.platform), ["x", "youtube"]);
 });
 
+test("visibleSocials: Show on a platform homepage still renders the icon", () => {
+  const out = visibleSocials([
+    { platform: "x", url: "https://x.com/", visible: true },
+    { platform: "facebook", url: "https://www.facebook.com/", visible: true },
+    { platform: "instagram", url: "https://www.instagram.com/", visible: true },
+    { platform: "youtube", url: "https://www.youtube.com/", visible: true },
+    { platform: "linkedin", url: "", visible: false },
+    { platform: "rss", url: "/feed.xml", visible: true },
+    { platform: "email", url: "mailto:hi@dypol.example", visible: true },
+  ]);
+  assert.deepEqual(out.map((s) => s.platform), ["x", "facebook", "instagram", "youtube", "rss", "email"]);
+});
+
 test("validSocialUrl: https only, mailto for email, path for RSS", () => {
   assert.equal(validSocialUrl("x", "https://x.com/dypol"), true);
   assert.equal(validSocialUrl("x", "http://x.com/dypol"), false);
