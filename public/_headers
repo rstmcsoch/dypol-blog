@@ -4,3 +4,9 @@
 # and failed PageSpeed's "Use efficient cache lifetimes" audit (t88).
 /assets/*
   Cache-Control: public, max-age=31536000, immutable
+
+# Webpushr service worker must stay at the site root and revalidate.
+/webpushr-sw.js
+  Content-Type: application/javascript; charset=utf-8
+  Cache-Control: public, max-age=0, must-revalidate
+  Service-Worker-Allowed: /
