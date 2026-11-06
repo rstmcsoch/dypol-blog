@@ -64,6 +64,8 @@ export const Route = createRootRoute({
   notFoundComponent: NotFoundState,
 });
 
+const webpushrSnippet = `(function(w,d, s, id) {if(typeof(w.webpushr)!=='undefined') return;w.webpushr=w.webpushr||function(){(w.webpushr.q=w.webpushr.q||[]).push(arguments)};var js, fjs = d.getElementsByTagName(s)[0];js = d.createElement(s); js.id = id;js.async=1;js.src = "https://cdn.webpushr.com/app.min.js";fjs.parentNode.appendChild(js);}(window,document, 'script', 'webpushr-jssdk'));webpushr('setup',{'key':'BN4PyWH1GyffjSpRf314qyn_3UM-hHR7M2lRPWw_FzyonXY9QiOjY8sdDx4neZyTvAFgQrb9Gv9-mE94vghJzqU' });`;
+
 function RootShell({ children }: { children: ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
@@ -77,6 +79,9 @@ function RootShell({ children }: { children: ReactNode }) {
         <PreviewHostBridge />
         <AuthProvider>{children}</AuthProvider>
         <Scripts />
+        {/* start webpushr code */}
+        <script dangerouslySetInnerHTML={{ __html: webpushrSnippet }} />
+        {/* end webpushr code */}
       </body>
     </html>
   );
