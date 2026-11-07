@@ -24,6 +24,7 @@ import { Route as PhotolabRouteImport } from './routes/photolab'
 import { Route as RobotsDottxtRouteImport } from './routes/robots[.]txt'
 import { Route as SearchRouteImport } from './routes/search'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
+import { Route as WebpushrSwDotjsRouteImport } from './routes/webpushr-sw[.]js'
 import { Route as DotwellKnownOauthAuthorizationServerRouteImport } from './routes/[.]well-known/oauth-authorization-server'
 import { Route as DotwellKnownOauthProtectedResourceRouteImport } from './routes/[.]well-known/oauth-protected-resource'
 import { Route as AdClickIdRouteImport } from './routes/ad-click/$id'
@@ -33,6 +34,7 @@ import { Route as AdminActivityRouteImport } from './routes/admin/activity'
 import { Route as AdminAdsRouteImport } from './routes/admin/ads'
 import { Route as AdminAppearanceRouteImport } from './routes/admin/appearance'
 import { Route as AdminAutomationRouteImport } from './routes/admin/automation'
+import { Route as AdminEventsRouteImport } from './routes/admin/events'
 import { Route as AdminHealthRouteImport } from './routes/admin/health'
 import { Route as AdminHelpRouteImport } from './routes/admin/help'
 import { Route as AdminHomepageRouteImport } from './routes/admin/homepage'
@@ -152,6 +154,11 @@ const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
   path: '/sitemap.xml',
   getParentRoute: () => rootRouteImport,
 } as any)
+const WebpushrSwDotjsRoute = WebpushrSwDotjsRouteImport.update({
+  id: '/webpushr-sw.js',
+  path: '/webpushr-sw.js',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DotwellKnownOauthAuthorizationServerRoute =
   DotwellKnownOauthAuthorizationServerRouteImport.update({
     id: '/.well-known/oauth-authorization-server',
@@ -197,6 +204,11 @@ const AdminAppearanceRoute = AdminAppearanceRouteImport.update({
 const AdminAutomationRoute = AdminAutomationRouteImport.update({
   id: '/automation',
   path: '/automation',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminEventsRoute = AdminEventsRouteImport.update({
+  id: '/events',
+  path: '/events',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminHealthRoute = AdminHealthRouteImport.update({
@@ -434,6 +446,7 @@ export interface FileRoutesByFullPath {
   '/robots.txt': typeof RobotsDottxtRoute
   '/search': typeof SearchRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/webpushr-sw.js': typeof WebpushrSwDotjsRoute
   '/.well-known/oauth-authorization-server': typeof DotwellKnownOauthAuthorizationServerRoute
   '/.well-known/oauth-protected-resource': typeof DotwellKnownOauthProtectedResourceRouteWithChildren
   '/ad-click/$id': typeof AdClickIdRoute
@@ -442,6 +455,7 @@ export interface FileRoutesByFullPath {
   '/admin/ads': typeof AdminAdsRoute
   '/admin/appearance': typeof AdminAppearanceRoute
   '/admin/automation': typeof AdminAutomationRoute
+  '/admin/events': typeof AdminEventsRoute
   '/admin/health': typeof AdminHealthRoute
   '/admin/help': typeof AdminHelpRoute
   '/admin/homepage': typeof AdminHomepageRoute
@@ -502,6 +516,7 @@ export interface FileRoutesByTo {
   '/robots.txt': typeof RobotsDottxtRoute
   '/search': typeof SearchRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/webpushr-sw.js': typeof WebpushrSwDotjsRoute
   '/.well-known/oauth-authorization-server': typeof DotwellKnownOauthAuthorizationServerRoute
   '/.well-known/oauth-protected-resource': typeof DotwellKnownOauthProtectedResourceRouteWithChildren
   '/ad-click/$id': typeof AdClickIdRoute
@@ -510,6 +525,7 @@ export interface FileRoutesByTo {
   '/admin/ads': typeof AdminAdsRoute
   '/admin/appearance': typeof AdminAppearanceRoute
   '/admin/automation': typeof AdminAutomationRoute
+  '/admin/events': typeof AdminEventsRoute
   '/admin/health': typeof AdminHealthRoute
   '/admin/help': typeof AdminHelpRoute
   '/admin/homepage': typeof AdminHomepageRoute
@@ -572,6 +588,7 @@ export interface FileRoutesById {
   '/robots.txt': typeof RobotsDottxtRoute
   '/search': typeof SearchRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/webpushr-sw.js': typeof WebpushrSwDotjsRoute
   '/.well-known/oauth-authorization-server': typeof DotwellKnownOauthAuthorizationServerRoute
   '/.well-known/oauth-protected-resource': typeof DotwellKnownOauthProtectedResourceRouteWithChildren
   '/ad-click/$id': typeof AdClickIdRoute
@@ -580,6 +597,7 @@ export interface FileRoutesById {
   '/admin/ads': typeof AdminAdsRoute
   '/admin/appearance': typeof AdminAppearanceRoute
   '/admin/automation': typeof AdminAutomationRoute
+  '/admin/events': typeof AdminEventsRoute
   '/admin/health': typeof AdminHealthRoute
   '/admin/help': typeof AdminHelpRoute
   '/admin/homepage': typeof AdminHomepageRoute
@@ -643,6 +661,7 @@ export interface FileRouteTypes {
     | '/robots.txt'
     | '/search'
     | '/sitemap.xml'
+    | '/webpushr-sw.js'
     | '/.well-known/oauth-authorization-server'
     | '/.well-known/oauth-protected-resource'
     | '/ad-click/$id'
@@ -651,6 +670,7 @@ export interface FileRouteTypes {
     | '/admin/ads'
     | '/admin/appearance'
     | '/admin/automation'
+    | '/admin/events'
     | '/admin/health'
     | '/admin/help'
     | '/admin/homepage'
@@ -711,6 +731,7 @@ export interface FileRouteTypes {
     | '/robots.txt'
     | '/search'
     | '/sitemap.xml'
+    | '/webpushr-sw.js'
     | '/.well-known/oauth-authorization-server'
     | '/.well-known/oauth-protected-resource'
     | '/ad-click/$id'
@@ -719,6 +740,7 @@ export interface FileRouteTypes {
     | '/admin/ads'
     | '/admin/appearance'
     | '/admin/automation'
+    | '/admin/events'
     | '/admin/health'
     | '/admin/help'
     | '/admin/homepage'
@@ -780,6 +802,7 @@ export interface FileRouteTypes {
     | '/robots.txt'
     | '/search'
     | '/sitemap.xml'
+    | '/webpushr-sw.js'
     | '/.well-known/oauth-authorization-server'
     | '/.well-known/oauth-protected-resource'
     | '/ad-click/$id'
@@ -788,6 +811,7 @@ export interface FileRouteTypes {
     | '/admin/ads'
     | '/admin/appearance'
     | '/admin/automation'
+    | '/admin/events'
     | '/admin/health'
     | '/admin/help'
     | '/admin/homepage'
@@ -850,6 +874,7 @@ export interface RootRouteChildren {
   RobotsDottxtRoute: typeof RobotsDottxtRoute
   SearchRoute: typeof SearchRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
+  WebpushrSwDotjsRoute: typeof WebpushrSwDotjsRoute
   DotwellKnownOauthAuthorizationServerRoute: typeof DotwellKnownOauthAuthorizationServerRoute
   DotwellKnownOauthProtectedResourceRoute: typeof DotwellKnownOauthProtectedResourceRouteWithChildren
   AdClickIdRoute: typeof AdClickIdRoute
@@ -984,6 +1009,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SitemapDotxmlRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/webpushr-sw.js': {
+      id: '/webpushr-sw.js'
+      path: '/webpushr-sw.js'
+      fullPath: '/webpushr-sw.js'
+      preLoaderRoute: typeof WebpushrSwDotjsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/.well-known/oauth-authorization-server': {
       id: '/.well-known/oauth-authorization-server'
       path: '/.well-known/oauth-authorization-server'
@@ -1045,6 +1077,13 @@ declare module '@tanstack/react-router' {
       path: '/automation'
       fullPath: '/admin/automation'
       preLoaderRoute: typeof AdminAutomationRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/events': {
+      id: '/admin/events'
+      path: '/events'
+      fullPath: '/admin/events'
+      preLoaderRoute: typeof AdminEventsRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/health': {
@@ -1356,6 +1395,7 @@ interface AdminRouteChildren {
   AdminAdsRoute: typeof AdminAdsRoute
   AdminAppearanceRoute: typeof AdminAppearanceRoute
   AdminAutomationRoute: typeof AdminAutomationRoute
+  AdminEventsRoute: typeof AdminEventsRoute
   AdminHealthRoute: typeof AdminHealthRoute
   AdminHelpRoute: typeof AdminHelpRoute
   AdminHomepageRoute: typeof AdminHomepageRoute
@@ -1384,6 +1424,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminAdsRoute: AdminAdsRoute,
   AdminAppearanceRoute: AdminAppearanceRoute,
   AdminAutomationRoute: AdminAutomationRoute,
+  AdminEventsRoute: AdminEventsRoute,
   AdminHealthRoute: AdminHealthRoute,
   AdminHelpRoute: AdminHelpRoute,
   AdminHomepageRoute: AdminHomepageRoute,
@@ -1452,6 +1493,7 @@ const rootRouteChildren: RootRouteChildren = {
   RobotsDottxtRoute: RobotsDottxtRoute,
   SearchRoute: SearchRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
+  WebpushrSwDotjsRoute: WebpushrSwDotjsRoute,
   DotwellKnownOauthAuthorizationServerRoute:
     DotwellKnownOauthAuthorizationServerRoute,
   DotwellKnownOauthProtectedResourceRoute:
