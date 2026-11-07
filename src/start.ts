@@ -109,6 +109,16 @@ const securityHeaders = createMiddleware().server(async ({ request, pathname, ne
     if (!headers.has("x-frame-options")) headers.set("x-frame-options", "SAMEORIGIN");
     if (!headers.has("referrer-policy")) headers.set("referrer-policy", "strict-origin-when-cross-origin");
     if (!headers.has("permissions-policy")) headers.set("permissions-policy", "camera=(), microphone=(), geolocation=()");
+    // t202: `headers` above belongs to the pre-rewrite response when the head block was
+    // injected, so set the event-preview headers on the response actually returned.
+    if (!privatePath && new URL(request.url).searchParams.has("event")) {
+      try {
+        result.response.headers.set("cache-control", "no-store");
+        result.response.headers.set("x-robots-tag", "noindex");
+      } catch {
+        /* immutable headers */
+      }
+    }
   }
   return result;
 });
