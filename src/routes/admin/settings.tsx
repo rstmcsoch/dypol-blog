@@ -4,6 +4,7 @@ import { FormShell, useSiteForm } from "@/components/admin/site-form";
 import { adminSettings } from "@/content/admin-api";
 import { useState } from "react";
 import { HeadCodeCards } from "@/components/admin/head-code-cards";
+import { ShareSettingsEditor } from "@/components/admin/share-settings";
 import { isRootSocialUrl, SOCIAL_LABELS, SOCIAL_PLATFORMS, type SocialLink } from "@/lib/social-links";
 
 export const Route = createFileRoute("/admin/settings")({
@@ -82,6 +83,16 @@ function SettingsAdmin() {
             );
           })}
         </fieldset>
+        <ShareSettingsEditor
+          value={site.share}
+          onChange={(share) => patch({ share })}
+          media={data.media}
+          siteName={site.name}
+          publisher={site.publisher}
+          siteLogoMediaId={site.logoMediaId ?? null}
+          defaultOgMediaId={site.defaultOgMediaId ?? null}
+          sample={data.articles?.[0] ?? null}
+        />
         <fieldset className="block-card">
           <legend>AI publishing limit</legend>
           <label className="field">

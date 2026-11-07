@@ -4,6 +4,7 @@ import { site, T96_HOME_BLOCKS } from "./site.ts";
 import { BLOCK_TYPES, publicationStatuses, type ContentBlock, type NavItem, type SiteConfig } from "./types.ts";
 import { SOCIAL_PLATFORMS, normalizeSocials, validSocialUrl } from "../lib/social-links.ts";
 import { SHARE_KINDS, customTemplateError, normalizeShareSettings } from "../lib/share-buttons.ts";
+import { normalizeShareConfig, shareConfigProblems, type ShareConfig } from "../lib/share-config.ts";
 import { checkHeadCode } from "../lib/ads/head-html.ts";
 
 export { isSafeHref, publishProblems, slugify } from "./rules.ts";
@@ -272,7 +273,9 @@ const siteSchema = z.object({
     .max(7),
   aiDailyPublishLimit: z.number().int().min(0).max(100),
   customHead: z.string().max(20000, "Custom head code is limited to 20,000 characters.").default("").transform((v) => checkHeadCode(v).code),
-  share: z.object({
+  // t195: the share config part is normalized first (defaults for missing fields, so
+  // older callers that send only buttons keep working), then checked.
+  share: z.preprocess((v) => (v && typeof v === "object" ? { ...(v as object), ...normalizeShareConfig(v) } : v), z.object({
     buttons: z
       .array(
         z
@@ -291,7 +294,15 @@ const siteSchema = z.object({
       )
       .max(24)
       .refine((list) => new Set(list.map((b) => b.id)).size === list.length, "Each share button needs a unique id."),
-  }),
+    // t195: system-wide share config; already normalized (types/limits) by normalizeShareSettings.
+    message: z.custom<ShareConfig["message"]>((v) => !!v && typeof v === "object"),
+    link: z.custom<ShareConfig["link"]>((v) => !!v && typeof v === "object"),
+    networks: z.custom<ShareConfig["networks"]>((v) => !!v && typeof v === "object"),
+    image: z.custom<ShareConfig["image"]>((v) => !!v && typeof v === "object"),
+    meta: z.custom<ShareConfig["meta"]>((v) => !!v && typeof v === "object"),
+  }).superRefine((share, ctx) => {
+    for (const p of shareConfigProblems(share)) ctx.addIssue({ code: "custom", message: p.message, path: p.path.split(".") });
+  })),
 });
 
 

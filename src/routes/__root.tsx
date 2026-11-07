@@ -1,4 +1,5 @@
 import { createRootRoute, HeadContent, Outlet, Scripts, useRouterState } from "@tanstack/react-router";
+import { defaultShareConfig, twitterHandle } from "@/lib/share-config";
 import type { CSSProperties, ReactNode } from "react";
 import { AuthProvider } from "@/lib/auth/provider";
 import { PreviewHostBridge } from "@/components/preview-host-bridge";
@@ -37,7 +38,9 @@ export const Route = createRootRoute({
         { name: "viewport", content: "width=device-width, initial-scale=1" },
         { title: current.title },
         { name: "description", content: current.description },
-        { property: "og:site_name", content: current.name },
+        // t195: Settings → Sharing → link card (site name override, X @handle).
+        { property: "og:site_name", content: current.share?.meta?.siteName?.trim() || current.name },
+        ...(twitterHandle(current.share ?? defaultShareConfig()) ? [{ name: "twitter:site", content: twitterHandle(current.share ?? defaultShareConfig()) as string }] : []),
         { name: "application-name", content: current.name },
         { name: "apple-mobile-web-app-title", content: current.name },
         { name: "theme-color", media: "(prefers-color-scheme: light)", content: colors.light.paper },

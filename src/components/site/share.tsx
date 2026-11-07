@@ -1,13 +1,16 @@
 import { useEffect, useState } from "react";
 import { CANONICAL_ORIGIN } from "@/lib/seo";
 import { ShareIcon } from "./share-icons";
-import { DEFAULT_SHARE_BUTTONS, shareHref, shareLabel, type ShareButton } from "@/lib/share-buttons";
+import { DEFAULT_SHARE_BUTTONS, nativeShareData, shareCopyText, shareHrefFor, shareLabel, type ShareButton } from "@/lib/share-buttons";
+import { defaultShareConfig, type ShareConfig, type ShareSubject } from "@/lib/share-config";
 
 /**
  * Share links built from the article's canonical URL (no tracking scripts).
  * t148: the buttons, their order and labels come from Admin → Homepage builder →
- * Article sidebar → Share buttons. Rendered on the server; only "Copy link" and the
- * native "Share…" button need the browser (Share… stays hidden where unsupported).
+ * Article sidebar → Share buttons. t195: the text, link (UTM), hashtags, extra
+ * links and per-network formatting come from Admin → Settings → Sharing, read
+ * from the site settings on every render (saved changes apply immediately).
+ * Rendered on the server; only "Copy link" and "Share…" need the browser.
  */
 export function ShareLinks({
   title,
@@ -16,6 +19,10 @@ export function ShareLinks({
   copyLabel,
   copiedLabel,
   buttons = DEFAULT_SHARE_BUTTONS,
+  config,
+  subject,
+  siteName = "",
+  publisher = "",
 }: {
   title: string;
   path: string;
@@ -23,8 +30,16 @@ export function ShareLinks({
   copyLabel: string;
   copiedLabel: string;
   buttons?: ShareButton[];
+  config?: ShareConfig;
+  /** Extra article facts for placeholders ({excerpt}, {author}, {category}…). */
+  subject?: Partial<ShareSubject>;
+  siteName?: string;
+  publisher?: string;
 }) {
   const url = new URL(path, CANONICAL_ORIGIN).toString();
+  const cfg = config ?? defaultShareConfig();
+  const subj: ShareSubject = { slug: path.split("/").pop() ?? "", ...subject, title, path };
+  const ctx = { canonicalUrl: url, siteName, publisher: publisher || siteName };
   const [copied, setCopied] = useState(false);
   const [canNative, setCanNative] = useState(false);
   useEffect(() => setCanNative(typeof navigator !== "undefined" && typeof navigator.share === "function"), []);
@@ -39,7 +54,7 @@ export function ShareLinks({
           if (b.kind === "copy") {
             return (
               <li key={b.id}>
-                <button type="button" aria-label={copied ? copiedLabel : name} title={name} onClick={() => void navigator.clipboard?.writeText(url).then(() => setCopied(true))}>
+                <button type="button" aria-label={copied ? copiedLabel : name} title={name} onClick={() => void navigator.clipboard?.writeText(shareCopyText(cfg, subj, ctx)).then(() => setCopied(true))}>
                   <ShareIcon kind="copy" />
                   <span className="share-label">{copied ? copiedLabel : name}</span>
                 </button>
@@ -49,14 +64,14 @@ export function ShareLinks({
           if (b.kind === "native") {
             return (
               <li key={b.id} hidden={!canNative}>
-                <button type="button" aria-label={name} title={name} onClick={() => void navigator.share?.({ title, url }).catch(() => undefined)}>
+                <button type="button" aria-label={name} title={name} onClick={() => void navigator.share?.(nativeShareData(cfg, subj, ctx)).catch(() => undefined)}>
                   <ShareIcon kind="native" />
                   <span className="share-label">{name}</span>
                 </button>
               </li>
             );
           }
-          const href = shareHref(b, url, title);
+          const href = shareHrefFor(b, cfg, subj, ctx);
           if (!href) return null;
           return (
             <li key={b.id}>

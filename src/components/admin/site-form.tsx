@@ -4,6 +4,7 @@ import { useRouter } from "@tanstack/react-router";
 import { errorText } from "@/components/admin/gate";
 import { adminSaveSettings } from "@/content/admin-api";
 import type { SiteConfig } from "@/content/types";
+import { normalizeShareConfig, shareConfigProblems } from "@/lib/share-config";
 
 /**
  * Shared editor for the site settings record (site_settings 'site'). Each admin
@@ -17,9 +18,15 @@ export function useSiteForm(initial: SiteConfig) {
   const [message, setMessage] = useState<string | null>(null);
   const patch = (next: Partial<SiteConfig>) => setSite((current) => ({ ...current, ...next }));
   const save = async (success = "Saved. The public site now uses these settings.") => {
-    setPending(true);
     setError(null);
     setMessage(null);
+    // t195: the same checks the server runs; a malformed share template never reaches the save.
+    const shareProblems = site.share ? shareConfigProblems(normalizeShareConfig(site.share)) : [];
+    if (shareProblems.length) {
+      setError(`Not saved. Fix Sharing first: ${shareProblems.map((p) => p.message).join(" ")}`);
+      return;
+    }
+    setPending(true);
     try {
       await adminSaveSettings({ data: site });
       // The server keeps only head-valid tags; show the field the way it was stored.
