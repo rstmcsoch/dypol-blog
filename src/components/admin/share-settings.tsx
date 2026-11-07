@@ -8,6 +8,7 @@ import {
   joinShare,
   logoPlacement,
   parseHashtags,
+  splitHashtags,
   shareConfigProblems,
   type LogoPosition,
   type ShareConfig,
@@ -147,8 +148,24 @@ export function ShareSettingsEditor({ value, onChange, media, siteName, publishe
       <TemplateField label="Text after (optional)" value={cfg.message.suffix} onChange={(suffix) => msg({ suffix })} />
       <label className="field">
         <span>Hashtags (added at the end)</span>
-        <input value={tagsText} placeholder="#tech #news" data-testid="share-hashtags" onChange={(e) => { setTagsText(e.target.value); msg({ hashtags: parseHashtags(e.target.value) }); }} />
-        <span className="field-help">Up to 10. Letters, numbers and _ only.</span>
+        <input value={tagsText} placeholder="#tech #news" data-testid="share-hashtags" onChange={(e) => { setTagsText(e.target.value); msg({ hashtags: splitHashtags(e.target.value) }); }} />
+        <span className="field-help">Up to 10. Letters, numbers and _ only. Nothing is changed for you: a tag that would not work blocks saving until you fix it.</span>
+        {(() => {
+          const typed = cfg.message.hashtags;
+          const clean = parseHashtags(tagsText);
+          const changed = typed.length !== clean.length || typed.some((t, i) => t !== clean[i]);
+          return (
+            <span className={changed ? "field-help field-help--bad" : "field-help"} data-testid="share-hashtags-result" role={changed ? "alert" : undefined}>
+              {typed.length ? <>Shared as: {typed.map((t) => `#${t}`).join(" ")}</> : "No hashtags."}
+              {changed ? (
+                <>
+                  {" "}Not valid as typed. Would work as: {clean.length ? clean.map((t) => `#${t}`).join(" ") : "(nothing)"}{" "}
+                  <button type="button" className="btn btn--ghost btn--sm" data-testid="share-hashtags-apply" onClick={() => { const text = clean.map((t) => `#${t}`).join(" "); setTagsText(text); msg({ hashtags: clean }); }}>Use this</button>
+                </>
+              ) : null}
+            </span>
+          );
+        })()}
       </label>
       <label className="field">
         <span>Between the parts</span>
@@ -242,8 +259,16 @@ export function ShareSettingsEditor({ value, onChange, media, siteName, publishe
             <label className="field"><span>Margin (px)</span><input type="number" min={0} max={120} value={cfg.image.margin} onChange={(e) => set({ image: { ...cfg.image, margin: Math.max(0, Math.min(120, Number(e.target.value) || 0)) } })} /></label>
             <label className="field"><span>Opacity (%)</span><input type="number" min={10} max={100} value={cfg.image.opacity} onChange={(e) => set({ image: { ...cfg.image, opacity: Math.max(10, Math.min(100, Number(e.target.value) || 100)) } })} /></label>
           </div>
-          {!logoId ? <p className="field-help field-help--bad">No logo: set a site logo below or pick one here. Until then the plain image is used.</p> : null}
-          <div className="share-image-preview" data-testid="share-image-preview" style={{ position: "relative", width: "100%", maxWidth: 480, aspectRatio: "1200 / 630", background: "#ddd", overflow: "hidden", borderRadius: 8 }}>
+          {!logoId ? (
+            <p className="field-help field-help--bad" role="status" data-testid="share-image-status">
+              Not active yet: no logo is set, so link cards use the plain article cover (no logo). Pick a logo here or set a site logo below.
+            </p>
+          ) : !baseId ? (
+            <p className="field-help" role="status" data-testid="share-image-status">Articles with a cover (or a default social image) get the logo; others keep the plain image.</p>
+          ) : (
+            <p className="field-help" role="status" data-testid="share-image-status">Active: the logo is drawn onto each article cover at 1200×630. The box below shows its approximate position.</p>
+          )}
+          <div className="share-image-preview" data-testid="share-image-preview" data-branded={logoId ? "yes" : "no"} aria-label={logoId ? "Approximate branded image" : "Plain image (no logo)"} style={{ position: "relative", width: "100%", maxWidth: 480, aspectRatio: "1200 / 630", background: "#ddd", overflow: "hidden", borderRadius: 8 }}>
             {baseId ? <img src={`/media/${baseId}`} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : null}
             {logoId ? <img src={`/media/${logoId}`} alt="Logo position" style={{ position: "absolute", left: `${(place.left / 1200) * 100}%`, top: cfg.image.position.startsWith("top") ? `${(cfg.image.margin / 630) * 100}%` : cfg.image.position === "center" ? "50%" : undefined, bottom: cfg.image.position.startsWith("bottom") ? `${(cfg.image.margin / 630) * 100}%` : undefined, transform: cfg.image.position === "center" ? "translateY(-50%)" : undefined, width: `${cfg.image.size}%`, opacity: cfg.image.opacity / 100 }} /> : null}
           </div>
