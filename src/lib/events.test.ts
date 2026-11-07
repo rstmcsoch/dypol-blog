@@ -123,3 +123,47 @@ test("an open-start event never beats one with a real start", () => {
   const dated = { ...base, id: "dated", startsAt: "2026-12-01T00:00:00.000Z", endsAt: "2026-12-31T00:00:00.000Z" };
   assert.equal(resolveActiveEvent({ events: [always, dated] }, at("2026-12-10T00:00:00Z"))?.id, "dated");
 });
+
+// ---- t202: static checks on the event stylesheet (decor never blocks clicks; reduced motion honoured) ----
+import { readFileSync } from "node:fs";
+const css = readFileSync(new URL("../styles-events.css", import.meta.url), "utf8");
+const rule = (selector: string) => {
+  const i = css.indexOf(`${selector} {`);
+  assert.ok(i >= 0, `missing rule ${selector}`);
+  return css.slice(i, css.indexOf("}", i));
+};
+
+test("particles are fixed, inert and contained", () => {
+  const r = rule(".event-particles");
+  assert.match(r, /position:\s*fixed/);
+  assert.match(r, /pointer-events:\s*none/);
+  assert.match(r, /contain:\s*strict/);
+  assert.match(r, /overflow:\s*hidden/);
+});
+
+test("header and footer accents never take clicks", () => {
+  assert.match(rule("[data-event] .site-header::after"), /pointer-events:\s*none/);
+  assert.match(rule("[data-event] .site-footer::after"), /pointer-events:\s*none/);
+});
+
+test("reduced motion removes particles and stops the twinkle", () => {
+  const i = css.indexOf("@media (prefers-reduced-motion: reduce)");
+  assert.ok(i >= 0);
+  const block = css.slice(i);
+  assert.match(block, /\.event-particles\s*\{\s*display:\s*none/);
+  assert.match(block, /\.site-footer::after\s*\{\s*animation:\s*none/);
+});
+
+test("every event rule is scoped, so nothing applies with no event", () => {
+  const selectors = css.replace(/\/\*[\s\S]*?\*\//g, "").replace(/@keyframes[^{]+\{(?:[^{}]*\{[^}]*\})*\s*\}/g, "").match(/[^{}]+(?=\{)/g) ?? [];
+  for (const raw of selectors) {
+    const sel = raw.trim();
+    if (!sel || sel.startsWith("@media") || /^(from|to|\d+%)/.test(sel)) continue;
+    for (const part of sel.split(",")) assert.match(part.trim(), /data-event|event-/, `unscoped selector: ${part.trim()}`);
+  }
+});
+
+test("particle count is capped (18, 10 on phones) and the ribbon is not fixed", () => {
+  assert.match(css, /nth-child\(n \+ 11\)\s*\{\s*display:\s*none/);
+  assert.doesNotMatch(rule(".event-ribbon"), /position:\s*fixed/);
+});
