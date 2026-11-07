@@ -28,7 +28,9 @@ test("WhatsApp gets WhatsApp's own markup; underline has no WhatsApp form and st
   assert.equal(formatShareText("<c>line1<br>line2</c>", "whatsapp"), "```line1\nline2```");
 });
 
-test("Telegram gets the app's typed shortcuts (**bold** __italic__ ~~strike~~ `mono`)", () => {
+test("Telegram defaults to plain text; typed shortcuts only when explicitly chosen", () => {
+  const c = cfg((x) => { x.message.template = "<b>{title}</b> <i>now</i>"; });
+  assert.equal(composeShare(c, subject, "telegram", ctx).text, "Apple & Google: 50% off? now");
   assert.equal(formatShareText("<b>Hi</b> <i>there</i> <c>x</c> <s>no</s> <u>u</u>", "telegram"), "**Hi** __there__ `x` ~~no~~ u");
 });
 
@@ -47,7 +49,7 @@ test("platforms without formatting get clean plain text — never Unicode look-a
   assert.equal(composeShare(c, subject, "x", ctx).text, "Apple & Google: 50% off? by Ann x old “new”");
   assert.equal(NETWORK_DEFAULT_FORMAT.x, "plain");
   assert.equal(NETWORK_DEFAULT_FORMAT.whatsapp, "whatsapp");
-  assert.equal(NETWORK_DEFAULT_FORMAT.telegram, "telegram");
+  assert.equal(NETWORK_DEFAULT_FORMAT.telegram, "plain");
 });
 
 test("Unicode look-alike letters only when the admin explicitly picks them", () => {

@@ -4,8 +4,11 @@
  * destination natively understands, or removed where it has none:
  *  - "whatsapp": WhatsApp's markup (*bold* _italic_ ~strike~ `code` / ```block```),
  *    from WhatsApp Help Center "How to format your messages". No underline.
- *  - "telegram": the Telegram apps' typed shortcuts, applied when the message is
- *    sent (**bold** __italic__ ~~strike~~ `mono`; underline is menu-only there).
+ *  - "telegram": the Telegram apps' typed shortcuts (**bold** __italic__ ~~strike~~
+ *    `mono`, listed in Telegram's own app strings). Opt-in only: Telegram's share URL
+ *    docs (core.telegram.org/widgets/share) describe {text} as a plain comment and say
+ *    nothing about formatting it, so whether a prefilled shortcut is converted is not
+ *    guaranteed. Telegram's default is plain text.
  *  - "markdown": Discord markdown (**bold** *italic* __underline__ ~~strike~~ `code`).
  *  - "slack": Slack mrkdwn (*bold* _italic_ ~strike~ `code`; no underline).
  *  - "plain": tags removed (every share URL whose post box has no text formatting:
@@ -25,7 +28,7 @@ export const SHARE_FORMATS: readonly ShareFormat[] = ["plain", "whatsapp", "tele
 export const SHARE_FORMAT_NAMES: Record<ShareFormat, string> = {
   plain: "Plain text (tags removed)",
   whatsapp: "WhatsApp formatting (*bold* _italic_)",
-  telegram: "Telegram formatting (**bold** __italic__)",
+  telegram: "Telegram typed shortcuts (**bold** __italic__) — not guaranteed",
   markdown: "Discord markdown (**bold** *italic*)",
   slack: "Slack mrkdwn (*bold* _italic_)",
   unicode: "Unicode look-alike letters (not real formatting)",
@@ -35,21 +38,22 @@ export const SHARE_FORMAT_NAMES: Record<ShareFormat, string> = {
 export const SHARE_FORMAT_SUPPORT: Record<ShareFormat, string> = {
   plain: "No formatting: tags are removed, the words stay.",
   whatsapp: "Bold, italic, strikethrough, code. No underline (shown as plain text).",
-  telegram: "Bold, italic, strikethrough, code — applied by the Telegram app when the message is sent. No underline (plain).",
+  telegram: "Inserts Telegram's typed shortcuts (**bold** __italic__ ~~strike~~ `code`). Telegram's share link documents plain text only, so the markers may show as typed. No underline (plain).",
   markdown: "Bold, italic, underline, strikethrough, code.",
   slack: "Bold, italic, strikethrough, code. No underline (plain).",
   unicode: "Look-alike letters only (Latin A–Z, 0–9). Not real formatting: screen readers may read them oddly and search does not match them.",
 };
 
 /**
- * Default format per built-in network (researched, t197). Only WhatsApp and
- * Telegram have formatting a prefilled share text can carry; the other share
+ * Default format per built-in network (researched, t197). Only WhatsApp documents
+ * formatting that a prefilled share text carries (its markup is plain characters
+ * that WhatsApp renders); Telegram's share URL documents a plain comment; the other share
  * endpoints insert plain text, or ignore text entirely (Facebook, LinkedIn: the
  * link card from og: tags is all that shows).
  */
 export const NETWORK_DEFAULT_FORMAT: Record<string, ShareFormat> = {
   whatsapp: "whatsapp",
-  telegram: "telegram",
+  telegram: "plain",
   x: "plain",
   facebook: "plain",
   linkedin: "plain",
@@ -67,7 +71,7 @@ export const NETWORK_DEFAULT_FORMAT: Record<string, ShareFormat> = {
 /** What each built-in destination does with the share text (shown in the admin). */
 export const NETWORK_LIMITS: Record<string, string> = {
   whatsapp: "Text + link in one message. Native formatting.",
-  telegram: "Link plus text; formatting is applied by the Telegram app when sent.",
+  telegram: "Link plus a plain comment the user can edit before sending (Telegram's share link documents no formatting).",
   x: "Plain text; 280 characters including the link (links count as 23).",
   facebook: "Ignores text: only the link is passed; the post shows the link card (title, description, image below).",
   linkedin: "Ignores text: only the link is passed; the post shows the link card.",
