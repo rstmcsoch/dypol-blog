@@ -278,17 +278,49 @@ export function formatShareText(input: string, format: ShareFormat | string): st
 }
 
 /** Problems with tags in a template (shown under the field; never blocks unknown text). */
+const ANY_TAG_RE = /<(\/?)([A-Za-z][A-Za-z0-9]*)\s*(\/?)>/g;
+const WRAP_TAGS = new Set(FORMAT_TAGS.filter((t) => t.wraps).map((t) => t.tag));
+const TAG_LIST = FORMAT_TAGS.map((t) => `<${t.tag}>`).join(" ");
+
+/**
+ * Template problems that must block a save (client and server use this same list):
+ * unknown tags (e.g. <zz>), unclosed tags, closing tags with no opener, and tags
+ * closed out of order (<b><i>x</b></i>).
+ */
 export function formattingProblems(input: string): string[] {
   const problems: string[] = [];
-  const open: Record<string, number> = {};
-  for (const m of input.matchAll(TAG_RE)) {
-    if (!m[2]) continue;
-    const tag = m[2].toLowerCase();
-    if (m[1] === "/") {
-      if (!open[tag]) problems.push(`</${tag}> has no matching <${tag}>.`);
-      else open[tag] -= 1;
-    } else open[tag] = (open[tag] ?? 0) + 1;
+  const stack: string[] = [];
+  for (const m of input.matchAll(ANY_TAG_RE)) {
+    const closing = m[1] === "/";
+    const tag = m[2]!.toLowerCase();
+    if (tag === "br") {
+      if (closing) problems.push(`</br> is not a tag: a line break is just <br>.`);
+      continue;
+    }
+    if (!WRAP_TAGS.has(tag)) {
+      problems.push(`${m[0]} is not a formatting tag. Use ${TAG_LIST}.`);
+      continue;
+    }
+    if (m[3]) {
+      problems.push(`${m[0]} cannot be self-closing: wrap text like <${tag}>text</${tag}>.`);
+      continue;
+    }
+    if (!closing) {
+      stack.push(tag);
+      continue;
+    }
+    if (!stack.includes(tag)) {
+      problems.push(`</${tag}> has no matching <${tag}>.`);
+      continue;
+    }
+    const top = stack[stack.length - 1]!;
+    if (top !== tag) {
+      problems.push(`</${tag}> closes before </${top}>: close tags in reverse order, e.g. <${tag}><${top}>text</${top}></${tag}>.`);
+      stack.splice(stack.lastIndexOf(tag), 1);
+      continue;
+    }
+    stack.pop();
   }
-  for (const [tag, n] of Object.entries(open)) if (n > 0) problems.push(`<${tag}> is not closed with </${tag}>.`);
+  for (const tag of stack) problems.push(`<${tag}> is not closed with </${tag}>.`);
   return problems;
 }

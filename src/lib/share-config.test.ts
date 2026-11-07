@@ -3,7 +3,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { DEFAULT_SHARE_BUTTONS, nativeShareData, normalizeShareSettings, shareCopyText, shareHref, shareHrefFor } from "./share-buttons.ts";
 import { composeShare, defaultShareConfig, joinShare, normalizeShareConfig, shareConfigProblems, shareLinkFor, type ShareConfig } from "./share-config.ts";
-import { NETWORK_DEFAULT_FORMAT, formatShareText, stripFormatting } from "./share-format.ts";
+import { NETWORK_DEFAULT_FORMAT, formatShareText, formattingProblems as fp, stripFormatting } from "./share-format.ts";
 import { articleSocialMeta, shareImagePath, socialMeta } from "./seo.ts";
 import { parseSite } from "../content/validate.ts";
 import { site as defaults } from "../content/site.ts";
@@ -141,4 +141,42 @@ test("stored settings: tolerant normalize; buttons kept; older callers sending o
 
 test("stripFormatting keeps the words", () => {
   assert.equal(stripFormatting("<b>a</b><br><i>b</i>"), "a\nb");
+});
+
+// ---- t195 round 2: malformed templates and hashtags must block saves ----
+
+const withShare = (message: Record<string, unknown>) => ({ ...defaults, share: { ...defaults.share, message: { ...(defaults.share as { message: object }).message, ...message } } });
+const rejects = (input: unknown) => { try { parseSite(input); return null; } catch (e) { return ((e as { issues?: { message: string }[] }).issues ?? []).map((i) => i.message).join(" | "); } };
+
+test("unknown tags are reported", () => {
+  assert.match(fp("<zz>x</zz>").join(" "), /<zz> is not a formatting tag/);
+  assert.match(fp("a <strong>b</strong>").join(" "), /<strong> is not a formatting tag/);
+  assert.match(fp("x</br>").join(" "), /<\/br> is not a tag/);
+  assert.match(fp("<b/>").join(" "), /cannot be self-closing/);
+});
+test("unclosed, unmatched and crossed tags are reported", () => {
+  assert.match(fp("<b>x").join(" "), /<b> is not closed/);
+  assert.match(fp("x</i>").join(" "), /<\/i> has no matching <i>/);
+  assert.match(fp("<b><i>x</b></i>").join(" "), /<\/b> closes before <\/i>/);
+});
+test("valid formatting has no problems", () => {
+  assert.deepEqual(fp("<b>a</b> <i>b</i> <bi>c</bi> <u>d</u> <s>e</s> <c>f</c> <q>g</q><br><BR/> <b><i>n</i></b> 3 < 4 > 2 {title}"), []);
+});
+test("server rejects malformed templates in every text field", () => {
+  assert.match(rejects(withShare({ template: "<zz>{title}</zz>" })) ?? "", /Share text: <zz>/);
+  assert.match(rejects(withShare({ template: "<b>{title}" })) ?? "", /Share text: <b> is not closed/);
+  assert.match(rejects(withShare({ prefix: "<i>new" })) ?? "", /Text before: <i>/);
+  assert.match(rejects(withShare({ suffix: "<b><i>x</b></i>" })) ?? "", /Text after: <\/b> closes before/);
+  assert.match(rejects(withShare({ extraLinks: [{ label: "<zz>Docs", url: "https://example.com" }] })) ?? "", /Extra link 1 label/);
+  assert.equal(rejects(withShare({ template: "<b>{title}</b>" })), null);
+});
+test("server rejects malformed network override templates", () => {
+  const input = { ...defaults, share: { ...defaults.share, networks: { telegram: { template: "<b>{title}" } } } };
+  assert.match(rejects(input) ?? "", /telegram text: <b> is not closed/);
+});
+test("invalid hashtags are reported, not silently rewritten", () => {
+  const msg = rejects(withShare({ hashtags: ["good", "bad-tag!", "ok"] })) ?? "";
+  assert.match(msg, /Hashtag "#bad-tag!": only letters, numbers and _ .*#badtag/);
+  assert.equal(rejects(withShare({ hashtags: ["#good", "ok_2", "भारत"] })), null);
+  assert.match(rejects(withShare({ hashtags: Array.from({ length: 11 }, (_, i) => `t${i}`) })) ?? "", /up to 10/);
 });

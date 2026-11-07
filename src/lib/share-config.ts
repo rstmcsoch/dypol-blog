@@ -116,11 +116,24 @@ const num = (v: unknown, fallback: number, min: number, max: number) => (typeof 
 const TOGGLES = ["inherit", "on", "off"] as const;
 
 export function cleanHashtag(tag: string): string {
-  return tag.trim().replace(/^#+/, "").replace(/[^\p{L}\p{N}_]/gu, "").slice(0, 40);
+  return tag.trim().replace(/^#+/, "").replace(/[^\p{L}\p{M}\p{N}_]/gu, "").slice(0, 40);
 }
 /** "#ai, tech news" → ["ai", "technews"] */
 export function parseHashtags(input: string): string[] {
   return input.split(/[\s,]+/).map(cleanHashtag).filter(Boolean).slice(0, 10);
+}
+/** The hashtags exactly as typed (only the leading # and spaces removed), so problems can be shown instead of silently fixed. */
+export function splitHashtags(input: string): string[] {
+  return input.split(/[\s,]+/).map((t) => t.trim().replace(/^#+/, "").slice(0, 40)).filter(Boolean);
+}
+export const MAX_HASHTAGS = 10;
+/** Why a typed hashtag would not work as one, or null when it is fine. */
+export function hashtagProblem(tag: string): string | null {
+  if (/[^\p{L}\p{M}\p{N}_]/u.test(tag)) {
+    const clean = cleanHashtag(tag);
+    return `Hashtag "#${tag}": only letters, numbers and _ work in hashtags${clean ? ` (it would have to be #${clean})` : ""}.`;
+  }
+  return null;
 }
 
 export function normalizeShareConfig(raw: unknown): ShareConfig {
@@ -151,7 +164,8 @@ export function normalizeShareConfig(raw: unknown): ShareConfig {
       template: str(m.template, d.message.template, 1000),
       prefix: str(m.prefix, "", 300),
       suffix: str(m.suffix, "", 300),
-      hashtags: Array.isArray(m.hashtags) ? m.hashtags.filter((t): t is string => typeof t === "string").map(cleanHashtag).filter(Boolean).slice(0, 10) : [],
+      // t195: typed hashtags are kept as typed (minus # and spaces); invalid ones are reported by shareConfigProblems, never silently rewritten.
+      hashtags: Array.isArray(m.hashtags) ? m.hashtags.filter((t): t is string => typeof t === "string").map((t) => t.trim().replace(/^#+/, "").slice(0, 40)).filter(Boolean).slice(0, 20) : [],
       separator: pick(m.separator, ["space", "newline", "blank"] as const, "space"),
       includeLink: bool(m.includeLink, true),
       extraLinks: Array.isArray(m.extraLinks)
@@ -230,7 +244,13 @@ export function shareConfigProblems(cfg: ShareConfig): ShareProblem[] {
   list.push(...templateProblems("message.template", cfg.message.template, "Share text"));
   list.push(...templateProblems("message.prefix", cfg.message.prefix, "Text before"));
   list.push(...templateProblems("message.suffix", cfg.message.suffix, "Text after"));
+  for (const t of cfg.message.hashtags) {
+    const p = hashtagProblem(t);
+    if (p) list.push({ path: "message.hashtags", message: p });
+  }
+  if (cfg.message.hashtags.length > MAX_HASHTAGS) list.push({ path: "message.hashtags", message: `Hashtags: up to ${MAX_HASHTAGS} (you have ${cfg.message.hashtags.length}).` });
   cfg.message.extraLinks.forEach((x, i) => {
+    list.push(...templateProblems(`message.extraLinks.${i}.label`, x.label, `Extra link ${i + 1} label`));
     if (!isHttpUrl(x.url)) list.push({ path: `message.extraLinks.${i}.url`, message: `Extra link ${i + 1}: enter a full https:// address.` });
   });
   for (const [key, o] of Object.entries(cfg.networks)) list.push(...templateProblems(`networks.${key}.template`, o.template, `${key} text`));
@@ -347,7 +367,7 @@ export function composeShare(
   const fmt = (t: string) => formatShareText(fillTemplate(t, vars), format).replace(/[ \t]+$/gm, "").trim();
   const template = o.template.trim() ? o.template : cfg.message.template;
   const sep = separatorText(cfg.message.separator);
-  const tags = on(o.hashtags, true) ? cfg.message.hashtags.map((t) => `#${t}`).join(" ") : "";
+  const tags = on(o.hashtags, true) ? cfg.message.hashtags.map(cleanHashtag).filter(Boolean).slice(0, MAX_HASHTAGS).map((t) => `#${t}`).join(" ") : "";
   const extras = on(o.extraLinks, true)
     ? cfg.message.extraLinks.filter((x) => isHttpUrl(x.url)).map((x) => (x.label.trim() ? `${stripFormatting(x.label.trim())}: ${x.url}` : x.url))
     : [];
