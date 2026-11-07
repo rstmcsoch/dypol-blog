@@ -1,3 +1,4 @@
+import type { ShareSubject } from "@/lib/share-config";
 import { Link } from "@tanstack/react-router";
 import type { Card, ResolvedBlock } from "@/content/blocks";
 import type { SiteConfig } from "@/content/types";
@@ -438,14 +439,14 @@ export function HomeBlocks({ blocks, site }: { blocks: ResolvedBlock[]; site: Si
 }
 
 /** Article sidebar blocks (always compact lists). */
-export function SidebarBlocks({ blocks, site, title, slug, adAfterRelated }: { blocks: ResolvedBlock[]; site: SiteConfig; title: string; slug: string; adAfterRelated?: ReactNode }) {
+export function SidebarBlocks({ blocks, site, title, slug, adAfterRelated, shareSubject }: { blocks: ResolvedBlock[]; site: SiteConfig; title: string; slug: string; adAfterRelated?: ReactNode; shareSubject?: Partial<ShareSubject> }) {
   const anchor = blocks.findIndex((r) => r.block.type === "related");
   const adAt = anchor >= 0 ? anchor : blocks.length - 1;
   return (
     <>
       {blocks.map((r, i) => (
         <Fragment key={r.block.id}>
-          <SidebarBlock r={r} site={site} title={title} slug={slug} />
+          <SidebarBlock r={r} site={site} title={title} slug={slug} shareSubject={shareSubject} />
           {i === adAt ? adAfterRelated : null}
         </Fragment>
       ))}
@@ -453,13 +454,13 @@ export function SidebarBlocks({ blocks, site, title, slug, adAfterRelated }: { b
   );
 }
 
-function SidebarBlock({ r, site, title, slug }: { r: ResolvedBlock; site: SiteConfig; title: string; slug: string }) {
+function SidebarBlock({ r, site, title, slug, shareSubject }: { r: ResolvedBlock; site: SiteConfig; title: string; slug: string; shareSubject?: Partial<ShareSubject> }) {
   return (
     <>
       {[r].map((r) => {
         const t = r.block.type;
         if (t === "share") {
-          return <ShareLinks key={r.block.id} title={title} path={`/articles/${slug}`} label={r.title} copyLabel={site.labels.copyLink} copiedLabel={site.labels.linkCopied} buttons={site.share?.buttons} />;
+          return <ShareLinks key={r.block.id} title={title} path={`/articles/${slug}`} label={r.title} copyLabel={site.labels.copyLink} copiedLabel={site.labels.linkCopied} buttons={site.share?.buttons} config={site.share} subject={shareSubject} siteName={site.name} publisher={site.publisher} />;
         }
         return (
           <div className="aside-block" key={r.block.id} data-block={t}>

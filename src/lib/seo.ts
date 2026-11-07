@@ -1,4 +1,5 @@
 import { site as defaults, DEFAULT_ASSETS } from "../content/site.ts";
+import { brandLogoId, brandedImageVersion, defaultShareConfig, shareMetaDescription, shareMetaTitle, shareVars, type ShareConfig } from "./share-config.ts";
 /**
  * Pure SEO builders (t48): absolute URLs, JSON-LD (NewsArticle,
  * BreadcrumbList, WebSite/Organization, ItemList), RSS, sitemaps.
@@ -266,13 +267,16 @@ export function socialMeta(input: {
   publishedAt?: string | null;
   modifiedAt?: string | null;
   section?: string;
+  /** t195: Settings → Sharing → link card ("auto" = large card when there is an image). */
+  twitterCard?: "auto" | "summary" | "summary_large_image";
 }): { name?: string; property?: string; content: string }[] {
+  const card = input.twitterCard && input.twitterCard !== "auto" ? input.twitterCard : input.image ? "summary_large_image" : "summary";
   const meta: { name?: string; property?: string; content: string }[] = [
     { property: "og:title", content: input.title },
     { property: "og:description", content: input.description },
     { property: "og:url", content: input.url },
     { property: "og:type", content: input.type },
-    { name: "twitter:card", content: input.image ? "summary_large_image" : "summary" },
+    { name: "twitter:card", content: card },
     { name: "twitter:title", content: input.title },
     { name: "twitter:description", content: input.description },
   ];
@@ -296,4 +300,84 @@ export function socialMeta(input: {
 
 export function defaultOgPath(site: { defaultOgMediaId?: string | null }): string {
   return site.defaultOgMediaId ? `/media/${site.defaultOgMediaId}` : DEFAULT_ASSETS.og;
+}
+
+type ShareSite = { name: string; publisher: string; defaultOgMediaId?: string | null; logoMediaId?: string | null; share?: Partial<ShareConfig> | null };
+type ShareArticle = { id: string; coverMediaId?: string | null; coverImage?: { v?: string | null } | null };
+
+function shareCfg(site: ShareSite): ShareConfig {
+  const d = defaultShareConfig();
+  const s = site.share;
+  return s && s.message && s.link && s.image && s.meta && s.networks ? (s as ShareConfig) : { ...d, ...(s ?? {}) } as ShareConfig;
+}
+
+/**
+ * t195: the og:image / twitter:image path for an article (Settings → Sharing →
+ * Preview image). Default ("cover") = the cover, else the default social image.
+ * "branded" = /share-image/<mediaId>.jpg?v=<version> (cover or default image with the
+ * logo drawn on); it falls back to the plain image when there is no logo or no
+ * stored base image. The version changes with the image, logo or placement, so
+ * platforms that cache by URL fetch the new image after a change.
+ */
+export function shareImagePath(site: ShareSite, article: ShareArticle): string {
+  const cfg = shareCfg(site);
+  const fallback = defaultOgPath(site);
+  const cover = article.coverMediaId ? `/media/${article.coverMediaId}` : null;
+  if (cfg.image.source === "default") return fallback;
+  if (cfg.image.source === "branded") {
+    const logo = brandLogoId(cfg, site.logoMediaId);
+    const baseMediaId = article.coverMediaId || site.defaultOgMediaId || null;
+    if (logo && baseMediaId) {
+      const v = brandedImageVersion({ baseMediaId, baseVersion: article.coverMediaId ? (article.coverImage?.v ?? null) : null, logoMediaId: logo, image: cfg.image });
+      return `/share-image/${encodeURIComponent(baseMediaId)}.jpg?v=${v}`;
+    }
+  }
+  return cover ?? fallback;
+}
+
+/**
+ * t195: og:/twitter: tags for an article page, shaped by Settings → Sharing.
+ * With default settings the output equals the pre-t195 socialMeta() call.
+ */
+export function articleSocialMeta(input: {
+  origin: string;
+  site: ShareSite;
+  article: ShareArticle & {
+    slug: string;
+    title: string;
+    excerpt: string;
+    seoTitle?: string | null;
+    seoDescription?: string | null;
+    authorName?: string | null;
+    coverAlt?: string | null;
+    publishedAt: string | null;
+    updatedAt: string;
+  };
+  path: string;
+  title: string;
+  description: string;
+  topics: string[];
+}) {
+  const cfg = shareCfg(input.site);
+  const url = absoluteUrl(input.origin, input.path);
+  const siteName = cfg.meta.siteName.trim() || input.site.name;
+  const vars = shareVars(
+    { title: input.article.title, seoTitle: input.article.seoTitle, excerpt: input.article.excerpt, seoDescription: input.article.seoDescription, author: input.article.authorName, category: input.topics[0] ?? "", slug: input.article.slug, path: input.path },
+    siteName,
+    input.site.publisher,
+    url,
+  );
+  return socialMeta({
+    title: shareMetaTitle(cfg, input.title, vars),
+    description: shareMetaDescription(cfg, input.description, vars),
+    url,
+    type: "article",
+    siteName,
+    image: absoluteUrl(input.origin, shareImagePath(input.site, input.article)),
+    imageAlt: cfg.meta.imageAlt ? (input.article.coverAlt ?? input.article.title) : null,
+    publishedAt: cfg.meta.articleTimes ? input.article.publishedAt : null,
+    modifiedAt: cfg.meta.articleTimes ? input.article.updatedAt : null,
+    section: cfg.meta.section ? input.topics[0] : undefined,
+    twitterCard: cfg.meta.twitterCard,
+  });
 }

@@ -59,6 +59,7 @@ import { Route as OauthTokenRouteImport } from './routes/oauth/token'
 import { Route as PhotolabFileRouteImport } from './routes/photolab.$file'
 import { Route as PreviewIdRouteImport } from './routes/preview/$id'
 import { Route as PreviewHomeRouteImport } from './routes/preview/home'
+import { Route as ShareImageFileRouteImport } from './routes/share-image.$file'
 import { Route as SpecialIndexRouteImport } from './routes/special/index'
 import { Route as SpecialSlugRouteImport } from './routes/special/$slug'
 import { Route as TopicsIndexRouteImport } from './routes/topics/index'
@@ -330,6 +331,11 @@ const PreviewHomeRoute = PreviewHomeRouteImport.update({
   path: '/preview/home',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ShareImageFileRoute = ShareImageFileRouteImport.update({
+  id: '/share-image/$file',
+  path: '/share-image/$file',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SpecialIndexRoute = SpecialIndexRouteImport.update({
   id: '/special/',
   path: '/special/',
@@ -473,6 +479,7 @@ export interface FileRoutesByFullPath {
   '/photolab/$file': typeof PhotolabFileRoute
   '/preview/$id': typeof PreviewIdRoute
   '/preview/home': typeof PreviewHomeRoute
+  '/share-image/$file': typeof ShareImageFileRoute
   '/special/$slug': typeof SpecialSlugRoute
   '/topics/$slug': typeof TopicsSlugRoute
   '/admin/': typeof AdminIndexRoute
@@ -542,6 +549,7 @@ export interface FileRoutesByTo {
   '/photolab/$file': typeof PhotolabFileRoute
   '/preview/$id': typeof PreviewIdRoute
   '/preview/home': typeof PreviewHomeRoute
+  '/share-image/$file': typeof ShareImageFileRoute
   '/special/$slug': typeof SpecialSlugRoute
   '/topics/$slug': typeof TopicsSlugRoute
   '/admin': typeof AdminIndexRoute
@@ -613,6 +621,7 @@ export interface FileRoutesById {
   '/photolab/$file': typeof PhotolabFileRoute
   '/preview/$id': typeof PreviewIdRoute
   '/preview/home': typeof PreviewHomeRoute
+  '/share-image/$file': typeof ShareImageFileRoute
   '/special/$slug': typeof SpecialSlugRoute
   '/topics/$slug': typeof TopicsSlugRoute
   '/admin/': typeof AdminIndexRoute
@@ -685,6 +694,7 @@ export interface FileRouteTypes {
     | '/photolab/$file'
     | '/preview/$id'
     | '/preview/home'
+    | '/share-image/$file'
     | '/special/$slug'
     | '/topics/$slug'
     | '/admin/'
@@ -754,6 +764,7 @@ export interface FileRouteTypes {
     | '/photolab/$file'
     | '/preview/$id'
     | '/preview/home'
+    | '/share-image/$file'
     | '/special/$slug'
     | '/topics/$slug'
     | '/admin'
@@ -824,6 +835,7 @@ export interface FileRouteTypes {
     | '/photolab/$file'
     | '/preview/$id'
     | '/preview/home'
+    | '/share-image/$file'
     | '/special/$slug'
     | '/topics/$slug'
     | '/admin/'
@@ -877,6 +889,7 @@ export interface RootRouteChildren {
   OauthTokenRoute: typeof OauthTokenRoute
   PreviewIdRoute: typeof PreviewIdRoute
   PreviewHomeRoute: typeof PreviewHomeRoute
+  ShareImageFileRoute: typeof ShareImageFileRoute
   SpecialSlugRoute: typeof SpecialSlugRoute
   TopicsSlugRoute: typeof TopicsSlugRoute
   ArticlesIndexRoute: typeof ArticlesIndexRoute
@@ -1241,6 +1254,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PreviewHomeRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/share-image/$file': {
+      id: '/share-image/$file'
+      path: '/share-image/$file'
+      fullPath: '/share-image/$file'
+      preLoaderRoute: typeof ShareImageFileRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/special/': {
       id: '/special/'
       path: '/special'
@@ -1490,6 +1510,7 @@ const rootRouteChildren: RootRouteChildren = {
   OauthTokenRoute: OauthTokenRoute,
   PreviewIdRoute: PreviewIdRoute,
   PreviewHomeRoute: PreviewHomeRoute,
+  ShareImageFileRoute: ShareImageFileRoute,
   SpecialSlugRoute: SpecialSlugRoute,
   TopicsSlugRoute: TopicsSlugRoute,
   ArticlesIndexRoute: ArticlesIndexRoute,

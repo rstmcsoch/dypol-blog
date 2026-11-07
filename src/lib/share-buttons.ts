@@ -1,3 +1,5 @@
+import { composeShare, defaultShareConfig, joinShare, normalizeShareConfig, type ShareConfig, type ShareSubject } from "./share-config.ts";
+
 /**
  * t148: configurable article share buttons (Admin → Homepage builder → Article
  * sidebar → Share buttons). Built-in networks have fixed, tested URL templates;
@@ -32,7 +34,8 @@ export type ShareButton = {
   template: string;
 };
 
-export type ShareSettings = { buttons: ShareButton[] };
+/** t195: buttons (where) + the system-wide share config (what is shared). */
+export type ShareSettings = { buttons: ShareButton[] } & ShareConfig;
 
 /** Built-in templates. {url} / {title} are replaced with encoded values. */
 export const SHARE_NETWORKS: Record<Exclude<ShareKind, "copy" | "native" | "custom">, { name: string; template: string }> = {
@@ -75,7 +78,7 @@ export function isLegacyDefault(buttons: ShareButton[]): boolean {
 }
 
 export function defaultShareSettings(): ShareSettings {
-  return { buttons: DEFAULT_SHARE_BUTTONS.map((x) => ({ ...x })) };
+  return { buttons: DEFAULT_SHARE_BUTTONS.map((x) => ({ ...x })), ...defaultShareConfig() };
 }
 
 /** A custom template must be an absolute http(s) URL with at least one placeholder or a fixed target. */
@@ -86,7 +89,7 @@ export function customTemplateError(template: string): string | null {
   if (/[\s<>"'`]/.test(t)) return "The link template cannot contain spaces or quotes.";
   let parsed: URL;
   try {
-    parsed = new URL(t.replaceAll("{url}", "x").replaceAll("{title}", "x"));
+    parsed = new URL(t.replaceAll("{url}", "x").replaceAll("{title}", "x").replaceAll("{text}", "x"));
   } catch {
     return "The link template must be a full https:// address.";
   }
@@ -120,7 +123,8 @@ export function shareLabel(button: Pick<ShareButton, "kind" | "label">, copyLabe
 /** Tolerant read of stored settings: unknown kinds and bad custom templates are dropped, never thrown. */
 export function normalizeShareSettings(raw: unknown): ShareSettings {
   const list = raw && typeof raw === "object" && Array.isArray((raw as ShareSettings).buttons) ? (raw as ShareSettings).buttons : null;
-  if (!list) return defaultShareSettings();
+  const config = normalizeShareConfig(raw);
+  if (!list) return { ...defaultShareSettings(), ...config };
   const seen = new Set<string>();
   const buttons: ShareButton[] = [];
   for (const item of list.slice(0, 24)) {
@@ -134,5 +138,76 @@ export function normalizeShareSettings(raw: unknown): ShareSettings {
     buttons.push({ id, kind, enabled: item.enabled !== false, label: typeof item.label === "string" ? item.label.trim().slice(0, 40) : "", template });
   }
   // t150: settings that still equal the old five-button default move to the new default.
-  return isLegacyDefault(buttons) ? defaultShareSettings() : { buttons };
+  return isLegacyDefault(buttons) ? { ...defaultShareSettings(), ...config } : { buttons, ...config };
+}
+
+export type ShareContext = { canonicalUrl: string; siteName: string; publisher: string };
+const e = encodeURIComponent;
+/** Title-only fields (email subject, Reddit / Hacker News titles) cannot hold line breaks. */
+const oneLine = (text: string) => text.replace(/\s*\n+\s*/g, " ").trim();
+
+/**
+ * t195: the href for a link-type button from the system-wide share config.
+ * With default settings every built-in network produces exactly the pre-t195
+ * URL (text = title, link = canonical URL). Text is converted to each network's
+ * formatting (see share-format.ts); links, hashtags and handles stay plain.
+ */
+export function shareHrefFor(button: Pick<ShareButton, "kind" | "template">, cfg: ShareConfig, subject: ShareSubject, ctx: ShareContext): string | null {
+  const kind = button.kind;
+  if (kind === "copy" || kind === "native") return null;
+  const c = composeShare(cfg, subject, kind, ctx);
+  const withExtras = [c.text, ...c.extras].filter(Boolean).join(c.separator);
+  const url = c.link;
+  if (kind === "custom") {
+    if (customTemplateError(button.template)) return null;
+    const href = button.template
+      .trim()
+      .replaceAll("{url}", e(url))
+      .replaceAll("{title}", e(subject.title))
+      .replaceAll("{text}", e(joinShare({ ...c, includeLink: false })));
+    return /^https?:\/\//i.test(href) ? href : null;
+  }
+  switch (kind) {
+    case "x":
+      return c.includeLink && !withExtras.includes(url) ? `https://x.com/intent/post?url=${e(url)}&text=${e(withExtras)}` : `https://x.com/intent/post?text=${e(joinShare(c))}`;
+    case "linkedin":
+      return `https://www.linkedin.com/sharing/share-offsite/?url=${e(url)}`;
+    case "facebook":
+      return `https://www.facebook.com/sharer/sharer.php?u=${e(url)}`;
+    case "email": {
+      const body = [c.includeLink && !c.text.includes(url) ? url : "", ...c.extras].filter(Boolean).join("\n");
+      return `mailto:?subject=${e(oneLine(c.text))}&body=${e(body)}`;
+    }
+    case "whatsapp":
+      return `https://wa.me/?text=${e(joinShare(c))}`;
+    case "telegram":
+      return `https://t.me/share/url?url=${e(url)}&text=${e(withExtras)}`;
+    case "reddit":
+      return `https://www.reddit.com/submit?url=${e(url)}&title=${e(oneLine(c.text))}`;
+    case "threads":
+      return `https://www.threads.net/intent/post?text=${e(joinShare(c))}`;
+    case "bluesky":
+      return `https://bsky.app/intent/compose?text=${e(joinShare(c))}`;
+    case "pinterest":
+      return `https://www.pinterest.com/pin/create/button/?url=${e(url)}&description=${e(withExtras)}`;
+    case "hackernews":
+      return `https://news.ycombinator.com/submitlink?u=${e(url)}&t=${e(oneLine(c.text))}`;
+    default:
+      return null;
+  }
+}
+
+/** What "Copy link" puts on the clipboard: the link (default) or the whole share text. */
+export function shareCopyText(cfg: ShareConfig, subject: ShareSubject, ctx: ShareContext): string {
+  const c = composeShare(cfg, subject, "copy", ctx);
+  return cfg.link.copyMode === "text" ? joinShare(c) : c.link;
+}
+
+/** navigator.share() data. Text is only added when it differs from the title (default: { title, url }). */
+export function nativeShareData(cfg: ShareConfig, subject: ShareSubject, ctx: ShareContext): { title: string; url: string; text?: string } {
+  const c = composeShare(cfg, subject, "native", ctx);
+  const text = [c.text, ...c.extras].filter(Boolean).join(c.separator);
+  const data: { title: string; url: string; text?: string } = { title: subject.title, url: c.link };
+  if (text && text !== subject.title) data.text = text;
+  return data;
 }

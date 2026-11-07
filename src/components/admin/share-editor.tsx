@@ -14,7 +14,7 @@ import {
 const HELP: Partial<Record<ShareKind, string>> = {
   copy: "Copies the article link. Default label comes from Site text.",
   native: "The phone's own share sheet. Only shown on devices/browsers that support it.",
-  custom: "Your own link. Use {url} and {title}; they are encoded automatically. https:// only.",
+  custom: "Your own link. Use {url}, {title} and {text} (the share text from Settings → Sharing); they are encoded automatically. https:// only.",
 };
 
 /**
@@ -25,7 +25,7 @@ export function ShareButtonsEditor({ value, onChange }: { value: ShareSettings; 
   const buttons = value.buttons;
   const [adding, setAdding] = useState<ShareKind>("whatsapp");
   const [drag, setDrag] = useState<number | null>(null);
-  const set = (next: ShareButton[]) => onChange({ buttons: next });
+  const set = (next: ShareButton[]) => onChange({ ...value, buttons: next });
   const update = (i: number, patch: Partial<ShareButton>) => set(buttons.map((b, j) => (j === i ? { ...b, ...patch } : b)));
   const add = () =>
     set([

@@ -1672,6 +1672,9 @@ export async function saveSettings(raw: unknown): Promise<void> {
   if (raw && typeof raw === "object" && !("share" in raw)) raw = { ...raw, share: (await catalog()).site.share };
   const next = parseSite(raw);
   await ensureContent();
+  // t195: a separately chosen share logo must exist too.
+  const shareLogo = next.share?.image?.logo === "custom" ? next.share.image.logoMediaId : null;
+  if (shareLogo && !(await (await openMediaStore()).exists(shareLogo))) throw new ContentError("The share logo image is not in the library.");
   if (next.logoMediaId || next.faviconMediaId) {
     const library = await openMediaStore();
     if (next.logoMediaId && !(await library.exists(next.logoMediaId))) {

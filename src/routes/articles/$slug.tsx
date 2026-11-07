@@ -6,7 +6,7 @@ import { AdPage, useSponsoredArticle } from "@/components/site/ads";
 import { ArticlePagePending, NotFoundState } from "@/components/site/states";
 import { useSite } from "@/components/site/use-site";
 import { getArticle } from "@/content/public-api";
-import { defaultOgPath, absoluteUrl, articleJsonLd, breadcrumbJsonLd, metaDescription, sitePageTitle, socialMeta } from "@/lib/seo";
+import { absoluteUrl, articleJsonLd, breadcrumbJsonLd, metaDescription, sitePageTitle, articleSocialMeta } from "@/lib/seo";
 
 export const Route = createFileRoute("/articles/$slug")({
   loader: async ({ params }) => {
@@ -25,7 +25,6 @@ export const Route = createFileRoute("/articles/$slug")({
     const description = metaDescription(article.seoDescription ?? article.excerpt, article.title);
     const topics = (loaderData.topics ?? []).map((t) => t.label);
     const url = absoluteUrl(origin, `/articles/${article.slug}`);
-    const cover = article.coverMediaId ? absoluteUrl(origin, `/media/${article.coverMediaId}`) : absoluteUrl(origin, defaultOgPath(loaderData.site));
     const newsLd = articleJsonLd({
       origin,
       siteName: loaderData.site.name,
@@ -52,10 +51,7 @@ export const Route = createFileRoute("/articles/$slug")({
         { title },
         { name: "description", content: description },
         { name: "author", content: article.authorName?.trim() || loaderData.site.publisher },
-        ...socialMeta({
-          title, description, url, type: "article", siteName: loaderData.site.name, image: cover,
-          publishedAt: article.publishedAt, modifiedAt: article.updatedAt, section: topics[0], imageAlt: article.coverAlt ?? article.title,
-        }),
+        ...articleSocialMeta({ origin, site: loaderData.site, article, path: `/articles/${article.slug}`, title, description, topics }),
       ],
       links: [
         { rel: "canonical", href: url },
