@@ -1,0 +1,222 @@
+/* ---------------------------------------------------------------------------
+ * Seasonal site events (admin → Events).
+ * Everything is scoped to [data-event], so while no event is live none of these
+ * rules match and the public site renders exactly as before. Event colours live
+ * in their own variables; the owner's --accent and theme tokens are untouched.
+ * ------------------------------------------------------------------------- */
+[data-event] {
+  --event-primary: #0f5132;
+  --event-secondary: #b3122f;
+  --event-ink: #fff7e6;
+}
+
+/* Message bar above the header (scrolls away; the sticky header stays put). */
+:root[data-event-dismissed] .event-ribbon {
+  display: none;
+}
+.event-ribbon {
+  background: var(--event-primary);
+  color: var(--event-ink);
+  border-bottom: 3px solid var(--event-secondary);
+}
+.event-ribbon__inner {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.45rem 0.85rem;
+  min-height: 2.5rem;
+  padding-block: 0.5rem;
+}
+.event-ribbon__orn {
+  flex: 0 0 auto;
+  opacity: 0.85;
+}
+.event-ribbon__text {
+  flex: 1 1 15rem;
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.35;
+  font-weight: 600;
+}
+.event-ribbon__cta {
+  flex: 0 0 auto;
+  border: 1px solid color-mix(in srgb, var(--event-ink) 60%, transparent);
+  padding: 0.2rem 0.6rem;
+  color: inherit;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  text-decoration: none;
+}
+.event-ribbon__cta:hover {
+  background: color-mix(in srgb, var(--event-ink) 14%, transparent);
+}
+.event-ribbon__close {
+  flex: 0 0 auto;
+  margin-left: auto;
+  display: grid;
+  place-items: center;
+  width: 1.65rem;
+  height: 1.65rem;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--event-ink) 40%, transparent);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 1rem;
+  line-height: 1;
+}
+.event-ribbon__close:hover {
+  background: color-mix(in srgb, var(--event-ink) 16%, transparent);
+}
+
+/* Festive rule on the sticky header's bottom edge, and lights above the footer. */
+[data-event] .site-header::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -2px;
+  height: 5px;
+  pointer-events: none;
+  background: linear-gradient(90deg, var(--event-secondary), var(--event-primary));
+}
+[data-event="christmas"] .site-header::after {
+  background: repeating-linear-gradient(45deg, var(--event-secondary) 0 8px, var(--event-primary) 8px 16px);
+}
+[data-event] .site-footer {
+  position: relative;
+}
+[data-event] .site-footer::after {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 6px;
+  pointer-events: none;
+  background-image: radial-gradient(circle, var(--event-secondary) 1.6px, transparent 2.1px);
+  background-size: 24px 6px;
+  background-position: center;
+  animation: event-twinkle 3.4s ease-in-out infinite;
+}
+
+/* Particles: one fixed, inert CSS-animated layer (no canvas, no JS loop). */
+.event-particles {
+  --event-flake: var(--event-primary);
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  overflow: hidden;
+  pointer-events: none;
+  contain: strict;
+}
+.event-particles__piece {
+  position: absolute;
+  top: -6vh;
+  display: block;
+  width: var(--piece-size, 4px);
+  height: var(--piece-size, 4px);
+  border-radius: 999px;
+  background: var(--event-flake);
+  opacity: 0.24;
+  animation: event-fall linear infinite;
+}
+[data-event-intensity="festive"] .event-particles__piece {
+  opacity: 0.36;
+}
+.event-particles[data-effect="confetti"] .event-particles__piece {
+  width: calc(var(--piece-size, 4px) * 1.2);
+  height: calc(var(--piece-size, 4px) * 2.4);
+  border-radius: 1px;
+  animation-name: event-fall, event-spin;
+}
+.event-particles[data-effect="confetti"] .event-particles__piece:nth-child(even) {
+  background: var(--event-secondary);
+}
+.event-particles[data-effect="sparkle"] .event-particles__piece {
+  animation-name: event-fall, event-glow;
+}
+.event-particles[data-effect="sparkle"] .event-particles__piece:nth-child(even) {
+  background: var(--event-secondary);
+}
+:root[data-theme="dark"] .event-particles {
+  --event-flake: #ffffff;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .event-particles {
+    --event-flake: #ffffff;
+  }
+}
+
+@keyframes event-fall {
+  from {
+    transform: translate3d(0, -8vh, 0);
+  }
+  to {
+    transform: translate3d(var(--drift, 0px), 108vh, 0);
+  }
+}
+@keyframes event-spin {
+  from {
+    rotate: 0deg;
+  }
+  to {
+    rotate: 360deg;
+  }
+}
+@keyframes event-glow {
+  0%,
+  100% {
+    opacity: 0.14;
+  }
+  50% {
+    opacity: 0.62;
+  }
+}
+@keyframes event-twinkle {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@media (max-width: 520px) {
+  .event-particles__piece:nth-child(n + 11) {
+    display: none;
+  }
+  /* One compact row on a phone: message + close (the snowflake is decorative). */
+  .event-ribbon__orn {
+    display: none;
+  }
+  .event-ribbon__inner {
+    row-gap: 0.4rem;
+  }
+  .event-ribbon__text {
+    flex: 1 1 0;
+    min-width: 0;
+    font-size: 0.78rem;
+  }
+  .event-ribbon__close {
+    margin-left: 0;
+    width: 2rem;
+    height: 2rem;
+  }
+  .event-ribbon__cta {
+    order: 3;
+    flex: 1 1 100%;
+    text-align: center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .event-particles {
+    display: none;
+  }
+  [data-event] .site-footer::after {
+    animation: none;
+    opacity: 0.6;
+  }
+}

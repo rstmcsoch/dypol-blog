@@ -9,6 +9,12 @@ export function useSite(): SiteConfig {
   return data?.site ?? fallbackSite;
 }
 
+/** Seasonal event for this request (null = the ordinary site). */
+export function useEvent(): import("@/lib/events").SiteEvent | null {
+  const data = rootRoute.useLoaderData();
+  return data?.event ?? null;
+}
+
 export function useTrending(): import("@/content/ticker").TickerEntry[] {
   const data = rootRoute.useLoaderData();
   return data?.trending ?? [];

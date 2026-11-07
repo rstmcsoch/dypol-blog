@@ -33,6 +33,7 @@ import { Route as AdminActivityRouteImport } from './routes/admin/activity'
 import { Route as AdminAdsRouteImport } from './routes/admin/ads'
 import { Route as AdminAppearanceRouteImport } from './routes/admin/appearance'
 import { Route as AdminAutomationRouteImport } from './routes/admin/automation'
+import { Route as AdminEventsRouteImport } from './routes/admin/events'
 import { Route as AdminHealthRouteImport } from './routes/admin/health'
 import { Route as AdminHelpRouteImport } from './routes/admin/help'
 import { Route as AdminHomepageRouteImport } from './routes/admin/homepage'
@@ -197,6 +198,11 @@ const AdminAppearanceRoute = AdminAppearanceRouteImport.update({
 const AdminAutomationRoute = AdminAutomationRouteImport.update({
   id: '/automation',
   path: '/automation',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminEventsRoute = AdminEventsRouteImport.update({
+  id: '/events',
+  path: '/events',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminHealthRoute = AdminHealthRouteImport.update({
@@ -442,6 +448,7 @@ export interface FileRoutesByFullPath {
   '/admin/ads': typeof AdminAdsRoute
   '/admin/appearance': typeof AdminAppearanceRoute
   '/admin/automation': typeof AdminAutomationRoute
+  '/admin/events': typeof AdminEventsRoute
   '/admin/health': typeof AdminHealthRoute
   '/admin/help': typeof AdminHelpRoute
   '/admin/homepage': typeof AdminHomepageRoute
@@ -510,6 +517,7 @@ export interface FileRoutesByTo {
   '/admin/ads': typeof AdminAdsRoute
   '/admin/appearance': typeof AdminAppearanceRoute
   '/admin/automation': typeof AdminAutomationRoute
+  '/admin/events': typeof AdminEventsRoute
   '/admin/health': typeof AdminHealthRoute
   '/admin/help': typeof AdminHelpRoute
   '/admin/homepage': typeof AdminHomepageRoute
@@ -580,6 +588,7 @@ export interface FileRoutesById {
   '/admin/ads': typeof AdminAdsRoute
   '/admin/appearance': typeof AdminAppearanceRoute
   '/admin/automation': typeof AdminAutomationRoute
+  '/admin/events': typeof AdminEventsRoute
   '/admin/health': typeof AdminHealthRoute
   '/admin/help': typeof AdminHelpRoute
   '/admin/homepage': typeof AdminHomepageRoute
@@ -651,6 +660,7 @@ export interface FileRouteTypes {
     | '/admin/ads'
     | '/admin/appearance'
     | '/admin/automation'
+    | '/admin/events'
     | '/admin/health'
     | '/admin/help'
     | '/admin/homepage'
@@ -719,6 +729,7 @@ export interface FileRouteTypes {
     | '/admin/ads'
     | '/admin/appearance'
     | '/admin/automation'
+    | '/admin/events'
     | '/admin/health'
     | '/admin/help'
     | '/admin/homepage'
@@ -788,6 +799,7 @@ export interface FileRouteTypes {
     | '/admin/ads'
     | '/admin/appearance'
     | '/admin/automation'
+    | '/admin/events'
     | '/admin/health'
     | '/admin/help'
     | '/admin/homepage'
@@ -1045,6 +1057,13 @@ declare module '@tanstack/react-router' {
       path: '/automation'
       fullPath: '/admin/automation'
       preLoaderRoute: typeof AdminAutomationRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/events': {
+      id: '/admin/events'
+      path: '/events'
+      fullPath: '/admin/events'
+      preLoaderRoute: typeof AdminEventsRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/health': {
@@ -1356,6 +1375,7 @@ interface AdminRouteChildren {
   AdminAdsRoute: typeof AdminAdsRoute
   AdminAppearanceRoute: typeof AdminAppearanceRoute
   AdminAutomationRoute: typeof AdminAutomationRoute
+  AdminEventsRoute: typeof AdminEventsRoute
   AdminHealthRoute: typeof AdminHealthRoute
   AdminHelpRoute: typeof AdminHelpRoute
   AdminHomepageRoute: typeof AdminHomepageRoute
@@ -1384,6 +1404,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminAdsRoute: AdminAdsRoute,
   AdminAppearanceRoute: AdminAppearanceRoute,
   AdminAutomationRoute: AdminAutomationRoute,
+  AdminEventsRoute: AdminEventsRoute,
   AdminHealthRoute: AdminHealthRoute,
   AdminHelpRoute: AdminHelpRoute,
   AdminHomepageRoute: AdminHomepageRoute,

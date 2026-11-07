@@ -1,10 +1,11 @@
 import { createRootRoute, HeadContent, Outlet, Scripts, useRouterState } from "@tanstack/react-router";
 import { defaultShareConfig, twitterHandle } from "@/lib/share-config";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { AuthProvider } from "@/lib/auth/provider";
 import { PreviewHostBridge } from "@/components/preview-host-bridge";
 import { SiteFooter } from "@/components/site/footer";
 import { SiteHeader } from "@/components/site/header";
+import { SiteEventLayer } from "@/components/site/event-layer";
 import { ExternalLinkGuard } from "@/components/site/external-link-guard";
 import { AdHeadCode, AdsRuntime } from "@/components/site/ads";
 import { CmpHeadMirror } from "@/components/site/cmp-head";
@@ -12,13 +13,14 @@ import { ThemeSync } from "@/components/site/theme-sync";
 import { themeBootScript } from "@/components/site/theme";
 import { TrendingBar } from "@/components/site/trending-bar";
 import { NotFoundState } from "@/components/site/states";
-import { useSite } from "@/components/site/use-site";
+import { useEvent, useSite } from "@/components/site/use-site";
 import { getShell } from "@/content/public-api";
 import { themeColors } from "@/lib/appearance";
 import { appearanceCss } from "@/lib/appearance";
 import { GoogleAnalytics } from "@/components/site/google-analytics";
 import { site as fallbackSite } from "@/content/site";
 import appCss from "../styles.css?url";
+import eventsCss from "../styles-events.css?url";
 // t88: preload the latin display font. It sets the header/headline metrics;
 // arriving late swapped the font and shifted article content (CLS 0.28 in
 // Lighthouse). Same file the CSS @font-face references - no extra family,
@@ -57,6 +59,8 @@ export const Route = createRootRoute({
         ]),
         { rel: "preload", as: "font", type: "font/woff2", href: familjenLatin, crossOrigin: "anonymous" },
         { rel: "stylesheet", href: appCss },
+        // t202: the event stylesheet loads only while an event is shown.
+        ...(loaderData?.event ? [{ rel: "stylesheet", href: eventsCss }] : []),
         { rel: "manifest", href: "/manifest.webmanifest?v=2" },
         { rel: "alternate", type: "application/rss+xml", title: `${current.name} feed`, href: "/feed.xml" },
       ],
@@ -87,18 +91,32 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootLayout() {
   const site = useSite();
+  const shellEvent = useEvent();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const desk = pathname === "/admin" || pathname.startsWith("/admin/");
+  // t202: no seasonal decoration on admin previews.
+  const event = pathname === "/preview" || pathname.startsWith("/preview/") ? null : shellEvent;
   // GoogleAnalytics stays the first child of a stable fragment so switching
   // between the public shell and the admin desk never remounts its tracker.
   if (desk) return <Outlet />;
+  // Event colours are their own variables: the owner's accent/theme tokens are untouched.
+  const eventStyle = event
+    ? ({ "--event-primary": event.colors.primary, "--event-secondary": event.colors.secondary, "--event-ink": event.colors.ink } as CSSProperties)
+    : undefined;
   return (
     <>
     <GoogleAnalytics />
-    <div className="site">
+    <div
+      className="site"
+      data-event={event ? event.theme : undefined}
+      data-event-effect={event?.effect}
+      data-event-intensity={event?.intensity}
+      style={eventStyle}
+    >
       <a className="skip" href="#content">
         {site.labels.skip}
       </a>
+      <SiteEventLayer event={event} />
       <style dangerouslySetInnerHTML={{ __html: appearanceCss(site.appearance) }} />
       <ThemeSync />
       <SiteHeader />
