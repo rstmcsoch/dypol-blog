@@ -39,16 +39,29 @@ async function shellAds(): Promise<import("@/lib/ads/public").PublicAds | null> 
   }
 }
 
+/** Seasonal event for this request; `?event=<id>` previews one from the Events tab. */
+async function shellEvent(): Promise<import("@/lib/events").SiteEvent | null> {
+  try {
+    const { getRequest } = await import("@tanstack/react-start/server");
+    const request = getRequest();
+    const override = request ? new URL(request.url).searchParams.get("event") : null;
+    const { readActiveEvent } = await import("./events.server");
+    return await readActiveEvent(Date.now(), override);
+  } catch {
+    return null;
+  }
+}
+
 export const getShell = createServerFn({ method: "GET" }).handler(async () => {
   try {
     const { readShell } = await import("./repository.server");
-    const [shell, ads, cmpHead] = await Promise.all([readShell(), shellAds(), shellCmpHead()]);
-    return { ...shell, ads, cmpHead };
+    const [shell, ads, cmpHead, event] = await Promise.all([readShell(), shellAds(), shellCmpHead(), shellEvent()]);
+    return { ...shell, ads, cmpHead, event };
   } catch (error) {
     // The site frame must always render, even if the content layer is broken.
     console.error("[shell] falling back to the built-in site config.", error);
     const { site } = await import("./site");
-    return { site, trending: [] as import("./ticker").TickerEntry[], pages: [] as { slug: string; title: string }[], menuTopics: null as { slug: string; label: string; count: number }[] | null, storyCount: 0, ads: null as import("@/lib/ads/public").PublicAds | null, cmpHead: "" };
+    return { site, trending: [] as import("./ticker").TickerEntry[], pages: [] as { slug: string; title: string }[], menuTopics: null as { slug: string; label: string; count: number }[] | null, storyCount: 0, ads: null as import("@/lib/ads/public").PublicAds | null, cmpHead: "", event: null as import("@/lib/events").SiteEvent | null };
   }
 });
 
