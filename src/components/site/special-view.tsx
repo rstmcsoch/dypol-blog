@@ -240,7 +240,18 @@ export function SpecialView({
                 <p>{corrections}</p>
               </aside>
             ) : null}
-            <ShareLinks title={article.title} path={path} label="Share" copyLabel={site.labels.copyLink} copiedLabel={site.labels.linkCopied} buttons={site.share?.buttons} />
+            <ShareLinks
+              title={article.title}
+              path={path}
+              label="Share"
+              copyLabel={site.labels.copyLink}
+              copiedLabel={site.labels.linkCopied}
+              buttons={site.share?.buttons}
+              config={site.share}
+              subject={{ slug: article.slug, excerpt: article.excerpt, seoTitle: article.seoTitle, seoDescription: article.seoDescription, author: article.authorName, category: chips[0]?.label ?? null }}
+              siteName={site.name}
+              publisher={site.publisher}
+            />
             <AdSlot id="A4" />
           </div>
         </div>

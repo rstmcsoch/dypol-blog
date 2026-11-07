@@ -125,7 +125,14 @@ export function ArticleView({
           />
           {blocks.length > 0 ? (
             <aside className="article-aside" ref={asideRef}>
-              <SidebarBlocks blocks={blocks} site={site} title={article.title} slug={article.slug} adAfterRelated={<AdSlot id="A3" />} />
+              <SidebarBlocks
+                blocks={blocks}
+                site={site}
+                title={article.title}
+                slug={article.slug}
+                adAfterRelated={<AdSlot id="A3" />}
+                shareSubject={{ excerpt: article.excerpt, seoTitle: article.seoTitle, seoDescription: article.seoDescription, author: article.authorName, category: category?.label ?? null }}
+              />
               <AdSlot id="A3b" />
             </aside>
           ) : null}
