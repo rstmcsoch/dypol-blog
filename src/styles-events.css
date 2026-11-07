@@ -11,6 +11,9 @@
 }
 
 /* Message bar above the header (scrolls away; the sticky header stays put). */
+:root[data-event-dismissed] .event-ribbon {
+  display: none;
+}
 .event-ribbon {
   background: var(--event-primary);
   color: var(--event-ink);

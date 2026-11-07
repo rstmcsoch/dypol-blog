@@ -56,7 +56,7 @@ function formatWhen(iso: string, now: number): string {
 }
 
 function statusLine(event: SiteEvent, status: EventStatus, now: number): string {
-  if (status === "live") return "Live on the site now";
+  if (status === "live") return event.endsAt ? "Live on the site now" : "Live on the site now (no end date)";
   if (status === "upcoming") return `Starts ${formatWhen(event.startsAt, now)}`;
   if (status === "ended") return `Ended ${formatWhen(event.endsAt, now)}`;
   return "Switched off";
@@ -117,7 +117,7 @@ function EventsAdmin() {
     try {
       const out = await adminSaveEvents({ data: config });
       setConfig(out.config);
-      setMessage("Events saved. The public site picks them up within a few seconds.");
+      setMessage("Events saved. New page loads use them right away (pages already open in a browser may take up to a minute).");
       await router.invalidate();
     } catch (caught) {
       setError(errorText(caught));
@@ -134,6 +134,7 @@ function EventsAdmin() {
         Seasonal decorations for the whole public site. While an event is inside its dates, visitors see its message bar above
         the header, a festive rule on the header and footer, and a light particle effect. Article pages, the homepage, the
         ticker, ads and your theme colours are never changed — and while no event is live the site looks exactly as it does today.
+        New events start switched off: tick “Use this event” and save to put one on the site. Preview works while you are signed in.
       </p>
 
       <div className="inline-actions" style={{ marginTop: "1rem" }}>
@@ -197,29 +198,37 @@ function EventsAdmin() {
 
               <div className="filters">
                 <label className="field">
-                  <span>Starts</span>
+                  <span>Starts (optional)</span>
                   <input
                     type="datetime-local"
                     value={toLocalInput(event.startsAt)}
                     onChange={(e) => {
-                      const iso = fromLocalInput(e.target.value);
-                      if (iso) patchEvent(event.id, { startsAt: iso });
+                      // t202: empty = open-ended.
+                      if (!e.target.value) patchEvent(event.id, { startsAt: "" });
+                      else {
+                        const iso = fromLocalInput(e.target.value);
+                        if (iso) patchEvent(event.id, { startsAt: iso });
+                      }
                     }}
                   />
                 </label>
                 <label className="field">
-                  <span>Ends</span>
+                  <span>Ends (optional)</span>
                   <input
                     type="datetime-local"
                     value={toLocalInput(event.endsAt)}
                     onChange={(e) => {
-                      const iso = fromLocalInput(e.target.value);
-                      if (iso) patchEvent(event.id, { endsAt: iso });
+                      // t202: empty = open-ended.
+                      if (!e.target.value) patchEvent(event.id, { endsAt: "" });
+                      else {
+                        const iso = fromLocalInput(e.target.value);
+                        if (iso) patchEvent(event.id, { endsAt: iso });
+                      }
                     }}
                   />
                 </label>
               </div>
-              <p className="field-help">Shows from the start until the end, then disappears on its own. Times use this device's timezone.</p>
+              <p className="field-help">Shows from the start until the end, then disappears on its own (no reload or redeploy needed). Leave a date empty for no limit on that side: both empty = on until you untick “Use this event”. Times use this device's timezone.</p>
 
               <label className="check-row">
                 <input type="checkbox" checked={event.banner} onChange={(e) => patchEvent(event.id, { banner: e.target.checked })} />

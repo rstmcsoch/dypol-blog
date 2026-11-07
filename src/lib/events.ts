@@ -28,7 +28,7 @@ export type SiteEvent = {
   theme: EventTheme;
   /** Switched off = never shown, whatever the dates say. */
   enabled: boolean;
-  /** ISO timestamps; the event is live for now >= startsAt and now <= endsAt. */
+  /** ISO timestamps; the event is live for now >= startsAt and now <= endsAt. Empty = open-ended on that side. */
   startsAt: string;
   endsAt: string;
   /** Message bar above the site header. */
@@ -105,7 +105,7 @@ export function eventHrefOk(href: string): boolean {
 }
 
 const hexColor = z.string().trim().toLowerCase().regex(/^#[0-9a-f]{6}$/, "Use a colour such as #0f5132.");
-const isoDate = z.string().trim().refine((value) => Number.isFinite(Date.parse(value)), "Use a valid date and time.");
+const isoDate = z.string().trim().refine((value) => value === "" || Number.isFinite(Date.parse(value)), "Use a valid date and time, or leave it empty.");
 
 export const eventSchema = z
   .object({
@@ -129,7 +129,7 @@ export const eventSchema = z
     colors: z.object({ primary: hexColor, secondary: hexColor, ink: hexColor }),
   })
   .superRefine((event, ctx) => {
-    if (Date.parse(event.endsAt) <= Date.parse(event.startsAt)) {
+    if (event.startsAt && event.endsAt && Date.parse(event.endsAt) <= Date.parse(event.startsAt)) {
       ctx.addIssue({ code: "custom", path: ["endsAt"], message: "The end must be after the start." });
     }
     if (event.ctaHref && !eventHrefOk(event.ctaHref)) {
@@ -179,9 +179,10 @@ export type EventStatus = "off" | "upcoming" | "live" | "ended";
 /** off = switched off, upcoming = starts later, live = showing now, ended = finished. */
 export function eventStatus(event: Pick<SiteEvent, "enabled" | "startsAt" | "endsAt">, now = Date.now()): EventStatus {
   if (!event.enabled) return "off";
-  const start = Date.parse(event.startsAt);
-  const end = Date.parse(event.endsAt);
-  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return "off";
+  // t202: an empty start or end means open-ended on that side.
+  const start = event.startsAt ? Date.parse(event.startsAt) : -Infinity;
+  const end = event.endsAt ? Date.parse(event.endsAt) : Infinity;
+  if (Number.isNaN(start) || Number.isNaN(end) || end <= start) return "off";
   if (now < start) return "upcoming";
   if (now > end) return "ended";
   return "live";
@@ -193,24 +194,26 @@ export function eventStatus(event: Pick<SiteEvent, "enabled" | "startsAt" | "end
  * switched-off event so the owner can look before turning it on.
  * If two events are live, the one that started most recently wins.
  */
-export function resolveActiveEvent(config: EventsConfig, now = Date.now(), overrideId?: string | null): SiteEvent | null {
-  if (overrideId) {
+export function resolveActiveEvent(config: EventsConfig, now = Date.now(), overrideId?: string | null, allowOverride = false): SiteEvent | null {
+  // t202: the preview override is for a signed-in admin only (the caller checks the desk session).
+  if (overrideId && allowOverride) {
     const preview = config.events.find((event) => event.id === overrideId);
     if (preview) return preview;
   }
   const live = config.events.filter((event) => eventStatus(event, now) === "live");
   if (live.length === 0) return null;
-  return live.reduce((best, event) => (Date.parse(event.startsAt) > Date.parse(best.startsAt) ? event : best));
+  const startOf = (event: SiteEvent) => (event.startsAt ? Date.parse(event.startsAt) : -Infinity);
+  return live.reduce((best, event) => (startOf(event) > startOf(best) ? event : best));
 }
 
-/** December 1 → January 6, ready to switch itself on for the season. */
+/** December 1 → January 6. t202: ships switched OFF; the owner turns it on in Admin → Events. */
 export function christmasEvent(year = new Date().getFullYear()): SiteEvent {
   const preset = eventPreset("christmas");
   return {
     id: "christmas",
     name: "Christmas",
     theme: "christmas",
-    enabled: true,
+    enabled: false,
     startsAt: `${year}-12-01T00:00:00.000Z`,
     endsAt: `${year + 1}-01-06T23:59:00.000Z`,
     banner: true,
@@ -240,7 +243,7 @@ export function newEventDraft(theme: EventTheme = "christmas", now = new Date())
     id: `event-${now.getTime().toString(36)}`,
     name: preset.label,
     theme,
-    enabled: true,
+    enabled: false,
     startsAt: now.toISOString(),
     endsAt: new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000).toISOString(),
     banner: true,

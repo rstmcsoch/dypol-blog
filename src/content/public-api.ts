@@ -45,8 +45,14 @@ async function shellEvent(): Promise<import("@/lib/events").SiteEvent | null> {
     const { getRequest } = await import("@tanstack/react-start/server");
     const request = getRequest();
     const override = request ? new URL(request.url).searchParams.get("event") : null;
+    // t202: previewing a (possibly switched-off) event needs a signed-in admin desk session.
+    let allowOverride = false;
+    if (override && request) {
+      const { deskSessionFromCookieHeader } = await import("@/lib/auth/admin.server");
+      allowOverride = await deskSessionFromCookieHeader(request.headers.get("cookie")).catch(() => false);
+    }
     const { readActiveEvent } = await import("./events.server");
-    return await readActiveEvent(Date.now(), override);
+    return await readActiveEvent(Date.now(), override, allowOverride);
   } catch {
     return null;
   }

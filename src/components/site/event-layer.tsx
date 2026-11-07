@@ -55,7 +55,9 @@ export function SiteEventLayer({ event }: { event: SiteEvent | null }) {
   useEffect(() => {
     if (!eventId) return;
     try {
-      setDismissed(window.sessionStorage.getItem(`dypol-event-dismissed:${eventId}`) === "1");
+      const hidden = window.sessionStorage.getItem(`dypol-event-dismissed:${eventId}`) === "1";
+      setDismissed(hidden);
+      if (!hidden) document.documentElement.removeAttribute("data-event-dismissed");
     } catch {
       setDismissed(false);
     }
@@ -69,6 +71,7 @@ export function SiteEventLayer({ event }: { event: SiteEvent | null }) {
 
   const dismiss = () => {
     setDismissed(true);
+    document.documentElement.setAttribute("data-event-dismissed", "");
     try {
       window.sessionStorage.setItem(`dypol-event-dismissed:${event.id}`, "1");
     } catch {
@@ -96,6 +99,14 @@ export function SiteEventLayer({ event }: { event: SiteEvent | null }) {
             />
           ))}
         </div>
+      ) : null}
+      {showBanner ? (
+        <script
+          // t202: hide an already-dismissed ribbon before first paint (no flash, no layout shift).
+          dangerouslySetInnerHTML={{
+            __html: `try{if(sessionStorage.getItem(${JSON.stringify(`dypol-event-dismissed:${event.id}`).replace(/</g, "\\u003c")})==="1")document.documentElement.setAttribute("data-event-dismissed","")}catch(e){}`,
+          }}
+        />
       ) : null}
       {showBanner ? (
         <div className="event-ribbon" role="region" aria-label={`${event.name} event`}>

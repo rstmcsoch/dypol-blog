@@ -59,7 +59,8 @@ export const Route = createRootRoute({
         ]),
         { rel: "preload", as: "font", type: "font/woff2", href: familjenLatin, crossOrigin: "anonymous" },
         { rel: "stylesheet", href: appCss },
-        { rel: "stylesheet", href: eventsCss },
+        // t202: the event stylesheet loads only while an event is shown.
+        ...(loaderData?.event ? [{ rel: "stylesheet", href: eventsCss }] : []),
         { rel: "manifest", href: "/manifest.webmanifest?v=2" },
         { rel: "alternate", type: "application/rss+xml", title: `${current.name} feed`, href: "/feed.xml" },
       ],
@@ -90,9 +91,11 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootLayout() {
   const site = useSite();
-  const event = useEvent();
+  const shellEvent = useEvent();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const desk = pathname === "/admin" || pathname.startsWith("/admin/");
+  // t202: no seasonal decoration on admin previews.
+  const event = pathname === "/preview" || pathname.startsWith("/preview/") ? null : shellEvent;
   // GoogleAnalytics stays the first child of a stable fragment so switching
   // between the public shell and the admin desk never remounts its tracker.
   if (desk) return <Outlet />;

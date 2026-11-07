@@ -42,9 +42,9 @@ export async function readEvents(): Promise<EventsConfig> {
  * The event the public shell shows right now, or null (the ordinary site).
  * `overrideId` is the admin preview from `/?event=<id>`.
  */
-export async function readActiveEvent(now = Date.now(), overrideId: string | null = null): Promise<SiteEvent | null> {
+export async function readActiveEvent(now = Date.now(), overrideId: string | null = null, allowOverride = false): Promise<SiteEvent | null> {
   try {
-    return resolveActiveEvent(await loadEvents(), now, overrideId);
+    return resolveActiveEvent(await loadEvents(), now, overrideId, allowOverride);
   } catch {
     return null;
   }

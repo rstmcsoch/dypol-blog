@@ -98,6 +98,11 @@ const securityHeaders = createMiddleware().server(async ({ request, pathname, ne
     const path = new URL(request.url).pathname;
     const privatePath = /^\/(admin|preview|oauth|api|auth)(\/|$)/.test(path);
     if (privatePath) headers.set("cache-control", "no-store");
+    // t202: an admin event preview (?event=<id>) is personal: never cached or indexed.
+    else if (new URL(request.url).searchParams.has("event")) {
+      headers.set("cache-control", "no-store");
+      headers.set("x-robots-tag", "noindex");
+    }
     else if (!headers.has("cache-control")) headers.set("cache-control", "public, max-age=60, s-maxage=60, stale-while-revalidate=300");
     if (!headers.has("strict-transport-security")) headers.set("strict-transport-security", "max-age=31536000");
     if (!headers.has("x-content-type-options")) headers.set("x-content-type-options", "nosniff");
