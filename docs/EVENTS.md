@@ -92,3 +92,21 @@ Audit: the `newyear` theme and its preset (indigo/gold, sparkle effect, message)
 - Particles: the existing `sparkle` effect (preset), already inert and lifted over the open menu by the t206 rule. The menu is not restyled.
 - Motion: slow blooms (7.5s), twinkles, window glow, river shimmer, rising bubbles. Opacity/transform only, every cycle ≥4s (no strobing), all static under reduced motion.
 - Preset: `newYearEvent(year)` (id `newyear`, 31 Dec → 2 Jan, OFF). It is in the defaults for fresh installs and in an "Add New Year" button in Admin → Events. Stored settings are never rewritten, so production's saved events stay as they are.
+
+## t209 — Diwali, Holi, Eid; Valentine's Day removed (plan)
+Audit (read-only): the themes were `christmas, newyear, halloween, valentines, custom`. There was no Diwali/Holi/Eid scaffolding and no Valentine art. Production's saved events are Christmas only (no Valentine row), so no production write is needed.
+- Valentine's removal: the theme, preset, editor choice and message are gone. Stored data is migrated on read (`migrateLegacyEvents`): an event that is unmistakably the Valentine's event (legacy theme AND "valentine" in its id or name) is dropped. Any other event using the legacy theme keeps all its data as a Custom event, so nothing else is lost. New admin saves can't use the legacy theme. Production's Christmas-only config passes through byte-identical.
+- Presets: Diwali, Holi and Eid have stable ids `diwali` / `holi` / `eid`. They are switched OFF with NO dates, because these festivals move every year (lunisolar and lunar calendars), and no religious dates are guessed. Admin → Events gets "Add Diwali / Add Holi / Add Eid" buttons that save normally. The status line asks the owner to set this year's dates first. Defaults stay Christmas + New Year.
+- Diwali, "Festival of lights": plum/indigo night, saffron and gold.
+  - Top band: a marigold toran (orange/yellow flower beads) with hanging strands and mango leaves that sway.
+  - Scene: hanging star lanterns (akash kandil) that glow, a large rangoli in perspective, rows of clay diyas with slow flame flicker and halos, havelis with arched lit windows and string lights.
+  - "HAPPY DIWALI" headline. Phone: lanterns in the corners, rangoli centre, two diyas each side.
+- Holi, "Colours of spring": a deep berry night base keeps the footer text crisp, while the colour lives in the art (magenta, saffron, turquoise, lime, violet).
+  - Top band: multi-colour bunting and soft powder puffs.
+  - Scene: soft gulal powder clouds (radial gradients, slow breathe), flowing ribbons that drift, brass thalis with powder mounds, flowers, gently floating colour dust.
+  - A multi-colour "HAPPY HOLI". Refined, not a confetti explosion.
+- Eid, "Moonlit evening": navy/emerald with antique gold.
+  - Top band: a geometric eight-point star band with small hanging lanterns.
+  - Scene: a crescent with a star and a soft halo, a generic skyline of domes and arches (no specific building), fanous lanterns, a foreground arcade of pointed arches with a warm inner glow.
+  - The greeting is "EID MUBARAK" (generic, not al-Fitr or al-Adha specific). No sacred text, no alcohol.
+- Each theme: a phone/tablet/wide composition (motifs rearranged, a test checks for collisions), short-landscape caps, a tiny logo ornament above the first letter (diya / colour dots / crescent and star), a theme palette at ≥7:1 text contrast, existing particles (sparkle / confetti / sparkle) lifted over the open menu with no menu restyle. Motion is opacity/transform only, ≥3.6s cycles, static under reduced motion. Each theme's CSS is scoped to its own `[data-event]`.

@@ -11,6 +11,8 @@ import {
   eventStatus,
   newEventDraft,
   newYearEvent,
+  festivalEvent,
+  FESTIVAL_PRESET_THEMES,
   type EventEffect,
   type EventStatus,
   type EventTheme,
@@ -60,6 +62,8 @@ function statusLine(event: SiteEvent, status: EventStatus, now: number): string 
   if (status === "live") return event.endsAt ? "Live on the site now" : "Live on the site now (no end date)";
   if (status === "upcoming") return `Starts ${formatWhen(event.startsAt, now)}`;
   if (status === "ended") return `Ended ${formatWhen(event.endsAt, now)}`;
+  // t209: festival presets ship without dates; say so before the owner switches one on.
+  if (!event.startsAt && !event.endsAt) return "Switched off · set this year's dates before switching on (no dates = shows until switched off)";
   return "Switched off";
 }
 
@@ -118,6 +122,17 @@ function EventsAdmin() {
     setMessage(null);
   };
 
+  // t209: Diwali / Holi / Eid presets — switched off and WITHOUT dates (they move every year).
+  const addFestival = (theme: (typeof FESTIVAL_PRESET_THEMES)[number]) => {
+    if (config.events.length >= MAX_EVENTS) return;
+    const draft = festivalEvent(theme);
+    let id = draft.id;
+    for (let n = 2; config.events.some((event) => event.id === id); n += 1) id = `${draft.id}-${n}`;
+    setConfig((current) => ({ ...current, events: [...current.events, { ...draft, id }] }));
+    setError(null);
+    setMessage(null);
+  };
+
   const removeEvent = (id: string) => {
     setConfig((current) => ({ ...current, events: current.events.filter((event) => event.id !== id) }));
     setMessage(null);
@@ -157,6 +172,11 @@ function EventsAdmin() {
         <button type="button" className="btn btn--ghost" onClick={addNewYear} disabled={config.events.length >= MAX_EVENTS}>
           Add New Year
         </button>
+        {FESTIVAL_PRESET_THEMES.map((theme) => (
+          <button key={theme} type="button" className="btn btn--ghost" onClick={() => addFestival(theme)} disabled={config.events.length >= MAX_EVENTS}>
+            Add {eventPreset(theme).label}
+          </button>
+        ))}
         <span className="field-help" style={{ margin: 0 }}>
           {config.events.length} of {MAX_EVENTS} events · visitors who prefer reduced motion get the colours and message without the
           falling particles.

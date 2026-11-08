@@ -1,6 +1,6 @@
 import { footerColumns, footerExtraLinks, visibleSocials, SOCIAL_LABELS, type SocialPlatform } from "@/lib/social-links";
 import { useEvent, usePages, useSite } from "./use-site";
-import { ChristmasFooterScene, ChristmasGarland, NewYearFooterScene, NewYearFrieze } from "./event-decor";
+import { ChristmasFooterScene, ChristmasGarland, FESTIVAL_THEMES, FestivalFooterScene, FestivalFrieze, NewYearFooterScene, NewYearFrieze, type FestivalTheme } from "./event-decor";
 import { celebratedYear } from "@/lib/events";
 
 /** Inline brand icons (no icon library). Fill paths are the platforms'
@@ -76,12 +76,14 @@ export function SiteFooter() {
   const socials = visibleSocials(site.socials);
   const xmas = event?.theme === "christmas";
   const newYear = event?.theme === "newyear";
+  const festival = FESTIVAL_THEMES.find((theme) => theme === event?.theme) as FestivalTheme | undefined;
   // t204: the standalone publisher link ("DYPOL LABS") is no longer shown; other saved links still render.
   const extraLinks = footerExtraLinks(site.footer.links, site.publisher);
   return (
-    <footer className={xmas ? "site-footer site-footer--xmas" : newYear ? "site-footer site-footer--newyear" : "site-footer"}>
+    <footer className={xmas ? "site-footer site-footer--xmas" : newYear ? "site-footer site-footer--newyear" : festival ? `site-footer site-footer--fest site-footer--${festival}` : "site-footer"}>
       {xmas ? <ChristmasGarland /> : null}
       {newYear ? <NewYearFrieze /> : null}
+      {festival ? <FestivalFrieze theme={festival} /> : null}
       <div className="container footer-grid">
         <div className="footer-brand">
           <p className="footer-mark">{site.name}</p>
@@ -121,6 +123,7 @@ export function SiteFooter() {
       </div>
       {xmas ? <ChristmasFooterScene /> : null}
       {newYear && event ? <NewYearFooterScene year={celebratedYear(event)} /> : null}
+      {festival ? <FestivalFooterScene theme={festival} /> : null}
     </footer>
   );
 }

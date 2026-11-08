@@ -11,7 +11,8 @@
  */
 import { z } from "zod";
 
-export const EVENT_THEMES = ["christmas", "newyear", "halloween", "valentines", "custom"] as const;
+// t209: Valentine's Day removed (owner); Diwali, Holi and Eid added. See normalizeEvents for stored legacy data.
+export const EVENT_THEMES = ["christmas", "newyear", "diwali", "holi", "eid", "halloween", "custom"] as const;
 export type EventTheme = (typeof EVENT_THEMES)[number];
 
 export const EVENT_EFFECTS = ["snow", "confetti", "sparkle", "none"] as const;
@@ -77,11 +78,25 @@ export const EVENT_PRESETS: EventPreset[] = [
     message: "Happy Halloween from DYPOL BLOG — read something eerie tonight.",
   },
   {
-    value: "valentines",
-    label: "Valentine's Day",
+    value: "diwali",
+    label: "Diwali",
+    effect: "sparkle",
+    colors: { primary: "#3a1550", secondary: "#ffb020", ink: "#fff4e0" },
+    message: "Happy Diwali from DYPOL BLOG — wishing you light, joy and good stories.",
+  },
+  {
+    value: "holi",
+    label: "Holi",
     effect: "confetti",
-    colors: { primary: "#8c1d3f", secondary: "#f2a2b4", ink: "#fff5f8" },
-    message: "Happy Valentine's Day from DYPOL BLOG.",
+    colors: { primary: "#3b1a5a", secondary: "#ff4fa3", ink: "#fff7fb" },
+    message: "Happy Holi from DYPOL BLOG — a season of colour and good stories.",
+  },
+  {
+    value: "eid",
+    label: "Eid",
+    effect: "sparkle",
+    colors: { primary: "#0d3b3a", secondary: "#c9a24a", ink: "#f6efd9" },
+    message: "Eid Mubarak from DYPOL BLOG — warm wishes to you and your family.",
   },
   {
     value: "custom",
@@ -155,8 +170,28 @@ export function parseEvents(input: unknown): EventsConfig {
   return { events: parsed.events.map(clean) };
 }
 
+/**
+ * t209: stored events from before Valentine's Day was removed. An event that is unmistakably the
+ * Valentine's event (legacy theme AND a Valentine id or name) is dropped; any other event that
+ * used the legacy theme keeps all its data and becomes a Custom event, so nothing else is lost.
+ */
+export function migrateLegacyEvents(input: unknown): unknown {
+  const raw = input && typeof input === "object" ? (input as { events?: unknown }).events : null;
+  if (!Array.isArray(raw)) return input;
+  const events = raw
+    .filter((item) => {
+      if (!item || typeof item !== "object") return true;
+      const event = item as { theme?: unknown; id?: unknown; name?: unknown };
+      if (event.theme !== "valentines") return true;
+      return !/valentine/i.test(`${String(event.id ?? "")} ${String(event.name ?? "")}`);
+    })
+    .map((item) => (item && typeof item === "object" && (item as { theme?: unknown }).theme === "valentines" ? { ...(item as object), theme: "custom" } : item));
+  return { ...(input as object), events };
+}
+
 /** Lenient parse for stored data: keep every valid event, ignore broken ones. */
-export function normalizeEvents(input: unknown): EventsConfig {
+export function normalizeEvents(stored: unknown): EventsConfig {
+  const input = migrateLegacyEvents(stored);
   const strict = eventsConfigSchema.safeParse(input);
   if (strict.success) return { events: strict.data.events.map(clean) };
   const raw = input && typeof input === "object" ? (input as { events?: unknown }).events : null;
@@ -274,6 +309,31 @@ export function defaultEvents(now = new Date()): EventsConfig {
   const year = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
   // t208: the New Year preset ships alongside, also switched off (stored settings are never rewritten).
   return { events: [christmasEvent(year), newYearEvent(year)] };
+}
+
+/**
+ * t209: Diwali / Holi / Eid presets. Their dates move every year (lunar/lunisolar calendars), so
+ * they ship switched OFF with NO dates: the owner picks the real dates before turning one on.
+ * The admin editor warns that an enabled event with no dates shows indefinitely.
+ */
+export const FESTIVAL_PRESET_THEMES = ["diwali", "holi", "eid"] as const;
+export function festivalEvent(theme: (typeof FESTIVAL_PRESET_THEMES)[number]): SiteEvent {
+  const preset = eventPreset(theme);
+  return {
+    id: theme,
+    name: preset.label,
+    theme,
+    enabled: false,
+    startsAt: "",
+    endsAt: "",
+    banner: true,
+    message: preset.message,
+    ctaLabel: "",
+    ctaHref: "",
+    effect: preset.effect,
+    intensity: "subtle",
+    colors: { ...preset.colors },
+  };
 }
 
 /** A fresh two-week event for the "Add event" button. */

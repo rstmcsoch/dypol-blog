@@ -5,7 +5,7 @@ import type { NavItem } from "@/content/types";
 import { NavLink } from "./nav-link";
 import { ThemeToggle } from "./theme-toggle";
 import { useEvent, useMenuTopics, useSite, type MenuTopic } from "./use-site";
-import { LogoSparkle, SantaHat } from "./event-decor";
+import { FESTIVAL_THEMES, FestivalOrnament, LogoSparkle, SantaHat, type FestivalTheme } from "./event-decor";
 
 const TOPIC_PREFIX = "/topics/";
 
@@ -166,6 +166,7 @@ export function SiteHeader() {
         <NavLink href="/" className="wordmark">
           {event?.theme === "christmas" ? <SantaHat /> : null}
           {event?.theme === "newyear" ? <LogoSparkle /> : null}
+          {FESTIVAL_THEMES.includes(event?.theme as FestivalTheme) ? <FestivalOrnament theme={event?.theme as FestivalTheme} /> : null}
           {site.logoMediaId ? <img className="wordmark__logo" src={`/media/${site.logoMediaId}`} alt="" /> : null}
           <span className="wordmark__name">{site.name.split(/\s+/).slice(0, -1).join(" ") || site.name}</span>
           {site.name.trim().includes(" ") ? <span className="wordmark__stamp grain">

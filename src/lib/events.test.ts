@@ -3,6 +3,11 @@ import assert from "node:assert/strict";
 import {
   MAX_EVENTS,
   celebratedYear,
+  EVENT_PRESETS,
+  EVENT_THEMES,
+  FESTIVAL_PRESET_THEMES,
+  festivalEvent,
+  migrateLegacyEvents,
   christmasEvent,
   defaultEvents,
   eventHrefOk,
@@ -172,7 +177,7 @@ test("particle count is capped (18, 10 on phones) and the ribbon is not fixed", 
 
 test("t204 Christmas footer: transform/opacity motion only, static under reduced motion, inert", () => {
   const decor = readFileSync(new URL("../components/site/event-decor.tsx", import.meta.url), "utf8");
-  assert.equal((decor.match(/aria-hidden="true"/g) ?? []).length, 6);
+  assert.equal((decor.match(/aria-hidden="true"/g) ?? []).length, 9);
   assert.doesNotMatch(decor, /<script|https?:\/\/(?!www\.w3\.org)/);
   for (const name of ["xmas-glow", "xmas-twinkle", "xmas-breathe", "xmas-swing", "xmas-fall"]) {
     const body = css.match(new RegExp(`@keyframes ${name} \\{([\\s\\S]*?)\\n\\}`))?.[1] ?? "";
@@ -360,7 +365,7 @@ test("t208 New Year wiring: theme-gated header/footer, inert, reduced motion sta
   assert.match(footer, /newYear && event \? <NewYearFooterScene year=\{celebratedYear\(event\)\} \/> : null/);
   const decor = readFileSync(new URL("../components/site/event-decor.tsx", import.meta.url), "utf8");
   for (const cls of ["event-sparkle", "ny-frieze", "ny-scene"]) assert.match(decor, new RegExp(`className="${cls}"[^>]*aria-hidden="true"|className=\\{?\`?${cls}`));
-  const ny = css.slice(css.indexOf("/* ---- t208"));
+  const ny = css.slice(css.indexOf("/* ---- t208"), css.indexOf("/* ---- t209"));
   for (const m of ny.replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/([^{}]+)\{([^}]*)\}/g)) {
     const sel = m[1].trim();
     if (/^(@|from|to|\d+%)/.test(sel)) continue;
@@ -383,7 +388,7 @@ test("t208 New Year wiring: theme-gated header/footer, inert, reduced motion sta
 });
 
 test("t208 pre-release: New Year footer palette is theme-independent and high contrast; every NY animation stops under reduced motion; Add New Year saves", () => {
-  const ny = css.slice(css.indexOf("/* ---- t208"));
+  const ny = css.slice(css.indexOf("/* ---- t208"), css.indexOf("/* ---- t209"));
   assert.doesNotMatch(ny, /data-theme|prefers-color-scheme|\.dark\b/);
   const lum = (hex: string) => {
     const c = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
@@ -407,4 +412,138 @@ test("t208 pre-release: New Year footer palette is theme-independent and high co
   assert.deepEqual(saved.events.map((e) => [e.id, e.theme, e.enabled]), [["christmas", "christmas", false], ["newyear", "newyear", false]]);
   const admin = readFileSync(new URL("../routes/admin/events.tsx", import.meta.url), "utf8");
   assert.match(admin, /onClick=\{addNewYear\}[^\n]*\n\s*Add New Year/);
+});
+
+// ---- t209: Diwali / Holi / Eid; Valentine's Day removed ----
+test("t209 themes: Valentine's removed everywhere; festivals are presets, OFF, with no invented dates", () => {
+  assert.ok(!(EVENT_THEMES as readonly string[]).includes("valentines"));
+  assert.ok(!EVENT_PRESETS.some((p) => /valentine/i.test(`${p.value} ${p.label} ${p.message}`)));
+  for (const theme of ["diwali", "holi", "eid"] as const) assert.ok((EVENT_THEMES as readonly string[]).includes(theme));
+  assert.deepEqual([...FESTIVAL_PRESET_THEMES], ["diwali", "holi", "eid"]);
+  for (const theme of FESTIVAL_PRESET_THEMES) {
+    const e = festivalEvent(theme);
+    assert.equal(e.id, theme);
+    assert.equal(e.enabled, false);
+    assert.equal(e.startsAt, "");
+    assert.equal(e.endsAt, "");
+    assert.equal(eventStatus(e, Date.now()), "off");
+    assert.equal(resolveActiveEvent({ events: [e] }, Date.now()), null);
+    assert.equal(resolveActiveEvent({ events: [e] }, Date.now(), theme, false), null);
+    assert.equal(resolveActiveEvent({ events: [e] }, Date.now(), theme, true)?.theme, theme);
+  }
+  // Eid is generic: no al-Fitr / al-Adha assumption in the preset.
+  assert.doesNotMatch(JSON.stringify(EVENT_PRESETS.find((p) => p.value === "eid")), /fitr|adha|ramadan/i);
+  // No alcohol in the festival presets.
+  assert.doesNotMatch(JSON.stringify(EVENT_PRESETS.filter((p) => ["diwali", "holi", "eid"].includes(p.value))), /champagne|wine|toast|cheers/i);
+  // Defaults are unchanged (festivals are added by the owner, never auto-written).
+  assert.deepEqual(defaultEvents(new Date("2026-11-08T00:00:00Z")).events.map((e) => e.id), ["christmas", "newyear"]);
+  // Admin save (strict) of all presets works; Valentine's theme is rejected for new saves.
+  const saved = parseEvents({ events: [christmasEvent(2026), newYearEvent(2026), ...FESTIVAL_PRESET_THEMES.map(festivalEvent)] });
+  assert.deepEqual(saved.events.map((e) => e.id), ["christmas", "newyear", "diwali", "holi", "eid"]);
+  assert.throws(() => parseEvents({ events: [{ ...christmasEvent(2026), id: "x", theme: "valentines" }] }));
+  const admin = readFileSync(new URL("../routes/admin/events.tsx", import.meta.url), "utf8");
+  assert.match(admin, /FESTIVAL_PRESET_THEMES\.map\(\(theme\) => \([\s\S]*?onClick=\{\(\) => addFestival\(theme\)\}[\s\S]*?Add \{eventPreset\(theme\)\.label\}/);
+  assert.match(admin, /set this year's dates before switching on/);
+});
+
+test("t209 legacy stored data: the Valentine's event is removed, other legacy-theme events kept as Custom, production shape untouched", () => {
+  const xmas = { ...christmasEvent(2026), enabled: true, startsAt: "2026-11-01T00:00:00.000Z", endsAt: "2026-12-03T23:59:00.000Z" };
+  const valentine = { ...christmasEvent(2026), id: "valentines", name: "Valentine's Day", theme: "valentines", enabled: true };
+  const valentineById = { ...christmasEvent(2026), id: "event-valentine-2027", name: "Love week", theme: "valentines" };
+  const repurposed = { ...christmasEvent(2026), id: "spring-sale", name: "Spring sale", theme: "valentines", message: "Keep me" };
+  const out = normalizeEvents({ events: [xmas, valentine, valentineById, repurposed] });
+  assert.deepEqual(out.events.map((e) => [e.id, e.theme]), [["christmas", "christmas"], ["spring-sale", "custom"]]);
+  assert.equal(out.events[1].message, "Keep me");
+  assert.deepEqual(out.events[0], xmas);
+  // Production today (Christmas only) is a no-op.
+  assert.deepEqual(migrateLegacyEvents({ events: [xmas] }), { events: [xmas] });
+  assert.deepEqual(normalizeEvents({ events: [xmas] }), { events: [xmas] });
+  assert.equal(migrateLegacyEvents(null), null);
+});
+
+test("t209 festival art: composed per size, inside the frame, no collisions, caps only trim sky, unique ids, no bleed", async () => {
+  const art = await import("../components/site/event-decor-art.ts");
+  const { FESTIVAL_ART, FESTIVAL_THEMES, SCENE_MODES, SCENES, NY_SCENES, GARLAND, NY_FRIEZE } = art;
+  const ranges: Record<string, [number, number]> = { compact: [300, 599], medium: [600, 1099], wide: [1100, 1920] };
+  const capOf = (mode: string) => Number(css.match(new RegExp(`\\[data-event="diwali"\\] \\.fest-scene__v--${mode} \\{[^}]*max-height: (\\d+)px`))?.[1]);
+  const required: Record<string, string[]> = { diwali: ["text", "rangoli", "diya0", "diya3", "lantern0", "lantern1"], holi: ["text", "cloud0", "cloud1", "thali0", "thali1"], eid: ["text", "moon", "lamp0", "arcade"] };
+  const allIds: string[] = [];
+  for (const theme of FESTIVAL_THEMES) {
+    for (const mode of SCENE_MODES) {
+      const { w, h, boxes } = FESTIVAL_ART[theme].layout[mode];
+      for (const key of required[theme]) assert.ok(boxes[key], `${theme}.${mode} has ${key}`);
+      const keys = Object.keys(boxes);
+      for (const key of keys) {
+        const [x1, y1, x2, y2] = boxes[key];
+        assert.ok(x1 >= 0 && y1 >= 0 && x2 <= w && y2 <= h, `${theme}.${mode}.${key} inside ${w}x${h}: ${boxes[key]}`);
+      }
+      for (let i = 0; i < keys.length; i++) for (let j = i + 1; j < keys.length; j++) {
+        const a = boxes[keys[i]], b = boxes[keys[j]];
+        assert.ok(a[2] <= b[0] || b[2] <= a[0] || a[3] <= b[1] || b[3] <= a[1], `${theme}.${mode}: ${keys[i]} overlaps ${keys[j]}`);
+      }
+      const topMost = Math.min(...Object.values(boxes).filter((b) => b[1] > 0).map((b) => b[1]), h);
+      for (const width of ranges[mode]) {
+        const natural = (width * h) / w;
+        const trimmed = natural > capOf(mode) ? h - capOf(mode) / (width / w) : 0;
+        assert.ok(trimmed <= 0.5 || trimmed < topMost, `${theme}.${mode}@${width} trims ${trimmed.toFixed(1)}`);
+      }
+      const markup = FESTIVAL_ART[theme].scenes[mode];
+      assert.doesNotMatch(markup, /<a |<button|tabindex|<script|href=|\{\{/);
+      allIds.push(...[...markup.matchAll(/ id="([^"]+)"/g)].map((m) => m[1]));
+      for (const m of markup.matchAll(/url\(#([^)]+)\)/g)) assert.ok(markup.includes(` id="${m[1]}"`), `${theme}.${mode} dangling ${m[1]}`);
+    }
+    allIds.push(...[...FESTIVAL_ART[theme].frieze.matchAll(/ id="([^"]+)"/g)].map((m) => m[1]));
+    const all = SCENE_MODES.map((m) => FESTIVAL_ART[theme].scenes[m]).join("") + FESTIVAL_ART[theme].frieze;
+    // No bleed between themes: own prefix only, no Christmas/New Year motifs, no alcohol imagery.
+    const own = { diwali: "dw-", holi: "hl", eid: "ed-" }[theme];
+    for (const cls of all.matchAll(/class="([^"]+)"/g)) for (const c of cls[1].split(" ")) assert.ok(c.startsWith(own), `${theme} uses foreign class ${c}`);
+    assert.doesNotMatch(all, /ny-|xs-|xg-|xmas|glass|bubbly|champagne|santa|snow/i);
+  }
+  for (const m of SCENE_MODES) allIds.push(...[...(SCENES[m] + NY_SCENES[m]).matchAll(/ id="([^"]+)"/g)].map((x) => x[1]));
+  allIds.push(...[...(GARLAND + NY_FRIEZE).matchAll(/ id="([^"]+)"/g)].map((x) => x[1]));
+  assert.equal(new Set(allIds).size, allIds.length, "ids unique across every theme");
+});
+
+test("t209 festival wiring + CSS: theme-gated, inert, palettes legible, slow motion, reduced motion static, menu untouched", () => {
+  const header = readFileSync(new URL("../components/site/header.tsx", import.meta.url), "utf8");
+  assert.match(header, /FESTIVAL_THEMES\.includes\(event\?\.theme as FestivalTheme\) \? <FestivalOrnament/);
+  const footer = readFileSync(new URL("../components/site/footer.tsx", import.meta.url), "utf8");
+  assert.match(footer, /festival \? <FestivalFrieze theme=\{festival\} \/> : null/);
+  assert.match(footer, /festival \? <FestivalFooterScene theme=\{festival\} \/> : null/);
+  const block = css.slice(css.indexOf("/* ---- t209"));
+  const lum = (hex: string) => {
+    const c = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
+    return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+  };
+  const ratio = (a: string, b: string) => { const [x, y] = [lum(a), lum(b)].sort((m, n) => n - m); return (x + 0.05) / (y + 0.05); };
+  for (const theme of ["diwali", "holi", "eid"]) {
+    const vars = block.match(new RegExp(`\\[data-event="${theme}"\\] \\.site-footer--${theme} \\{([^}]*)\\}`))?.[1] ?? "";
+    const v = (n: string) => vars.match(new RegExp(`${n}: (#[0-9a-f]{6})`))?.[1] as string;
+    for (const bg of [v("--ft-top"), v("--ft-mid"), v("--ft-bottom")]) {
+      assert.ok(ratio(v("--ft-fg"), bg) >= 7, `${theme} text on ${bg}`);
+      assert.ok(ratio(v("--ft-muted"), bg) >= 4.5, `${theme} titles on ${bg}`);
+    }
+    assert.match(block, new RegExp(`\\.site-footer--${theme} > \\.fest-scene \\{[^}]*pointer-events: none`));
+    assert.match(block, new RegExp(`\\[data-event="${theme}"\\] \\.event-ornament \\{[^}]*pointer-events: none`));
+  }
+  for (const m of block.replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/([^{}]+)\{([^}]*)\}/g)) {
+    const sel = m[1].trim();
+    if (/^(@|from|to|\d+%)/.test(sel)) continue;
+    for (const part of sel.split(",")) assert.match(part.trim(), /^\[data-event="(diwali|holi|eid)"\]/, part.trim());
+    assert.doesNotMatch(sel, /site-nav|nav-link|nav-chip|menu-btn|search-form|\.btn\b|theme-toggle|data-theme/);
+  }
+  for (const name of ["fest-flicker", "fest-glow", "fest-twinkle", "fest-sway", "fest-breathe", "fest-breathe-o", "fest-drift", "fest-float"]) {
+    const body = css.match(new RegExp(`@keyframes ${name} \\{([\\s\\S]*?)\\n\\}`))?.[1] ?? "";
+    assert.ok(body, name);
+    assert.ok([...body.matchAll(/([a-z-]+):/g)].every((x) => x[1] === "transform" || x[1] === "opacity"), name);
+    const d = [...css.matchAll(new RegExp(`animation: ${name} ([\\d.]+)s`, "g"))].map((x) => Number(x[1]));
+    assert.ok(d.length && d.every((x) => x >= 3.6), `${name} slow: ${d}`);
+  }
+  const reduced = block.slice(block.indexOf("@media (prefers-reduced-motion: reduce)"));
+  const animated = [...block.replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/([^{}]+)\{[^}]*animation: fest-/g)].flatMap((m) => m[1].split(",").map((x) => x.trim()));
+  for (const sel of new Set(animated)) {
+    const base = sel.replace(/ \.(dw-d\d|dw-w\d|dw-u\d|dw-s\d|dw-t\d|ed-t\d|hl-c\d|hl-rb\d|hl-ds\d|hl-fl\d|hl-fw\d|ed-h\d|ed-a\d)\b.*$/, "");
+    if (/ \.(dw-d|dw-w|dw-u|dw-s|dw-t|ed-t|hl-c|hl-rb|hl-ds|hl-fl|hl-fw|ed-h|ed-a)\d/.test(sel)) continue;
+    assert.ok(reduced.includes(base), `reduced motion covers ${sel}`);
+  }
 });

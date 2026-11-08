@@ -15,7 +15,9 @@ export function SantaHat() {
   );
 }
 
-import { GARLAND, NY_FRIEZE, NY_LAYOUT, SCENES, SCENE_LAYOUT, SCENE_MODES, newYearMarkup } from "./event-decor-art";
+import { FESTIVAL_ART, FESTIVAL_THEMES, GARLAND, NY_FRIEZE, NY_LAYOUT, SCENES, SCENE_LAYOUT, SCENE_MODES, newYearMarkup, type FestivalTheme } from "./event-decor-art";
+
+export { FESTIVAL_THEMES, type FestivalTheme };
 
 /** One long evergreen strand: CSS fixes the band height per size, so the swag density adapts and nothing is squashed. */
 export function ChristmasGarland() {
@@ -79,5 +81,58 @@ export function NewYearFooterScene({ year }: { year: number }) {
         />
       ))}
     </div>
+  );
+}
+
+/** t209: Diwali / Holi / Eid top band (same fixed-height strand approach as the garland). */
+export function FestivalFrieze({ theme }: { theme: FestivalTheme }) {
+  return (
+    <div className={`fest-frieze fest-frieze--${theme}`} aria-hidden="true">
+      <svg viewBox="0 0 2400 70" preserveAspectRatio="xMidYMin slice" focusable="false" dangerouslySetInnerHTML={{ __html: FESTIVAL_ART[theme].frieze }} />
+    </div>
+  );
+}
+
+/** t209: the festival scene, composed separately for phone, tablet and wide screens. */
+export function FestivalFooterScene({ theme }: { theme: FestivalTheme }) {
+  const art = FESTIVAL_ART[theme];
+  return (
+    <div className={`fest-scene fest-scene--${theme}`} aria-hidden="true">
+      {SCENE_MODES.map((mode) => (
+        <svg
+          key={mode}
+          className={`fest-scene__v fest-scene__v--${mode}`}
+          viewBox={`0 0 ${art.layout[mode].w} ${art.layout[mode].h}`}
+          preserveAspectRatio="xMidYMax slice"
+          focusable="false"
+          dangerouslySetInnerHTML={{ __html: art.scenes[mode] }}
+        />
+      ))}
+    </div>
+  );
+}
+
+/** t209: tiny logo ornament above the first letter (never over the lettering). */
+export function FestivalOrnament({ theme }: { theme: FestivalTheme }) {
+  return (
+    <svg className={`event-ornament event-ornament--${theme}`} viewBox="0 0 40 28" aria-hidden="true" focusable="false">
+      {theme === "diwali" ? (
+        <>
+          <path className="event-ornament__clay" d="M6 22Q8 27 16 27Q24 27 26 22Q16 24 6 22Z" />
+          <path className="event-ornament__flame" d="M16 4C20 10 20 15 16 20C12 15 12 10 16 4Z" />
+        </>
+      ) : theme === "holi" ? (
+        <>
+          <circle className="event-ornament__a" cx="9" cy="16" r="5" />
+          <circle className="event-ornament__b" cx="19" cy="10" r="5.5" />
+          <circle className="event-ornament__c" cx="29" cy="17" r="4.5" />
+        </>
+      ) : (
+        <>
+          <path className="event-ornament__moon" d="M16 3A11 11 0 1 0 16 25A7 11 0 1 1 16 3Z" />
+          <path className="event-ornament__star" d="M27 8l1.3 3.7 3.7 1.3-3.7 1.3L27 18l-1.3-3.7L22 13l3.7-1.3z" />
+        </>
+      )}
+    </svg>
   );
 }
