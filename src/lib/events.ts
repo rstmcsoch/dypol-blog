@@ -190,7 +190,14 @@ export const eventSchema = z
     // t210: optional display year; integers only (it is rendered into SVG text), absent = automatic.
     year: z.number().int().min(EVENT_YEAR_MIN).max(EVENT_YEAR_MAX).nullable().optional(),
     // t214: server-controlled; whatever a browser sends is replaced by stampEdits() on save.
-    editedAt: z.string().max(40).refine((v) => Number.isFinite(Date.parse(v)), "Bad timestamp").optional(),
+    editedAt: z
+      .string()
+      .max(40)
+      .refine((v) => {
+        const t = Date.parse(v);
+        return Number.isFinite(t) && t >= Date.UTC(EVENT_YEAR_MIN, 0, 1) && t < Date.UTC(EVENT_YEAR_MAX + 1, 0, 1);
+      }, "Bad timestamp")
+      .optional(),
   })
   .superRefine((event, ctx) => {
     if (event.startsAt && event.endsAt && Date.parse(event.endsAt) <= Date.parse(event.startsAt)) {
@@ -507,4 +514,27 @@ export function eventsSignature(raw: string | null): string {
   let h = 0x811c9dc5;
   for (let i = 0; i < raw.length; i += 1) h = Math.imul(h ^ raw.charCodeAt(i), 0x01000193) >>> 0;
   return `${raw.length.toString(36)}-${h.toString(36)}`;
+}
+
+/** Storage seam for the clean-up: read the exact stored text, and swap it only if still unchanged. */
+export type EventsStore = { read(): Promise<string | null>; swap(expected: string, next: string): Promise<boolean> };
+
+/**
+ * t214 clean-up core (used by the hourly cron and the on-request fallback). Deletes only events
+ * past purgeDeadline; never stamps editedAt; writes nothing when nothing is due; compare-and-swap so a
+ * concurrent admin save always wins (the next run re-evaluates).
+ */
+export async function sweepStore(store: EventsStore, now = Date.now()): Promise<{ removed: string[]; conflict: boolean }> {
+  const raw = await store.read();
+  if (raw === null) return { removed: [], conflict: false };
+  let current: EventsConfig;
+  try {
+    current = normalizeEvents(JSON.parse(raw));
+  } catch {
+    return { removed: [], conflict: false };
+  }
+  const { config, removed } = purgeExpired(current, now);
+  if (removed.length === 0) return { removed: [], conflict: false };
+  const ok = await store.swap(raw, JSON.stringify(config));
+  return ok ? { removed: removed.map((e) => e.id), conflict: false } : { removed: [], conflict: true };
 }

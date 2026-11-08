@@ -92,7 +92,7 @@ test("compare-and-swap: signature changes on any stored change; server uses guar
   assert.equal(eventsSignature(null), "none");
   const server = readFileSync(new URL("../content/events.server.ts", import.meta.url), "utf8");
   assert.match(server, /if \(eventsSignature\(storedRaw\) !== version\) throw new EventsConflictError\(\)/);
-  assert.equal((server.match(/where id = \$\{EVENTS_SETTINGS_ID\} and data = \$\{(raw|storedRaw)\} returning id/g) ?? []).length, 2);
+  assert.equal((server.match(/where id = \$\{EVENTS_SETTINGS_ID\} and data = \$\{(expected|storedRaw)\} returning id/g) ?? []).length, 2);
   assert.doesNotMatch(server, /on conflict \(id\) do update/);
   // every removal goes through purgeExpired (7-day deadline); nothing filters on eventStatus "ended"
   assert.doesNotMatch(server + readFileSync(new URL("./events.ts", import.meta.url), "utf8"), /filter\([^)]*=== "ended"/);

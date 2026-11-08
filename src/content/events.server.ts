@@ -13,6 +13,7 @@ import {
   purgeExpired,
   resolveActiveEvent,
   stampEdits,
+  sweepStore,
   type EventsConfig,
   type SiteEvent,
 } from "@/lib/events";
@@ -56,14 +57,16 @@ function parseRaw(raw: string | null): EventsConfig | null {
 export async function sweepExpiredEvents(now = Date.now(), cached?: EventsConfig): Promise<number> {
   if (cached && purgeExpired(cached, now).removed.length === 0) return 0;
   const sql = await getSql();
-  const raw = await readRaw(sql);
-  const current = parseRaw(raw);
-  if (!raw || !current) return 0;
-  const { config, removed } = purgeExpired(current, now);
-  if (removed.length === 0) return 0;
-  const done = await sql<{ id: string }>`update site_settings set data = ${JSON.stringify(config)}
-    where id = ${EVENTS_SETTINGS_ID} and data = ${raw} returning id`;
-  return done.length ? removed.length : 0;
+  const out = await sweepStore(
+    {
+      read: () => readRaw(sql),
+      swap: async (expected, next) =>
+        (await sql<{ id: string }>`update site_settings set data = ${next}
+          where id = ${EVENTS_SETTINGS_ID} and data = ${expected} returning id`).length > 0,
+    },
+    now,
+  );
+  return out.removed.length;
 }
 
 async function loadSwept(now = Date.now()): Promise<EventsConfig> {

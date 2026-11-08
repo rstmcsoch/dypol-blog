@@ -187,3 +187,15 @@ try again" instead of overwriting. Content cache is invalidated by the usual sit
 
 Also: Eid arcade arches now close on a sill above a floor band (no arches running off the frame);
 Holi particles use vivid powder colours (particle layer only).
+
+### t214 — hourly cron
+
+`src/server.ts` is now the Worker entry: it forwards every request unchanged to TanStack Start's
+generated handler (`@tanstack/react-start/server-entry`) and adds `scheduled`. `wrangler.jsonc` has
+`"main": "src/server.ts"` and `"triggers": { "crons": ["17 * * * *"] }` (hourly, minute 17).
+`dispatchScheduled` (src/lib/scheduled.ts) runs the events clean-up only for that exact cron, using
+the trigger's scheduledTime as the clock; failures are logged and retried next hour. The clean-up core
+`sweepStore` (pure, in events.ts) deletes only events past their 7-day deadline, writes nothing when
+nothing is due, never stamps `editedAt`, and swaps the row only if its text is unchanged (a concurrent
+admin save wins; the next run re-evaluates). The on-request sweep stays as a fallback. Deletion can
+therefore lag the deadline by up to ~1 hour (or happen sooner on a page view).
