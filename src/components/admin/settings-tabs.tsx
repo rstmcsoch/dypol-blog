@@ -1,4 +1,5 @@
 import { useRef, type KeyboardEvent } from "react";
+import { tabIndexForKey } from "@/lib/admin-tabs";
 
 export type SettingsTab = { id: string; label: string };
 
@@ -21,21 +22,15 @@ export function SettingsTabs({
   idPrefix: string;
 }) {
   const refs = useRef<(HTMLButtonElement | null)[]>([]);
-  const go = (index: number) => {
-    const next = (index + tabs.length) % tabs.length;
+  const go = (next: number) => {
     onChange(tabs[next]!.id);
     refs.current[next]?.focus();
   };
   const onKey = (event: KeyboardEvent, index: number) => {
-    const map: Record<string, number> = {
-      ArrowRight: index + 1,
-      ArrowLeft: index - 1,
-      Home: 0,
-      End: tabs.length - 1,
-    };
-    if (!(event.key in map)) return;
+    const next = tabIndexForKey(event.key, index, tabs.length);
+    if (next === null) return;
     event.preventDefault();
-    go(map[event.key]!);
+    go(next);
   };
   return (
     <div className="adm-tabs" role="tablist" aria-label={label}>
@@ -66,15 +61,4 @@ export function SettingsTabs({
       })}
     </div>
   );
-}
-
-export function tabPanelProps(idPrefix: string, id: string, active: string) {
-  return {
-    role: "tabpanel" as const,
-    id: `${idPrefix}-panel-${id}`,
-    "aria-labelledby": `${idPrefix}-tab-${id}`,
-    hidden: id !== active,
-    tabIndex: 0,
-    className: "stack adm-tabpanel",
-  };
 }

@@ -13,11 +13,14 @@ export const Route = createFileRoute("/preview/home")({
       return await adminHomePreview({ data: {} });
     } catch (error) {
       const message = error instanceof Error ? error.message : "";
-      if (message.includes("Unauthorized") || message.includes("Forbidden")) throw redirect({ to: "/admin", search: { denied: message.includes("Forbidden") } });
+      if (message.includes("Unauthorized") || message.includes("Forbidden"))
+        throw redirect({ to: "/admin", search: { denied: message.includes("Forbidden") } });
       throw error;
     }
   },
-  head: () => ({ meta: [{ title: sitePageTitle("Homepage preview") }, { name: "robots", content: "noindex" }] }),
+  head: () => ({
+    meta: [{ title: sitePageTitle("Homepage preview") }, { name: "robots", content: "noindex" }],
+  }),
   component: HomePreview,
 });
 
@@ -38,6 +41,9 @@ function HomePreview() {
         .catch(() => undefined);
     };
     window.addEventListener("message", onMessage);
+    // t217: tell the builder the listener is live (a draft sent at iframe `load` can arrive before hydration).
+    if (window.parent !== window)
+      window.parent.postMessage({ type: "dypol-home-ready" }, window.location.origin);
     return () => window.removeEventListener("message", onMessage);
   }, []);
   return <HomeBlocks blocks={data.blocks} site={data.site} />;

@@ -6,7 +6,7 @@ const read = (p: string) => readFileSync(new URL(`../../${p}`, import.meta.url),
 const settings = read("src/routes/admin/settings.tsx");
 const homepage = read("src/routes/admin/homepage.tsx");
 const dialog = read("src/components/admin/home-preview-dialog.tsx");
-const tabs = read("src/components/admin/settings-tabs.tsx");
+const tabs = read("src/components/admin/settings-tabs.tsx") + read("src/lib/admin-tabs.ts");
 const css = read("src/styles.css");
 const api = read("src/content/admin-api.ts");
 
@@ -39,7 +39,7 @@ test("t217 settings: hidden panels stay mounted (values kept and saved); invalid
 });
 
 test("t217 tabs: accessible tablist with roving focus and keyboard", () => {
-  for (const s of ['role="tablist"', 'role="tab"', "aria-selected={selected}", "aria-controls=", "tabIndex={selected ? 0 : -1}", "ArrowRight", "ArrowLeft", "Home", "End"]) assert.ok(tabs.includes(s), s);
+  for (const s of ['role="tablist"', 'role="tab"', "aria-selected={selected}", "aria-controls=", "tabIndex={selected ? 0 : -1}", "ArrowRight", "ArrowLeft", "Home", "End", "tabIndexForKey("]) assert.ok(tabs.includes(s), s);
   assert.match(tabs, /role: "tabpanel"/);
   assert.match(tabs, /"aria-labelledby"/);
 });
@@ -75,4 +75,47 @@ test("t217 preview server fn is read-only (no DB write, no cache bump)", () => {
   const fn = api.slice(api.indexOf("export const adminHomePreview"), api.indexOf("// ---------- pages"));
   assert.match(fn, /await guard\(\)/);
   assert.doesNotMatch(fn, /writeGuard|save|bump|update|insert|invalidate|revalidate|put\(/i);
+});
+
+import { homeDraftPayload, tabFromPanelId, tabIndexForKey, tabPanelProps } from "./admin-tabs.ts";
+
+test("t217 tab keyboard transitions wrap and ignore other keys", () => {
+  assert.equal(tabIndexForKey("ArrowRight", 0, 6), 1);
+  assert.equal(tabIndexForKey("ArrowRight", 5, 6), 0);
+  assert.equal(tabIndexForKey("ArrowLeft", 0, 6), 5);
+  assert.equal(tabIndexForKey("Home", 4, 6), 0);
+  assert.equal(tabIndexForKey("End", 1, 6), 5);
+  assert.equal(tabIndexForKey("Enter", 1, 6), null);
+  assert.equal(tabIndexForKey("a", 1, 6), null);
+  assert.equal(tabIndexForKey("ArrowRight", 0, 0), null);
+});
+
+test("t217 panel props: only the active panel is visible; ids pair tab<->panel; invalid field maps back to its tab", () => {
+  const ids = ["general", "social", "sharing", "tracking", "publishing", "access"];
+  for (const active of ids) {
+    const visible = ids.filter((id) => !tabPanelProps("settings", id, active).hidden);
+    assert.deepEqual(visible, [active]);
+  }
+  const p = tabPanelProps("settings", "sharing", "general");
+  assert.equal(p.id, "settings-panel-sharing");
+  assert.equal(p["aria-labelledby"], "settings-tab-sharing");
+  assert.equal(tabFromPanelId("settings", p.id), "sharing");
+  assert.equal(tabFromPanelId("settings", "settings-panel-"), null);
+  assert.equal(tabFromPanelId("settings", "other-panel-x"), null);
+  assert.equal(tabFromPanelId("settings", undefined), null);
+});
+
+test("t217 preview payload carries only homepage-render fields, never sidebar/share/head/analytics", () => {
+  const site = { home: { blocks: [{ type: "latest" }] }, trending: { x: 1 }, labels: { a: "b" }, customHead: "<script>", analytics: { measurementId: "G-1" }, share: {}, articleSidebar: {} };
+  assert.deepEqual(Object.keys(JSON.parse(homeDraftPayload(site))), ["home", "trending", "labels"]);
+});
+
+test("t217 preview handshake: frame announces readiness after its listener is attached; dialog answers with the draft", () => {
+  const frame = read("src/routes/preview/home.tsx");
+  const add = frame.indexOf('window.addEventListener("message", onMessage)');
+  const ready = frame.indexOf('type: "dypol-home-ready"');
+  assert.ok(add > 0 && ready > add, "ready is posted after the listener exists");
+  assert.match(frame, /window\.parent\.postMessage\(\{ type: "dypol-home-ready" \}, window\.location\.origin\)/);
+  assert.match(dialog, /event\.source !== frame\.current\?\.contentWindow/);
+  assert.match(dialog, /"dypol-home-ready"\) send\(\)/);
 });

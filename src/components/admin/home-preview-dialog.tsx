@@ -36,6 +36,19 @@ export function HomePreviewDialog({
     if (!open && el.open) el.close();
   }, [open]);
 
+  // t217: the frame announces when its listener is attached; answer with the current draft.
+  useEffect(() => {
+    if (!open) return;
+    const onReady = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin || event.source !== frame.current?.contentWindow)
+        return;
+      if ((event.data as { type?: string })?.type === "dypol-home-ready") send();
+    };
+    window.addEventListener("message", onReady);
+    return () => window.removeEventListener("message", onReady);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, draft]);
+
   // While open, later edits (if any) reach the frame too.
   useEffect(() => {
     if (!open) return;

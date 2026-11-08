@@ -4,7 +4,8 @@ import { FormShell, useSiteForm } from "@/components/admin/site-form";
 import { adminSettings } from "@/content/admin-api";
 import { useState } from "react";
 import { HeadCodeCards } from "@/components/admin/head-code-cards";
-import { SettingsTabs, tabPanelProps, type SettingsTab } from "@/components/admin/settings-tabs";
+import { SettingsTabs, type SettingsTab } from "@/components/admin/settings-tabs";
+import { tabFromPanelId, tabPanelProps } from "@/lib/admin-tabs";
 import { ShareSettingsEditor } from "@/components/admin/share-settings";
 import {
   isRootSocialUrl,
@@ -54,7 +55,7 @@ function SettingsAdmin() {
       onInvalidCapture={(e) => {
         // A required field in a hidden tab: open that tab so the browser can show the message.
         const panel = (e.target as HTMLElement).closest<HTMLElement>("[role=tabpanel]");
-        const id = panel?.id.replace(`${P}-panel-`, "");
+        const id = tabFromPanelId(P, panel?.id);
         if (id && id !== tab) {
           const field = e.target as HTMLInputElement;
           setTab(id);

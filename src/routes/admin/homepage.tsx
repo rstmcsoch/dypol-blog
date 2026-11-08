@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { homeDraftPayload } from "@/lib/admin-tabs";
 import { HomePreviewDialog } from "@/components/admin/home-preview-dialog";
 import { adminPending } from "@/components/admin/pending";
 import { createFileRoute } from "@tanstack/react-router";
@@ -30,7 +31,7 @@ function HomepageAdmin() {
 
   // t217: the draft lives only in this component's memory. Leaving the route unmounts it; a
   // back/forward restore from the browser cache reloads so stored settings are shown, never the draft.
-  const draft = JSON.stringify({ home: site.home, trending: site.trending, labels: site.labels });
+  const draft = homeDraftPayload(site);
   useEffect(() => {
     const onShow = (event: PageTransitionEvent) => {
       if (event.persisted) window.location.reload();
