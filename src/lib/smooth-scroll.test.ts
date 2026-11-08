@@ -87,3 +87,26 @@ test("components: both TOCs arm smooth scroll on plain clicks; Back to top is IO
   assert.ok(desk > 0 && root.indexOf("<BackToTop />") > desk, "rendered only in the public shell (after the admin early-return)");
   assert.equal((root.match(/<BackToTop \/>/g) ?? []).length, 1);
 });
+
+test("fallback never cuts a long scroll: each scroll event pushes the cleanup back; idle then removes", () => {
+  const a = fakeDoc();
+  const t = (globalThis as { setTimeout: typeof setTimeout }).setTimeout;
+  const c = (globalThis as { clearTimeout: typeof clearTimeout }).clearTimeout;
+  const timers: { fn: () => void; ms: number; dead?: boolean }[] = [];
+  (globalThis as { setTimeout: unknown }).setTimeout = ((fn: () => void, ms: number) => (timers.push({ fn, ms }), timers.length)) as unknown;
+  (globalThis as { clearTimeout: unknown }).clearTimeout = ((id: number) => { if (timers[id - 1]) timers[id - 1].dead = true; }) as unknown;
+  try {
+    armSmoothScroll(a.doc);
+    for (let i = 0; i < 20; i++) a.listeners.get("scroll")!();
+    assert.ok(a.classes.has(SMOOTH_CLASS), "still smooth while scroll events keep arriving");
+    assert.equal(timers.filter((x) => !x.dead).length, 1);
+    const live = timers.find((x) => !x.dead)!;
+    assert.equal(live.ms, 250);
+    live.fn();
+    assert.ok(!a.classes.has(SMOOTH_CLASS));
+    assert.equal(a.listeners.size, 0, "listeners cleaned up");
+  } finally {
+    (globalThis as { setTimeout: unknown }).setTimeout = t;
+    (globalThis as { clearTimeout: unknown }).clearTimeout = c;
+  }
+});

@@ -10,7 +10,9 @@
  * Reduced motion: the existing `prefers-reduced-motion` rule forces `scroll-behavior: auto`.
  */
 export const SMOOTH_CLASS = "is-smooth-scrolling";
-const FALLBACK_MS = 1500;
+const FALLBACK_MS = 1500; // no scroll at all (e.g. already at target)
+const IDLE_MS = 250; // scrolling stopped (browsers without scrollend)
+const MAX_MS = 8000;
 
 type MouseLike = { button: number; metaKey: boolean; ctrlKey: boolean; shiftKey: boolean; altKey: boolean; defaultPrevented: boolean };
 
@@ -28,20 +30,34 @@ export function prefersReducedMotion(win: Pick<Window, "matchMedia"> | undefined
 }
 
 let timer: ReturnType<typeof setTimeout> | undefined;
+let cleanup: (() => void) | undefined;
 
-/** Turn smooth scrolling on for the next user-started scroll only. */
+/**
+ * Turn smooth scrolling on for the next user-started scroll only. Removed on `scrollend`; where
+ * that event is missing, removed once scrolling has been idle for a moment (so a very long native
+ * scroll is never cut short), with a hard cap.
+ */
 export function armSmoothScroll(doc: Document | undefined = typeof document === "undefined" ? undefined : document): void {
   if (!doc) return;
-  const root = doc.documentElement;
   if (prefersReducedMotion(doc.defaultView ?? undefined)) return;
+  cleanup?.();
+  const root = doc.documentElement;
   root.classList.add(SMOOTH_CLASS);
+  const started = Date.now();
+  const idle = () => {
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(done, Date.now() - started > MAX_MS ? 0 : IDLE_MS);
+  };
   const done = () => {
     root.classList.remove(SMOOTH_CLASS);
     doc.removeEventListener("scrollend", done);
+    doc.removeEventListener("scroll", idle);
     if (timer) clearTimeout(timer);
     timer = undefined;
+    cleanup = undefined;
   };
-  if (timer) clearTimeout(timer);
+  cleanup = done;
   doc.addEventListener("scrollend", done, { once: true });
+  doc.addEventListener("scroll", idle, { passive: true });
   timer = setTimeout(done, FALLBACK_MS);
 }
