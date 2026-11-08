@@ -72,6 +72,6 @@ test("wiring: worker entry keeps the TanStack fetch handler and adds scheduled; 
   assert.match(entry, /async scheduled\(/);
   const wr = readFileSync(new URL("../../wrangler.jsonc", import.meta.url), "utf8");
   assert.match(wr, /"main": "src\/server\.ts"/);
-  assert.ok(wr.includes(`"triggers": { "crons": ["${EVENTS_CLEANUP_CRON}"] }`));
+  assert.ok(wr.includes(`"triggers": { "crons": ["*/5 * * * *", "${EVENTS_CLEANUP_CRON}"] }`)); // pre-existing prod cron kept
   assert.equal((wr.match(/"crons"/g) ?? []).length, 1);
 });

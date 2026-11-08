@@ -8,7 +8,9 @@
   "name": "blog",
   "main": "src/server.ts",
   // t214: hourly clean-up of expired events (deleted 7 days after their end date / last edit).
-  "triggers": { "crons": ["17 * * * *"] },
+  // "*/5 * * * *" already exists on the production Worker (created 2026-10-13, no handler until now);
+  // it is kept so a deploy does not drop it — dispatchScheduled ignores it.
+  "triggers": { "crons": ["*/5 * * * *", "17 * * * *"] },
   "compatibility_date": "2026-10-06",
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true },
