@@ -11,6 +11,12 @@ import {
   eventStatus,
   newEventDraft,
   newYearEvent,
+  celebratedYear,
+  endOfDateIST,
+  istDateOf,
+  startOfDateIST,
+  EVENT_YEAR_MAX,
+  EVENT_YEAR_MIN,
   festivalEvent,
   FESTIVAL_PRESET_THEMES,
   type EventEffect,
@@ -33,29 +39,13 @@ const EFFECT_LABELS: Record<EventEffect, string> = {
   none: "No particles (colours only)",
 };
 
-function toLocalInput(iso: string): string {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return "";
-  const pad = (value: number) => String(value).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
-}
-
-function fromLocalInput(value: string): string | null {
-  if (!value) return null;
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date.toISOString();
-}
-
-// Only rendered after mount (client), so the visitor's locale and timezone are
-// used without a server/client markup mismatch.
-function formatWhen(iso: string, now: number): string {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return "—";
-  const sameYear = date.getFullYear() === new Date(now).getFullYear();
-  return date.toLocaleString(
-    undefined,
-    sameYear ? { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" } : { day: "numeric", month: "short", year: "numeric" },
-  );
+// t210: schedules are whole dates in India time; the browser's own timezone is never used.
+const dateInputValue = (iso: string) => istDateOf(iso);
+function formatWhen(iso: string, _now: number): string {
+  const day = istDateOf(iso);
+  if (!day) return "";
+  const [y, m, d] = day.split("-").map(Number);
+  return `${d} ${["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][m - 1]} ${y}`;
 }
 
 function statusLine(event: SiteEvent, status: EventStatus, now: number): string {
@@ -234,37 +224,56 @@ function EventsAdmin() {
 
               <div className="filters">
                 <label className="field">
-                  <span>Starts (optional)</span>
+                  <span>Start date (optional)</span>
                   <input
-                    type="datetime-local"
-                    value={toLocalInput(event.startsAt)}
+                    type="date"
+                    value={dateInputValue(event.startsAt)}
                     onChange={(e) => {
-                      // t202: empty = open-ended.
+                      // t202: empty = open-ended. t210: whole day, from 00:00 India time.
                       if (!e.target.value) patchEvent(event.id, { startsAt: "" });
                       else {
-                        const iso = fromLocalInput(e.target.value);
+                        const iso = startOfDateIST(e.target.value);
                         if (iso) patchEvent(event.id, { startsAt: iso });
                       }
                     }}
                   />
                 </label>
                 <label className="field">
-                  <span>Ends (optional)</span>
+                  <span>End date (optional, included)</span>
                   <input
-                    type="datetime-local"
-                    value={toLocalInput(event.endsAt)}
+                    type="date"
+                    value={dateInputValue(event.endsAt)}
+                    min={dateInputValue(event.startsAt) || undefined}
                     onChange={(e) => {
-                      // t202: empty = open-ended.
+                      // t210: the end date is included — the event shows until 23:59 India time that day.
                       if (!e.target.value) patchEvent(event.id, { endsAt: "" });
                       else {
-                        const iso = fromLocalInput(e.target.value);
+                        const iso = endOfDateIST(e.target.value);
                         if (iso) patchEvent(event.id, { endsAt: iso });
                       }
                     }}
                   />
                 </label>
+                <label className="field">
+                  <span>Year shown in design</span>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min={EVENT_YEAR_MIN}
+                    max={EVENT_YEAR_MAX}
+                    step={1}
+                    placeholder={`Auto (${celebratedYear({ ...event, year: null })})`}
+                    value={event.year ?? ""}
+                    onChange={(e) => {
+                      const raw = e.target.value.trim();
+                      if (!raw) return patchEvent(event.id, { year: null });
+                      const year = Number(raw);
+                      if (Number.isInteger(year) && year >= EVENT_YEAR_MIN && year <= EVENT_YEAR_MAX) patchEvent(event.id, { year });
+                    }}
+                  />
+                </label>
               </div>
-              <p className="field-help">Shows from the start until the end, then disappears on its own (no reload or redeploy needed). Leave a date empty for no limit on that side: both empty = on until you untick “Use this event”. Times use this device's timezone.</p>
+              <p className="field-help">Dates only, in India time (IST): the event shows from the start of the start date until the end of the end date (both days included). Leave a date empty for no limit on that side: both empty = on until you untick “Use this event”. Year: leave empty for automatic, or set it (e.g. 2028) and designs that show a year — the New Year footer — use exactly that year.</p>
 
               <label className="check-row">
                 <input type="checkbox" checked={event.banner} onChange={(e) => patchEvent(event.id, { banner: e.target.checked })} />

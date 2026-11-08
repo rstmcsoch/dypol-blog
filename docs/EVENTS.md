@@ -110,3 +110,29 @@ Audit (read-only): the themes were `christmas, newyear, halloween, valentines, c
   - Scene: a crescent with a star and a soft halo, a generic skyline of domes and arches (no specific building), fanous lanterns, a foreground arcade of pointed arches with a warm inner glow.
   - The greeting is "EID MUBARAK" (generic, not al-Fitr or al-Adha specific). No sacred text, no alcohol.
 - Each theme: a phone/tablet/wide composition (motifs rearranged, a test checks for collisions), short-landscape caps, a tiny logo ornament above the first letter (diya / colour dots / crescent and star), a theme palette at ≥7:1 text contrast, existing particles (sparkle / confetti / sparkle) lifted over the open menu with no menu restyle. Motion is opacity/transform only, ≥3.6s cycles, static under reduced motion. Each theme's CSS is scoped to its own `[data-event]`.
+
+## t210 — Editable display year and date-only schedules
+
+**Year.** Each event has an optional `year` (integer 2000–2100, validated by zod on save and on read;
+empty/absent = automatic). Admin field "Year shown in design" (native number input, placeholder shows
+the automatic value). `celebratedYear()` returns an explicit year first — it is never replaced by the
+schedule, today's date, or sanitisation — otherwise the automatic year from the dates. The New Year
+footer (all three variants, normal and Special routes, `?event=` preview) renders it via
+`newYearMarkup`, which only ever writes digits. Other themes store the field but show no year text.
+
+**Dates.** Scheduling is date-only (`<input type="date">`, no time controls), always in India time
+(Asia/Kolkata, UTC+05:30) regardless of the browser zone. Both dates are inclusive:
+start = 00:00 IST of the start date, end = 23:59:59.999 IST of the end date (= next day 00:00 IST
+exclusive). Same-day events are allowed; either date may be blank (open-ended).
+
+**Storage / back-compat.** The stored fields stay `startsAt`/`endsAt` ISO instants, so the runtime
+resolver, status line and preview are unchanged. Helpers in `src/lib/events.ts`: `parseDateOnly`
+(strict calendar validation, leap years, no `new Date("YYYY-MM-DD")`), `startOfDateIST`,
+`endOfDateIST`, `istDateOf`. Admin saves (`parseEvents(raw, previous)`) require a start on an IST
+midnight and an end on an IST day end; the only exception is a legacy timestamp identical to the value
+already stored for the same event id, so saving other edits never shifts a live schedule. Reads never
+rewrite records. Legacy instants display as their IST date (e.g. an old end of 2027-01-02T23:59Z shows
+as 3 Jan); picking a date converts that field to the new semantics.
+
+**Presets.** Christmas: 1 Dec – 6 Jan IST; New Year: 31 Dec – 2 Jan IST; new custom draft: today + 13
+days. Existing stored events are not migrated.

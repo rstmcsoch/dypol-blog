@@ -40,6 +40,8 @@ export type SiteEvent = {
   effect: EventEffect;
   intensity: EventIntensity;
   colors: EventColors;
+  /** t210: year shown by designs that show one (New Year). Absent/null = automatic. */
+  year?: number | null;
 };
 
 export type EventsConfig = { events: SiteEvent[] };
@@ -119,6 +121,47 @@ export function eventHrefOk(href: string): boolean {
   return /^https:\/\/[^\s]+$/i.test(value);
 }
 
+// ---- t210: date-only schedules in India time (Asia/Kolkata, UTC+05:30, no DST) ----
+export const EVENT_YEAR_MIN = 2000;
+export const EVENT_YEAR_MAX = 2100;
+export const SCHEDULE_ZONE = "Asia/Kolkata";
+const IST_OFFSET_MS = (5 * 60 + 30) * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** Strict calendar date "YYYY-MM-DD" → [y, m, d], or null (rejects 2027-02-29, 2026-13-01, …). */
+export function parseDateOnly(value: string): [number, number, number] | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim());
+  if (!m) return null;
+  const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  if (mo < 1 || mo > 12 || d < 1) return null;
+  const dim = new Date(Date.UTC(y, mo, 0)).getUTCDate(); // days in month, computed in UTC (no local-time footgun)
+  return d <= dim ? [y, mo, d] : null;
+}
+/** First moment of a date in India time, as an ISO instant (e.g. 2026-12-31 → 2026-12-30T18:30:00.000Z). */
+export function startOfDateIST(value: string): string | null {
+  const p = parseDateOnly(value);
+  return p ? new Date(Date.UTC(p[0], p[1] - 1, p[2]) - IST_OFFSET_MS).toISOString() : null;
+}
+/** Last moment of a date in India time (inclusive end): next day 00:00 IST minus 1 ms. */
+export function endOfDateIST(value: string): string | null {
+  const p = parseDateOnly(value);
+  return p ? new Date(Date.UTC(p[0], p[1] - 1, p[2]) - IST_OFFSET_MS + DAY_MS - 1).toISOString() : null;
+}
+/** The India-time calendar date of an instant ("" for empty/invalid). Used to show legacy timestamps too. */
+export function istDateOf(iso: string): string {
+  if (!iso) return "";
+  const t = Date.parse(iso);
+  return Number.isFinite(t) ? new Date(t + IST_OFFSET_MS).toISOString().slice(0, 10) : "";
+}
+export function isDayStartIST(iso: string): boolean {
+  const t = Date.parse(iso);
+  return Number.isFinite(t) && (((t + IST_OFFSET_MS) % DAY_MS) + DAY_MS) % DAY_MS === 0;
+}
+export function isDayEndIST(iso: string): boolean {
+  const t = Date.parse(iso);
+  return Number.isFinite(t) && (((t + IST_OFFSET_MS + 1) % DAY_MS) + DAY_MS) % DAY_MS === 0;
+}
+
 const hexColor = z.string().trim().toLowerCase().regex(/^#[0-9a-f]{6}$/, "Use a colour such as #0f5132.");
 const isoDate = z.string().trim().refine((value) => value === "" || Number.isFinite(Date.parse(value)), "Use a valid date and time, or leave it empty.");
 
@@ -142,6 +185,8 @@ export const eventSchema = z
     effect: z.enum(EVENT_EFFECTS),
     intensity: z.enum(EVENT_INTENSITIES),
     colors: z.object({ primary: hexColor, secondary: hexColor, ink: hexColor }),
+    // t210: optional display year; integers only (it is rendered into SVG text), absent = automatic.
+    year: z.number().int().min(EVENT_YEAR_MIN).max(EVENT_YEAR_MAX).nullable().optional(),
   })
   .superRefine((event, ctx) => {
     if (event.startsAt && event.endsAt && Date.parse(event.endsAt) <= Date.parse(event.startsAt)) {
@@ -164,9 +209,24 @@ export const eventsConfigSchema = z.object({
     .refine((list) => new Set(list.map((event) => event.id)).size === list.length, "Each event needs a unique id."),
 });
 
-/** Strict parse for admin saves: invalid input is reported, never silently stored. */
-export function parseEvents(input: unknown): EventsConfig {
+/**
+ * Strict parse for admin saves: invalid input is reported, never silently stored.
+ * t210: schedules are date-only. A start must be 00:00 India time and an end 23:59:59.999 India
+ * time (inclusive last day). The one exception is a legacy timestamp the owner did not touch:
+ * it is accepted only if it is identical to the value already stored for the same event id,
+ * so saving other edits never shifts an existing live schedule.
+ */
+export function parseEvents(input: unknown, previous: EventsConfig | null = null): EventsConfig {
   const parsed = eventsConfigSchema.parse(input ?? { events: [] });
+  const before = new Map((previous?.events ?? []).map((event) => [event.id, event]));
+  parsed.events.forEach((event, index) => {
+    const old = before.get(event.id);
+    const issue = (field: "startsAt" | "endsAt", message: string) => {
+      throw new z.ZodError([{ code: "custom", path: ["events", index, field], message, input: event[field] }]);
+    };
+    if (event.startsAt && !isDayStartIST(event.startsAt) && event.startsAt !== old?.startsAt) issue("startsAt", "Pick a start date (dates only).");
+    if (event.endsAt && !isDayEndIST(event.endsAt) && event.endsAt !== old?.endsAt) issue("endsAt", "Pick an end date (dates only).");
+  });
   return { events: parsed.events.map(clean) };
 }
 
@@ -249,8 +309,9 @@ export function christmasEvent(year = new Date().getFullYear()): SiteEvent {
     name: "Christmas",
     theme: "christmas",
     enabled: false,
-    startsAt: `${year}-12-01T00:00:00.000Z`,
-    endsAt: `${year + 1}-01-06T23:59:00.000Z`,
+    // t210: whole days in India time — 1 Dec to 6 Jan inclusive.
+    startsAt: startOfDateIST(`${year}-12-01`) as string,
+    endsAt: endOfDateIST(`${year + 1}-01-06`) as string,
     banner: true,
     message: preset.message,
     ctaLabel: "",
@@ -272,8 +333,9 @@ export function newYearEvent(year = new Date().getUTCFullYear()): SiteEvent {
     name: "New Year",
     theme: "newyear",
     enabled: false,
-    startsAt: `${year}-12-31T00:00:00.000Z`,
-    endsAt: `${year + 1}-01-02T23:59:00.000Z`,
+    // t210: whole days in India time — 31 Dec to 2 Jan inclusive.
+    startsAt: startOfDateIST(`${year}-12-31`) as string,
+    endsAt: endOfDateIST(`${year + 1}-01-02`) as string,
     banner: true,
     message: preset.message,
     ctaLabel: "",
@@ -290,7 +352,9 @@ export function newYearEvent(year = new Date().getUTCFullYear()): SiteEvent {
  * Late in the year (October onwards) means the coming year; otherwise the current one.
  * Month-based in UTC, so midnight time-zone differences can never flip it.
  */
-export function celebratedYear(event: Pick<SiteEvent, "startsAt" | "endsAt"> | null, now = Date.now()): number {
+export function celebratedYear(event: (Pick<SiteEvent, "startsAt" | "endsAt"> & { year?: number | null }) | null, now = Date.now()): number {
+  // t210: an explicit year set by the owner always wins (never replaced by the schedule or today's date).
+  if (event && Number.isInteger(event.year) && (event.year as number) >= EVENT_YEAR_MIN && (event.year as number) <= EVENT_YEAR_MAX) return event.year as number;
   let at = now;
   const start = event?.startsAt ? Date.parse(event.startsAt) : NaN;
   const end = event?.endsAt ? Date.parse(event.endsAt) : NaN;
@@ -344,8 +408,9 @@ export function newEventDraft(theme: EventTheme = "christmas", now = new Date())
     name: preset.label,
     theme,
     enabled: false,
-    startsAt: now.toISOString(),
-    endsAt: new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000).toISOString(),
+    // t210: today → 13 days later, whole days in India time.
+    startsAt: startOfDateIST(istDateOf(now.toISOString())) as string,
+    endsAt: endOfDateIST(istDateOf(new Date(now.getTime() + 13 * DAY_MS).toISOString())) as string,
     banner: true,
     message: preset.message,
     ctaLabel: "",

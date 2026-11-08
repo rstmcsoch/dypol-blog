@@ -51,7 +51,9 @@ export async function readActiveEvent(now = Date.now(), overrideId: string | nul
 }
 
 export async function saveEvents(raw: unknown): Promise<EventsConfig> {
-  const config = parseEvents(raw);
+  // t210: untouched legacy (non date-only) timestamps are accepted only if identical to what is stored.
+  const previous = await loadEvents().catch(() => null);
+  const config = parseEvents(raw, previous);
   const sql = await getSql();
   await sql`insert into site_settings (id, data) values (${EVENTS_SETTINGS_ID}, ${JSON.stringify(config)})
     on conflict (id) do update set data = excluded.data`;

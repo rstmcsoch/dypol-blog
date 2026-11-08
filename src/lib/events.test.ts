@@ -26,10 +26,11 @@ test("christmas event is live across the season only", () => {
   assert.equal(eventStatus(christmasEvent(2026), at("2026-12-25T12:00:00Z")), "off");
   const event = { ...christmasEvent(2026), enabled: true };
   assert.equal(eventStatus(event, at("2026-11-07T12:00:00Z")), "upcoming");
-  assert.equal(eventStatus(event, at("2026-12-01T00:00:00Z")), "live");
+  assert.equal(eventStatus(event, at("2026-11-30T18:30:00Z")), "live"); // t210: 1 Dec 00:00 IST
+  assert.equal(eventStatus(event, at("2026-11-30T18:29:59Z")), "upcoming");
   assert.equal(eventStatus(event, at("2026-12-25T12:00:00Z")), "live");
-  assert.equal(eventStatus(event, at("2027-01-06T23:00:00Z")), "live");
-  assert.equal(eventStatus(event, at("2027-01-07T00:00:00Z")), "ended");
+  assert.equal(eventStatus(event, at("2027-01-06T18:29:59Z")), "live"); // 6 Jan 23:59:59 IST
+  assert.equal(eventStatus(event, at("2027-01-06T18:30:00Z")), "ended"); // 7 Jan 00:00 IST
   assert.equal(eventStatus({ ...event, enabled: false }, at("2026-12-25T12:00:00Z")), "off");
 });
 
@@ -40,7 +41,7 @@ test("default events follow the Christmas season being read", () => {
   assert.equal(eventStatus(december.events[0]!, at("2026-12-25T00:00:00Z")), "off");
   assert.equal(eventStatus({ ...december.events[0]!, enabled: true }, at("2026-12-25T00:00:00Z")), "live");
   const january = defaultEvents(new Date("2027-01-03T00:00:00Z"));
-  assert.equal(january.events[0]?.startsAt, "2026-12-01T00:00:00.000Z");
+  assert.equal(january.events[0]?.startsAt, "2026-11-30T18:30:00.000Z"); // t210: 1 Dec 00:00 IST
   assert.equal(eventStatus({ ...january.events[0]!, enabled: true }, at("2027-01-03T00:00:00Z")), "live");
 });
 
@@ -287,8 +288,8 @@ test("t208 New Year preset: off by default, its own id/theme/dates, valid agains
   assert.equal(ny.theme, "newyear");
   assert.equal(ny.enabled, false);
   assert.equal(ny.effect, "sparkle");
-  assert.equal(ny.startsAt, "2026-12-31T00:00:00.000Z");
-  assert.equal(ny.endsAt, "2027-01-02T23:59:00.000Z");
+  assert.equal(ny.startsAt, "2026-12-30T18:30:00.000Z"); // t210: 31 Dec 00:00 IST
+  assert.equal(ny.endsAt, "2027-01-02T18:29:59.999Z"); // 2 Jan 23:59:59.999 IST (not 3 Jan)
   const defaults = defaultEvents(new Date("2026-11-08T00:00:00Z"));
   assert.deepEqual(defaults.events.map((e) => [e.id, e.enabled]), [["christmas", false], ["newyear", false]]);
   // Stored configs (e.g. production's single Christmas event) round-trip untouched; the preset is never injected.
