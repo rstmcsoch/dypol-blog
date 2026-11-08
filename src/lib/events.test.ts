@@ -381,3 +381,30 @@ test("t208 New Year wiring: theme-gated header/footer, inert, reduced motion sta
   assert.match(css, /\.site-footer--newyear > \.ny-scene \{[^}]*pointer-events: none/);
   assert.match(css, /\[data-event="newyear"\] \.event-sparkle \{[^}]*pointer-events: none/);
 });
+
+test("t208 pre-release: New Year footer palette is theme-independent and high contrast; every NY animation stops under reduced motion; Add New Year saves", () => {
+  const ny = css.slice(css.indexOf("/* ---- t208"));
+  assert.doesNotMatch(ny, /data-theme|prefers-color-scheme|\.dark\b/);
+  const lum = (hex: string) => {
+    const c = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
+    return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+  };
+  const ratio = (a: string, b: string) => { const [x, y] = [lum(a), lum(b)].sort((m, n) => n - m); return (x + 0.05) / (y + 0.05); };
+  const v = (name: string) => ny.match(new RegExp(`${name}: (#[0-9a-f]{6})`))?.[1] as string;
+  for (const bg of [v("--ft-top"), v("--ft-mid"), v("--ft-bottom")]) {
+    assert.ok(ratio(v("--ft-fg"), bg) >= 7, `ivory on ${bg}`);
+    assert.ok(ratio(v("--ft-muted"), bg) >= 4.5, `gold titles on ${bg}`);
+  }
+  const animated = [...ny.matchAll(/([^{}]+)\{[^}]*animation: ny-/g)].flatMap((m) => m[1].split(",").map((s) => s.trim().replace(/^\[data-event="newyear"\] /, "")));
+  const reduced = ny.slice(ny.indexOf("@media (prefers-reduced-motion: reduce)"));
+  for (const sel of new Set(animated)) {
+    const base = sel.replace(/\.ny-b\d .*|\.nyf-d\d|\.ny-s\d|\.nyf-g\d|\.ny-w\d|\.ny-r\d|\.ny-bb\d/, "").trim();
+    if (!base) continue;
+    assert.ok(reduced.includes(base), `reduced motion covers ${sel}`);
+  }
+  assert.match(css, /prefers-reduced-motion: reduce\) \{\s*\.event-particles \{\s*display: none/);
+  const saved = parseEvents({ events: [christmasEvent(2026), newYearEvent(2026)] });
+  assert.deepEqual(saved.events.map((e) => [e.id, e.theme, e.enabled]), [["christmas", "christmas", false], ["newyear", "newyear", false]]);
+  const admin = readFileSync(new URL("../routes/admin/events.tsx", import.meta.url), "utf8");
+  assert.match(admin, /onClick=\{addNewYear\}[^\n]*\n\s*Add New Year/);
+});
