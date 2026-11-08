@@ -66,7 +66,7 @@ Art direction: "Christmas Eve over a quiet village". The footer turns into a nig
 - Static SVG constants, inert (`aria-hidden`, no pointer events), no network, no JS. Every selector is scoped to `[data-event="christmas"]`.
 - Globally (all themes): the standalone footer link whose label equals the publisher ("DYPOL LABS") is filtered at render. Settings are untouched and other saved footer links still render. The copyright note is untouched.
 
-## t205 — Responsive art direction + festive mobile menu (plan)
+## t205 — Responsive art direction (plan; menu part superseded by t206)
 Finding (t204): one 1200×220 scene with `xMidYMax slice` was just a centre crop. On phones it lost the decorated tree, gifts, moon and lamp, and it left a tall empty sky.
 Approach: compose the scene separately per size. All three variants come from one generator (its output constants live in `event-decor-art.ts`) built from shared motifs (decorated tree, gifts, village, lamp, moon, hills, tree line, snow). Each variant places motifs for its own frame. CSS shows exactly one variant. Slicing only ever trims sky; motifs sit inside a "safe band", and a test checks that.
 - Compact (<600: 320/360/400/540): 520×250. The decorated tree and gifts lead at left, a 3-building village (cottage, lit church, cottage) on the ridge, lamp right, small moon top-right. Fewer stars/flakes; the distant tree line is simplified.
@@ -75,5 +75,5 @@ Approach: compose the scene separately per size. All three variants come from on
 - Height is `aspect-ratio` from the viewBox with a per-mode cap. Short landscape (max-height 500px) caps lower and hides the moon rather than half-cropping it.
 - Garland: one long 2400-unit strand with a fixed band height per mode (52/60/70px) and `xMidYMin slice`. The scale is always height-driven, so swags are never squashed: about 3 swags on a phone, more on wider screens.
 - Footer content (Christmas only): tighter top spacing, columns stack 2-up on phones with roomier link tap targets, copyright wraps balanced, no dead gap above the scene.
-- Menu (<960, Christmas only): the mobile `#site-nav` panel is rendered inside `.site[data-event]` (no portal), so selectors stay scoped. A garland strip runs across the panel top (content gets matching top padding), soft snow-dot texture and warm/evergreen glows sit on the theme's own paper colour (so light and dark text keep their contrast), and a small holly-and-baubles sprig sits in the bottom corner. All of it is `aria-hidden` and has no pointer events. Search, links, chips, close, theme, scroll lock and focus are untouched. Hidden at ≥960 (inline desktop nav).
+- Menu (t206 correction, owner): the menu design, background, spacing and buttons stay exactly original. The only change is that the existing event snowfall layer is lifted above the open menu (`html.nav-open … .event-particles { z-index: 31 }`, above the sticky header's z-index 30 stacking context). It is inert and hidden under reduced motion. The t205 menu garland/holly/texture was removed.
 - Motion stays opacity/transform, and none under reduced motion. Cleanup: drop the single-scene CSS/markup and the t204 negative margin.

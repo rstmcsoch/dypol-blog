@@ -5,7 +5,7 @@ import type { NavItem } from "@/content/types";
 import { NavLink } from "./nav-link";
 import { ThemeToggle } from "./theme-toggle";
 import { useEvent, useMenuTopics, useSite, type MenuTopic } from "./use-site";
-import { ChristmasMenuDecor, SantaHat } from "./event-decor";
+import { SantaHat } from "./event-decor";
 
 const TOPIC_PREFIX = "/topics/";
 
@@ -172,7 +172,6 @@ export function SiteHeader() {
           </span> : null}
         </NavLink>
         <nav id="site-nav" className={open ? "site-nav is-open" : "site-nav"} aria-label={site.labels.primaryNav}>
-          {event?.theme === "christmas" ? <ChristmasMenuDecor /> : null}
           <div className="site-nav__inner" ref={panel}>
             <form className="search-form site-nav__search" action="/search" method="get" role="search" onSubmit={() => setOpen(false)}>
               <label htmlFor="menu-q" className="sr-only">Search stories</label>

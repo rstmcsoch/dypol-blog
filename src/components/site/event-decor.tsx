@@ -15,12 +15,12 @@ export function SantaHat() {
   );
 }
 
-import { GARLAND, SCENES, SCENE_LAYOUT, SCENE_MODES, SPRIG } from "./event-decor-art";
+import { GARLAND, SCENES, SCENE_LAYOUT, SCENE_MODES } from "./event-decor-art";
 
 /** One long evergreen strand: CSS fixes the band height per size, so the swag density adapts and nothing is squashed. */
-export function ChristmasGarland({ className = "xmas-garland" }: { className?: string }) {
+export function ChristmasGarland() {
   return (
-    <div className={className} aria-hidden="true">
+    <div className="xmas-garland" aria-hidden="true">
       <svg viewBox="0 0 2400 70" preserveAspectRatio="xMidYMin slice" focusable="false" dangerouslySetInnerHTML={{ __html: GARLAND }} />
     </div>
   );
@@ -40,16 +40,6 @@ export function ChristmasFooterScene() {
           dangerouslySetInnerHTML={{ __html: SCENES[mode] }}
         />
       ))}
-    </div>
-  );
-}
-
-/** Festive accents for the open mobile menu: garland strip, snow texture (CSS) and a holly sprig. */
-export function ChristmasMenuDecor() {
-  return (
-    <div className="xmas-menu" aria-hidden="true">
-      <ChristmasGarland className="xmas-menu__garland" />
-      <svg className="xmas-menu__sprig" viewBox="0 0 140 100" focusable="false" dangerouslySetInnerHTML={{ __html: SPRIG }} />
     </div>
   );
 }

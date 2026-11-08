@@ -170,7 +170,7 @@ test("particle count is capped (18, 10 on phones) and the ribbon is not fixed", 
 
 test("t204 Christmas footer: transform/opacity motion only, static under reduced motion, inert", () => {
   const decor = readFileSync(new URL("../components/site/event-decor.tsx", import.meta.url), "utf8");
-  assert.equal((decor.match(/aria-hidden="true"/g) ?? []).length, 4);
+  assert.equal((decor.match(/aria-hidden="true"/g) ?? []).length, 3);
   assert.doesNotMatch(decor, /<script|https?:\/\/(?!www\.w3\.org)/);
   for (const name of ["xmas-glow", "xmas-twinkle", "xmas-breathe", "xmas-swing", "xmas-fall"]) {
     const body = css.match(new RegExp(`@keyframes ${name} \\{([\\s\\S]*?)\\n\\}`))?.[1] ?? "";
@@ -247,20 +247,27 @@ test("t205 scene variants: hero motifs composed inside every frame, no collision
   }
 });
 
-test("t205 static markup: three scene variants with unique ids, no dangling refs, decor inert", async () => {
-  const { SCENES, SCENE_MODES, GARLAND, SPRIG } = await import("../components/site/event-decor-art.ts");
+test("t205 static markup: three scene variants with unique ids, no dangling refs, inert", async () => {
+  const { SCENES, SCENE_MODES, GARLAND } = await import("../components/site/event-decor-art.ts");
   const all = SCENE_MODES.map((m) => SCENES[m]).join("");
   const ids = [...all.matchAll(/ id="([^"]+)"/g)].map((m) => m[1]);
   assert.ok(ids.length >= 9);
   assert.equal(new Set(ids).size, ids.length, "gradient ids unique across variants");
   for (const m of all.matchAll(/url\(#([^)]+)\)/g)) assert.ok(ids.includes(m[1]), `dangling ${m[1]}`);
   for (const mode of SCENE_MODES) for (const motif of ["xs-bigtree", "xs-gifts", "xs-village", "xs-lamp", "xs-moon"]) assert.ok(SCENES[mode].includes(`class="${motif}"`), `${mode} ${motif}`);
-  assert.doesNotMatch(all + GARLAND + SPRIG, /<a |<button|tabindex|<script|href=/);
-  const decor = readFileSync(new URL("../components/site/event-decor.tsx", import.meta.url), "utf8");
-  assert.match(decor, /className="xmas-menu" aria-hidden="true"/);
+  assert.doesNotMatch(all + GARLAND, /<a |<button|tabindex|<script|href=/);
+});
+
+test("t206 open menu: original design untouched, only the existing snowfall is lifted above it", () => {
   const header = readFileSync(new URL("../components/site/header.tsx", import.meta.url), "utf8");
-  assert.match(header, /event\?\.theme === "christmas" \? <ChristmasMenuDecor \/> : null\}\s*<div className="site-nav__inner" ref=\{panel\}>/);
-  assert.match(css, /\[data-event="christmas"\] \.xmas-menu \{ display: none; \}/);
-  assert.match(css, /\.site-nav\.is-open \.xmas-menu \{[^}]*pointer-events: none/);
-  assert.match(css, /\.site-nav\.is-open \.site-nav__inner \{[^}]*padding-top: 46px/);
+  assert.doesNotMatch(header, /xmas|Christmas(?!.*SantaHat)|MenuDecor/i);
+  // No event rule styles the menu, its buttons, links, chips, search or background.
+  for (const m of css.replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/([^{}]+)\{([^}]*)\}/g)) {
+    assert.doesNotMatch(m[1], /site-nav|nav-link|nav-chip|menu-btn|search-form|\.btn\b|theme-toggle|search-btn/, m[1].trim());
+  }
+  assert.doesNotMatch(css, /xmas-menu/);
+  // The single menu-related rule: snow above the sticky header's stacking context, still inert.
+  assert.match(css, /html\.nav-open \[data-event\] \.event-particles \{\s*z-index: 31;\s*\}/);
+  assert.match(css, /\.event-particles \{[^}]*pointer-events: none/);
+  assert.match(css, /prefers-reduced-motion: reduce\) \{\s*\.event-particles \{\s*display: none/);
 });
