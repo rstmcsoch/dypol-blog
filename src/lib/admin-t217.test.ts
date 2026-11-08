@@ -58,7 +58,7 @@ test("t217 homepage: no persistent mini preview; Preview button opens a dialog w
   assert.match(dialog, /showModal\(\)/);
   assert.match(dialog, /Unsaved/);
   assert.match(dialog, /\{open \? \(\s*<iframe/, "frame only exists while open");
-  assert.match(dialog, /postMessage\(\s*\{ type: "dypol-home-draft", draft \},\s*window\.location\.origin,?\s*\)/);
+  assert.match(dialog, /postMessage\(\s*\{ type: "dypol-home-draft", draft, id \},\s*window\.location\.origin,?\s*\)/);
   assert.doesNotMatch(css, /@media \(min-width: 1200px\) \{ \.adm-builder \{ grid-template-columns/);
 });
 
@@ -113,9 +113,52 @@ test("t217 preview payload carries only homepage-render fields, never sidebar/sh
 test("t217 preview handshake: frame announces readiness after its listener is attached; dialog answers with the draft", () => {
   const frame = read("src/routes/preview/home.tsx");
   const add = frame.indexOf('window.addEventListener("message", onMessage)');
-  const ready = frame.indexOf('type: "dypol-home-ready"');
+  const ready = frame.indexOf('reply({ type: "dypol-home-ready" })');
   assert.ok(add > 0 && ready > add, "ready is posted after the listener exists");
-  assert.match(frame, /window\.parent\.postMessage\(\{ type: "dypol-home-ready" \}, window\.location\.origin\)/);
-  assert.match(dialog, /event\.source !== frame\.current\?\.contentWindow/);
-  assert.match(dialog, /"dypol-home-ready"\) send\(\)/);
+  assert.match(frame, /reply\(\{ type: "dypol-home-ready" \}\)/);
+  assert.match(dialog, /isTrustedMessage\(event, origin, win, "dypol-home-ready"\)/);
+  assert.match(dialog, /"dypol-home-ready"\)\) send\(\)/);
+});
+
+import { isTrustedMessage, PREVIEW_INITIAL, previewReducer } from "./home-preview-protocol.ts";
+
+test("t217 preview loading gate: hidden until the latest draft is acked; late acks ignored; error only for the latest", () => {
+  let s = previewReducer(PREVIEW_INITIAL, { type: "sent", id: 1 });
+  assert.equal(s.status, "loading");
+  s = previewReducer(s, { type: "sent", id: 2 });
+  s = previewReducer(s, { type: "applied", id: 1 });
+  assert.equal(s.status, "loading", "ack for an older draft does not reveal stale content");
+  s = previewReducer(s, { type: "failed", id: 1 });
+  assert.equal(s.status, "loading", "late error ignored");
+  s = previewReducer(s, { type: "applied", id: 2 });
+  assert.equal(s.status, "ready");
+  s = previewReducer(s, { type: "sent", id: 3 });
+  assert.equal(s.status, "ready", "later edits keep the current render visible");
+  s = previewReducer(s, { type: "timeout", id: 3 });
+  assert.equal(s.status, "ready");
+  s = previewReducer(s, { type: "reset" });
+  assert.equal(s.status, "loading", "reopen hides again until acked");
+  s = previewReducer(s, { type: "sent", id: 4 });
+  s = previewReducer(s, { type: "timeout", id: 4 });
+  assert.equal(s.status, "error", "never loading forever");
+});
+
+test("t217 preview messages: same origin AND exact frame window AND type", () => {
+  const win = {};
+  const ok = { origin: "https://a.test", source: win, data: { type: "dypol-home-applied" } };
+  assert.ok(isTrustedMessage(ok, "https://a.test", win, "dypol-home-applied"));
+  assert.ok(!isTrustedMessage({ ...ok, origin: "https://evil.test" }, "https://a.test", win, "dypol-home-applied"));
+  assert.ok(!isTrustedMessage({ ...ok, source: {} }, "https://a.test", win, "dypol-home-applied"));
+  assert.ok(!isTrustedMessage(ok, "https://a.test", undefined, "dypol-home-applied"));
+  assert.ok(!isTrustedMessage({ ...ok, data: null }, "https://a.test", win, "dypol-home-applied"));
+  assert.ok(!isTrustedMessage(ok, "https://a.test", win, "dypol-home-ready"));
+});
+
+test("t217 frame acks only after commit and reports errors; dialog gates the frame", () => {
+  const frame = read("src/routes/preview/home.tsx");
+  assert.match(frame, /useEffect\(\(\) => \{\s*if \(data\.ack !== undefined[\s\S]*?"dypol-home-applied", id: data\.ack/);
+  assert.match(frame, /"dypol-home-error", id/);
+  assert.match(dialog, /aria-busy=\{state\.status === "loading"\}/);
+  assert.match(dialog, /Retry/);
+  assert.match(css, /iframe\[data-state="loading"\][^{]*\{ visibility: hidden; \}/);
 });

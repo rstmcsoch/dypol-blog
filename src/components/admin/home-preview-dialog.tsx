@@ -1,4 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useReducer, useRef, useState } from "react";
+import {
+  isTrustedMessage,
+  PREVIEW_INITIAL,
+  PREVIEW_TIMEOUT_MS,
+  previewReducer,
+} from "@/lib/home-preview-protocol";
 
 const SIZES = [
   { id: "desktop", label: "Desktop", width: null },
@@ -22,30 +28,41 @@ export function HomePreviewDialog({
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const frame = useRef<HTMLIFrameElement>(null);
+  const nextId = useRef(0);
   const [size, setSize] = useState<(typeof SIZES)[number]["id"]>("desktop");
-  const send = () =>
-    frame.current?.contentWindow?.postMessage(
-      { type: "dypol-home-draft", draft },
-      window.location.origin,
-    );
+  const [state, dispatch] = useReducer(previewReducer, PREVIEW_INITIAL);
+  const [attempt, setAttempt] = useState(0);
+  const send = () => {
+    const win = frame.current?.contentWindow;
+    if (!win) return;
+    const id = ++nextId.current;
+    dispatch({ type: "sent", id });
+    win.postMessage({ type: "dypol-home-draft", draft, id }, window.location.origin);
+  };
 
   useEffect(() => {
     const el = dialog.current;
     if (!el) return;
     if (open && !el.open) el.showModal();
     if (!open && el.open) el.close();
+    if (open) dispatch({ type: "reset" });
   }, [open]);
 
-  // t217: the frame announces when its listener is attached; answer with the current draft.
+  // t217: frame messages (same origin, from this frame only): ready -> send draft; applied/error -> state.
   useEffect(() => {
     if (!open) return;
-    const onReady = (event: MessageEvent) => {
-      if (event.origin !== window.location.origin || event.source !== frame.current?.contentWindow)
-        return;
-      if ((event.data as { type?: string })?.type === "dypol-home-ready") send();
+    const onMessage = (event: MessageEvent) => {
+      const win = frame.current?.contentWindow;
+      const origin = window.location.origin;
+      const id = (event.data as { id?: number })?.id ?? -1;
+      if (isTrustedMessage(event, origin, win, "dypol-home-ready")) send();
+      else if (isTrustedMessage(event, origin, win, "dypol-home-applied"))
+        dispatch({ type: "applied", id });
+      else if (isTrustedMessage(event, origin, win, "dypol-home-error"))
+        dispatch({ type: "failed", id });
     };
-    window.addEventListener("message", onReady);
-    return () => window.removeEventListener("message", onReady);
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, draft]);
 
@@ -56,6 +73,19 @@ export function HomePreviewDialog({
     return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draft, open]);
+
+  // Never spin forever: no ack in time -> error with Retry.
+  useEffect(() => {
+    if (!open || state.status !== "loading") return;
+    const id = state.sent;
+    const timer = window.setTimeout(() => dispatch({ type: "timeout", id }), PREVIEW_TIMEOUT_MS);
+    return () => window.clearTimeout(timer);
+  }, [open, state.status, state.sent, attempt]);
+
+  const retry = () => {
+    dispatch({ type: "reset" });
+    setAttempt((n) => n + 1);
+  };
 
   const width = SIZES.find((s) => s.id === size)!.width;
   return (
@@ -88,13 +118,33 @@ export function HomePreviewDialog({
           Close preview
         </button>
       </div>
-      <div className="adm-previewdlg__stage">
+      <div className="adm-previewdlg__stage" aria-busy={state.status === "loading"}>
+        {open && state.status !== "ready" ? (
+          <div
+            className="adm-previewdlg__status"
+            role={state.status === "error" ? "alert" : "status"}
+          >
+            {state.status === "error" ? (
+              <>
+                <span>The preview couldn't load your unsaved changes.</span>
+                <button type="button" className="btn btn--ghost" onClick={retry}>
+                  Retry
+                </button>
+              </>
+            ) : (
+              <span>Loading preview of your unsaved changes…</span>
+            )}
+          </div>
+        ) : null}
         {open ? (
           <iframe
+            key={attempt}
             ref={frame}
             title="Homepage preview (unsaved)"
             src="/preview/home"
             onLoad={send}
+            data-state={state.status}
+            aria-hidden={state.status !== "ready"}
             style={width ? { width: `${width}px` } : undefined}
           />
         ) : null}

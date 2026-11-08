@@ -12,7 +12,8 @@ const BASE = process.env.BASE ?? "http://127.0.0.1:8787";
 const TOKEN = process.env.ADMIN_TOKEN ?? "";
 assert.ok(TOKEN.length >= 16, "set ADMIN_TOKEN");
 assert.ok(/^(127\.0\.0\.1|localhost):/.test(new URL(BASE).host), "local only");
-const fingerprint = () =>
+const fingerprint = () => JSON.stringify(JSON.parse(rawFingerprint())[0].results);
+const rawFingerprint = () =>
   execFileSync("npx", ["wrangler", "d1", "execute", "DB", "--local", "--json", "--command", "select (select group_concat(id||':'||length(data)||':'||data, '|') from site_settings) s, (select v from content_version where id=1) v, (select count(*) from articles) a"], { encoding: "utf8" });
 
 let failures = 0;
@@ -76,7 +77,7 @@ await check("settings: Save sends the full record (all tabs) and stores values f
   await page.click("#settings-tab-publishing");
   const before = posts.length;
   await page.click('button[type="submit"]:has-text("Save changes")');
-  await page.waitForSelector('[role="status"]:has-text("Saved"), [role="alert"]');
+  await page.waitForSelector('.adm-savebar [role="status"]:has-text("Saved"), [role="alert"]');
   const body = posts.slice(before).map((p) => p.body).join("");
   for (const k of ["socials", "share", "customHead", "analytics", "aiDailyPublishLimit", "logoMediaId", "home", "articleSidebar"]) assert.ok(body.includes(k), k);
   assert.ok(body.includes(original.name + " QA"));
@@ -84,7 +85,7 @@ await check("settings: Save sends the full record (all tabs) and stores values f
   assert.equal(await page.inputValue('label:has-text("Website name") input'), original.name + " QA");
   await page.fill('label:has-text("Website name") input', original.name);
   await page.click('button[type="submit"]:has-text("Save changes")');
-  await page.waitForSelector('[role="status"]:has-text("Saved")');
+  await page.waitForSelector('.adm-savebar [role="status"]:has-text("Saved")');
 });
 
 await check("settings: narrow (820px/390px) tab strip scrolls sideways; every tab reachable", async () => {
@@ -122,7 +123,14 @@ await check("homepage: Preview shows the unsaved draft via the real renderer; no
   const frame = page.frameLocator("dialog.adm-previewdlg iframe");
   await frame.locator(`text=${DRAFT}`).first().waitFor({ timeout: 10000 });
   for (const p of posts.slice(before)) assert.doesNotMatch(p.body, /customHead|socials/, "only preview payload sent");
-  assert.equal(fingerprint(), fp, "database unchanged");
+  const fp2 = fingerprint();
+  if (fp2 !== fp) {
+    const rows = (t) => JSON.parse(t)[0];
+    const a = rows(fp), b = rows(fp2);
+    const sa = new Map(a.s.split("|").map((x) => [x.split(":")[0], x])), sb = new Map(b.s.split("|").map((x) => [x.split(":")[0], x]));
+    const changed = [...sb.keys()].filter((k) => sa.get(k) !== sb.get(k));
+    throw new Error(`database changed: v ${a.v}->${b.v}, articles ${a.a}->${b.a}, rows ${changed.join(",")}`);
+  }
   const pub = await (await context.request.get(BASE + "/")).text();
   assert.ok(!pub.includes(DRAFT), "public page unaffected");
   for (const w of ["Tablet", "Phone"]) {
@@ -171,12 +179,14 @@ await check("homepage: leaving to a public page (full document) then Back discar
 await check("homepage: only Save publishes; then restored", async () => {
   await page.fill(heading, DRAFT);
   await page.click('button[type="submit"]:has-text("Save changes")');
-  await page.waitForSelector('[role="status"]:has-text("Saved")');
+  await page.waitForSelector('.adm-savebar [role="status"], .adm-savebar [role="alert"]', { timeout: 30000 }).catch(() => undefined);
+  const msg = await page.$eval(".adm-savebar", (e) => e.textContent).catch(() => "");
+  assert.match(msg, /Saved/, `save result: ${msg}`);
   const pub = await (await context.request.get(BASE + "/?cb=" + Date.now())).text();
   assert.ok(pub.includes(DRAFT), "saved draft visible publicly");
   await page.fill(heading, stored);
   await page.click('button[type="submit"]:has-text("Save changes")');
-  await page.waitForSelector('[role="status"]:has-text("Saved")');
+  await page.waitForSelector('.adm-savebar [role="status"]:has-text("Saved")');
 });
 
 await browser.close();
