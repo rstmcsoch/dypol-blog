@@ -291,7 +291,7 @@ test("t208 New Year preset: off by default, its own id/theme/dates, valid agains
   assert.equal(ny.startsAt, "2026-12-30T18:30:00.000Z"); // t210: 31 Dec 00:00 IST
   assert.equal(ny.endsAt, "2027-01-02T18:29:59.999Z"); // 2 Jan 23:59:59.999 IST (not 3 Jan)
   const defaults = defaultEvents(new Date("2026-11-08T00:00:00Z"));
-  assert.deepEqual(defaults.events.map((e) => [e.id, e.enabled]), [["christmas", false], ["newyear", false]]);
+  assert.deepEqual(defaults.events.map((e) => [e.id, e.enabled]), [["christmas", false]]); // t211: no seeded New Year card
   // Stored configs (e.g. production's single Christmas event) round-trip untouched; the preset is never injected.
   const stored = { events: [{ ...defaults.events[0], enabled: true, startsAt: "2026-11-01T00:00:00.000Z", endsAt: "2026-12-03T23:59:00.000Z" }] };
   assert.deepEqual(normalizeEvents(stored), stored);
@@ -412,7 +412,7 @@ test("t208 pre-release: New Year footer palette is theme-independent and high co
   const saved = parseEvents({ events: [christmasEvent(2026), newYearEvent(2026)] });
   assert.deepEqual(saved.events.map((e) => [e.id, e.theme, e.enabled]), [["christmas", "christmas", false], ["newyear", "newyear", false]]);
   const admin = readFileSync(new URL("../routes/admin/events.tsx", import.meta.url), "utf8");
-  assert.match(admin, /onClick=\{addNewYear\}[^\n]*\n\s*Add New Year/);
+  assert.doesNotMatch(admin, /addNewYear|Add New Year/); // t211: picked from the Design dropdown instead
 });
 
 // ---- t209: Diwali / Holi / Eid; Valentine's Day removed ----
@@ -437,13 +437,13 @@ test("t209 themes: Valentine's removed everywhere; festivals are presets, OFF, w
   // No alcohol in the festival presets.
   assert.doesNotMatch(JSON.stringify(EVENT_PRESETS.filter((p) => ["diwali", "holi", "eid"].includes(p.value))), /champagne|wine|toast|cheers/i);
   // Defaults are unchanged (festivals are added by the owner, never auto-written).
-  assert.deepEqual(defaultEvents(new Date("2026-11-08T00:00:00Z")).events.map((e) => e.id), ["christmas", "newyear"]);
+  assert.deepEqual(defaultEvents(new Date("2026-11-08T00:00:00Z")).events.map((e) => e.id), ["christmas"]);
   // Admin save (strict) of all presets works; Valentine's theme is rejected for new saves.
   const saved = parseEvents({ events: [christmasEvent(2026), newYearEvent(2026), ...FESTIVAL_PRESET_THEMES.map(festivalEvent)] });
   assert.deepEqual(saved.events.map((e) => e.id), ["christmas", "newyear", "diwali", "holi", "eid"]);
   assert.throws(() => parseEvents({ events: [{ ...christmasEvent(2026), id: "x", theme: "valentines" }] }));
   const admin = readFileSync(new URL("../routes/admin/events.tsx", import.meta.url), "utf8");
-  assert.match(admin, /FESTIVAL_PRESET_THEMES\.map\(\(theme\) => \([\s\S]*?onClick=\{\(\) => addFestival\(theme\)\}[\s\S]*?Add \{eventPreset\(theme\)\.label\}/);
+  assert.doesNotMatch(admin, /addFestival|FESTIVAL_PRESET_THEMES/); // t211: no per-theme add buttons
   assert.match(admin, /set this year's dates before switching on/);
 });
 
@@ -547,4 +547,25 @@ test("t209 festival wiring + CSS: theme-gated, inert, palettes legible, slow mot
     if (/ \.(dw-d|dw-w|dw-u|dw-s|dw-t|ed-t|hl-c|hl-rb|hl-ds|hl-fl|hl-fw|ed-h|ed-a)\d/.test(sel)) continue;
     assert.ok(reduced.includes(base), `reduced motion covers ${sel}`);
   }
+});
+
+test("t211: one generic Add event + Design dropdown with every theme; no seeded New Year row", async () => {
+  const { readFileSync } = await import("node:fs");
+  const admin = readFileSync(new URL("../routes/admin/events.tsx", import.meta.url), "utf8");
+  assert.equal((admin.match(/onClick=\{add[A-Za-z]*\}/g) ?? []).join(","), "onClick={addEvent}");
+  assert.match(admin, /EVENT_PRESETS\.map\(\(preset\)/);
+  const themes = EVENT_PRESETS.map((p) => p.value);
+  for (const t of ["christmas", "newyear", "diwali", "holi", "eid"]) assert.ok(themes.includes(t as never), t);
+  assert.ok(!themes.includes("valentines" as never));
+  assert.deepEqual(defaultEvents(new Date("2026-12-31T00:00:00Z")).events.map((e) => e.id), ["christmas"]);
+  // Switching theme keeps the owner's name, year, dates and enabled state (only design defaults change).
+  const ev = { ...christmasEvent(2026), name: "New Year", year: 2028, enabled: true };
+  const preset = EVENT_PRESETS.find((p) => p.value === "newyear")!;
+  const switched = { ...ev, theme: "newyear" as const, effect: preset.effect, colors: { ...preset.colors } };
+  const out = parseEvents({ events: [switched] }).events[0]!;
+  assert.equal(out.name, "New Year"); assert.equal(out.year, 2028); assert.equal(out.startsAt, ev.startsAt); assert.equal(out.enabled, true);
+  // Stored multi-event configs (incl. any newyear id) round-trip untouched — nothing is filtered on read.
+  const stored = { events: [{ ...ev, theme: "halloween" as never }, { ...newYearEvent(2026), theme: "halloween" as never }] };
+  const read = normalizeEvents(JSON.parse(JSON.stringify(stored)));
+  assert.deepEqual(read.events.map((e) => e.id), ["christmas", "newyear"]);
 });

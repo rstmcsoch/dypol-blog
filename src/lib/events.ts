@@ -371,8 +371,9 @@ export function celebratedYear(event: (Pick<SiteEvent, "startsAt" | "endsAt"> & 
  */
 export function defaultEvents(now = new Date()): EventsConfig {
   const year = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
-  // t208: the New Year preset ships alongside, also switched off (stored settings are never rewritten).
-  return { events: [christmasEvent(year), newYearEvent(year)] };
+  // t211: one example event only (switched off). Other designs — New Year, Diwali, Holi, Eid — are picked
+  // from the Design dropdown of any event; there are no separate seeded cards or per-theme add buttons.
+  return { events: [christmasEvent(year)] };
 }
 
 /**

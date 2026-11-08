@@ -10,15 +10,12 @@ import {
   eventPreset,
   eventStatus,
   newEventDraft,
-  newYearEvent,
   celebratedYear,
   endOfDateIST,
   istDateOf,
   startOfDateIST,
   EVENT_YEAR_MAX,
   EVENT_YEAR_MIN,
-  festivalEvent,
-  FESTIVAL_PRESET_THEMES,
   type EventEffect,
   type EventStatus,
   type EventTheme,
@@ -100,29 +97,6 @@ function EventsAdmin() {
     setMessage(null);
   };
 
-  // t208: the New Year preset with its own dates (31 Dec → 2 Jan), switched off until the owner turns it on.
-  const addNewYear = () => {
-    if (config.events.length >= MAX_EVENTS) return;
-    const now = new Date();
-    const draft = newYearEvent(now.getUTCMonth() === 0 ? now.getUTCFullYear() - 1 : now.getUTCFullYear());
-    let id = draft.id;
-    for (let n = 2; config.events.some((event) => event.id === id); n += 1) id = `${draft.id}-${n}`;
-    setConfig((current) => ({ ...current, events: [...current.events, { ...draft, id }] }));
-    setError(null);
-    setMessage(null);
-  };
-
-  // t209: Diwali / Holi / Eid presets — switched off and WITHOUT dates (they move every year).
-  const addFestival = (theme: (typeof FESTIVAL_PRESET_THEMES)[number]) => {
-    if (config.events.length >= MAX_EVENTS) return;
-    const draft = festivalEvent(theme);
-    let id = draft.id;
-    for (let n = 2; config.events.some((event) => event.id === id); n += 1) id = `${draft.id}-${n}`;
-    setConfig((current) => ({ ...current, events: [...current.events, { ...draft, id }] }));
-    setError(null);
-    setMessage(null);
-  };
-
   const removeEvent = (id: string) => {
     setConfig((current) => ({ ...current, events: current.events.filter((event) => event.id !== id) }));
     setMessage(null);
@@ -159,14 +133,6 @@ function EventsAdmin() {
         <button type="button" className="btn btn--ghost" onClick={addEvent} disabled={config.events.length >= MAX_EVENTS}>
           Add event
         </button>
-        <button type="button" className="btn btn--ghost" onClick={addNewYear} disabled={config.events.length >= MAX_EVENTS}>
-          Add New Year
-        </button>
-        {FESTIVAL_PRESET_THEMES.map((theme) => (
-          <button key={theme} type="button" className="btn btn--ghost" onClick={() => addFestival(theme)} disabled={config.events.length >= MAX_EVENTS}>
-            Add {eventPreset(theme).label}
-          </button>
-        ))}
         <span className="field-help" style={{ margin: 0 }}>
           {config.events.length} of {MAX_EVENTS} events · visitors who prefer reduced motion get the colours and message without the
           falling particles.

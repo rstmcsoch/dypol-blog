@@ -136,3 +136,13 @@ as 3 Jan); picking a date converts that field to the new semantics.
 
 **Presets.** Christmas: 1 Dec – 6 Jan IST; New Year: 31 Dec – 2 Jan IST; new custom draft: today + 13
 days. Existing stored events are not migrated.
+
+## t211 — One generic editor, no separate New Year card
+
+The admin Events tab has a single **Add event** button; the design (Christmas, New Year, Diwali, Holi,
+Eid, Halloween, Custom) is chosen from each event's Design dropdown. The "Add New Year / Diwali / Holi /
+Eid" buttons are gone and `defaultEvents()` (used only when no settings row exists) seeds just one
+switched-off Christmas example — no New Year card. Switching design keeps the event's name, year, dates
+and on/off state; it updates effect and colours, and the message only if it was still the old preset's.
+Multiple events stay supported. Stored rows are never filtered on read: removing the existing redundant
+production `newyear` row is a one-off, targeted edit of that exact row (see release notes), not a migration.
