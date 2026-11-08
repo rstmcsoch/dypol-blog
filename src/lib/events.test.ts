@@ -2,11 +2,13 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   MAX_EVENTS,
+  celebratedYear,
   christmasEvent,
   defaultEvents,
   eventHrefOk,
   eventStatus,
   newEventDraft,
+  newYearEvent,
   normalizeEvents,
   parseEvents,
   resolveActiveEvent,
@@ -170,7 +172,7 @@ test("particle count is capped (18, 10 on phones) and the ribbon is not fixed", 
 
 test("t204 Christmas footer: transform/opacity motion only, static under reduced motion, inert", () => {
   const decor = readFileSync(new URL("../components/site/event-decor.tsx", import.meta.url), "utf8");
-  assert.equal((decor.match(/aria-hidden="true"/g) ?? []).length, 3);
+  assert.equal((decor.match(/aria-hidden="true"/g) ?? []).length, 6);
   assert.doesNotMatch(decor, /<script|https?:\/\/(?!www\.w3\.org)/);
   for (const name of ["xmas-glow", "xmas-twinkle", "xmas-breathe", "xmas-swing", "xmas-fall"]) {
     const body = css.match(new RegExp(`@keyframes ${name} \\{([\\s\\S]*?)\\n\\}`))?.[1] ?? "";
@@ -178,7 +180,7 @@ test("t204 Christmas footer: transform/opacity motion only, static under reduced
     const props = [...body.matchAll(/([a-z-]+):/g)].map((m) => m[1]);
     assert.ok(props.every((p) => p === "transform" || p === "opacity"), `${name}: ${props}`);
   }
-  const reduced = css.slice(css.lastIndexOf("prefers-reduced-motion"));
+  const reduced = css.slice(css.indexOf("prefers-reduced-motion", css.indexOf("@keyframes xmas-fall")));
   assert.match(reduced, /\.xs-village-glow \{\s*animation: none/);
   assert.match(reduced, /\.xs-flake \{ animation: none/);
   assert.match(css, /\.xmas-scene \{[\s\S]*?\}/);
@@ -270,4 +272,112 @@ test("t206 open menu: original design untouched, only the existing snowfall is l
   assert.match(css, /html\.nav-open \[data-event\] \.event-particles \{\s*z-index: 31;\s*\}/);
   assert.match(css, /\.event-particles \{[^}]*pointer-events: none/);
   assert.match(css, /prefers-reduced-motion: reduce\) \{\s*\.event-particles \{\s*display: none/);
+});
+
+// ---- t208: New Year ----
+
+test("t208 New Year preset: off by default, its own id/theme/dates, valid against the stored schema", () => {
+  const ny = newYearEvent(2026);
+  assert.equal(ny.id, "newyear");
+  assert.equal(ny.theme, "newyear");
+  assert.equal(ny.enabled, false);
+  assert.equal(ny.effect, "sparkle");
+  assert.equal(ny.startsAt, "2026-12-31T00:00:00.000Z");
+  assert.equal(ny.endsAt, "2027-01-02T23:59:00.000Z");
+  const defaults = defaultEvents(new Date("2026-11-08T00:00:00Z"));
+  assert.deepEqual(defaults.events.map((e) => [e.id, e.enabled]), [["christmas", false], ["newyear", false]]);
+  // Stored configs (e.g. production's single Christmas event) round-trip untouched; the preset is never injected.
+  const stored = { events: [{ ...defaults.events[0], enabled: true, startsAt: "2026-11-01T00:00:00.000Z", endsAt: "2026-12-03T23:59:00.000Z" }] };
+  assert.deepEqual(normalizeEvents(stored), stored);
+  assert.deepEqual(normalizeEvents({ events: [...stored.events, ny] }).events.map((e) => e.id), ["christmas", "newyear"]);
+  // Off = never live by itself; only an admin preview override shows it.
+  const config = { events: [ny] };
+  assert.equal(resolveActiveEvent(config, Date.parse("2027-01-01T00:00:00Z")), null);
+  assert.equal(resolveActiveEvent(config, Date.parse("2027-01-01T00:00:00Z"), "newyear", false), null);
+  assert.equal(resolveActiveEvent(config, Date.parse("2027-01-01T00:00:00Z"), "newyear", true)?.id, "newyear");
+});
+
+test("t208 celebrated year: held inside the event window, month-based so midnight time zones never flip it", () => {
+  const ny = newYearEvent(2026);
+  assert.equal(celebratedYear(ny, Date.parse("2026-11-08T03:00:00Z")), 2027); // preview before the window
+  assert.equal(celebratedYear(ny, Date.parse("2026-12-31T18:29:59Z")), 2027); // 23:59 IST on 31 Dec
+  assert.equal(celebratedYear(ny, Date.parse("2026-12-31T23:59:59Z")), 2027);
+  assert.equal(celebratedYear(ny, Date.parse("2027-01-01T00:00:01Z")), 2027);
+  assert.equal(celebratedYear(ny, Date.parse("2027-03-01T00:00:00Z")), 2027); // after the window: clamped to its end
+  const custom = { startsAt: "", endsAt: "" };
+  assert.equal(celebratedYear(custom, Date.parse("2027-01-15T00:00:00Z")), 2027);
+  assert.equal(celebratedYear(custom, Date.parse("2027-10-02T00:00:00Z")), 2028);
+  assert.equal(celebratedYear(null, Date.parse("2030-12-31T12:00:00Z")), 2031);
+});
+
+test("t208 New Year scenes: composed per size, no collisions, caps only trim sky, year injected safely", async () => {
+  const { NY_LAYOUT, NY_SCENES, NY_FRIEZE, SCENE_MODES, newYearMarkup, SCENES, GARLAND } = await import("../components/site/event-decor-art.ts");
+  const cap = (mode: string) => Number(css.match(new RegExp(`\\.ny-scene__v--${mode} \\{[^}]*max-height: (\\d+)px`))?.[1]);
+  const ranges: Record<string, [number, number]> = { compact: [300, 599], medium: [600, 1099], wide: [1100, 1920] };
+  assert.match(css, /\.ny-scene__v--wide \{[^}]*max-width: 1920px/);
+  for (const mode of SCENE_MODES) {
+    const { w, h, boxes } = NY_LAYOUT[mode];
+    for (const key of ["year", "clock", "glasses", "burst0", "burst1"]) assert.ok(boxes[key], `${mode} has ${key}`);
+    const keys = Object.keys(boxes);
+    for (const key of keys) {
+      const [x1, y1, x2, y2] = boxes[key];
+      assert.ok(x1 >= 0 && y1 >= 0 && x2 <= w && y2 <= h, `${mode}.${key} inside: ${boxes[key]}`);
+    }
+    for (let i = 0; i < keys.length; i++) for (let j = i + 1; j < keys.length; j++) {
+      const a = boxes[keys[i]], b = boxes[keys[j]];
+      const apart = a[2] <= b[0] || b[2] <= a[0] || a[3] <= b[1] || b[3] <= a[1];
+      assert.ok(apart, `${mode}: ${keys[i]} overlaps ${keys[j]}`);
+    }
+    // The year reads as a headline on phones (>= 30% of the frame width).
+    if (mode === "compact") assert.ok((boxes.year[2] - boxes.year[0]) / w >= 0.3);
+    const topMost = Math.min(...Object.values(boxes).map((b) => b[1]));
+    for (const width of ranges[mode]) {
+      const natural = (width * h) / w;
+      const trimmed = natural > cap(mode) ? h - cap(mode) / (width / w) : 0;
+      assert.ok(trimmed < topMost, `${mode}@${width}px trims ${trimmed.toFixed(1)}`);
+    }
+    const markup = newYearMarkup(mode, 2027);
+    assert.ok(markup.includes(">2027</text>") && !markup.includes("{{YEAR}}"));
+    assert.ok(!newYearMarkup(mode, Number.NaN).includes("NaN"));
+  }
+  const all = SCENE_MODES.map((m) => NY_SCENES[m]).join("") + NY_FRIEZE;
+  const ids = [...all.matchAll(/ id="([^"]+)"/g)].map((m) => m[1]);
+  const xmasIds = [...SCENE_MODES.map((m) => SCENES[m]).join("").matchAll(/ id="([^"]+)"/g)].map((m) => m[1]);
+  assert.equal(new Set([...ids, ...xmasIds]).size, ids.length + xmasIds.length, "ids unique across themes");
+  for (const m of all.matchAll(/url\(#([^)]+)\)/g)) assert.ok(ids.includes(m[1]), `dangling ${m[1]}`);
+  // No Christmas motif leaks into New Year art, and the reverse.
+  assert.doesNotMatch(all, /class="(xs-|xg-|xmas)|bigtree|village|garland|santa|hat|snow/i);
+  assert.doesNotMatch(SCENE_MODES.map((m) => SCENES[m]).join("") + GARLAND, /class="ny|nyf-/);
+  assert.doesNotMatch(all, /<a |<button|tabindex|<script|href=/);
+});
+
+test("t208 New Year wiring: theme-gated header/footer, inert, reduced motion static, no menu restyle", () => {
+  const header = readFileSync(new URL("../components/site/header.tsx", import.meta.url), "utf8");
+  assert.match(header, /event\?\.theme === "christmas" \? <SantaHat \/> : null/);
+  assert.match(header, /event\?\.theme === "newyear" \? <LogoSparkle \/> : null/);
+  const footer = readFileSync(new URL("../components/site/footer.tsx", import.meta.url), "utf8");
+  assert.match(footer, /newYear \? <NewYearFrieze \/> : null/);
+  assert.match(footer, /newYear && event \? <NewYearFooterScene year=\{celebratedYear\(event\)\} \/> : null/);
+  const decor = readFileSync(new URL("../components/site/event-decor.tsx", import.meta.url), "utf8");
+  for (const cls of ["event-sparkle", "ny-frieze", "ny-scene"]) assert.match(decor, new RegExp(`className="${cls}"[^>]*aria-hidden="true"|className=\\{?\`?${cls}`));
+  const ny = css.slice(css.indexOf("/* ---- t208"));
+  for (const m of ny.replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/([^{}]+)\{([^}]*)\}/g)) {
+    const sel = m[1].trim();
+    if (/^(@|from|to|\d+%)/.test(sel)) continue;
+    for (const part of sel.split(",")) assert.match(part.trim(), /^\[data-event="newyear"\]/, part.trim());
+    assert.doesNotMatch(sel, /site-nav|nav-link|nav-chip|menu-btn|search-form|\.btn\b|theme-toggle/);
+  }
+  for (const name of ["ny-bloom", "ny-twinkle", "ny-glow", "ny-shimmer", "ny-rise", "ny-sway"]) {
+    const body = css.match(new RegExp(`@keyframes ${name} \\{([\\s\\S]*?)\\n\\}`))?.[1] ?? "";
+    assert.ok(body, name);
+    const props = [...body.matchAll(/([a-z-]+):/g)].map((x) => x[1]);
+    assert.ok(props.every((p) => p === "transform" || p === "opacity"), `${name}: ${props}`);
+    const durations = [...css.matchAll(new RegExp(`animation: ${name} ([\\d.]+)s`, "g"))].map((x) => Number(x[1]));
+    assert.ok(durations.length && durations.every((d) => d >= 4), `${name} is slow (no flashing): ${durations}`);
+  }
+  const reduced = ny.slice(ny.indexOf("prefers-reduced-motion"));
+  assert.match(reduced, /\.ny-burst \.ny-ray[\s\S]*?\{\s*animation: none/);
+  assert.match(reduced, /\.ny-bubble \{ animation: none/);
+  assert.match(css, /\.site-footer--newyear > \.ny-scene \{[^}]*pointer-events: none/);
+  assert.match(css, /\[data-event="newyear"\] \.event-sparkle \{[^}]*pointer-events: none/);
 });

@@ -466,3 +466,173 @@ html.nav-open [data-event] .event-particles {
   }
   [data-event="christmas"] .xs-flake { animation: none; opacity: 0; }
 }
+
+/* ---- t208: New Year — "Midnight gala over the city". New Year theme only. ----
+   Palette: midnight indigo, champagne gold, ivory, with jewel accents (emerald, sapphire, ruby,
+   amethyst). Same structure as Christmas: frieze band above, scene band below, content between. */
+[data-event="newyear"] .event-sparkle {
+  position: absolute;
+  left: -0.5rem;
+  top: calc(50% - 1.55rem);
+  width: 1.7rem;
+  height: auto;
+  pointer-events: none;
+  overflow: visible;
+}
+[data-event="newyear"] .event-sparkle path { fill: #d4af37; }
+[data-event="newyear"] .event-sparkle__b { fill: #e9cf7a; }
+@media (max-width: 520px) {
+  [data-event="newyear"] .event-sparkle { width: 1.35rem; top: calc(50% - 1.3rem); left: -0.38rem; }
+}
+[data-event="newyear"] .site-footer--newyear {
+  --ft-fg: #fbf7ea;
+  --ft-muted: #e9cf7a;
+  --ft-top: #0d1033;
+  --ft-mid: #141a46;
+  --ft-bottom: #1d2458;
+  --ft-blob: rgba(212, 175, 55, 0.08);
+  --ft-sheen: rgba(111, 155, 255, 0.08);
+  --ft-noise-opacity: 0.1;
+}
+[data-event="newyear"] .site-footer--newyear::after { display: none; }
+[data-event="newyear"] .site-footer--newyear .footer-grid {
+  padding-top: clamp(0.75rem, 2vw, 1.5rem);
+  padding-bottom: clamp(0.5rem, 1.5vw, 1rem);
+}
+[data-event="newyear"] .site-footer--newyear .footer-mark { color: #fff6d8; text-shadow: 0 0 18px rgba(212, 175, 55, 0.28); }
+[data-event="newyear"] .site-footer--newyear .footer-mark::after {
+  content: "\2726";
+  display: inline-block;
+  margin-left: 0.4em;
+  font-size: 0.6em;
+  vertical-align: 0.35em;
+  color: #d4af37;
+}
+[data-event="newyear"] .site-footer--newyear .footer-note { color: color-mix(in srgb, #fbf7ea 82%, transparent); }
+[data-event="newyear"] .site-footer--newyear .footer-col-title { color: #e9cf7a; border-color: color-mix(in srgb, #d4af37 40%, transparent); }
+[data-event="newyear"] .site-footer--newyear .footer-link { color: #fbf7ea; text-decoration-color: #d4af37; }
+[data-event="newyear"] .site-footer--newyear .footer-link:hover { color: #ffffff; text-decoration: underline; text-decoration-color: #d4af37; text-underline-offset: 3px; }
+[data-event="newyear"] .site-footer--newyear .footer-social { color: #fbf7ea; border-color: color-mix(in srgb, #d4af37 55%, transparent); background: color-mix(in srgb, #0d1033 55%, transparent); }
+[data-event="newyear"] .site-footer--newyear .footer-social:hover { border-color: #d4af37; background: color-mix(in srgb, #d4af37 16%, transparent); }
+[data-event="newyear"] .site-footer--newyear a:focus-visible { outline-color: #e9cf7a; }
+[data-event="newyear"] .site-footer--newyear .footer-sign { color: color-mix(in srgb, #fbf7ea 80%, transparent); border-color: color-mix(in srgb, #d4af37 30%, transparent); }
+
+/* Bands: same adaptive rules as Christmas (fixed frieze height; one composed scene per size). */
+[data-event="newyear"] .site-footer--newyear > .ny-frieze,
+[data-event="newyear"] .site-footer--newyear > .ny-scene {
+  position: relative;
+  z-index: 0;
+  width: 100%;
+  pointer-events: none;
+}
+[data-event="newyear"] .ny-frieze svg { display: block; width: 100%; height: 50px; }
+[data-event="newyear"] .ny-scene__v { display: none; width: 100%; height: auto; }
+[data-event="newyear"] .ny-scene__v--compact { display: block; aspect-ratio: 520 / 280; max-height: 320px; }
+@media (min-width: 600px) {
+  [data-event="newyear"] .ny-frieze svg { height: 58px; }
+  [data-event="newyear"] .ny-scene__v--compact { display: none; }
+  [data-event="newyear"] .ny-scene__v--medium { display: block; aspect-ratio: 900 / 240; max-height: 300px; }
+}
+@media (min-width: 1100px) {
+  [data-event="newyear"] .ny-frieze svg { height: 66px; }
+  [data-event="newyear"] .ny-scene__v--medium { display: none; }
+  [data-event="newyear"] .ny-scene__v--wide { display: block; aspect-ratio: 1200 / 240; max-width: 1920px; max-height: 384px; margin-inline: auto; }
+}
+@media (max-height: 500px) and (orientation: landscape) {
+  [data-event="newyear"] .ny-scene__v { max-height: 190px !important; }
+  [data-event="newyear"] .ny-frieze svg { height: 46px; }
+}
+@media (max-width: 599px) {
+  [data-event="newyear"] .site-footer--newyear .footer-grid { gap: 1.5rem; }
+  [data-event="newyear"] .site-footer--newyear .footer-link { display: inline-flex; align-items: center; min-height: 2.25rem; }
+  [data-event="newyear"] .site-footer--newyear .footer-sign { text-wrap: balance; }
+}
+
+/* Art */
+[data-event="newyear"] .nyf-rule { fill: none; stroke: #d9b45a; stroke-width: 1.6; }
+[data-event="newyear"] .nyf-rule--thin { stroke-width: .8; opacity: .7; }
+[data-event="newyear"] .nyf-fan { fill: none; stroke: #d9b45a; stroke-width: 1; opacity: .75; }
+[data-event="newyear"] .nyf-string { fill: none; stroke: #d9b45a; stroke-width: .8; opacity: .8; }
+[data-event="newyear"] .nyf-star--g { fill: #f2d27a; } [data-event="newyear"] .nyf-star--e { fill: #46c9a0; } [data-event="newyear"] .nyf-star--s { fill: #6f9bff; } [data-event="newyear"] .nyf-star--r { fill: #ff6f8e; } [data-event="newyear"] .nyf-star--a { fill: #b98cff; } [data-event="newyear"] .nyf-star--i { fill: #fbf7ea; }
+[data-event="newyear"] .nyf-glint { fill: #fff6d8; }
+[data-event="newyear"] .nyf-streamer { fill: none; stroke-width: 2.2; stroke-linecap: round; opacity: .9; }
+[data-event="newyear"] .nyf-streamer--e { stroke: #46c9a0; } [data-event="newyear"] .nyf-streamer--s { stroke: #6f9bff; } [data-event="newyear"] .nyf-streamer--r { stroke: #ff6f8e; } [data-event="newyear"] .nyf-streamer--a { stroke: #b98cff; }
+[data-event="newyear"] .ny-star { fill: #fbf7ea; }
+[data-event="newyear"] .ny-ray { fill: none; stroke-width: 1.6; stroke-linecap: round; }
+[data-event="newyear"] .ny-ray--g { stroke: #f2d27a; } [data-event="newyear"] .ny-ray--e { stroke: #46c9a0; } [data-event="newyear"] .ny-ray--s { stroke: #8fb1ff; } [data-event="newyear"] .ny-ray--r { stroke: #ff7f9b; }
+[data-event="newyear"] .ny-tip--g { fill: #fff1c2; } [data-event="newyear"] .ny-tip--e { fill: #a9f0d8; } [data-event="newyear"] .ny-tip--s { fill: #c9d8ff; } [data-event="newyear"] .ny-tip--r { fill: #ffc2cf; }
+[data-event="newyear"] .ny-core { fill: #fff6d8; }
+[data-event="newyear"] .ny-cap { fill: #fbf7ea; font-family: Georgia, "Times New Roman", serif; font-weight: 700; }
+[data-event="newyear"] .ny-year { font-family: Georgia, "Times New Roman", serif; font-weight: 700; stroke: #fff1c2; stroke-width: .6; paint-order: stroke; }
+[data-event="newyear"] .ny-underline { fill: none; stroke: #d9b45a; stroke-width: 1.2; }
+[data-event="newyear"] .ny-gold { fill: #d9b45a; }
+[data-event="newyear"] .ny-tick { stroke: #141a3c; stroke-width: 1.2; }
+[data-event="newyear"] .ny-hand { stroke: #141a3c; stroke-width: 2; stroke-linecap: round; }
+[data-event="newyear"] .ny-hand--min { stroke-width: 1.4; }
+[data-event="newyear"] .ny-win { fill: #f2d27a; }
+[data-event="newyear"] .ny-ripple { fill: none; stroke: #d9b45a; stroke-width: 1; stroke-linecap: round; opacity: .45; }
+[data-event="newyear"] .ny-glass { fill: rgba(251, 247, 234, .3); stroke: #fbf7ea; stroke-width: 1.6; }
+[data-event="newyear"] .ny-bubbly { fill: #e7c25a; opacity: .85; }
+[data-event="newyear"] .ny-stem { fill: none; stroke: #fbf7ea; stroke-width: 2; stroke-linecap: round; }
+[data-event="newyear"] .ny-clink { fill: none; stroke: #fff1c2; stroke-width: 1.2; stroke-linecap: round; }
+[data-event="newyear"] .ny-bubble { fill: #fff6d8; }
+
+/* Motion: slow blooms and shimmer (opacity/transform only, 5–9 s cycles, never flashing). */
+[data-event="newyear"] .ny-burst > * { transform-box: view-box; }
+[data-event="newyear"] .ny-burst .ny-ray, [data-event="newyear"] .ny-burst .ny-tip { animation: ny-bloom 7.5s ease-in-out infinite; transform-origin: 0 0; }
+[data-event="newyear"] .ny-b1 .ny-ray, [data-event="newyear"] .ny-b1 .ny-tip { animation-delay: -1.9s; }
+[data-event="newyear"] .ny-b2 .ny-ray, [data-event="newyear"] .ny-b2 .ny-tip { animation-delay: -3.8s; }
+[data-event="newyear"] .ny-b3 .ny-ray, [data-event="newyear"] .ny-b3 .ny-tip { animation-delay: -5.6s; }
+[data-event="newyear"] .ny-star, [data-event="newyear"] .nyf-glint { animation: ny-twinkle 5s ease-in-out infinite; }
+[data-event="newyear"] .ny-s1, [data-event="newyear"] .nyf-g1 { animation-delay: -1.2s; }
+[data-event="newyear"] .ny-s2, [data-event="newyear"] .nyf-g2 { animation-delay: -2.5s; }
+[data-event="newyear"] .ny-s3, [data-event="newyear"] .nyf-g3 { animation-delay: -3.7s; }
+[data-event="newyear"] .ny-win { animation: ny-glow 6s ease-in-out infinite; }
+[data-event="newyear"] .ny-w1 { animation-delay: -2s; }
+[data-event="newyear"] .ny-w2 { animation-delay: -4s; }
+[data-event="newyear"] .ny-ripple { animation: ny-shimmer 6.5s ease-in-out infinite; }
+[data-event="newyear"] .ny-r1 { animation-delay: -2.1s; }
+[data-event="newyear"] .ny-r2 { animation-delay: -4.3s; }
+[data-event="newyear"] .ny-bubble { transform-box: fill-box; animation: ny-rise 4.5s ease-in infinite; }
+[data-event="newyear"] .ny-bb1 { animation-delay: -1.5s; }
+[data-event="newyear"] .ny-bb2 { animation-delay: -3s; }
+[data-event="newyear"] .nyf-drop { transform-box: fill-box; transform-origin: 50% 0; animation: ny-sway 6s ease-in-out infinite; }
+[data-event="newyear"] .nyf-d1 { animation-delay: -1.5s; }
+[data-event="newyear"] .nyf-d2 { animation-delay: -3s; }
+[data-event="newyear"] .nyf-d3 { animation-delay: -4.5s; }
+[data-event="newyear"] .event-sparkle path { transform-box: fill-box; transform-origin: 50% 50%; animation: ny-twinkle 4.8s ease-in-out infinite; }
+[data-event="newyear"] .event-sparkle__b { animation-delay: -1.6s !important; }
+[data-event="newyear"] .event-sparkle__c { animation-delay: -3.2s !important; }
+@keyframes ny-bloom {
+  0%, 100% { opacity: 0.3; transform: scale(0.82); }
+  45% { opacity: 1; transform: scale(1); }
+  70% { opacity: 0.75; transform: scale(1.02); }
+}
+@keyframes ny-twinkle {
+  0%, 100% { opacity: 0.95; }
+  50% { opacity: 0.35; }
+}
+@keyframes ny-glow {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+@keyframes ny-shimmer {
+  0%, 100% { opacity: 0.25; }
+  50% { opacity: 0.6; }
+}
+@keyframes ny-rise {
+  0% { opacity: 0; transform: translateY(0); }
+  30% { opacity: 0.9; }
+  100% { opacity: 0; transform: translateY(-14px); }
+}
+@keyframes ny-sway {
+  0%, 100% { transform: rotate(-3deg); }
+  50% { transform: rotate(3deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-event="newyear"] .ny-burst .ny-ray, [data-event="newyear"] .ny-burst .ny-tip, [data-event="newyear"] .ny-star, [data-event="newyear"] .nyf-glint, [data-event="newyear"] .ny-win, [data-event="newyear"] .ny-ripple, [data-event="newyear"] .nyf-drop, [data-event="newyear"] .event-sparkle path {
+    animation: none;
+    transform: none;
+  }
+  [data-event="newyear"] .ny-bubble { animation: none; opacity: 0.8; }
+}

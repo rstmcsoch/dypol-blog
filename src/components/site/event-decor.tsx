@@ -15,7 +15,7 @@ export function SantaHat() {
   );
 }
 
-import { GARLAND, SCENES, SCENE_LAYOUT, SCENE_MODES } from "./event-decor-art";
+import { GARLAND, NY_FRIEZE, NY_LAYOUT, SCENES, SCENE_LAYOUT, SCENE_MODES, newYearMarkup } from "./event-decor-art";
 
 /** One long evergreen strand: CSS fixes the band height per size, so the swag density adapts and nothing is squashed. */
 export function ChristmasGarland() {
@@ -38,6 +38,44 @@ export function ChristmasFooterScene() {
           preserveAspectRatio="xMidYMax slice"
           focusable="false"
           dangerouslySetInnerHTML={{ __html: SCENES[mode] }}
+        />
+      ))}
+    </div>
+  );
+}
+
+/** t208: three small gold sparkles above the wordmark's first letter (never over the lettering). */
+export function LogoSparkle() {
+  return (
+    <svg className="event-sparkle" viewBox="0 0 40 28" aria-hidden="true" focusable="false">
+      <path className="event-sparkle__a" d="M12 2l2.2 6.8L21 11l-6.8 2.2L12 20l-2.2-6.8L3 11l6.8-2.2z" />
+      <path className="event-sparkle__b" d="M29 4l1.3 3.7L34 9l-3.7 1.3L29 14l-1.3-3.7L24 9l3.7-1.3z" />
+      <path className="event-sparkle__c" d="M24 18l.9 2.6 2.6.9-2.6.9-.9 2.6-.9-2.6-2.6-.9 2.6-.9z" />
+    </svg>
+  );
+}
+
+/** t208: art-deco gold frieze with hanging jewel stars and streamers across the top of the footer. */
+export function NewYearFrieze() {
+  return (
+    <div className="ny-frieze" aria-hidden="true">
+      <svg viewBox="0 0 2400 70" preserveAspectRatio="xMidYMin slice" focusable="false" dangerouslySetInnerHTML={{ __html: NY_FRIEZE }} />
+    </div>
+  );
+}
+
+/** t208: midnight skyline, clock tower at twelve, slow-blooming fireworks, the celebrated year, a toast. */
+export function NewYearFooterScene({ year }: { year: number }) {
+  return (
+    <div className="ny-scene" aria-hidden="true">
+      {SCENE_MODES.map((mode) => (
+        <svg
+          key={mode}
+          className={`ny-scene__v ny-scene__v--${mode}`}
+          viewBox={`0 0 ${NY_LAYOUT[mode].w} ${NY_LAYOUT[mode].h}`}
+          preserveAspectRatio="xMidYMax slice"
+          focusable="false"
+          dangerouslySetInnerHTML={{ __html: newYearMarkup(mode, year) }}
         />
       ))}
     </div>

@@ -77,3 +77,18 @@ Approach: compose the scene separately per size. All three variants come from on
 - Footer content (Christmas only): tighter top spacing, columns stack 2-up on phones with roomier link tap targets, copyright wraps balanced, no dead gap above the scene.
 - Menu (t206 correction, owner): the menu design, background, spacing and buttons stay exactly original. The only change is that the existing event snowfall layer is lifted above the open menu (`html.nav-open … .event-particles { z-index: 31 }`, above the sticky header's z-index 30 stacking context). It is inert and hidden under reduced motion. The t205 menu garland/holly/texture was removed.
 - Motion stays opacity/transform, and none under reduced motion. Cleanup: drop the single-scene CSS/markup and the t204 negative margin.
+
+## t208 — New Year: "Midnight gala over the city" (plan)
+Audit: the `newyear` theme and its preset (indigo/gold, sparkle effect, message) already existed in `EVENT_THEMES`, but nothing rendered for it beyond the generic ribbon and stripe. Reused that theme and preset; nothing is duplicated and Christmas is unchanged.
+- Art direction: midnight indigo sky, champagne gold and ivory, with jewel accents (emerald, sapphire, ruby, amethyst). Sophisticated rather than party-store: an art-deco frieze, crafted fireworks, the clock at twelve.
+- Top band (own row): a gold deco rule with repeating sunburst fans, jewel stars hanging on gold threads (gentle ±3° sway), ribbon streamers and twinkling glints. One 2400-unit strand at a fixed height (50/58/66px), like the Christmas garland.
+- Scene (own row, composed per size like Christmas):
+  - Compact (<600): "HAPPY NEW YEAR" with a large gold year as the centred headline, two fireworks in the top corners, a clock tower at left, a toast of two coupes at right, a two-layer lit skyline and a gold-rippled river.
+  - Medium (600–1099): year centred, four fireworks, tower left, toast right.
+  - Wide (≥1100): the same with more breathing room.
+  The skyline is kept low under the headline so the year always reads.
+- Year: `celebratedYear(event, now)` is "now" clamped into the event window. October onwards means next year, otherwise this year. It is month-based in UTC, so midnight in any time zone can't flip it, and an admin preview of a future event shows that event's year. Digits only, injected at render; no countdown.
+- Logo: three small gold sparkles above the first letter (twinkle), like the hat (never over the lettering). No Christmas motifs.
+- Particles: the existing `sparkle` effect (preset), already inert and lifted over the open menu by the t206 rule. The menu is not restyled.
+- Motion: slow blooms (7.5s), twinkles, window glow, river shimmer, rising bubbles. Opacity/transform only, every cycle ≥4s (no strobing), all static under reduced motion.
+- Preset: `newYearEvent(year)` (id `newyear`, 31 Dec → 2 Jan, OFF). It is in the defaults for fresh installs and in an "Add New Year" button in Admin → Events. Stored settings are never rewritten, so production's saved events stay as they are.

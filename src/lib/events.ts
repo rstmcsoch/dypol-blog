@@ -227,13 +227,53 @@ export function christmasEvent(year = new Date().getFullYear()): SiteEvent {
 }
 
 /**
+ * t208: New Year's Eve → January 2. Ships switched OFF; the owner turns it on in Admin → Events.
+ * `year` is the year that is ending (31 Dec of `year` → 2 Jan of `year + 1`).
+ */
+export function newYearEvent(year = new Date().getUTCFullYear()): SiteEvent {
+  const preset = eventPreset("newyear");
+  return {
+    id: "newyear",
+    name: "New Year",
+    theme: "newyear",
+    enabled: false,
+    startsAt: `${year}-12-31T00:00:00.000Z`,
+    endsAt: `${year + 1}-01-02T23:59:00.000Z`,
+    banner: true,
+    message: preset.message,
+    ctaLabel: "",
+    ctaHref: "",
+    effect: "sparkle",
+    intensity: "subtle",
+    colors: { ...preset.colors },
+  };
+}
+
+/**
+ * t208: the year a New Year event celebrates. The moment used is "now", held inside the
+ * event's own window (so an admin preview of a future or past event shows that event's year).
+ * Late in the year (October onwards) means the coming year; otherwise the current one.
+ * Month-based in UTC, so midnight time-zone differences can never flip it.
+ */
+export function celebratedYear(event: Pick<SiteEvent, "startsAt" | "endsAt"> | null, now = Date.now()): number {
+  let at = now;
+  const start = event?.startsAt ? Date.parse(event.startsAt) : NaN;
+  const end = event?.endsAt ? Date.parse(event.endsAt) : NaN;
+  if (Number.isFinite(start) && at < start) at = start;
+  if (Number.isFinite(end) && at > end) at = end;
+  const date = new Date(at);
+  return date.getUTCMonth() >= 9 ? date.getUTCFullYear() + 1 : date.getUTCFullYear();
+}
+
+/**
  * The starting configuration of the Events tab: the Christmas event, aimed at
  * the Christmas season that is coming up (in January it still points at the
  * season that is finishing, not at next December).
  */
 export function defaultEvents(now = new Date()): EventsConfig {
   const year = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
-  return { events: [christmasEvent(year)] };
+  // t208: the New Year preset ships alongside, also switched off (stored settings are never rewritten).
+  return { events: [christmasEvent(year), newYearEvent(year)] };
 }
 
 /** A fresh two-week event for the "Add event" button. */

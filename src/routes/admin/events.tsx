@@ -10,6 +10,7 @@ import {
   eventPreset,
   eventStatus,
   newEventDraft,
+  newYearEvent,
   type EventEffect,
   type EventStatus,
   type EventTheme,
@@ -105,6 +106,18 @@ function EventsAdmin() {
     setMessage(null);
   };
 
+  // t208: the New Year preset with its own dates (31 Dec → 2 Jan), switched off until the owner turns it on.
+  const addNewYear = () => {
+    if (config.events.length >= MAX_EVENTS) return;
+    const now = new Date();
+    const draft = newYearEvent(now.getUTCMonth() === 0 ? now.getUTCFullYear() - 1 : now.getUTCFullYear());
+    let id = draft.id;
+    for (let n = 2; config.events.some((event) => event.id === id); n += 1) id = `${draft.id}-${n}`;
+    setConfig((current) => ({ ...current, events: [...current.events, { ...draft, id }] }));
+    setError(null);
+    setMessage(null);
+  };
+
   const removeEvent = (id: string) => {
     setConfig((current) => ({ ...current, events: current.events.filter((event) => event.id !== id) }));
     setMessage(null);
@@ -140,6 +153,9 @@ function EventsAdmin() {
       <div className="inline-actions" style={{ marginTop: "1rem" }}>
         <button type="button" className="btn btn--ghost" onClick={addEvent} disabled={config.events.length >= MAX_EVENTS}>
           Add event
+        </button>
+        <button type="button" className="btn btn--ghost" onClick={addNewYear} disabled={config.events.length >= MAX_EVENTS}>
+          Add New Year
         </button>
         <span className="field-help" style={{ margin: 0 }}>
           {config.events.length} of {MAX_EVENTS} events · visitors who prefer reduced motion get the colours and message without the
