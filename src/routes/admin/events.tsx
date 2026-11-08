@@ -64,7 +64,7 @@ function cardDetail(event: SiteEvent, state: EventLifecycle, now: number): strin
   const deadline = purgeDeadline(event);
   if (state === "expired" && deadline !== null) {
     const days = Math.max(1, Math.ceil((deadline - now) / 86_400_000));
-    return `${range} · Deletes automatically on ${formatWhen(new Date(deadline - 1).toISOString(), now)} (in ${days} day${days === 1 ? "" : "s"}) unless you edit or reschedule it`;
+    return `${range} · Deletes automatically on ${formatWhen(new Date(deadline).toISOString(), now)} (in ${days} day${days === 1 ? "" : "s"}) unless you edit or reschedule it`;
   }
   if (state === "upcoming") return `${range} · Turns on automatically on the start date`;
   if (state === "ongoing") return `${range} · On the site now${event.endsAt ? ", turns off automatically after the end date" : ""}`;

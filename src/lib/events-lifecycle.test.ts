@@ -94,7 +94,7 @@ test("compare-and-swap: signature changes on any stored change; server uses guar
   assert.match(server, /if \(eventsSignature\(storedRaw\) !== version\) throw new EventsConflictError\(\)/);
   assert.equal((server.match(/where id = \$\{EVENTS_SETTINGS_ID\} and data = \$\{(expected|storedRaw)\} returning id/g) ?? []).length, 2);
   assert.doesNotMatch(server, /on conflict \(id\) do update/);
-  // every removal goes through purgeExpired (7-day deadline); nothing filters on eventStatus "ended"
+  // every removal goes through purgeExpired (deadline = max(end, edit) + 7 days, counted once); nothing filters on eventStatus "ended"
   assert.doesNotMatch(server + readFileSync(new URL("./events.ts", import.meta.url), "utf8"), /filter\([^)]*=== "ended"/);
 });
 
@@ -110,4 +110,18 @@ test("admin UI: one top form, compact saved cards, generic Add event, date-only,
   assert.doesNotMatch(src, /addNewYear|addFestival|Add New Year/);
   assert.match(src, /Year shown in design/);
   assert.match(src, /version \}/);
+});
+
+test("7 days are counted once: deletion = 7 days after the inclusive end OR after a later edit, never 14", () => {
+  const e = ev(); // ends 10 Nov IST (inclusive)
+  const endEx = Date.parse(startOfDateIST("2026-11-11")!);
+  assert.equal(purgeDeadline(e), endEx + EXPIRED_RETENTION_MS);
+  const editedBefore = { ...e, editedAt: new Date(endEx - 86_400_000).toISOString() };
+  assert.equal(purgeDeadline(editedBefore), endEx + EXPIRED_RETENTION_MS, "edit before the end does not extend");
+  const editedAfter = { ...e, editedAt: new Date(endEx + 3 * 86_400_000).toISOString() };
+  assert.equal(purgeDeadline(editedAfter), endEx + 3 * 86_400_000 + EXPIRED_RETENTION_MS, "edit after the end restarts from the edit");
+  assert.equal(purgeExpired({ events: [e] }, endEx + EXPIRED_RETENTION_MS).removed.length, 1);
+  // card text shows the actual deletion day (18 Nov IST = start of day 8 after 10 Nov)
+  const src = readFileSync(new URL("../routes/admin/events.tsx", import.meta.url), "utf8");
+  assert.match(src, /formatWhen\(new Date\(deadline\)\.toISOString\(\), now\)/);
 });
