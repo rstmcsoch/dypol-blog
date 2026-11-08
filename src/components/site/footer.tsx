@@ -1,6 +1,6 @@
 import { footerColumns, visibleSocials, SOCIAL_LABELS, type SocialPlatform } from "@/lib/social-links";
 import { useEvent, usePages, useSite } from "./use-site";
-import { ChristmasFooterScene } from "./event-decor";
+import { ChristmasFooterGarland, ChristmasFooterScene } from "./event-decor";
 
 /** Inline brand icons (no icon library). Fill paths are the platforms'
  * standard glyphs; instagram/rss/email are drawn strokes. */
@@ -73,8 +73,12 @@ export function SiteFooter() {
     ...column, links: column.links.filter((link) => !standardPaths.has(link.href) || publishedPaths.has(link.href)),
   })).filter((column) => column.links.length);
   const socials = visibleSocials(site.socials);
+  const xmas = event?.theme === "christmas";
+  // t204: the standalone publisher link ("DYPOL LABS") is no longer shown; other saved links still render.
+  const extraLinks = site.footer.links.filter((link) => link.label.trim().toLowerCase() !== (site.publisher || "DYPOL LABS").trim().toLowerCase());
   return (
-    <footer className="site-footer">
+    <footer className={xmas ? "site-footer site-footer--xmas" : "site-footer"}>
+      {xmas ? <ChristmasFooterGarland /> : null}
       <div className="container footer-grid">
         <div className="footer-brand">
           <p className="footer-mark">{site.name}</p>
@@ -107,12 +111,12 @@ export function SiteFooter() {
             </nav>
           ))}
         </div>
-        {site.footer.links.length > 0 ? <nav aria-label={site.labels.footerNav} className="footer-socials">
-          {site.footer.links.map((link) => <a key={link.id} className="footer-link" href={link.href}>{link.label}</a>)}
+        {extraLinks.length > 0 ? <nav aria-label={site.labels.footerNav} className="footer-socials">
+          {extraLinks.map((link) => <a key={link.id} className="footer-link" href={link.href}>{link.label}</a>)}
         </nav> : null}
         <p className="footer-sign">{site.footer.note.replaceAll("{year}", String(new Date().getFullYear()))}</p>
       </div>
-      {event?.theme === "christmas" ? <ChristmasFooterScene /> : null}
+      {xmas ? <ChristmasFooterScene /> : null}
     </footer>
   );
 }

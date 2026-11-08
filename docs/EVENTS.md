@@ -56,3 +56,12 @@ owner decides, then PR into `main`.
 - Footer: `ChristmasFooterScene` is its own row after the footer grid (in normal flow, so it can never overlap text/links): four sparse evergreens + one bell on a hairline, right-aligned (centred on mobile).
 - Motion: trees fade/rise in once (staggered), then a ~1° sway; bell ±5° swing. Transform/opacity only; none under reduced motion.
 - Only rendered when the shown event theme is `christmas`; `useEvent()` now returns null on `/preview`, so the header, footer and shell agree.
+
+## t204 — Christmas night footer (replaces the t203 tiny trees/bell)
+Art direction: "Christmas Eve over a quiet village". The footer turns into a night sky (midnight navy, candle-gold accents, holly-red link underlines, snow white) only while the Christmas theme is on. Reasoning: the silver footer can't carry warm lights. A night palette makes the glowing windows, bulbs and moon read, and keeps cream text at high contrast.
+- Top band (own row): an evergreen garland in swags with coloured bulbs and seven hanging baubles. Bulbs glow, baubles swing ±4°.
+- Content: the real brand, description, socials, Explore/Company/Legal and copyright are unchanged. They get re-tinted (gold column titles, a star after the wordmark, gold-ringed socials).
+- Bottom band (own row): one SVG scene with stars, moon glow, far hills, a tree line, a snowy ridge, a five-building village with a lit church, mid evergreens with snow caps, a decorated tree with gifts, a lamp post, foreground drift and slow snowfall. `xMidYMax slice` keeps the village centred on tablet and phone.
+- Motion: opacity/transform keyframes only, staggered and slow. All of it is off under reduced motion.
+- Static SVG constants, inert (`aria-hidden`, no pointer events), no network, no JS. Every selector is scoped to `[data-event="christmas"]`.
+- Globally (all themes): the standalone footer link whose label equals the publisher ("DYPOL LABS") is filtered at render. Settings are untouched and other saved footer links still render. The copyright note is untouched.

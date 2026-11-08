@@ -168,17 +168,20 @@ test("particle count is capped (18, 10 on phones) and the ribbon is not fixed", 
   assert.doesNotMatch(rule(".event-ribbon"), /position:\s*fixed/);
 });
 
-test("t203 decorations: transform/opacity motion only, static under reduced motion, non-interactive", () => {
+test("t204 Christmas footer: transform/opacity motion only, static under reduced motion, inert", () => {
   const decor = readFileSync(new URL("../components/site/event-decor.tsx", import.meta.url), "utf8");
-  assert.equal((decor.match(/aria-hidden="true"/g) ?? []).length, 2);
-  for (const name of ["event-tree-in", "event-tree-sway", "event-bell-swing"]) {
+  assert.equal((decor.match(/aria-hidden="true"/g) ?? []).length, 3);
+  assert.doesNotMatch(decor, /<script|https?:\/\/(?!www\.w3\.org)/);
+  for (const name of ["xmas-glow", "xmas-twinkle", "xmas-breathe", "xmas-swing", "xmas-fall"]) {
     const body = css.match(new RegExp(`@keyframes ${name} \\{([\\s\\S]*?)\\n\\}`))?.[1] ?? "";
     assert.ok(body, name);
     const props = [...body.matchAll(/([a-z-]+):/g)].map((m) => m[1]);
     assert.ok(props.every((p) => p === "transform" || p === "opacity"), `${name}: ${props}`);
   }
   const reduced = css.slice(css.lastIndexOf("prefers-reduced-motion"));
-  assert.match(reduced, /\.event-tree,\s*\.event-bell\s*\{\s*animation: none/);
+  assert.match(reduced, /\.xs-village-glow \{\s*animation: none/);
+  assert.match(reduced, /\.xs-flake \{ animation: none/);
+  assert.match(css, /\.xmas-scene \{[\s\S]*?\}/);
+  assert.match(css, /\.site-footer--xmas > \.xmas-scene \{[^}]*pointer-events: none/);
   assert.match(css, /\.event-hat \{[^}]*pointer-events: none/);
-  assert.match(css, /\.event-footer-scene \{[^}]*pointer-events: none/);
 });
