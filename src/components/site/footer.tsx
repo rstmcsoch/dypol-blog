@@ -1,6 +1,6 @@
 import { footerColumns, footerExtraLinks, visibleSocials, SOCIAL_LABELS, type SocialPlatform } from "@/lib/social-links";
 import { useEvent, usePages, useSite } from "./use-site";
-import { ChristmasFooterGarland, ChristmasFooterScene } from "./event-decor";
+import { ChristmasFooterScene, ChristmasGarland } from "./event-decor";
 
 /** Inline brand icons (no icon library). Fill paths are the platforms'
  * standard glyphs; instagram/rss/email are drawn strokes. */
@@ -78,7 +78,7 @@ export function SiteFooter() {
   const extraLinks = footerExtraLinks(site.footer.links, site.publisher);
   return (
     <footer className={xmas ? "site-footer site-footer--xmas" : "site-footer"}>
-      {xmas ? <ChristmasFooterGarland /> : null}
+      {xmas ? <ChristmasGarland /> : null}
       <div className="container footer-grid">
         <div className="footer-brand">
           <p className="footer-mark">{site.name}</p>

@@ -170,7 +170,7 @@ test("particle count is capped (18, 10 on phones) and the ribbon is not fixed", 
 
 test("t204 Christmas footer: transform/opacity motion only, static under reduced motion, inert", () => {
   const decor = readFileSync(new URL("../components/site/event-decor.tsx", import.meta.url), "utf8");
-  assert.equal((decor.match(/aria-hidden="true"/g) ?? []).length, 3);
+  assert.equal((decor.match(/aria-hidden="true"/g) ?? []).length, 4);
   assert.doesNotMatch(decor, /<script|https?:\/\/(?!www\.w3\.org)/);
   for (const name of ["xmas-glow", "xmas-twinkle", "xmas-breathe", "xmas-swing", "xmas-fall"]) {
     const body = css.match(new RegExp(`@keyframes ${name} \\{([\\s\\S]*?)\\n\\}`))?.[1] ?? "";
@@ -215,4 +215,52 @@ test("t204 footer: six production-style socials still render; only the standalon
       assert.doesNotMatch(m[2], /display:\s*none|visibility:\s*hidden|opacity:\s*0[;\s]|height:\s*0|overflow:\s*hidden/, m[1].trim());
     }
   }
+});
+
+test("t205 scene variants: hero motifs composed inside every frame, no collisions, caps only trim sky", async () => {
+  const { SCENE_LAYOUT, SCENE_MODES } = await import("../components/site/event-decor-art.ts");
+  const cap = (mode: string) => Number(css.match(new RegExp(`\\.xmas-scene__v--${mode} \\{[^}]*max-height: (\\d+)px`))?.[1]);
+  // [min, max] rendered width per mode (wide is limited by max-width: 1920px).
+  const ranges: Record<string, [number, number]> = { compact: [300, 599], medium: [600, 1099], wide: [1100, 1920] };
+  assert.match(css, /\.xmas-scene__v--wide \{[^}]*max-width: 1920px/);
+  for (const mode of SCENE_MODES) {
+    const { w, h, boxes } = SCENE_LAYOUT[mode];
+    for (const key of ["moon", "village", "tree", "gifts", "lamp"] as const) {
+      const [x1, y1, x2, y2] = boxes[key];
+      assert.ok(x1 >= 0 && y1 >= 0 && x2 <= w && y2 <= h, `${mode}.${key} inside ${w}x${h}: ${boxes[key]}`);
+    }
+    const ground = ["tree", "gifts", "village", "lamp"] as const;
+    for (let i = 0; i < ground.length; i++) for (let j = i + 1; j < ground.length; j++) {
+      const a = boxes[ground[i]], b = boxes[ground[j]];
+      assert.ok(a[2] <= b[0] || b[2] <= a[0], `${mode}: ${ground[i]} and ${ground[j]} overlap horizontally`);
+    }
+    // Phone keeps the decorated tree as a real hero (>= 18% of the frame width), not a crumb.
+    if (mode === "compact") assert.ok((boxes.tree[2] - boxes.tree[0]) / w >= 0.18);
+    const max = cap(mode);
+    assert.ok(max > 0, `${mode} cap`);
+    for (const width of ranges[mode]) {
+      const natural = (width * h) / w;
+      const trimmed = natural > max ? h - max / (width / w) : 0; // xMidYMax slice trims the top only
+      const topMost = Math.min(...Object.values(boxes).map((b) => b[1]));
+      assert.ok(trimmed < topMost, `${mode}@${width}px trims ${trimmed.toFixed(1)} >= motif top ${topMost}`);
+    }
+  }
+});
+
+test("t205 static markup: three scene variants with unique ids, no dangling refs, decor inert", async () => {
+  const { SCENES, SCENE_MODES, GARLAND, SPRIG } = await import("../components/site/event-decor-art.ts");
+  const all = SCENE_MODES.map((m) => SCENES[m]).join("");
+  const ids = [...all.matchAll(/ id="([^"]+)"/g)].map((m) => m[1]);
+  assert.ok(ids.length >= 9);
+  assert.equal(new Set(ids).size, ids.length, "gradient ids unique across variants");
+  for (const m of all.matchAll(/url\(#([^)]+)\)/g)) assert.ok(ids.includes(m[1]), `dangling ${m[1]}`);
+  for (const mode of SCENE_MODES) for (const motif of ["xs-bigtree", "xs-gifts", "xs-village", "xs-lamp", "xs-moon"]) assert.ok(SCENES[mode].includes(`class="${motif}"`), `${mode} ${motif}`);
+  assert.doesNotMatch(all + GARLAND + SPRIG, /<a |<button|tabindex|<script|href=/);
+  const decor = readFileSync(new URL("../components/site/event-decor.tsx", import.meta.url), "utf8");
+  assert.match(decor, /className="xmas-menu" aria-hidden="true"/);
+  const header = readFileSync(new URL("../components/site/header.tsx", import.meta.url), "utf8");
+  assert.match(header, /event\?\.theme === "christmas" \? <ChristmasMenuDecor \/> : null\}\s*<div className="site-nav__inner" ref=\{panel\}>/);
+  assert.match(css, /\[data-event="christmas"\] \.xmas-menu \{ display: none; \}/);
+  assert.match(css, /\.site-nav\.is-open \.xmas-menu \{[^}]*pointer-events: none/);
+  assert.match(css, /\.site-nav\.is-open \.site-nav__inner \{[^}]*padding-top: 46px/);
 });
