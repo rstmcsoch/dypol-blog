@@ -378,8 +378,8 @@ export const adminSaveSettings = createServerFn({ method: "POST" })
 
 export const adminEvents = createServerFn({ method: "GET" }).handler(async () => {
   await guard();
-  const { readEvents } = await import("./events.server");
-  return { config: await readEvents(), now: Date.now() };
+  const { readEventsForAdmin } = await import("./events.server");
+  return { ...(await readEventsForAdmin()), now: Date.now() };
 });
 
 export const adminSaveEvents = createServerFn({ method: "POST" })
@@ -388,10 +388,11 @@ export const adminSaveEvents = createServerFn({ method: "POST" })
     await writeGuard();
     const { saveEvents } = await import("./events.server");
     const { logAdminAction } = await import("./repository.server");
-    const config = await saveEvents(data);
+    const input = (data ?? {}) as { config?: unknown; version?: unknown };
+    const { config, version } = await saveEvents(input.config, typeof input.version === "string" ? input.version : "");
     const enabled = config.events.filter((event) => event.enabled).length;
     await logAdminAction("events.save", `Saved ${config.events.length} site event${config.events.length === 1 ? "" : "s"} (${enabled} enabled)`);
-    return { config };
+    return { config, version };
   });
 
 /** t183: save Settings → Custom head code entries (add / edit / delete / reorder) at once. */

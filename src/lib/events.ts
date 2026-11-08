@@ -42,6 +42,8 @@ export type SiteEvent = {
   colors: EventColors;
   /** t210: year shown by designs that show one (New Year). Absent/null = automatic. */
   year?: number | null;
+  /** t214: server-stamped time of the last meaningful saved change (never sent by the browser). */
+  editedAt?: string;
 };
 
 export type EventsConfig = { events: SiteEvent[] };
@@ -187,6 +189,8 @@ export const eventSchema = z
     colors: z.object({ primary: hexColor, secondary: hexColor, ink: hexColor }),
     // t210: optional display year; integers only (it is rendered into SVG text), absent = automatic.
     year: z.number().int().min(EVENT_YEAR_MIN).max(EVENT_YEAR_MAX).nullable().optional(),
+    // t214: server-controlled; whatever a browser sends is replaced by stampEdits() on save.
+    editedAt: z.string().max(40).refine((v) => Number.isFinite(Date.parse(v)), "Bad timestamp").optional(),
   })
   .superRefine((event, ctx) => {
     if (event.startsAt && event.endsAt && Date.parse(event.endsAt) <= Date.parse(event.startsAt)) {
@@ -420,4 +424,87 @@ export function newEventDraft(theme: EventTheme = "christmas", now = new Date())
     intensity: "subtle",
     colors: { ...preset.colors },
   };
+}
+
+// ---------------------------------------------------------------------------------------------
+// t213/t214: lifecycle of saved events — Upcoming → Ongoing → Expired (kept 7 days) → deleted.
+// ---------------------------------------------------------------------------------------------
+export const EXPIRED_RETENTION_DAYS = 7;
+export const EXPIRED_RETENTION_MS = EXPIRED_RETENTION_DAYS * DAY_MS;
+
+export type EventLifecycle = "upcoming" | "ongoing" | "waiting" | "paused" | "expired";
+
+/** Exclusive end instant (the first moment after the inclusive end date), or null if open-ended. */
+function endExclusive(event: Pick<SiteEvent, "endsAt">): number | null {
+  if (!event.endsAt) return null;
+  const t = Date.parse(event.endsAt);
+  return Number.isFinite(t) ? t + 1 : null;
+}
+
+/**
+ * When an expired event is deleted: 7 days after its inclusive end (IST end of day), or 7 days
+ * after a later meaningful saved edit — whichever is later. Open-ended/undated events: never.
+ * Legacy rows without editedAt use the end date only; reading never changes this.
+ */
+export function purgeDeadline(event: Pick<SiteEvent, "endsAt" | "editedAt">): number | null {
+  const end = endExclusive(event);
+  if (end === null) return null;
+  const edited = event.editedAt ? Date.parse(event.editedAt) : NaN;
+  return Math.max(end, Number.isFinite(edited) ? edited : -Infinity) + EXPIRED_RETENTION_MS;
+}
+
+/** Honest card status. "waiting" = inside its dates but another live event is the one applied. */
+export function eventLifecycle(event: SiteEvent, config: EventsConfig, now = Date.now()): EventLifecycle {
+  const end = endExclusive(event);
+  if (end !== null && now >= end) return "expired";
+  if (!event.enabled) return "paused";
+  if (event.startsAt && now < Date.parse(event.startsAt)) return "upcoming";
+  return resolveActiveEvent(config, now)?.id === event.id ? "ongoing" : "waiting";
+}
+
+/** Drop events whose deletion deadline has passed (now >= deadline). Pure; never touches undated rows. */
+export function purgeExpired(config: EventsConfig, now = Date.now()): { config: EventsConfig; removed: SiteEvent[] } {
+  const removed: SiteEvent[] = [];
+  const events = config.events.filter((event) => {
+    const deadline = purgeDeadline(event);
+    if (deadline !== null && now >= deadline) {
+      removed.push(event);
+      return false;
+    }
+    return true;
+  });
+  return { config: { events }, removed };
+}
+
+function canonical(event: SiteEvent): string {
+  const { editedAt: _e, ...rest } = event;
+  const clean = Object.fromEntries(Object.entries(rest).filter(([, v]) => v !== undefined && v !== null));
+  const sort = (v: unknown): unknown =>
+    v && typeof v === "object" && !Array.isArray(v) ? Object.fromEntries(Object.keys(v as object).sort().map((k) => [k, sort((v as Record<string, unknown>)[k])])) : v;
+  return JSON.stringify(sort(clean));
+}
+
+/**
+ * Server-side edit stamping: an event identical to what is stored (ignoring editedAt) keeps its
+ * stored editedAt (or none, for legacy rows); a new or changed event gets editedAt = now.
+ * The browser's editedAt is always ignored.
+ */
+export function stampEdits(next: EventsConfig, previous: EventsConfig | null, now = Date.now()): EventsConfig {
+  const before = new Map((previous?.events ?? []).map((event) => [event.id, event]));
+  return {
+    events: next.events.map((event) => {
+      const { editedAt: _client, ...rest } = event;
+      const old = before.get(event.id);
+      if (old && canonical(old) === canonical(event)) return old.editedAt ? { ...rest, editedAt: old.editedAt } : rest;
+      return { ...rest, editedAt: new Date(now).toISOString() };
+    }),
+  };
+}
+
+/** Tiny stable signature of the stored row text, for compare-and-swap between tabs/clean-up. */
+export function eventsSignature(raw: string | null): string {
+  if (raw === null) return "none";
+  let h = 0x811c9dc5;
+  for (let i = 0; i < raw.length; i += 1) h = Math.imul(h ^ raw.charCodeAt(i), 0x01000193) >>> 0;
+  return `${raw.length.toString(36)}-${h.toString(36)}`;
 }

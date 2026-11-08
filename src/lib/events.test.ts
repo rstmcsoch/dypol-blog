@@ -552,7 +552,7 @@ test("t209 festival wiring + CSS: theme-gated, inert, palettes legible, slow mot
 test("t211: one generic Add event + Design dropdown with every theme; no seeded New Year row", async () => {
   const { readFileSync } = await import("node:fs");
   const admin = readFileSync(new URL("../routes/admin/events.tsx", import.meta.url), "utf8");
-  assert.equal((admin.match(/onClick=\{add[A-Za-z]*\}/g) ?? []).join(","), "onClick={addEvent}");
+  assert.equal((admin.match(/onClick=\{(add|startNew)[A-Za-z]*\}/g) ?? []).join(","), "onClick={startNew}"); // t213: one generic Add event
   assert.match(admin, /EVENT_PRESETS\.map\(\(preset\)/);
   const themes = EVENT_PRESETS.map((p) => p.value);
   for (const t of ["christmas", "newyear", "diwali", "holi", "eid"]) assert.ok(themes.includes(t as never), t);

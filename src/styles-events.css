@@ -981,3 +981,8 @@ html.nav-open [data-event] .event-particles {
     transform: none;
   }
 }
+
+/* t214 fix: Holi's main colour is a deep purple, which made half the confetti near-invisible; use
+   vivid powder colours for the particle layer only (menu, buttons and page styling unchanged). */
+[data-event="holi"] .event-particles { --event-flake: #22d3c5; }
+[data-event="holi"] .event-particles__piece { opacity: 0.42; }

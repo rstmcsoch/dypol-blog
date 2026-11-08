@@ -159,3 +159,31 @@ bunting sway — transform/opacity only, all static under reduced motion; decora
 `aria-hidden` and `pointer-events: none`. Menu, buttons and core styles untouched; the event's
 existing particle effect is unchanged. Any stored event whose theme is `halloween` (including the
 live card) gets the new art automatically with no settings change.
+
+## t213/t214 — Save-then-card editor and automatic lifecycle
+
+**Editor.** One form at the top (Add event → New event, or Edit on a card loads it there). Save
+persists, closes the form and shows the event as a compact card under "Saved events" (name, design,
+year, date range, status tag, Edit / Preview / Delete). Cancel discards (asks if unsaved). New events
+start Active; untick "Active" to pause. No per-theme buttons; design comes from the dropdown.
+
+**Tags.** Upcoming (before start date) · Ongoing (the event being applied now) · "Scheduled · another
+event is showing" (inside its dates but another live event wins) · Paused (switched off) · Expired
+(after the inclusive end date; "Expired · paused" if it was also off).
+
+**Automatic on/off** is the existing server-side resolver (date-only IST, inclusive end) — no browser.
+
+**Retention and deletion (t214, supersedes "delete at expiry").** An expired event stays as an
+Expired card for 7 days, then is deleted from storage. Deadline = max(exclusive end = next-day 00:00
+IST, last meaningful saved edit) + 7 days (`purgeDeadline`). `editedAt` is stamped by the server only
+(`stampEdits`): a new event or any changed field sets it to now; a no-op save keeps the stored value;
+reads, previews and page views never change it; a browser-sent value is ignored. Legacy rows without
+`editedAt` use the end date. Open-ended or undated events are never deleted. The clean-up
+(`sweepExpiredEvents`) runs on the normal server request path (public pages and the admin tab) — the
+app has no cron — and writes only when an event is past its deadline, with a compare-and-swap on the
+exact stored row text. Admin saves are compare-and-swap too: the editor sends the row signature it
+loaded; if the row changed meanwhile (another tab or the clean-up) the save is refused with "reload and
+try again" instead of overwriting. Content cache is invalidated by the usual site_settings write bump.
+
+Also: Eid arcade arches now close on a sill above a floor band (no arches running off the frame);
+Holi particles use vivid powder colours (particle layer only).
