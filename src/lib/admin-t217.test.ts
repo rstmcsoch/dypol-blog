@@ -58,7 +58,7 @@ test("t217 homepage: no persistent mini preview; Preview button opens a dialog w
   assert.match(dialog, /showModal\(\)/);
   assert.match(dialog, /Unsaved/);
   assert.match(dialog, /\{open \? \(\s*<iframe/, "frame only exists while open");
-  assert.match(dialog, /postMessage\(\{ type: "dypol-home-draft", draft \}, window\.location\.origin\)/);
+  assert.match(dialog, /postMessage\(\s*\{ type: "dypol-home-draft", draft \},\s*window\.location\.origin,?\s*\)/);
   assert.doesNotMatch(css, /@media \(min-width: 1200px\) \{ \.adm-builder \{ grid-template-columns/);
 });
 
