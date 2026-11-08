@@ -1,4 +1,4 @@
-import { footerColumns, visibleSocials, SOCIAL_LABELS, type SocialPlatform } from "@/lib/social-links";
+import { footerColumns, footerExtraLinks, visibleSocials, SOCIAL_LABELS, type SocialPlatform } from "@/lib/social-links";
 import { useEvent, usePages, useSite } from "./use-site";
 import { ChristmasFooterGarland, ChristmasFooterScene } from "./event-decor";
 
@@ -75,7 +75,7 @@ export function SiteFooter() {
   const socials = visibleSocials(site.socials);
   const xmas = event?.theme === "christmas";
   // t204: the standalone publisher link ("DYPOL LABS") is no longer shown; other saved links still render.
-  const extraLinks = site.footer.links.filter((link) => link.label.trim().toLowerCase() !== (site.publisher || "DYPOL LABS").trim().toLowerCase());
+  const extraLinks = footerExtraLinks(site.footer.links, site.publisher);
   return (
     <footer className={xmas ? "site-footer site-footer--xmas" : "site-footer"}>
       {xmas ? <ChristmasFooterGarland /> : null}

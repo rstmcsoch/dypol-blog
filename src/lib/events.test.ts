@@ -185,3 +185,34 @@ test("t204 Christmas footer: transform/opacity motion only, static under reduced
   assert.match(css, /\.site-footer--xmas > \.xmas-scene \{[^}]*pointer-events: none/);
   assert.match(css, /\.event-hat \{[^}]*pointer-events: none/);
 });
+
+test("t204 footer: six production-style socials still render; only the standalone publisher link is dropped", async () => {
+  const { visibleSocials, footerExtraLinks } = await import("./social-links.ts");
+  const socials = [
+    { platform: "x", url: "https://x.com/dypollabs", visible: true },
+    { platform: "facebook", url: "https://www.facebook.com/dypollabs", visible: true },
+    { platform: "instagram", url: "https://www.instagram.com/dypollabs", visible: true },
+    { platform: "youtube", url: "https://www.youtube.com/dypollabs", visible: true },
+    { platform: "linkedin", url: "", visible: false },
+    { platform: "rss", url: "/feed.xml", visible: true },
+    { platform: "email", url: "mailto:dypollabs@protonmail.com", visible: true },
+  ] as Parameters<typeof visibleSocials>[0];
+  assert.deepEqual(visibleSocials(socials).map((s) => s.url), [
+    "https://x.com/dypollabs", "https://www.facebook.com/dypollabs", "https://www.instagram.com/dypollabs",
+    "https://www.youtube.com/dypollabs", "/feed.xml", "mailto:dypollabs@protonmail.com",
+  ]);
+  const links = [
+    { id: "a", label: "DYPOL LABS", href: "/about" },
+    { id: "b", label: " dypol labs ", href: "/x" },
+    { id: "c", label: "Advertise", href: "/advertise" },
+    { id: "d", label: "DYPOL LABS Careers", href: "/careers" },
+  ];
+  assert.deepEqual(footerExtraLinks(links, "DYPOL LABS").map((l) => l.id), ["c", "d"]);
+  assert.deepEqual(footerExtraLinks(links, "Acme").map((l) => l.id), ["a", "b", "c", "d"]);
+  // Event CSS never hides or shrinks socials/brand/columns/copyright.
+  for (const m of css.matchAll(/([^{}]+)\{([^}]*)\}/g)) {
+    if (/footer-social|footer-brand|footer-columns|footer-sign|footer-link|footer-grid/.test(m[1])) {
+      assert.doesNotMatch(m[2], /display:\s*none|visibility:\s*hidden|opacity:\s*0[;\s]|height:\s*0|overflow:\s*hidden/, m[1].trim());
+    }
+  }
+});
