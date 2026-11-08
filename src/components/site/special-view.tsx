@@ -1,4 +1,5 @@
 import { Fragment, useMemo, useRef, useState } from "react";
+import { armSmoothScroll, isPlainClick } from "@/lib/smooth-scroll";
 import { Link } from "@tanstack/react-router";
 import type { ArticleBlock, Article, Category, SiteConfig, Tag } from "@/content/types";
 import type { SpecialBlock, SpecialResource, SpecialSource, TocEntry } from "@/lib/special/body";
@@ -119,7 +120,16 @@ function SpecialToc({ entries }: { entries: TocEntry[] }) {
       <ol id="spx-toc-list" className="spx-toc__list">
         {entries.map((e) => (
           <li key={e.id} className={e.level === 2 ? "is-sub" : undefined}>
-            <a href={`#${e.id}`} onClick={() => setOpen(false)}>{e.text}</a>
+            <a
+              href={`#${e.id}`}
+              onClick={(ev) => {
+                // t215: smooth native fragment scroll for plain clicks; modifiers/new-tab stay native.
+                if (isPlainClick(ev)) armSmoothScroll();
+                setOpen(false);
+              }}
+            >
+              {e.text}
+            </a>
           </li>
         ))}
       </ol>

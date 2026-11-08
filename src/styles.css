@@ -4968,3 +4968,50 @@ body:has(.consent-bar) .ad-consent { display: none; }
   .head-card__actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .desk .head-card .head-card__btn { width: 100%; min-height: 2.75rem; }
 }
+
+/* ---- t215/t216: smooth in-page scrolling (only while a user-started scroll runs) + Back to top ---- */
+html.is-smooth-scrolling { scroll-behavior: smooth; }
+.back-to-top__sentinel { position: absolute; top: 0; left: 0; width: 1px; height: 100vh; pointer-events: none; visibility: hidden; }
+.back-to-top {
+  position: fixed;
+  right: max(1rem, env(safe-area-inset-right, 0px));
+  bottom: max(1rem, env(safe-area-inset-bottom, 0px));
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  padding: 0;
+  border: var(--line, 1px) solid color-mix(in srgb, var(--ink) 22%, transparent);
+  border-radius: 999px;
+  color: var(--ink);
+  background: color-mix(in srgb, var(--paper) 88%, transparent);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.14);
+  cursor: pointer;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateY(0.75rem);
+  transition: opacity 0.22s ease, transform 0.22s ease, visibility 0s linear 0.22s, background-color 0.15s ease;
+}
+.back-to-top.is-shown {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: none;
+  transition: opacity 0.22s ease, transform 0.22s ease, visibility 0s, background-color 0.15s ease;
+}
+.back-to-top:hover { background: var(--paper); }
+.back-to-top svg { transition: transform 0.18s ease; }
+.back-to-top:hover svg, .back-to-top:focus-visible svg { transform: translateY(-2px); }
+.back-to-top:active svg { transform: translateY(-4px); }
+.back-to-top:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
+@media (min-width: 768px) { .back-to-top { right: max(1.5rem, env(safe-area-inset-right, 0px)); bottom: max(1.5rem, env(safe-area-inset-bottom, 0px)); } }
+@media (max-height: 500px) and (orientation: landscape) { .back-to-top { width: 2.4rem; height: 2.4rem; bottom: max(0.75rem, env(safe-area-inset-bottom, 0px)); } }
+/* Never over the open menu, the consent prompts, or a mobile anchor ad. */
+html.nav-open .back-to-top { display: none; }
+html:has(.consent-bar) .back-to-top, html:has(.ad-consent) .back-to-top { display: none; }
+@media (max-width: 767px) { html.has-ad-anchor .back-to-top { bottom: calc(5.25rem + env(safe-area-inset-bottom, 0px)); } }
+@media print { .back-to-top { display: none; } }

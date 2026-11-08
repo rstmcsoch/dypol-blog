@@ -4,6 +4,7 @@ import type { CSSProperties, ReactNode } from "react";
 import { AuthProvider } from "@/lib/auth/provider";
 import { PreviewHostBridge } from "@/components/preview-host-bridge";
 import { SiteFooter } from "@/components/site/footer";
+import { BackToTop } from "@/components/site/back-to-top";
 import { SiteHeader } from "@/components/site/header";
 import { SiteEventLayer } from "@/components/site/event-layer";
 import { ExternalLinkGuard } from "@/components/site/external-link-guard";
@@ -123,6 +124,7 @@ function RootLayout() {
         <Outlet />
       </main>
       <SiteFooter />
+      <BackToTop />
       <ExternalLinkGuard />
       <AdsRuntime />
     </div>
