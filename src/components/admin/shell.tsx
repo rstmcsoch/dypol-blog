@@ -201,7 +201,6 @@ export function AdminShell({
 
   const current = groups.flatMap((g) => g.links.map((l) => ({ ...l, group: g.label }))).find((l) => isActive(l, pathname));
   const who = mode === "dev" ? "Local preview" : (email ?? "Signed in with admin token");
-  const initial = (email ?? "A").trim().charAt(0).toUpperCase() || "A";
 
   const themeButton = (
     <button
@@ -422,12 +421,12 @@ export function AdminShell({
                 aria-haspopup="true"
                 onClick={() => setMenu(menu === "profile" ? null : "profile")}
               >
-                {initial}
+                <img className="adm-avatar__img" src="/admin-avatar-96.webp" srcSet="/admin-avatar-96.webp 1x, /admin-avatar-192.webp 2x" width={38} height={38} alt="" decoding="async" />
               </button>
               {menu === "profile" ? (
                 <div className="adm-dd__panel adm-dd__panel--profile" role="menu" aria-label="Account">
                   <div className="adm-profile">
-                    <span className="adm-avatar adm-avatar--lg" aria-hidden="true">{initial}</span>
+                    <span className="adm-avatar adm-avatar--lg" aria-hidden="true"><img className="adm-avatar__img" src="/admin-avatar-192.webp" width={64} height={64} alt="" decoding="async" /></span>
                     <strong>{mode === "dev" ? "Local preview" : "Admin"}</strong>
                     <small>{who}</small>
                   </div>
