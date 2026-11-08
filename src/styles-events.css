@@ -257,6 +257,8 @@
 .event-footer-scene {
   position: relative;
   z-index: 1;
+  /* t203: keep the art clear of the footer's overflow clip and the page bottom. */
+  padding-block: 0.25rem max(1rem, env(safe-area-inset-bottom));
   display: flex;
   justify-content: flex-end;
   pointer-events: none;
