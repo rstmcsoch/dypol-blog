@@ -91,11 +91,9 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootLayout() {
   const site = useSite();
-  const shellEvent = useEvent();
+  const event = useEvent();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const desk = pathname === "/admin" || pathname.startsWith("/admin/");
-  // t202: no seasonal decoration on admin previews.
-  const event = pathname === "/preview" || pathname.startsWith("/preview/") ? null : shellEvent;
   // GoogleAnalytics stays the first child of a stable fragment so switching
   // between the public shell and the admin desk never remounts its tracker.
   if (desk) return <Outlet />;

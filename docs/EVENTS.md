@@ -50,3 +50,9 @@ with the same one-off Workers build of this exact commit used for Sharing; the t
 `main` stay untouched. `main` must not be built until it contains this branch: reconcile
 by merging `events-christmas` into a branch from `main`, dropping/keeping Webpushr as the
 owner decides, then PR into `main`.
+
+## t203 — Christmas hat + footer scene (plan)
+- Hat: inline SVG (`event-decor.tsx` `SantaHat`) inside `.wordmark`, absolutely positioned above the first letter, tilted, `pointer-events:none`, aria-hidden. Nothing covers the lettering or BLOG badge.
+- Footer: `ChristmasFooterScene` is its own row after the footer grid (in normal flow, so it can never overlap text/links): four sparse evergreens + one bell on a hairline, right-aligned (centred on mobile).
+- Motion: trees fade/rise in once (staggered), then a ~1° sway; bell ±5° swing. Transform/opacity only; none under reduced motion.
+- Only rendered when the shown event theme is `christmas`; `useEvent()` now returns null on `/preview`, so the header, footer and shell agree.

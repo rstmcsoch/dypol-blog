@@ -1,5 +1,6 @@
 import { footerColumns, visibleSocials, SOCIAL_LABELS, type SocialPlatform } from "@/lib/social-links";
-import { usePages, useSite } from "./use-site";
+import { useEvent, usePages, useSite } from "./use-site";
+import { ChristmasFooterScene } from "./event-decor";
 
 /** Inline brand icons (no icon library). Fill paths are the platforms'
  * standard glyphs; instagram/rss/email are drawn strokes. */
@@ -64,6 +65,7 @@ function SocialIcon({ platform }: { platform: SocialPlatform }) {
 
 export function SiteFooter() {
   const site = useSite();
+  const event = useEvent();
   const pages = usePages();
   const publishedPaths = new Set(pages.map((p) => `/${p.slug}`));
   const standardPaths = new Set(["/about", "/contact", "/editorial-policy", "/corrections-policy", "/privacy-policy", "/terms", "/dmca", "/cookie-policy", "/disclaimer"]);
@@ -110,6 +112,7 @@ export function SiteFooter() {
         </nav> : null}
         <p className="footer-sign">{site.footer.note.replaceAll("{year}", String(new Date().getFullYear()))}</p>
       </div>
+      {event?.theme === "christmas" ? <ChristmasFooterScene /> : null}
     </footer>
   );
 }

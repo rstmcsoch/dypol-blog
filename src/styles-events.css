@@ -220,3 +220,132 @@
     opacity: 0.6;
   }
 }
+
+/* ---- t203: Christmas hat on the wordmark (sits above the first letter, never over it) ---- */
+[data-event] .wordmark {
+  position: relative;
+}
+.event-hat {
+  position: absolute;
+  left: -0.42rem;
+  top: calc(50% - 1.55rem);
+  width: 1.55rem;
+  height: auto;
+  transform: rotate(-16deg);
+  transform-origin: 20% 90%;
+  pointer-events: none;
+  overflow: visible;
+}
+.event-hat__cap {
+  fill: #c8102e;
+}
+.event-hat__brim,
+.event-hat__pom {
+  fill: #fbfbf8;
+  stroke: rgba(0, 0, 0, 0.12);
+  stroke-width: 1;
+}
+@media (max-width: 520px) {
+  .event-hat {
+    width: 1.25rem;
+    top: calc(50% - 1.3rem);
+    left: -0.32rem;
+  }
+}
+
+/* ---- t203: footer evergreens + bell, in their own row below the footer text ---- */
+.event-footer-scene {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  justify-content: flex-end;
+  pointer-events: none;
+}
+.event-footer-scene__art {
+  display: block;
+  width: min(320px, 70%);
+  height: auto;
+  color: var(--ft-fg, currentColor);
+  overflow: visible;
+}
+.event-tree path,
+.event-tree rect {
+  fill: color-mix(in srgb, var(--event-primary) 78%, var(--ft-fg, #111111));
+}
+.event-tree--2 path,
+.event-tree--4 path {
+  fill: color-mix(in srgb, var(--event-primary) 55%, var(--ft-fg, #111111));
+}
+.event-bell__body,
+.event-bell__clapper {
+  fill: #c9a227;
+}
+.event-bell__line,
+.event-footer-scene__ground {
+  fill: none;
+  stroke: color-mix(in srgb, var(--ft-fg, #111111) 35%, transparent);
+  stroke-width: 1;
+}
+.event-tree {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  animation: event-tree-in 0.9s ease-out both, event-tree-sway 7s ease-in-out 0.9s infinite;
+}
+.event-tree--2 {
+  animation-delay: 0.12s, 1.6s;
+}
+.event-tree--3 {
+  animation-delay: 0.24s, 2.4s;
+}
+.event-tree--4 {
+  animation-delay: 0.36s, 3.1s;
+}
+.event-bell {
+  transform-box: view-box;
+  transform-origin: 160px 0;
+  animation: event-bell-swing 4.8s ease-in-out infinite;
+}
+@keyframes event-tree-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes event-tree-sway {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  50% {
+    transform: rotate(1.2deg);
+  }
+}
+@keyframes event-bell-swing {
+  0%,
+  100% {
+    transform: rotate(-5deg);
+  }
+  50% {
+    transform: rotate(5deg);
+  }
+}
+@media (max-width: 520px) {
+  .event-footer-scene {
+    justify-content: center;
+  }
+  .event-footer-scene__art {
+    width: min(260px, 86%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .event-tree,
+  .event-bell {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+}

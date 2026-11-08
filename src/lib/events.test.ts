@@ -167,3 +167,18 @@ test("particle count is capped (18, 10 on phones) and the ribbon is not fixed", 
   assert.match(css, /nth-child\(n \+ 11\)\s*\{\s*display:\s*none/);
   assert.doesNotMatch(rule(".event-ribbon"), /position:\s*fixed/);
 });
+
+test("t203 decorations: transform/opacity motion only, static under reduced motion, non-interactive", () => {
+  const decor = readFileSync(new URL("../components/site/event-decor.tsx", import.meta.url), "utf8");
+  assert.equal((decor.match(/aria-hidden="true"/g) ?? []).length, 2);
+  for (const name of ["event-tree-in", "event-tree-sway", "event-bell-swing"]) {
+    const body = css.match(new RegExp(`@keyframes ${name} \\{([\\s\\S]*?)\\n\\}`))?.[1] ?? "";
+    assert.ok(body, name);
+    const props = [...body.matchAll(/([a-z-]+):/g)].map((m) => m[1]);
+    assert.ok(props.every((p) => p === "transform" || p === "opacity"), `${name}: ${props}`);
+  }
+  const reduced = css.slice(css.lastIndexOf("prefers-reduced-motion"));
+  assert.match(reduced, /\.event-tree,\s*\.event-bell\s*\{\s*animation: none/);
+  assert.match(css, /\.event-hat \{[^}]*pointer-events: none/);
+  assert.match(css, /\.event-footer-scene \{[^}]*pointer-events: none/);
+});

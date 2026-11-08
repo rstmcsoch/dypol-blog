@@ -1,4 +1,4 @@
-import { getRouteApi } from "@tanstack/react-router";
+import { getRouteApi, useRouterState } from "@tanstack/react-router";
 import { site as fallbackSite } from "@/content/site";
 import type { SiteConfig } from "@/content/types";
 
@@ -12,6 +12,9 @@ export function useSite(): SiteConfig {
 /** Seasonal event for this request (null = the ordinary site). */
 export function useEvent(): import("@/lib/events").SiteEvent | null {
   const data = rootRoute.useLoaderData();
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  // t202: never on admin article previews.
+  if (pathname === "/preview" || pathname.startsWith("/preview/")) return null;
   return data?.event ?? null;
 }
 
