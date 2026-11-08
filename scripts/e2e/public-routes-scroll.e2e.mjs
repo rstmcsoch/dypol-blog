@@ -1,3 +1,4 @@
+// Usage: node scripts/e2e/public-routes-scroll.e2e.mjs <base>   (t216: Back to top on public routes, not admin; route changes not animated)
 import { chromium } from "playwright";
 const base = process.argv[2];
 const b = await chromium.launch({ executablePath: "/usr/bin/google-chrome", args: ["--no-sandbox"] });

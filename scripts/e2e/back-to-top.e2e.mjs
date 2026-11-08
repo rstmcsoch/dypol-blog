@@ -1,4 +1,5 @@
 import { chromium } from "playwright";
+// Usage: node scripts/e2e/back-to-top.e2e.mjs <base> <path> [toc]   (t215/t216)
 const base = process.argv[2]; const path = process.argv[3]; const toc = process.argv[4] === "toc";
 const browser = await chromium.launch({ executablePath: "/usr/bin/google-chrome", args: ["--no-sandbox"] });
 const out = {};
@@ -12,7 +13,7 @@ for (const [name, vp, reduced] of [["phone", { width: 390, height: 844 }, false]
   r.top = await vis();
   if (toc) {
     const link = page.locator(".toc__list a").last();
-    if (name === "phone") await page.click(".toc__toggle");
+    if (await page.locator(".toc__toggle").isVisible()) await page.click(".toc__toggle");
     const href = await link.getAttribute("href");
     const y0 = await page.evaluate(() => scrollY);
     await link.click();
