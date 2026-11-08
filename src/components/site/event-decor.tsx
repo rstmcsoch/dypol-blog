@@ -121,6 +121,14 @@ export function FestivalOrnament({ theme }: { theme: FestivalTheme }) {
           <path className="event-ornament__clay" d="M6 22Q8 27 16 27Q24 27 26 22Q16 24 6 22Z" />
           <path className="event-ornament__flame" d="M16 4C20 10 20 15 16 20C12 15 12 10 16 4Z" />
         </>
+      ) : theme === "halloween" ? (
+        <>
+          <ellipse className="event-ornament__pk" cx="12" cy="20" rx="5" ry="6" />
+          <ellipse className="event-ornament__pk" cx="20" cy="20" rx="5" ry="6" />
+          <ellipse className="event-ornament__pk2" cx="16" cy="20" rx="4.6" ry="6.4" />
+          <path className="event-ornament__stem" d="M15.4 14q.6-3.4 3-4l.6 1.2q-1.8.8-2 2.8z" />
+          <path className="event-ornament__face" d="M12.6 19l1.4-2 1.4 2zM16.6 19l1.4-2 1.4 2zM12.5 21.6q3.5 2.6 7 0q-3.5 1-7 0z" />
+        </>
       ) : theme === "holi" ? (
         <>
           <circle className="event-ornament__a" cx="9" cy="16" r="5" />

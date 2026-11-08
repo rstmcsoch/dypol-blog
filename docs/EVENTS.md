@@ -146,3 +146,16 @@ switched-off Christmas example — no New Year card. Switching design keeps the 
 and on/off state; it updates effect and colours, and the message only if it was still the old preset's.
 Multiple events stay supported. Stored rows are never filtered on read: removing the existing redundant
 production `newyear` row is a one-off, targeted edit of that exact row (see release notes), not a migration.
+
+## t212 — Halloween design
+
+Halloween (already in the Design dropdown) now uses the festival pipeline like Diwali/Holi/Eid:
+`FESTIVAL_THEMES` includes `halloween`; `FESTIVAL_ART.halloween` has a bunting frieze (orange/purple
+pennants with small swaying pumpkins) and three composed scenes — wide/medium/compact — of a
+moonlit plum sky, stars, friendly bats, a crooked village with lit windows, bare trees and carved
+smiling pumpkins, with "HAPPY HALLOWEEN". Short-landscape caps the band height. Logo gets a tiny
+pumpkin ornament. Motion: bat glide (9–13 s), wing flutter (3.6 s), candle glow, star twinkle,
+bunting sway — transform/opacity only, all static under reduced motion; decorations are
+`aria-hidden` and `pointer-events: none`. Menu, buttons and core styles untouched; the event's
+existing particle effect is unchanged. Any stored event whose theme is `halloween` (including the
+live card) gets the new art automatically with no settings change.

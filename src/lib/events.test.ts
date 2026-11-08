@@ -467,7 +467,7 @@ test("t209 festival art: composed per size, inside the frame, no collisions, cap
   const { FESTIVAL_ART, FESTIVAL_THEMES, SCENE_MODES, SCENES, NY_SCENES, GARLAND, NY_FRIEZE } = art;
   const ranges: Record<string, [number, number]> = { compact: [300, 599], medium: [600, 1099], wide: [1100, 1920] };
   const capOf = (mode: string) => Number(css.match(new RegExp(`\\[data-event="diwali"\\] \\.fest-scene__v--${mode} \\{[^}]*max-height: (\\d+)px`))?.[1]);
-  const required: Record<string, string[]> = { diwali: ["text", "rangoli", "diya0", "diya3", "lantern0", "lantern1"], holi: ["text", "cloud0", "cloud1", "thali0", "thali1"], eid: ["text", "moon", "lamp0", "arcade"] };
+  const required: Record<string, string[]> = { diwali: ["text", "rangoli", "diya0", "diya3", "lantern0", "lantern1"], holi: ["text", "cloud0", "cloud1", "thali0", "thali1"], eid: ["text", "moon", "lamp0", "arcade"], halloween: ["text", "moon", "pumpkin0", "pumpkin1", "bat0", "house0"] };
   const allIds: string[] = [];
   for (const theme of FESTIVAL_THEMES) {
     for (const mode of SCENE_MODES) {
@@ -496,7 +496,7 @@ test("t209 festival art: composed per size, inside the frame, no collisions, cap
     allIds.push(...[...FESTIVAL_ART[theme].frieze.matchAll(/ id="([^"]+)"/g)].map((m) => m[1]));
     const all = SCENE_MODES.map((m) => FESTIVAL_ART[theme].scenes[m]).join("") + FESTIVAL_ART[theme].frieze;
     // No bleed between themes: own prefix only, no Christmas/New Year motifs, no alcohol imagery.
-    const own = { diwali: "dw-", holi: "hl", eid: "ed-" }[theme];
+    const own = { diwali: "dw-", holi: "hl", eid: "ed-", halloween: "hw-" }[theme] as string;
     for (const cls of all.matchAll(/class="([^"]+)"/g)) for (const c of cls[1].split(" ")) assert.ok(c.startsWith(own), `${theme} uses foreign class ${c}`);
     assert.doesNotMatch(all, /ny-|xs-|xg-|xmas|glass|bubbly|champagne|santa|snow/i);
   }
@@ -517,7 +517,7 @@ test("t209 festival wiring + CSS: theme-gated, inert, palettes legible, slow mot
     return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
   };
   const ratio = (a: string, b: string) => { const [x, y] = [lum(a), lum(b)].sort((m, n) => n - m); return (x + 0.05) / (y + 0.05); };
-  for (const theme of ["diwali", "holi", "eid"]) {
+  for (const theme of ["diwali", "holi", "eid", "halloween"]) {
     const vars = block.match(new RegExp(`\\[data-event="${theme}"\\] \\.site-footer--${theme} \\{([^}]*)\\}`))?.[1] ?? "";
     const v = (n: string) => vars.match(new RegExp(`${n}: (#[0-9a-f]{6})`))?.[1] as string;
     for (const bg of [v("--ft-top"), v("--ft-mid"), v("--ft-bottom")]) {
@@ -530,7 +530,7 @@ test("t209 festival wiring + CSS: theme-gated, inert, palettes legible, slow mot
   for (const m of block.replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/([^{}]+)\{([^}]*)\}/g)) {
     const sel = m[1].trim();
     if (/^(@|from|to|\d+%)/.test(sel)) continue;
-    for (const part of sel.split(",")) assert.match(part.trim(), /^\[data-event="(diwali|holi|eid)"\]/, part.trim());
+    for (const part of sel.split(",")) assert.match(part.trim(), /^\[data-event="(diwali|holi|eid|halloween)"\]/, part.trim());
     assert.doesNotMatch(sel, /site-nav|nav-link|nav-chip|menu-btn|search-form|\.btn\b|theme-toggle|data-theme/);
   }
   for (const name of ["fest-flicker", "fest-glow", "fest-twinkle", "fest-sway", "fest-breathe", "fest-breathe-o", "fest-drift", "fest-float"]) {
@@ -568,4 +568,30 @@ test("t211: one generic Add event + Design dropdown with every theme; no seeded 
   const stored = { events: [{ ...ev, theme: "halloween" as never }, { ...newYearEvent(2026), theme: "halloween" as never }] };
   const read = normalizeEvents(JSON.parse(JSON.stringify(stored)));
   assert.deepEqual(read.events.map((e) => e.id), ["christmas", "newyear"]);
+});
+
+test("t212 Halloween: generic dropdown theme gets festival art; motion slow + static under reduced motion; stored card unchanged", async () => {
+  const art = await import("../components/site/event-decor-art.ts");
+  assert.ok(art.FESTIVAL_THEMES.includes("halloween"));
+  for (const m of art.SCENE_MODES) assert.match(art.FESTIVAL_ART.halloween.scenes[m], /HAPPY HALLOWEEN/);
+  assert.doesNotMatch(JSON.stringify(art.FESTIVAL_ART.halloween), /blood|skull|gore|<script|href=/i);
+  const block = css.slice(css.indexOf("/* ---- t212"));
+  assert.ok(block.length > 500);
+  for (const name of ["hw-glide", "hw-flap"]) {
+    const body = css.match(new RegExp(`@keyframes ${name} \\{([\\s\\S]*?)\\n\\}`))?.[1] ?? "";
+    assert.ok([...body.matchAll(/([a-z-]+):/g)].every((x) => x[1] === "transform" || x[1] === "opacity"), name);
+    const d = [...css.matchAll(new RegExp(`animation: ${name} ([\\d.]+)s`, "g"))].map((x) => Number(x[1]));
+    assert.ok(d.length && d.every((x) => x >= 3.6), name);
+  }
+  const reduced = block.slice(block.indexOf("@media (prefers-reduced-motion: reduce)"));
+  const animated = [...block.slice(0, block.indexOf("@media (prefers-reduced-motion")).replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/([^{}]+)\{[^}]*animation: (?!none)/g)].flatMap((m) => m[1].split(",").map((x) => x.trim().split(" .")[1]?.split(" ")[0]));
+  for (const cls of new Set(animated.filter(Boolean))) {
+    const base = cls.replace(/^(hw-[a-z]+?)\d$/, "$1");
+    if (/^hw-(b|p|w|t|h)\d$/.test(cls)) continue; // delay-only modifiers
+    assert.ok(reduced.includes(`.${base}`), `reduced motion stops ${cls}`);
+  }
+  assert.match(block, /\.site-footer--halloween > \.fest-scene \{[^}]*pointer-events: none/);
+  // The live "Christmas" card with the Halloween design keeps its name/message/dates exactly.
+  const live = { ...christmasEvent(2026), enabled: true, theme: "halloween" as const, message: "Happy Halloween from DYPOL BLOG — read something eerie tonight.", startsAt: "2026-11-01T00:00:00.000Z", endsAt: "2026-12-03T23:59:00.000Z" };
+  assert.deepEqual(normalizeEvents(JSON.parse(JSON.stringify({ events: [live] }))), { events: [live] });
 });

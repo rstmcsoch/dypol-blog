@@ -889,3 +889,95 @@ html.nav-open [data-event] .event-particles {
     transform: none;
   }
 }
+
+/* ---- t212: Halloween — moonlit village, carved friendly pumpkins, bats. Scoped to [data-event="halloween"]. ---- */
+[data-event="halloween"] .event-ornament { position: absolute; left: -0.5rem; top: calc(50% - 1.55rem); width: 1.7rem; height: auto; pointer-events: none; overflow: visible; }
+@media (max-width: 520px) { [data-event="halloween"] .event-ornament { width: 1.35rem; top: calc(50% - 1.3rem); left: -0.38rem; } }
+[data-event="halloween"] .site-footer--halloween { --ft-fg: #fff2e6; --ft-muted: #ffb24a; --ft-top: #1a0b2e; --ft-mid: #24102f; --ft-bottom: #1b0c27; --ft-blob: rgba(255, 117, 24, 0.07); --ft-sheen: rgba(255, 255, 255, 0.05); --ft-noise-opacity: 0.1; }
+[data-event="halloween"] .site-footer--halloween::after { display: none; }
+[data-event="halloween"] .site-footer--halloween .footer-grid { padding-top: clamp(0.75rem, 2vw, 1.5rem); padding-bottom: clamp(0.5rem, 1.5vw, 1rem); }
+[data-event="halloween"] .site-footer--halloween .footer-mark::after { content: "\263E"; display: inline-block; margin-left: 0.4em; font-size: 0.6em; vertical-align: 0.35em; color: #ffb24a; }
+[data-event="halloween"] .site-footer--halloween .footer-note { color: color-mix(in srgb, #fff2e6 82%, transparent); }
+[data-event="halloween"] .site-footer--halloween .footer-col-title { color: #ffb24a; border-color: color-mix(in srgb, #ffb24a 40%, transparent); }
+[data-event="halloween"] .site-footer--halloween .footer-link { color: #fff2e6; text-decoration-color: #ff7518; }
+[data-event="halloween"] .site-footer--halloween .footer-link:hover { color: #ffffff; text-decoration: underline; text-decoration-color: #ff7518; text-underline-offset: 3px; }
+[data-event="halloween"] .site-footer--halloween .footer-social { color: #fff2e6; border-color: color-mix(in srgb, #ffb24a 55%, transparent); background: color-mix(in srgb, #1a0b2e 55%, transparent); }
+[data-event="halloween"] .site-footer--halloween .footer-social:hover { border-color: #ffb24a; background: color-mix(in srgb, #ffb24a 16%, transparent); }
+[data-event="halloween"] .site-footer--halloween a:focus-visible { outline-color: #ffb24a; }
+[data-event="halloween"] .site-footer--halloween .footer-sign { color: color-mix(in srgb, #fff2e6 80%, transparent); border-color: color-mix(in srgb, #ffb24a 30%, transparent); }
+[data-event="halloween"] .site-footer--halloween > .fest-frieze,
+[data-event="halloween"] .site-footer--halloween > .fest-scene { position: relative; z-index: 0; width: 100%; pointer-events: none; }
+[data-event="halloween"] .fest-frieze svg { display: block; width: 100%; height: 50px; }
+[data-event="halloween"] .fest-scene__v { display: none; width: 100%; height: auto; }
+[data-event="halloween"] .fest-scene__v--compact { display: block; aspect-ratio: 520 / 280; max-height: 320px; }
+@media (min-width: 600px) {
+  [data-event="halloween"] .fest-frieze svg { height: 58px; }
+  [data-event="halloween"] .fest-scene__v--compact { display: none; }
+  [data-event="halloween"] .fest-scene__v--medium { display: block; aspect-ratio: 900 / 240; max-height: 300px; }
+}
+@media (min-width: 1100px) {
+  [data-event="halloween"] .fest-frieze svg { height: 66px; }
+  [data-event="halloween"] .fest-scene__v--medium { display: none; }
+  [data-event="halloween"] .fest-scene__v--wide { display: block; aspect-ratio: 1200 / 240; max-width: 1920px; max-height: 384px; margin-inline: auto; }
+}
+@media (max-height: 500px) and (orientation: landscape) {
+  [data-event="halloween"] .fest-scene__v { max-height: 190px !important; }
+  [data-event="halloween"] .fest-frieze svg { height: 46px; }
+}
+@media (max-width: 599px) {
+  [data-event="halloween"] .site-footer--halloween .footer-grid { gap: 1.5rem; }
+  [data-event="halloween"] .site-footer--halloween .footer-link { display: inline-flex; align-items: center; min-height: 2.25rem; }
+  [data-event="halloween"] .site-footer--halloween .footer-sign { text-wrap: balance; }
+}
+[data-event="halloween"] .hw-cord { fill: none; stroke: #8a6a9e; stroke-width: 1.1; }
+[data-event="halloween"] .hw-flag--o { fill: #ff7518; }
+[data-event="halloween"] .hw-flag--p { fill: #8b4fc9; }
+[data-event="halloween"] .hw-star { fill: #fff1d6; }
+[data-event="halloween"] .hw-moon { fill: #fbe7b0; }
+[data-event="halloween"] .hw-crater { fill: #e8cf8f; opacity: .7; }
+[data-event="halloween"] .hw-bat, [data-event="halloween"] .hw-bat-b { fill: #0d0612; stroke: #7a4a9c; stroke-width: .8; stroke-linejoin: round; }
+[data-event="halloween"] .hw-bat-ears { fill: #120818; stroke: #120818; stroke-width: 1; }
+[data-event="halloween"] .hw-greet { fill: #ffb24a; font-family: Georgia, "Times New Roman", serif; font-weight: 700; }
+[data-event="halloween"] .hw-rule { fill: none; stroke: #b07ad6; stroke-width: 1.2; }
+[data-event="halloween"] .hw-hill2 { fill: #2a1238; }
+[data-event="halloween"] .hw-house { fill: #170a22; }
+[data-event="halloween"] .hw-win { fill: #ffb347; }
+[data-event="halloween"] .hw-door { fill: #2d1440; }
+[data-event="halloween"] .hw-tree { fill: #120818; }
+[data-event="halloween"] .hw-branch { fill: none; stroke: #120818; stroke-width: 2.4; stroke-linecap: round; }
+[data-event="halloween"] .hw-ground { fill: #1b0c27; }
+[data-event="halloween"] .hw-pk--a { fill: #ff8a2b; }
+[data-event="halloween"] .hw-pk--b { fill: #e86412; }
+[data-event="halloween"] .hw-stem { fill: #4f7a2a; }
+[data-event="halloween"] .hw-face { fill: #ffe08a; }
+[data-event="halloween"] .event-ornament__pk { fill: #e86412; }
+[data-event="halloween"] .event-ornament__pk2 { fill: #ff8a2b; }
+[data-event="halloween"] .event-ornament__stem { fill: #4f7a2a; }
+[data-event="halloween"] .event-ornament__face { fill: #ffe08a; }
+/* t212 Halloween motion: slow bat glide, wing flutter, candle-glow pumpkins/windows, twinkling stars,
+   swaying bunting pumpkins. transform/opacity only, cycles >= 3.6 s, static under reduced motion. */
+@keyframes hw-glide {
+  0%, 100% { transform: translate(0, 0); }
+  50% { transform: translate(-14px, -6px); }
+}
+@keyframes hw-flap {
+  0%, 100% { transform: scaleY(1); }
+  50% { transform: scaleY(0.72); }
+}
+[data-event="halloween"] .hw-batfly { animation: hw-glide 9s ease-in-out infinite; }
+[data-event="halloween"] .hw-b1 { animation-delay: -3s; animation-duration: 11s; }
+[data-event="halloween"] .hw-b2 { animation-delay: -6s; animation-duration: 13s; }
+[data-event="halloween"] .hw-wing { transform-box: fill-box; transform-origin: 50% 40%; animation: hw-flap 3.6s ease-in-out infinite; }
+[data-event="halloween"] .hw-pglow, [data-event="halloween"] .hw-face, [data-event="halloween"] .hw-win { animation: fest-glow 5s ease-in-out infinite; }
+[data-event="halloween"] .hw-p1 .hw-face, [data-event="halloween"] .hw-p1 .hw-pglow, [data-event="halloween"] .hw-w1 { animation-delay: -1.7s; }
+[data-event="halloween"] .hw-p2 .hw-face, [data-event="halloween"] .hw-p2 .hw-pglow, [data-event="halloween"] .hw-w2 { animation-delay: -3.3s; }
+[data-event="halloween"] .hw-star { animation: fest-twinkle 5s ease-in-out infinite; }
+[data-event="halloween"] .hw-t1 { animation-delay: -1.2s; } [data-event="halloween"] .hw-t2 { animation-delay: -2.5s; } [data-event="halloween"] .hw-t3 { animation-delay: -3.7s; }
+[data-event="halloween"] .hw-hang { transform-box: fill-box; transform-origin: 50% 0; animation: fest-sway 6s ease-in-out infinite; }
+[data-event="halloween"] .hw-h1 { animation-delay: -3s; }
+@media (prefers-reduced-motion: reduce) {
+  [data-event="halloween"] .hw-batfly, [data-event="halloween"] .hw-wing, [data-event="halloween"] .hw-pglow, [data-event="halloween"] .hw-face, [data-event="halloween"] .hw-win, [data-event="halloween"] .hw-star, [data-event="halloween"] .hw-hang {
+    animation: none;
+    transform: none;
+  }
+}
