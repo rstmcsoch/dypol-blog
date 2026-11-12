@@ -31,6 +31,10 @@
   --header-h: 4.5rem;
   --measure: 66ch;
   color-scheme: light;
+
+  --motion: 180ms;
+  --motion-exit: 140ms;
+  --motion-ease: cubic-bezier(0.2, 0.7, 0.2, 1);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -684,6 +688,7 @@ html[data-theme="dark"] .theme-switch__btn[data-value="dark"] .theme-switch__mar
     opacity: 0;
     pointer-events: none;
     background: var(--paper);
+    transition: opacity var(--motion) var(--motion-ease), visibility var(--motion) var(--motion-ease);
   }
 
   .site-nav.is-open {
@@ -1764,19 +1769,25 @@ html[data-theme="dark"] .theme-switch__btn[data-value="dark"] .theme-switch__mar
   background: rgb(0 0 0 / 0.55);
   backdrop-filter: blur(2px);
 }
+.leave-dialog {
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity var(--motion) var(--motion-ease), transform var(--motion) var(--motion-ease), overlay var(--motion) allow-discrete, display var(--motion) allow-discrete;
+}
 .leave-dialog[open] {
-  animation: leave-in 0.16s ease-out;
+  opacity: 1;
+  transform: none;
 }
-@keyframes leave-in {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
+@starting-style {
+  .leave-dialog[open] { opacity: 0; transform: translateY(6px); }
 }
-@media (prefers-reduced-motion: reduce) {
-  .leave-dialog[open] {
-    animation: none;
-  }
+.leave-dialog::backdrop {
+  opacity: 0;
+  transition: opacity var(--motion) var(--motion-ease), overlay var(--motion) allow-discrete, display var(--motion) allow-discrete;
+}
+.leave-dialog[open]::backdrop { opacity: 1; }
+@starting-style {
+  .leave-dialog[open]::backdrop { opacity: 0; }
 }
 .leave-dialog__panel {
   padding: 1.3rem 1.3rem 1.2rem;
@@ -3873,6 +3884,12 @@ html.nav-open .reading-progress { display: none; }
 }
 .desk .adm-dd__panel--profile { width: min(17.5rem, calc(100vw - 1.5rem)); }
 @keyframes adm-pop { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+@keyframes adm-pop-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(-4px); } }
+.desk .adm-dd__panel[data-motion="out"] { animation: adm-pop-out var(--motion-exit) var(--motion-ease) forwards; }
+.desk .adm-customizer[data-motion="out"] { animation: adm-slide-out var(--motion-exit) var(--motion-ease) forwards; }
+.desk .adm-overlay[data-motion="out"] { animation: adm-fade-out var(--motion-exit) var(--motion-ease) forwards; }
+@keyframes adm-slide-out { from { transform: none; } to { transform: translateX(100%); } }
+@keyframes adm-fade-out { from { opacity: 1; } to { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .desk .adm-dd__panel, .desk .adm-side, .desk .adm-customizer { animation: none; transition: none; } }
 .desk .adm-dd__head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.6rem; font-size: 1.05rem; }
 .desk .adm-pill { display: inline-flex; align-items: center; border-radius: 999px; background: var(--a-primary-soft); color: var(--a-primary-text); font-size: 0.72rem; font-weight: 700; padding: 0.15rem 0.6rem; white-space: nowrap; }
@@ -4967,6 +4984,64 @@ body:has(.consent-bar) .ad-consent { display: none; }
   .head-card__spacer { display: none; }
   .head-card__actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .desk .head-card .head-card__btn { width: 100%; min-height: 2.75rem; }
+}
+
+/* t220: consistent enter/exit for native dialogs, route content, consent */
+.route-motion[data-nav] {
+  animation: route-in var(--motion) var(--motion-ease);
+}
+@keyframes route-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+.adm-dialog,
+.adm-previewdlg {
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity var(--motion) var(--motion-ease), transform var(--motion) var(--motion-ease), overlay var(--motion) allow-discrete, display var(--motion) allow-discrete;
+}
+.adm-dialog[open],
+.adm-previewdlg[open] {
+  opacity: 1;
+  transform: none;
+}
+@starting-style {
+  .adm-dialog[open],
+  .adm-previewdlg[open] { opacity: 0; transform: translateY(6px); }
+}
+.adm-dialog::backdrop,
+.adm-previewdlg::backdrop {
+  opacity: 0;
+  transition: opacity var(--motion) var(--motion-ease), overlay var(--motion) allow-discrete, display var(--motion) allow-discrete;
+}
+.adm-dialog[open]::backdrop,
+.adm-previewdlg[open]::backdrop { opacity: 1; }
+@starting-style {
+  .adm-dialog[open]::backdrop,
+  .adm-previewdlg[open]::backdrop { opacity: 0; }
+}
+.consent-bar,
+.ad-consent {
+  animation: route-in var(--motion) var(--motion-ease);
+}
+@media (prefers-reduced-motion: reduce) {
+  :root { --motion: 0ms; --motion-exit: 0ms; }
+  .route-motion,
+  .leave-dialog,
+  .leave-dialog::backdrop,
+  .adm-dialog,
+  .adm-dialog::backdrop,
+  .adm-previewdlg,
+  .adm-previewdlg::backdrop,
+  .consent-bar,
+  .ad-consent,
+  .desk .adm-dd__panel,
+  .desk .adm-customizer,
+  .desk .adm-overlay,
+  .site-nav {
+    animation: none !important;
+    transition: none !important;
+  }
 }
 
 /* ---- t215/t216: smooth in-page scrolling (only while a user-started scroll runs) + Back to top ---- */
