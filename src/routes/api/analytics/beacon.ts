@@ -5,8 +5,16 @@ import { getSql } from "@/lib/db";
 
 type Limiter = { limit(input: { key: string }): Promise<{ success: boolean }> };
 
+/**
+ * The session id is chosen by the visitor's browser (a random UUID, 30-day
+ * cookie). It is the primary key of analytics_sessions, so it is constrained to
+ * the shape the client actually produces: an unconstrained string lets anyone
+ * mint an unlimited number of distinct rows with no reporting value at all.
+ */
+const SESSION_ID = /^[A-Za-z0-9_-]{8,64}$/;
+
 const BeaconPayload = z.object({
-  sessionId: z.string().min(8).max(64),
+  sessionId: z.string().regex(SESSION_ID, "session id must be a URL-safe token"),
   articleId: z.string().nullable().optional(),
   path: z.string().max(200),
   referrer: z.string().max(500).nullable().optional(),
@@ -28,6 +36,33 @@ const SearchPayload = z.object({
   q: z.string().min(1).max(120),
   results: z.number().int().min(0).max(1000).default(0),
 });
+
+/**
+ * Retention sweep for the beacon rollups.
+ *
+ * analytics_sessions and analytics_article_session are keyed by the visitor's
+ * session id, so nothing ever overwrites an old row: without a sweep both grow
+ * for the lifetime of the database. Every dashboard window is at most 12
+ * months (the longest preset), so rows older than 400 days are dead weight.
+ * Best effort and bounded: at most once an hour per isolate, three statements,
+ * and a failure never fails the beacon (analytics must not break a page).
+ */
+const RETENTION_DAYS = 400;
+const PRUNE_INTERVAL_MS = 60 * 60 * 1000;
+let lastPruneAt = 0;
+
+async function pruneExpiredAnalytics(sql: Awaited<ReturnType<typeof getSql>>): Promise<void> {
+  const now = Date.now();
+  if (now - lastPruneAt < PRUNE_INTERVAL_MS) return;
+  lastPruneAt = now;
+  const cutoff = new Date(now - RETENTION_DAYS * 86_400_000).toISOString();
+  const cutoffDate = kolkataDate(cutoff);
+  await Promise.all([
+    sql`delete from analytics_sessions where last_seen < ${cutoff}`.catch(() => undefined),
+    sql`delete from analytics_article_session where date < ${cutoffDate}`.catch(() => undefined),
+    sql`delete from analytics_link_clicks where date < ${cutoffDate}`.catch(() => undefined),
+  ]);
+}
 
 function normalizeSearchTerm(q: string): string {
   return q.toLowerCase().normalize("NFKC").replace(/\s+/g, " ").trim().slice(0, 80);
@@ -91,6 +126,9 @@ async function count(request: Request): Promise<Response> {
   const date = kolkataDate(new Date().toISOString());
   const now = new Date().toISOString();
   const sql = await getSql();
+
+  // Bounded retention sweep (no-op unless an hour has passed in this isolate).
+  await pruneExpiredAnalytics(sql).catch(() => undefined);
 
   try {
     // Session registry: one row per reader session, aggregates only.
