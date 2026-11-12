@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from "react";
+import type React from "react";
 import { checkHeadCode } from "@/lib/ads/head-html";
 import { useRouter } from "@tanstack/react-router";
 import { errorText } from "@/components/admin/gate";
@@ -49,6 +50,9 @@ export function FormShell({
   form,
   children,
   saveLabel = "Save changes",
+  tabs,
+  actions,
+  onInvalidCapture,
 }: {
   kicker: string;
   title: string;
@@ -56,15 +60,29 @@ export function FormShell({
   form: ReturnType<typeof useSiteForm>;
   children: ReactNode;
   saveLabel?: string;
+  /** t217: optional tab strip shown in the title area, under the heading. */
+  tabs?: ReactNode;
+  /** t217: optional extra controls next to the heading (e.g. Preview). */
+  actions?: ReactNode;
+  onInvalidCapture?: (event: React.FormEvent<HTMLFormElement>) => void;
 }) {
   return (
     <>
       <p className="desk-kicker">{kicker}</p>
-      <h1 className="desk-title">{title}</h1>
+      {actions ? (
+        <div className="adm-titlebar">
+          <h1 className="desk-title">{title}</h1>
+          <div className="inline-actions">{actions}</div>
+        </div>
+      ) : (
+        <h1 className="desk-title">{title}</h1>
+      )}
       {intro ? <p className="desk-note">{intro}</p> : null}
+      {tabs}
       <form
         className="stack"
         style={{ marginTop: "1.25rem" }}
+        onInvalidCapture={onInvalidCapture}
         onSubmit={(event) => {
           event.preventDefault();
           void form.save();

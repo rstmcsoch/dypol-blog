@@ -1,5 +1,7 @@
-import { footerColumns, visibleSocials, SOCIAL_LABELS, type SocialPlatform } from "@/lib/social-links";
-import { usePages, useSite } from "./use-site";
+import { footerColumns, footerExtraLinks, visibleSocials, SOCIAL_LABELS, type SocialPlatform } from "@/lib/social-links";
+import { useEvent, usePages, useSite } from "./use-site";
+import { ChristmasFooterScene, ChristmasGarland, FESTIVAL_THEMES, FestivalFooterScene, FestivalFrieze, NewYearFooterScene, NewYearFrieze, type FestivalTheme } from "./event-decor";
+import { celebratedYear } from "@/lib/events";
 
 /** Inline brand icons (no icon library). Fill paths are the platforms'
  * standard glyphs; instagram/rss/email are drawn strokes. */
@@ -64,6 +66,7 @@ function SocialIcon({ platform }: { platform: SocialPlatform }) {
 
 export function SiteFooter() {
   const site = useSite();
+  const event = useEvent();
   const pages = usePages();
   const publishedPaths = new Set(pages.map((p) => `/${p.slug}`));
   const standardPaths = new Set(["/about", "/contact", "/editorial-policy", "/corrections-policy", "/privacy-policy", "/terms", "/dmca", "/cookie-policy", "/disclaimer"]);
@@ -71,8 +74,16 @@ export function SiteFooter() {
     ...column, links: column.links.filter((link) => !standardPaths.has(link.href) || publishedPaths.has(link.href)),
   })).filter((column) => column.links.length);
   const socials = visibleSocials(site.socials);
+  const xmas = event?.theme === "christmas";
+  const newYear = event?.theme === "newyear";
+  const festival = FESTIVAL_THEMES.find((theme) => theme === event?.theme) as FestivalTheme | undefined;
+  // t204: the standalone publisher link ("DYPOL LABS") is no longer shown; other saved links still render.
+  const extraLinks = footerExtraLinks(site.footer.links, site.publisher);
   return (
-    <footer className="site-footer">
+    <footer className={xmas ? "site-footer site-footer--xmas" : newYear ? "site-footer site-footer--newyear" : festival ? `site-footer site-footer--fest site-footer--${festival}` : "site-footer"}>
+      {xmas ? <ChristmasGarland /> : null}
+      {newYear ? <NewYearFrieze /> : null}
+      {festival ? <FestivalFrieze theme={festival} /> : null}
       <div className="container footer-grid">
         <div className="footer-brand">
           <p className="footer-mark">{site.name}</p>
@@ -105,11 +116,14 @@ export function SiteFooter() {
             </nav>
           ))}
         </div>
-        {site.footer.links.length > 0 ? <nav aria-label={site.labels.footerNav} className="footer-socials">
-          {site.footer.links.map((link) => <a key={link.id} className="footer-link" href={link.href}>{link.label}</a>)}
+        {extraLinks.length > 0 ? <nav aria-label={site.labels.footerNav} className="footer-socials">
+          {extraLinks.map((link) => <a key={link.id} className="footer-link" href={link.href}>{link.label}</a>)}
         </nav> : null}
         <p className="footer-sign">{site.footer.note.replaceAll("{year}", String(new Date().getFullYear()))}</p>
       </div>
+      {xmas ? <ChristmasFooterScene /> : null}
+      {newYear && event ? <NewYearFooterScene year={celebratedYear(event)} /> : null}
+      {festival ? <FestivalFooterScene theme={festival} /> : null}
     </footer>
   );
 }

@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, useRouter, useRouterState } from "@tanstack/react-router";
+import { usePresence } from "@/lib/motion";
 import { forgetDesk } from "@/components/admin/desk-cache";
 import {
-  Activity, BadgeDollarSign, BarChart3, Bell, Bot, ChevronRight, ExternalLink, FileText, HelpCircle, Image, Inbox, LayoutDashboard, LayoutTemplate,
+  Activity, BadgeDollarSign, BarChart3, Bell, Bot, CalendarDays, ChevronRight, ExternalLink, FileText, HelpCircle, Image, Inbox, LayoutDashboard, LayoutTemplate,
   LogOut, Megaphone, Menu, Monitor, Moon, Palette, PanelLeft, ScrollText, Search, Settings, ShieldCheck, SlidersHorizontal, Sun, Tags,
   Type, X, type LucideIcon,
 } from "lucide-react";
@@ -30,6 +31,7 @@ const groups: { label: string; links: NavLinkDef[] }[] = [
     links: [
       { to: "/admin/homepage", label: "Homepage builder", icon: LayoutTemplate },
       { to: "/admin/ticker", label: "Top strip / Ticker", icon: Megaphone },
+      { to: "/admin/events", label: "Events", icon: CalendarDays },
       { to: "/admin/site-text", label: "Site text", icon: Type },
       { to: "/admin/pages", label: "Pages", icon: ScrollText },
       { to: "/admin/appearance", label: "Appearance", icon: Palette },
@@ -106,6 +108,9 @@ export function AdminShell({
   const [systemDark, setSystemDark] = useState(false);
   const [menu, setMenu] = useState<null | "notif" | "profile">(null);
   const [customizer, setCustomizer] = useState(false);
+  const notifMenu = usePresence(menu === "notif");
+  const profileMenu = usePresence(menu === "profile");
+  const customizerPanel = usePresence(customizer);
   const [notif, setNotif] = useState<Notif | null>(null);
   const [seenAt, setSeenAt] = useState(0);
   const [query, setQuery] = useState("");
@@ -200,7 +205,6 @@ export function AdminShell({
 
   const current = groups.flatMap((g) => g.links.map((l) => ({ ...l, group: g.label }))).find((l) => isActive(l, pathname));
   const who = mode === "dev" ? "Local preview" : (email ?? "Signed in with admin token");
-  const initial = (email ?? "A").trim().charAt(0).toUpperCase() || "A";
 
   const themeButton = (
     <button
@@ -332,8 +336,8 @@ export function AdminShell({
                 <Bell aria-hidden="true" size={19} />
                 {newMessages > 0 ? <span className="adm-hbtn__badge">{newMessages}</span> : null}
               </button>
-              {menu === "notif" ? (
-                <div className="adm-dd__panel adm-dd__panel--notif" role="dialog" aria-label="Notifications">
+              {notifMenu.shown ? (
+                <div className="adm-dd__panel adm-dd__panel--notif" data-motion={notifMenu.leaving ? "out" : "in"} role="dialog" aria-label="Notifications">
                   <div className="adm-dd__head">
                     <strong>Notifications</strong>
                     {newMessages > 0 ? <span className="adm-pill">{newMessages} new</span> : null}
@@ -421,12 +425,12 @@ export function AdminShell({
                 aria-haspopup="true"
                 onClick={() => setMenu(menu === "profile" ? null : "profile")}
               >
-                {initial}
+                <img className="adm-avatar__img" src="/admin-avatar-96.webp" srcSet="/admin-avatar-96.webp 1x, /admin-avatar-192.webp 2x" width={38} height={38} alt="" decoding="async" />
               </button>
-              {menu === "profile" ? (
-                <div className="adm-dd__panel adm-dd__panel--profile" role="menu" aria-label="Account">
+              {profileMenu.shown ? (
+                <div className="adm-dd__panel adm-dd__panel--profile" data-motion={profileMenu.leaving ? "out" : "in"} role="menu" aria-label="Account">
                   <div className="adm-profile">
-                    <span className="adm-avatar adm-avatar--lg" aria-hidden="true">{initial}</span>
+                    <span className="adm-avatar adm-avatar--lg" aria-hidden="true"><img className="adm-avatar__img" src="/admin-avatar-192.webp" width={64} height={64} alt="" decoding="async" /></span>
                     <strong>{mode === "dev" ? "Local preview" : "Admin"}</strong>
                     <small>{who}</small>
                   </div>
@@ -460,10 +464,10 @@ export function AdminShell({
           {children}
         </div>
       </main>
-      {customizer ? (
+      {customizerPanel.shown ? (
         <>
-          <div className="adm-overlay adm-overlay--on" aria-hidden="true" onClick={() => setCustomizer(false)} />
-          <aside className="adm-customizer" role="dialog" aria-modal="true" aria-label="Display settings">
+          <div className="adm-overlay adm-overlay--on" data-motion={customizerPanel.leaving ? "out" : "in"} aria-hidden="true" onClick={() => setCustomizer(false)} />
+          <aside className="adm-customizer" data-motion={customizerPanel.leaving ? "out" : "in"} role="dialog" aria-modal="true" aria-label="Display settings">
             <div className="adm-customizer__head">
               <strong>Display settings</strong>
               <button type="button" className="adm-hbtn" aria-label="Close settings" onClick={() => setCustomizer(false)} autoFocus>

@@ -374,6 +374,27 @@ export const adminSaveSettings = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+/* ---------- Seasonal site events (own settings row, separate from the site record) ---------- */
+
+export const adminEvents = createServerFn({ method: "GET" }).handler(async () => {
+  await guard();
+  const { readEventsForAdmin } = await import("./events.server");
+  return { ...(await readEventsForAdmin()), now: Date.now() };
+});
+
+export const adminSaveEvents = createServerFn({ method: "POST" })
+  .validator((input: unknown) => input)
+  .handler(async ({ data }) => {
+    await writeGuard();
+    const { saveEvents } = await import("./events.server");
+    const { logAdminAction } = await import("./repository.server");
+    const input = (data ?? {}) as { config?: unknown; version?: unknown };
+    const { config, version } = await saveEvents(input.config, typeof input.version === "string" ? input.version : "");
+    const enabled = config.events.filter((event) => event.enabled).length;
+    await logAdminAction("events.save", `Saved ${config.events.length} site event${config.events.length === 1 ? "" : "s"} (${enabled} enabled)`);
+    return { config, version };
+  });
+
 /** t183: save Settings → Custom head code entries (add / edit / delete / reorder) at once. */
 export const adminSaveHeadCode = createServerFn({ method: "POST" })
   .validator((input: unknown) => {

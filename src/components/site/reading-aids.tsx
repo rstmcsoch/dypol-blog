@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { armSmoothScroll, isPlainClick } from "@/lib/smooth-scroll";
 import type { ArticleBlock } from "@/content/types";
 import { inlinePlain } from "@/lib/inline-markdown";
 
@@ -45,7 +46,16 @@ export function TableOfContents({ entries }: { entries: { id: string; text: stri
       <ol id="toc-list" className="toc__list">
         {entries.map((e) => (
           <li key={e.id}>
-            <a href={`#${e.id}`} onClick={() => setOpen(false)}>{e.text}</a>
+            <a
+              href={`#${e.id}`}
+              onClick={(ev) => {
+                // t215: smooth native fragment scroll for plain clicks; modifiers/new-tab stay native.
+                if (isPlainClick(ev)) armSmoothScroll();
+                setOpen(false);
+              }}
+            >
+              {e.text}
+            </a>
           </li>
         ))}
       </ol>

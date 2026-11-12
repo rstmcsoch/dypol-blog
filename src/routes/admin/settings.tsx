@@ -4,8 +4,15 @@ import { FormShell, useSiteForm } from "@/components/admin/site-form";
 import { adminSettings } from "@/content/admin-api";
 import { useState } from "react";
 import { HeadCodeCards } from "@/components/admin/head-code-cards";
+import { SettingsTabs, type SettingsTab } from "@/components/admin/settings-tabs";
+import { tabFromPanelId, tabPanelProps } from "@/lib/admin-tabs";
 import { ShareSettingsEditor } from "@/components/admin/share-settings";
-import { isRootSocialUrl, SOCIAL_LABELS, SOCIAL_PLATFORMS, type SocialLink } from "@/lib/social-links";
+import {
+  isRootSocialUrl,
+  SOCIAL_LABELS,
+  SOCIAL_PLATFORMS,
+  type SocialLink,
+} from "@/lib/social-links";
 
 export const Route = createFileRoute("/admin/settings")({
   ...adminPending,
@@ -13,19 +20,55 @@ export const Route = createFileRoute("/admin/settings")({
   component: SettingsAdmin,
 });
 
+const P = "settings";
+/** t217: groups of the existing sections only (no new fields). */
+const SETTINGS_TABS: SettingsTab[] = [
+  { id: "general", label: "General" },
+  { id: "social", label: "Social links" },
+  { id: "sharing", label: "Sharing" },
+  { id: "tracking", label: "Analytics & head code" },
+  { id: "publishing", label: "AI publishing" },
+  { id: "access", label: "Access" },
+];
+
 function SettingsAdmin() {
   const data = Route.useLoaderData();
   const form = useSiteForm(data.site);
   const { site, patch } = form;
   const [headNames, setHeadNames] = useState(data.headNames ?? {});
+  const [tab, setTab] = useState<string>("general");
   return (
-    <>
-      <FormShell kicker="System" title="Settings" intro="Your site's name, description and logo. Menu, footer and other wording are under Site text." form={form}>
-        {data.mediaNotice ? (
-          <p className="banner banner--bad" role="alert">
-            {data.mediaNotice}
-          </p>
-        ) : null}
+    <FormShell
+      kicker="System"
+      title="Settings"
+      intro="Your site's name, description and logo. Menu, footer and other wording are under Site text."
+      form={form}
+      tabs={
+        <SettingsTabs
+          tabs={SETTINGS_TABS}
+          active={tab}
+          onChange={setTab}
+          label="Settings sections"
+          idPrefix={P}
+        />
+      }
+      onInvalidCapture={(e) => {
+        // A required field in a hidden tab: open that tab so the browser can show the message.
+        const panel = (e.target as HTMLElement).closest<HTMLElement>("[role=tabpanel]");
+        const id = tabFromPanelId(P, panel?.id);
+        if (id && id !== tab) {
+          const field = e.target as HTMLInputElement;
+          setTab(id);
+          requestAnimationFrame(() => field.reportValidity?.());
+        }
+      }}
+    >
+      {data.mediaNotice ? (
+        <p className="banner banner--bad" role="alert">
+          {data.mediaNotice}
+        </p>
+      ) : null}
+      <div {...tabPanelProps(P, "general", tab)}>
         <fieldset className="block-card">
           <legend>Site identity</legend>
           <label className="field">
@@ -38,87 +81,29 @@ function SettingsAdmin() {
           </label>
           <label className="field">
             <span>Description (search engines and footer)</span>
-            <textarea value={site.description} onChange={(e) => patch({ description: e.target.value })} required />
+            <textarea
+              value={site.description}
+              onChange={(e) => patch({ description: e.target.value })}
+              required
+            />
           </label>
           <label className="field">
             <span>Publisher name</span>
-            <input value={site.publisher} onChange={(e) => patch({ publisher: e.target.value })} required />
-          </label>
-        </fieldset>
-        <fieldset className="block-card">
-          <legend>Analytics and consent</legend>
-          <label className="check-row"><input type="checkbox" checked={site.analytics.enabled} onChange={(e) => patch({ analytics: { ...site.analytics, enabled: e.target.checked } })} />Enable Google Analytics (requires visitor consent)</label>
-          <label className="field"><span>GA4 Measurement ID</span><input value={site.analytics.measurementId} placeholder="G-…" onChange={(e) => patch({ analytics: { ...site.analytics, measurementId: e.target.value } })} /></label>
-          <p className="field-help">No Google script or request is sent before Accept. Admin pages never load Google Analytics.</p>
-        </fieldset>
-        <HeadCodeCards value={site.customHead} names={headNames} onSaved={(customHead, names) => { patch({ customHead }); setHeadNames(names); }} />
-        <fieldset className="block-card">
-          <legend>Social links</legend>
-          <p className="field-help">
-            Shown as icons under the logo and description in the footer. Leave a URL empty (or untick Show) and
-            that icon stays hidden. Use full https:// addresses; Email takes a mailto: address, RSS takes /feed.xml.
-          </p>
-          {SOCIAL_PLATFORMS.map((platform) => {
-            const current: SocialLink = site.socials.find((s) => s.platform === platform) ?? { platform, url: "", visible: true };
-            const update = (next: Partial<SocialLink>) => {
-              const others = site.socials.filter((s) => s.platform !== platform);
-              patch({ socials: [...others, { ...current, ...next }] });
-            };
-            return (
-              <div key={platform} className="filters">
-                <label className="field" style={{ flex: 1 }}>
-                  <span>{SOCIAL_LABELS[platform]}</span>
-                  <input
-                    value={current.url}
-                    placeholder={platform === "email" ? "mailto:hello@example.com" : platform === "rss" ? "/feed.xml" : "https://…"}
-                    onChange={(e) => update({ url: e.target.value })}
-                  />
-                  {isRootSocialUrl(platform, current.url) ? <span className="field-help" role="status">This is a platform homepage, not a profile. It will remain hidden until you enter your account URL.</span> : null}
-                </label>
-                <label className="field">
-                  <span>Show</span>
-                  <input type="checkbox" checked={current.visible} onChange={(e) => update({ visible: e.target.checked })} />
-                </label>
-              </div>
-            );
-          })}
-        </fieldset>
-        <ShareSettingsEditor
-          value={site.share}
-          onChange={(share) => patch({ share })}
-          media={data.media}
-          siteName={site.name}
-          publisher={site.publisher}
-          siteLogoMediaId={site.logoMediaId ?? null}
-          defaultOgMediaId={site.defaultOgMediaId ?? null}
-          sample={data.articles?.[0] ?? null}
-        />
-        <fieldset className="block-card">
-          <legend>AI publishing limit</legend>
-          <label className="field">
-            <span>Maximum AI-published articles per day (whole website)</span>
             <input
-              type="number"
-              min={0}
-              max={100}
-              value={site.aiDailyPublishLimit}
-              onChange={(e) => patch({ aiDailyPublishLimit: Math.max(0, Math.min(100, Math.floor(Number(e.target.value) || 0))) })}
+              value={site.publisher}
+              onChange={(e) => patch({ publisher: e.target.value })}
+              required
             />
           </label>
-          <p className="field-help">
-            Counts every article published by AI automation (automatic and explicit MCP publishes, all automation
-            profiles together, Normal and Special articles combined) per calendar day (UTC). This main limit overrides
-            the Normal and Special automation tabs' own limits: an article goes live only if it passes all of them, and
-            anything over a limit stays a draft. When the limit is reached, AI publishing stops until the next
-            day; drafts are unaffected. Publishing manually here in the admin panel is never counted or blocked.
-            Set 0 for no limit.
-          </p>
         </fieldset>
         <fieldset className="block-card">
           <legend>Logo & icon</legend>
           <label className="field">
             <span>Logo</span>
-            <select value={site.logoMediaId ?? ""} onChange={(e) => patch({ logoMediaId: e.target.value || null })}>
+            <select
+              value={site.logoMediaId ?? ""}
+              onChange={(e) => patch({ logoMediaId: e.target.value || null })}
+            >
               <option value="">Text logo only</option>
               {data.media.map((item) => (
                 <option key={item.id} value={item.id}>
@@ -129,7 +114,10 @@ function SettingsAdmin() {
           </label>
           <label className="field">
             <span>Browser icon (favicon)</span>
-            <select value={site.faviconMediaId ?? ""} onChange={(e) => patch({ faviconMediaId: e.target.value || null })}>
+            <select
+              value={site.faviconMediaId ?? ""}
+              onChange={(e) => patch({ faviconMediaId: e.target.value || null })}
+            >
               <option value="">Default icon</option>
               {data.media.map((item) => (
                 <option key={item.id} value={item.id}>
@@ -138,22 +126,166 @@ function SettingsAdmin() {
               ))}
             </select>
           </label>
-          <label className="field"><span>Default social-sharing image</span>
-            <select value={site.defaultOgMediaId ?? ""} onChange={(e) => patch({ defaultOgMediaId: e.target.value || null })}>
+          <label className="field">
+            <span>Default social-sharing image</span>
+            <select
+              value={site.defaultOgMediaId ?? ""}
+              onChange={(e) => patch({ defaultOgMediaId: e.target.value || null })}
+            >
               <option value="">Built-in share image</option>
-              {data.media.map((item) => <option key={item.id} value={item.id}>{item.filename}</option>)}
+              {data.media.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.filename}
+                </option>
+              ))}
             </select>
           </label>
           <p className="field-help">Upload images under Media first.</p>
         </fieldset>
-      </FormShell>
-      <section className="desk-section block-card">
-        <h2>Access</h2>
-        <p className="desk-note">
-          You sign in with the admin token stored as the <code>ADMIN_TOKEN</code> secret on the Cloudflare Worker. Changing that secret (or{" "}
-          <code>ADMIN_SESSION_SECRET</code>) signs everyone out. See Help for details.
-        </p>
-      </section>
-    </>
+      </div>
+      <div {...tabPanelProps(P, "social", tab)}>
+        <fieldset className="block-card">
+          <legend>Social links</legend>
+          <p className="field-help">
+            Shown as icons under the logo and description in the footer. Leave a URL empty (or
+            untick Show) and that icon stays hidden. Use full https:// addresses; Email takes a
+            mailto: address, RSS takes /feed.xml.
+          </p>
+          {SOCIAL_PLATFORMS.map((platform) => {
+            const current: SocialLink = site.socials.find((s) => s.platform === platform) ?? {
+              platform,
+              url: "",
+              visible: true,
+            };
+            const update = (next: Partial<SocialLink>) => {
+              const others = site.socials.filter((s) => s.platform !== platform);
+              patch({ socials: [...others, { ...current, ...next }] });
+            };
+            return (
+              <div key={platform} className="filters">
+                <label className="field" style={{ flex: 1 }}>
+                  <span>{SOCIAL_LABELS[platform]}</span>
+                  <input
+                    value={current.url}
+                    placeholder={
+                      platform === "email"
+                        ? "mailto:hello@example.com"
+                        : platform === "rss"
+                          ? "/feed.xml"
+                          : "https://…"
+                    }
+                    onChange={(e) => update({ url: e.target.value })}
+                  />
+                  {isRootSocialUrl(platform, current.url) ? (
+                    <span className="field-help" role="status">
+                      This is a platform homepage, not a profile. It will remain hidden until you
+                      enter your account URL.
+                    </span>
+                  ) : null}
+                </label>
+                <label className="field">
+                  <span>Show</span>
+                  <input
+                    type="checkbox"
+                    checked={current.visible}
+                    onChange={(e) => update({ visible: e.target.checked })}
+                  />
+                </label>
+              </div>
+            );
+          })}
+        </fieldset>
+      </div>
+      <div {...tabPanelProps(P, "sharing", tab)}>
+        <ShareSettingsEditor
+          value={site.share}
+          onChange={(share) => patch({ share })}
+          media={data.media}
+          siteName={site.name}
+          publisher={site.publisher}
+          siteLogoMediaId={site.logoMediaId ?? null}
+          defaultOgMediaId={site.defaultOgMediaId ?? null}
+          sample={data.articles?.[0] ?? null}
+        />
+      </div>
+      <div {...tabPanelProps(P, "tracking", tab)}>
+        <fieldset className="block-card">
+          <legend>Analytics and consent</legend>
+          <label className="check-row">
+            <input
+              type="checkbox"
+              checked={site.analytics.enabled}
+              onChange={(e) =>
+                patch({ analytics: { ...site.analytics, enabled: e.target.checked } })
+              }
+            />
+            Enable Google Analytics (requires visitor consent)
+          </label>
+          <label className="field">
+            <span>GA4 Measurement ID</span>
+            <input
+              value={site.analytics.measurementId}
+              placeholder="G-…"
+              onChange={(e) =>
+                patch({ analytics: { ...site.analytics, measurementId: e.target.value } })
+              }
+            />
+          </label>
+          <p className="field-help">
+            No Google script or request is sent before Accept. Admin pages never load Google
+            Analytics.
+          </p>
+        </fieldset>
+        <HeadCodeCards
+          value={site.customHead}
+          names={headNames}
+          onSaved={(customHead, names) => {
+            patch({ customHead });
+            setHeadNames(names);
+          }}
+        />
+      </div>
+      <div {...tabPanelProps(P, "publishing", tab)}>
+        <fieldset className="block-card">
+          <legend>AI publishing limit</legend>
+          <label className="field">
+            <span>Maximum AI-published articles per day (whole website)</span>
+            <input
+              type="number"
+              min={0}
+              max={100}
+              value={site.aiDailyPublishLimit}
+              onChange={(e) =>
+                patch({
+                  aiDailyPublishLimit: Math.max(
+                    0,
+                    Math.min(100, Math.floor(Number(e.target.value) || 0)),
+                  ),
+                })
+              }
+            />
+          </label>
+          <p className="field-help">
+            Counts every article published by AI automation (automatic and explicit MCP publishes,
+            all automation profiles together, Normal and Special articles combined) per calendar day
+            (UTC). This main limit overrides the Normal and Special automation tabs' own limits: an
+            article goes live only if it passes all of them, and anything over a limit stays a
+            draft. When the limit is reached, AI publishing stops until the next day; drafts are
+            unaffected. Publishing manually here in the admin panel is never counted or blocked. Set
+            0 for no limit.
+          </p>
+        </fieldset>
+      </div>
+      <div {...tabPanelProps(P, "access", tab)}>
+        <section className="block-card">
+          <h2>Access</h2>
+          <p className="desk-note">
+            You sign in with the admin token stored as the <code>ADMIN_TOKEN</code> secret on the
+            Cloudflare Worker. Changing that secret (or <code>ADMIN_SESSION_SECRET</code>) signs
+            everyone out. See Help for details.
+          </p>
+        </section>
+      </div>
+    </FormShell>
   );
 }
