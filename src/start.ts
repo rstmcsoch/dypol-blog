@@ -15,6 +15,12 @@ type RwEl = { remove(): void; after(h: string, o: { html: boolean }): void; befo
 type Rw = { on(sel: string, h: { element(el: RwEl): void }): Rw; transform(r: Response): Response };
 const Rewriter = (globalThis as unknown as { HTMLRewriter?: new () => Rw }).HTMLRewriter;
 
+/**
+ * Safe-subset Content-Security-Policy applied to every response that does not
+ * set its own. See the header block below for why no source lists are declared.
+ */
+const BASE_CSP = "object-src 'none'; base-uri 'self'";
+
 const securityHeaders = createMiddleware().server(async ({ request, pathname, next }) => {
   // Grok discovers OAuth by probing the MCP path, not only the issuer root.
   // An HTML 404 on any of these aborts connect before the consent page opens.
@@ -38,6 +44,9 @@ const securityHeaders = createMiddleware().server(async ({ request, pathname, ne
         const headers = new Headers();
         headers.set("content-type", path === "/photolab" ? "text/html; charset=utf-8" : obj.httpMetadata?.contentType || "image/jpeg");
         headers.set("cache-control", path === "/photolab" ? "public, max-age=300" : "public, max-age=86400");
+        // These responses return before the baseline header block below, so the
+        // sniffing guard is applied here for the gallery frames.
+        headers.set("x-content-type-options", "nosniff");
         return new Response(request.method === "HEAD" ? null : obj.body, { headers });
       }
     }
@@ -99,11 +108,29 @@ const securityHeaders = createMiddleware().server(async ({ request, pathname, ne
     const privatePath = /^\/(admin|preview|oauth|api|auth)(\/|$)/.test(path);
     if (privatePath) headers.set("cache-control", "no-store");
     else if (!headers.has("cache-control")) headers.set("cache-control", "public, max-age=60, s-maxage=60, stale-while-revalidate=300");
+  }
+  // Baseline headers on every response, not only HTML documents: JSON, XML,
+  // images, fonts and redirects are all sniffable/collectable too, and several
+  // of them are reached from URLs an attacker can plant. A route that already
+  // set a stricter value always wins (the `has` guards), so this only fills
+  // gaps. Wrapped because some platform-built Responses expose immutable
+  // headers, and a header is never worth failing a request over.
+  try {
     if (!headers.has("strict-transport-security")) headers.set("strict-transport-security", "max-age=31536000");
     if (!headers.has("x-content-type-options")) headers.set("x-content-type-options", "nosniff");
-    if (!headers.has("x-frame-options")) headers.set("x-frame-options", "SAMEORIGIN");
     if (!headers.has("referrer-policy")) headers.set("referrer-policy", "strict-origin-when-cross-origin");
     if (!headers.has("permissions-policy")) headers.set("permissions-policy", "camera=(), microphone=(), geolocation=()");
+    // This is the safe subset of CSP, not a full policy: it names no script,
+    // style, image or connect source, so the inline theme bootstrap, the ads
+    // runtime, GA, the consent tool's head code and social embeds are
+    // unaffected. What it does close off is `<base>` retargeting every relative
+    // URL on the page and plugin documents (Flash/PDF/Java) being embedded as
+    // the document itself. Routes with their own stricter CSP (OAuth consent,
+    // /media, special-charts) keep it.
+    if (!headers.has("content-security-policy")) headers.set("content-security-policy", BASE_CSP);
+    if (type.includes("text/html") && !headers.has("x-frame-options")) headers.set("x-frame-options", "SAMEORIGIN");
+  } catch {
+    /* immutable headers: the response is already safe to send */
   }
   return result;
 });

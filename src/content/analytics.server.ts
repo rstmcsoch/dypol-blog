@@ -16,6 +16,7 @@
 
 import { getSql, type Sql } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth/admin.server";
+import { csvEscape } from "@/lib/analytics-csv";
 import { bucketIndex, computePeriod, kolkataAddDays, type DatePreset, type Period } from "@/lib/analytics-dates";
 import {
   RETURNING_WINDOW_DAYS,
@@ -1007,11 +1008,10 @@ export async function analyticsExportCsv(input: {
   return { csv: lines.join("\n") + "\n", filename: `dypol-devices-${period.from}-to-${period.to}-${stamp}.csv` };
 }
 
-function csvEscape(value: unknown): string {
-  const text = String(value ?? "");
-  if (/[",\n]/.test(text)) return `"` + text.replace(/"/g, '""') + `"`;
-  return text;
-}
+/*
+ * Cell encoding (RFC 4180 quoting + spreadsheet formula neutralisation) lives
+ * in a pure module so it can be unit-tested without the database.
+ */
 
 /** ------------------------------------------------------------------ */
 /** t116 PR 2: scroll funnel, entry/exit, search terms, annotations     */

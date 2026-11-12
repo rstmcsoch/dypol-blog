@@ -165,7 +165,11 @@ export const getSearch = createServerFn({ method: "GET" })
 export const getContactConfig = createServerFn({ method: "GET" }).handler(async () => {
   const { getRequest } = await import("@tanstack/react-start/server");
   const { turnstileConfig } = await import("./contact.server");
-  const host = new URL(getRequest().url).host;
+  // A missing request context (build-time or a caller outside a request) must
+  // not throw a 500. No host means no test-key fallback, so turnstileConfig()
+  // reports "not configured" and the form fails closed, which is the intent.
+  const request = getRequest();
+  const host = request ? new URL(request.url).host : "";
   const cfg = await turnstileConfig(host);
   return { siteKey: cfg.siteKey };
 });
