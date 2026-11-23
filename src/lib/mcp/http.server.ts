@@ -2,12 +2,14 @@ import { workerEnv } from "@/lib/cf-env.server";
 import { authenticate } from "./auth";
 import { extraClientHosts } from "./hosts.server";
 import { MCP_CORS_BASE, originAllowed, withHeaders } from "./cors";
-import { handleRpc, RPC, MASTER_SERVER_INFO, MASTER_SERVER_INSTRUCTIONS } from "./protocol";
+import { handleRpc, RPC, MASTER_SERVER_INFO, MASTER_SERVER_INSTRUCTIONS, SUPPORTED_PROTOCOL_VERSIONS } from "./protocol";
+import { acceptPrefersSse, encodeSseMessage, rpcMethodOf } from "./transport";
 import { buildTools } from "./tools.server";
 import { authLabelFrom, mcpSourceFromAuth } from "@/lib/publish-source";
 
 /**
- * POST /mcp — Streamable HTTP transport, stateless, JSON responses.
+ * POST /mcp — Streamable HTTP transport, stateless. JSON or SSE when the
+ * client accepts text/event-stream.
  * Order of checks: method -> origin -> rate limit -> auth -> size -> JSON-RPC.
  */
 export const MAX_REQUEST_BYTES = 15_000_000; // room for a 10 MB base64 cover image
@@ -50,6 +52,25 @@ async function readCapped(request: Request): Promise<string | null> {
     offset += c.byteLength;
   }
   return new TextDecoder().decode(all);
+}
+
+
+function protocolHeader(request: Request): Record<string, string> {
+  const version = (request.headers.get("mcp-protocol-version") ?? "").trim();
+  return SUPPORTED_PROTOCOL_VERSIONS.includes(version) ? { "mcp-protocol-version": version } : {};
+}
+
+/** JSON-RPC body: SSE when the client accepts event-stream, otherwise JSON. */
+function rpcReply(body: unknown, request: Request, status = 200, headers: Record<string, string> = {}): Response {
+  const extra = { "cache-control": "no-store", ...protocolHeader(request), ...headers };
+  if (acceptPrefersSse(request.headers.get("accept"))) {
+    return new Response(encodeSseMessage(body), { status, headers: { "content-type": "text/event-stream", ...extra } });
+  }
+  return json(body, status, extra);
+}
+
+function logMcp(fields: Record<string, unknown>) {
+  console.info("[mcp]", JSON.stringify(fields));
 }
 
 export function resourceMetadataUrl(request: Request): string {
@@ -105,12 +126,14 @@ async function handleMcpInner(request: Request, env: { MCP_TOKEN?: string; MCP_L
   } catch {
     return rpcError(400, RPC.PARSE, "Parse error.");
   }
-  // t173: special mode is resolved once per request (buildTools stays synchronous).
-  // t178: plus the profile's exclusive Normal/Special assignment (Normal if unreadable).
-  const { special, assignment } = await import("@/lib/special/special-tools.server")
-    .then((m) => m.specialRequestContext(auth.profile.id))
-    .catch(() => ({ special: null, assignment: "normal" as const }));
   const hints = { origin: request.headers.get("origin"), userAgent: request.headers.get("user-agent") };
+  const started = Date.now();
+  const { method, toolName } = rpcMethodOf(body);
+  const logAndReply = (reply: object | object[] | null, role: string) => {
+    logMcp({ role, via: auth.via, method, toolName, durationMs: Date.now() - started, status: reply === null ? 202 : 200 });
+    if (reply === null) return new Response(null, { status: 202, headers: protocolHeader(request) });
+    return rpcReply(reply, request);
+  };
   if (auth.role === "master") {
     const connectionId = auth.connectionId ?? "master";
     await touchMasterConnection(connectionId, auth.client ?? null);
@@ -119,11 +142,16 @@ async function handleMcpInner(request: Request, env: { MCP_TOKEN?: string; MCP_L
     const product = (await import("@/lib/publish-source")).inferProduct({ clientName: auth.client, origin: hints.origin, userAgent: hints.userAgent });
     const source = { via: "master" as const, client: auth.client ?? null, product, mcpAuth: auth.via === "oauth" ? "oauth" as const : "bearer" as const };
     const reply = await handleRpc(body, buildMasterTools({ actor, source }), { instructions: MASTER_SERVER_INSTRUCTIONS, serverInfo: MASTER_SERVER_INFO });
-    if (reply === null) return new Response(null, { status: 202 });
-    return json(reply);
+    return logAndReply(reply, "master");
   }
+  // t173: special mode is resolved once per request (buildTools stays synchronous).
+  // t178: plus the profile's exclusive Normal/Special assignment (Normal if unreadable).
+  // Master requests skip this — it is a publishing-profile concern and added a D1 round trip
+  // on the initialize handshake.
+  const { special, assignment } = await import("@/lib/special/special-tools.server")
+    .then((m) => m.specialRequestContext(auth.profile.id))
+    .catch(() => ({ special: null, assignment: "normal" as const }));
   const source = mcpSourceFromAuth(auth, hints);
   const reply = await handleRpc(body, buildTools({ auth: authLabelFrom(auth), profileId: auth.profile.id, special, assignment, source }));
-  if (reply === null) return new Response(null, { status: 202 });
-  return json(reply);
+  return logAndReply(reply, auth.via === "profile-token" ? "profile" : auth.via === "oauth" ? "oauth" : "publisher");
 }

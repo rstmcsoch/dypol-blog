@@ -34,3 +34,10 @@ Publishing profiles also have `list_my_agent_tasks`, `claim_agent_task` and `rep
 ## Activity and audit
 
 Every important Master mutation is written to the Master audit log (visible on the Settings tab) and to **Activity**, labelled **Master MCP**, distinct from **Administrator**, **Normal MCP** and **Special MCP**. Credentials are never stored in logs.
+
+## Handshake and client compatibility
+
+The MCP endpoint is Streamable HTTP. Clients should send `Accept: application/json, text/event-stream`. When that header includes `text/event-stream`, responses are SSE `message` events; otherwise they are JSON. There is no server-side session: a `GET` to `/mcp` returns 405, which is expected, and every `POST` is self-contained.
+
+If an agent shows the server as connected but nothing changes on the site, it may have completed only `initialize` and never called `tools/list` or `tools/call`. Reconnect the agent after a deploy so it repeats the handshake and refreshes the tool list. Use the Master credential from **Settings → Master MCP**, not `MCP_TOKEN` or a publishing profile key — those keep the writer tool set.
+
