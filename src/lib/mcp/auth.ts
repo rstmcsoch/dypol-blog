@@ -106,6 +106,14 @@ const nowSec = () => Math.floor(Date.now() / 1000);
 export type ProfileBinding = { id: string; version: string };
 export const DEFAULT_PROFILE: ProfileBinding = { id: "default", version: "" };
 
+/** Owner-provisioned Master MCP identity, never a publishing profile. */
+export type MasterBinding = { id: string };
+export type MasterResolver = {
+  byToken(token: string): Promise<MasterBinding | null>;
+  oauthClientStillValid?(version: string): Promise<boolean>;
+};
+
+
 /**
  * Looks up a per-profile token (`dyp_<profile>_<secret>`) and confirms a
  * profile binding is still current (its token was not revoked or replaced).
@@ -122,7 +130,7 @@ export type ProfileResolver = {
 };
 
 export type AuthResult =
-  | { ok: true; via: "bearer" | "oauth" | "profile-token"; client?: string; profile: ProfileBinding }
+  | { ok: true; via: "bearer" | "oauth" | "profile-token"; client?: string; profile: ProfileBinding; role?: "master"; connectionId?: string }
   | { ok: false; reason: "missing" | "invalid" | "disabled" };
 
 /** Label for OAuth clients that registered before signed client ids (e.g. Grok before PR #4). */
@@ -133,14 +141,31 @@ export async function authenticate(
   mcpToken: string | undefined,
   now = nowSec(),
   profiles?: ProfileResolver,
+  master?: MasterResolver,
 ): Promise<AuthResult> {
-  if (!mcpConfigured(mcpToken)) return { ok: false, reason: "disabled" };
   const match = /^Bearer\s+(\S{1,2048})$/i.exec(authorization?.trim() ?? "");
-  if (!match) return { ok: false, reason: "missing" };
+  if (!match) {
+    if (!mcpConfigured(mcpToken)) return { ok: false, reason: "disabled" };
+    return { ok: false, reason: "missing" };
+  }
   const presented = match[1];
+
+  // Master bearer keys are independent of MCP_TOKEN and never inherit its privileges.
+  if (presented.startsWith("dypm_") && master) {
+    const binding = await master.byToken(presented);
+    if (binding) return { ok: true, via: "bearer", profile: { id: "master", version: "" }, role: "master", connectionId: binding.id };
+    return { ok: false, reason: "invalid" };
+  }
+
+  if (!mcpConfigured(mcpToken)) return { ok: false, reason: "disabled" };
   if (presented.startsWith("mcpat.")) {
     const payload = await open<{ c: string; n?: string; p?: string; v?: string; o?: string }>("mcpat", mcpToken, presented, now);
     if (!payload) return { ok: false, reason: "invalid" };
+    if (payload.p === "master") {
+      const version = payload.o ?? payload.v ?? "";
+      if (!master?.oauthClientStillValid || !(await master.oauthClientStillValid(version))) return { ok: false, reason: "invalid" };
+      return { ok: true, via: "oauth", client: payload.n ?? (payload.c === "signed" ? undefined : LEGACY_CLIENT_LABEL), profile: { id: "master", version }, role: "master", connectionId: "master" };
+    }
     const profile = payload.p && payload.p !== "default" ? { id: payload.p, version: payload.v ?? "" } : DEFAULT_PROFILE;
     if (payload.o) {
       // Bound to a desk-issued client secret, not to the profile API key.

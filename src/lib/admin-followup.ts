@@ -17,16 +17,32 @@ export function sanitizeNotFoundPath(raw: unknown): string | null {
   return path || "/";
 }
 
-export type ActivityEntry = { at: string; source: "You" | "Automation"; text: string };
+export type ActivitySource = "Administrator" | "Master MCP" | "Normal MCP" | "Special MCP";
+export type ActivityEntry = { at: string; source: ActivitySource; text: string };
+
+/** @deprecated Use ActivitySource. Kept so older call sites type-check during the rename. */
+export type LegacyActivitySource = "You" | "Automation";
+
+export function activitySourceFrom(input: { actorKind?: string | null; source?: string | null; assignment?: string | null }): ActivitySource {
+  const raw = (input.source ?? input.actorKind ?? "").toLowerCase();
+  if (raw === "master-mcp" || raw === "master mcp" || raw === "master") return "Master MCP";
+  if (raw === "mcp-special" || raw === "special mcp" || input.assignment === "special") return "Special MCP";
+  if (raw === "mcp-normal" || raw === "normal mcp" || raw === "automation" || input.assignment === "normal") return "Normal MCP";
+  if (raw === "administrator" || raw === "admin" || raw === "you" || raw === "") return "Administrator";
+  if (raw.includes("special")) return "Special MCP";
+  if (raw.includes("master")) return "Master MCP";
+  if (raw.includes("automation") || raw.includes("mcp")) return "Normal MCP";
+  return "Administrator";
+}
 
 export function mergeActivityFeed(
-  admin: Array<{ at: string; text: string }>,
-  automation: Array<{ at: string; text: string }>,
+  admin: Array<{ at: string; text: string; source?: ActivitySource; actorKind?: string | null }>,
+  automation: Array<{ at: string; text: string; source?: ActivitySource; assignment?: string | null }>,
   limit = 50,
 ): ActivityEntry[] {
   const all: ActivityEntry[] = [
-    ...admin.map((a) => ({ at: a.at, source: "You" as const, text: a.text })),
-    ...automation.map((a) => ({ at: a.at, source: "Automation" as const, text: a.text })),
+    ...admin.map((a) => ({ at: a.at, source: a.source ?? activitySourceFrom({ actorKind: a.actorKind }), text: a.text })),
+    ...automation.map((a) => ({ at: a.at, source: a.source ?? activitySourceFrom({ assignment: a.assignment, source: "automation" }), text: a.text })),
   ];
   all.sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
   return all.slice(0, Math.max(1, Math.min(limit, 100)));

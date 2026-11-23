@@ -19,7 +19,8 @@ test("t217 settings: every existing section is still there, each in exactly one 
   const panels = [...settings.matchAll(/tabPanelProps\(P, "([a-z]+)", tab\)/g)].map((m) => m[1]);
   const ids = [...settings.matchAll(/\{ id: "([a-z]+)", label:/g)].map((m) => m[1]);
   assert.deepEqual(panels, ids);
-  assert.equal(ids.length, 6);
+  assert.equal(ids.length, 7);
+  assert.ok(ids.includes("mastermcp"));
 });
 
 test("t217 settings: every field binding from before is preserved", () => {

@@ -10,7 +10,7 @@ export const IST_ZONE = "Asia/Kolkata";
 export type McpAuthKind = "oauth" | "bearer" | "profile-token";
 
 export type PublishSource = {
-  via: "mcp" | "manual";
+  via: "mcp" | "manual" | "master";
   /** OAuth client or connector name, when the server actually received one. */
   client?: string | null;
   /** Grok, Claude, Cursor, … only when identified from the client name, origin, or user-agent. */
@@ -29,7 +29,7 @@ export type ArticleProvenance = {
 export const MANUAL_ADMIN: PublishSource = { via: "manual" };
 
 /** Values stored in articles.created_via / published_via. */
-export type ViaColumn = "manual" | "mcp" | "mcp-oauth" | "mcp-bearer" | "mcp-profile-token";
+export type ViaColumn = "manual" | "mcp" | "mcp-oauth" | "mcp-bearer" | "mcp-profile-token" | "master-mcp";
 
 const PRODUCTS: { name: string; nameRe: RegExp; hostRe: RegExp; uaRe: RegExp }[] = [
   { name: "Grok", nameRe: /\bgrok\b/i, hostRe: /(?:^|\.)(grok\.com|x\.ai)$/i, uaRe: /\bgrok\b/i },
@@ -112,6 +112,7 @@ export function authLabelFrom(auth: { via: "bearer" | "oauth" | "profile-token";
 }
 
 export function viaColumn(source: PublishSource): ViaColumn {
+  if (source.via === "master") return "master-mcp";
   if (source.via === "manual") return "manual";
   if (source.mcpAuth === "bearer") return "mcp-bearer";
   if (source.mcpAuth === "profile-token") return "mcp-profile-token";
@@ -122,6 +123,7 @@ export function viaColumn(source: PublishSource): ViaColumn {
 export function sourceFromRow(via: string | null | undefined, client: string | null | undefined, product: string | null | undefined): PublishSource | null {
   const v = (via ?? "").trim();
   if (v === "manual") return { via: "manual", client: client?.trim() || null, product: product?.trim() || null };
+  if (v === "master-mcp") return { via: "master", client: client?.trim() || null, product: product?.trim() || null, mcpAuth: "bearer" };
   if (v === "mcp" || v === "mcp-oauth" || v === "mcp-bearer" || v === "mcp-profile-token") {
     const mcpAuth: McpAuthKind | null = v === "mcp-oauth" ? "oauth" : v === "mcp-bearer" ? "bearer" : v === "mcp-profile-token" ? "profile-token" : null;
     return { via: "mcp", client: client?.trim() || null, product: product?.trim() || null, mcpAuth };
@@ -163,6 +165,14 @@ export function formatDateTimeIST(iso: string | null | undefined): string | null
 export function formatSourceLabel(source: PublishSource | null | undefined): string | null {
   if (!source) return null;
   if (source.via === "manual") return "Manual (admin)";
+  if (source.via === "master") {
+    const client = source.client?.trim() || null;
+    const product = source.product?.trim() || null;
+    if (client && product && client.toLowerCase() !== product.toLowerCase()) return `Master MCP (${client} from ${product})`;
+    if (client) return `Master MCP (${client})`;
+    if (product) return `Master MCP from ${product}`;
+    return "Master MCP";
+  }
   const client = source.client?.trim() || null;
   const product = source.product?.trim() || null;
   const clientIsProduct = Boolean(client && product && client.toLowerCase() === product.toLowerCase());

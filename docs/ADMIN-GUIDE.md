@@ -127,6 +127,20 @@ Admin → **Pages** manages the standard reader-facing pages: **About Us** (`/ab
 - **Add** a new page with the form at the top; it appears at `/its-slug`, in the footer and in the sitemap automatically. Slugs the site itself uses (`/articles`, `/topics`, `/admin`…) are refused.
 - The AI has **no access** to pages — only a signed-in admin can change them. Legal pages carry an effective date; update it when you change the text.
 
+
+## Master MCP
+
+The Master MCP is a separate, owner-provisioned operations connection — not a writing profile. Configure it under **Settings → Master MCP**.
+
+- Create a bearer credential (or an optional OAuth 2.1 + PKCE client) there. The secret is shown **once**; only a hash is stored. You can rotate, deactivate or revoke it at any time.
+- Point your operations agent at this site's `/mcp` endpoint with that credential. After it authenticates as Master, it receives the Master tool set (content, publishing, existing automation, analytics, permitted settings). Ordinary profile keys and the `MCP_TOKEN` secret keep their current writing-tool set and do **not** receive Master privileges.
+- The Master MCP can pause or disable a publishing profile so further website writes and publishes from that profile are rejected. That does not stop any external AI process.
+- It can queue correction tasks for a profile; those stay pending while the profile is paused, and are only complete when the profile reports back.
+- It cannot access Security, administrator login, Worker secrets, or create/delete automation profiles or their credentials. Unrestricted custom head scripts and new ad JavaScript stay owner-only.
+- Deleting a published article (or other destructive removals) requires a preview and a confirmation token tied to that item.
+- Daily AI publishing caps are counted per **UTC** calendar day. Analytics date ranges use **Asia/Kolkata (IST)**.
+- Master operations appear in **Activity**, labelled distinctly from administrator actions and from Normal or Special MCP automation.
+
 ## Publishing rules
 
 - **Enabled / Paused**: when off or paused, the AI can still read settings but cannot write.

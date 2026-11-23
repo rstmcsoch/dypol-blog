@@ -2,7 +2,7 @@ import { workerEnv } from "@/lib/cf-env.server";
 import { authenticate } from "./auth";
 import { extraClientHosts } from "./hosts.server";
 import { MCP_CORS_BASE, originAllowed, withHeaders } from "./cors";
-import { handleRpc, RPC } from "./protocol";
+import { handleRpc, RPC, MASTER_SERVER_INFO, MASTER_SERVER_INSTRUCTIONS } from "./protocol";
 import { buildTools } from "./tools.server";
 import { authLabelFrom, mcpSourceFromAuth } from "@/lib/publish-source";
 
@@ -78,7 +78,8 @@ async function handleMcpInner(request: Request, env: { MCP_TOKEN?: string; MCP_L
   }
 
   const { profileResolver } = await import("@/content/automation.server");
-  const auth = await authenticate(request.headers.get("authorization"), env.MCP_TOKEN, undefined, profileResolver);
+  const { masterResolver, touchMasterConnection } = await import("@/content/master-mcp.server");
+  const auth = await authenticate(request.headers.get("authorization"), env.MCP_TOKEN, undefined, profileResolver, masterResolver());
   if (!auth.ok) {
     if (auth.reason === "disabled") return rpcError(503, RPC.INTERNAL, "The MCP endpoint is not enabled on this deployment.");
     return rpcError(401, RPC.INVALID_REQUEST, "Unauthorized.", {
@@ -110,6 +111,17 @@ async function handleMcpInner(request: Request, env: { MCP_TOKEN?: string; MCP_L
     .then((m) => m.specialRequestContext(auth.profile.id))
     .catch(() => ({ special: null, assignment: "normal" as const }));
   const hints = { origin: request.headers.get("origin"), userAgent: request.headers.get("user-agent") };
+  if (auth.role === "master") {
+    const connectionId = auth.connectionId ?? "master";
+    await touchMasterConnection(connectionId, auth.client ?? null);
+    const { buildMasterTools } = await import("./master-tools.server");
+    const actor = { kind: "master" as const, connectionId, clientName: auth.client ?? null, via: auth.via === "oauth" ? "oauth" as const : "bearer" as const };
+    const product = (await import("@/lib/publish-source")).inferProduct({ clientName: auth.client, origin: hints.origin, userAgent: hints.userAgent });
+    const source = { via: "master" as const, client: auth.client ?? null, product, mcpAuth: auth.via === "oauth" ? "oauth" as const : "bearer" as const };
+    const reply = await handleRpc(body, buildMasterTools({ actor, source }), { instructions: MASTER_SERVER_INSTRUCTIONS, serverInfo: MASTER_SERVER_INFO });
+    if (reply === null) return new Response(null, { status: 202 });
+    return json(reply);
+  }
   const source = mcpSourceFromAuth(auth, hints);
   const reply = await handleRpc(body, buildTools({ auth: authLabelFrom(auth), profileId: auth.profile.id, special, assignment, source }));
   if (reply === null) return new Response(null, { status: 202 });

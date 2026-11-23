@@ -221,8 +221,9 @@ async function publishLimitContext(profileId: string, policy: AutomationSettings
     kind === "special" ? specialDailyCap() : Promise.resolve(0),
   ]);
   const run = effectiveRun(profileId, runId, mine);
-  const verdict = combinedLimitVerdict({ kind, websiteUsed: all.length, websiteCap, runUsed: run.used, runCap: policy.maxPublishedPerRun, specialUsed, specialCap });
-  return { store, run, websiteCap, websiteUsed: all.length, specialUsed, specialCap, kind, verdict };
+  const profileCap = policy.maxArticlesPerDay ?? 0;
+  const verdict = combinedLimitVerdict({ kind, websiteUsed: all.length, websiteCap, runUsed: run.used, runCap: policy.maxPublishedPerRun, specialUsed, specialCap, profileUsed: mine.length, profileCap });
+  return { store, run, websiteCap, websiteUsed: all.length, specialUsed, specialCap, profileUsed: mine.length, profileCap, kind, verdict };
 }
 
 async function articleKindOf(articleId: string): Promise<ArticleKind> {
@@ -253,12 +254,12 @@ async function claimPublish(
   input: { articleId: string; auth: string; mode: "automatic" | "explicit"; runId?: string | null },
 ): Promise<{ ok: true; claim: PublishClaim } | { ok: false; reason: string }> {
   if (ctx.verdict.blocked) {
-    return { ok: false, reason: ctx.verdict.websiteReason ?? ctx.verdict.specialReason ?? ctx.verdict.runReason ?? "Publish limit reached." };
+    return { ok: false, reason: ctx.verdict.websiteReason ?? ctx.verdict.specialReason ?? ctx.verdict.profileReason ?? ctx.verdict.runReason ?? "Publish limit reached." };
   }
   // t177: the claim insert itself re-checks the website (and special) caps
   // atomically, so concurrent publishers from any profile/type cannot both
   // take the last slot.
-  const claimed = await ctx.store.claimAiPublish({ profileId, runKey: ctx.run.runKey, mode: input.mode, articleId: input.articleId, auth: input.auth, limits: { websiteCap: ctx.websiteCap, specialCap: ctx.specialCap, articleType: ctx.kind } });
+  const claimed = await ctx.store.claimAiPublish({ profileId, runKey: ctx.run.runKey, mode: input.mode, articleId: input.articleId, auth: input.auth, limits: { websiteCap: ctx.websiteCap, specialCap: ctx.specialCap, articleType: ctx.kind, profileCap: ctx.profileCap } });
   if (claimed && typeof claimed === "object") {
     const again = await publishLimitContext(profileId, policy, input.runId, input.articleId);
     return { ok: false, reason: again.verdict.websiteReason ?? again.verdict.specialReason ?? "Publish limit reached." };
@@ -276,6 +277,8 @@ async function claimPublish(
     runCap: policy.maxPublishedPerRun,
     specialUsed: Math.max(0, recount.specialUsed - 1),
     specialCap: recount.specialCap,
+    profileUsed: Math.max(0, recount.profileUsed - 1),
+    profileCap: recount.profileCap,
   }).blocked;
   if (othersBlocked) {
     await ctx.store.releaseAiPublishClaim(claimId);
@@ -1256,7 +1259,7 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
   // t173: special-article additions. With special mode off the list is exactly the one above.
   const special = ctx.special ?? null;
   const deps = { profileId, auth, loadSettings, attemptAutoPublish, source: actorSource(ctx) };
-  return applySpecialTools(tools, Boolean(special), {
+  const wired = applySpecialTools(tools, Boolean(special), {
     submitProperties: SPECIAL_SUBMIT_PROPERTIES,
     submit: (args) => submitSpecialDraft(args, special!, deps),
     update: (args) => updateSpecialDraft(args, special, deps),
@@ -1268,4 +1271,78 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
     },
     research: () => specialResearchTools(special!, deps),
   }, ctx.assignment ?? "normal");
+  return [...wired, ...publisherTaskTools({ profileId, auth })];
+}
+
+function publisherTaskTools(ctx: { profileId: string; auth: string }): ToolDefinition[] {
+  const { profileId, auth } = ctx;
+  const idSchema = z.object({ task_id: z.string().trim().min(1).max(80) });
+  const reportSchema = idSchema.extend({
+    status: z.enum(["in_progress", "completed", "failed"]),
+    summary: z.string().trim().max(2000).optional(),
+    article_ids: z.array(z.string().trim().min(1).max(80)).max(200).optional(),
+    changes: z.unknown().optional(),
+    error: z.string().trim().max(500).optional(),
+  });
+  return [
+    {
+      name: "list_my_agent_tasks",
+      title: "List my assigned tasks",
+      description: "List correction tasks the Master MCP assigned to this automation profile. Paused and disabled profiles can still read their queue; the tasks stay pending until the profile is allowed to work.",
+      inputSchema: { type: "object", properties: { status: { type: "string", enum: ["pending", "claimed", "in_progress", "completed", "failed", "cancelled"] }, limit: { type: "integer", minimum: 1, maximum: 200 } }, additionalProperties: false },
+      annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+      run: async (args) => {
+        const parsed = z.object({ status: z.enum(["pending", "claimed", "in_progress", "completed", "failed", "cancelled"]).optional(), limit: z.number().int().min(1).max(200).optional() }).safeParse(args ?? {});
+        if (!parsed.success) return invalid(parsed.error);
+        const { listAgentTasks } = await import("@/content/master-mcp.server");
+        const tasks = await listAgentTasks({ profileId, status: parsed.data.status, limit: parsed.data.limit });
+        return { ok: true, data: { tasks, timezoneNote: "Task timestamps are ISO-8601 UTC." } };
+      },
+    },
+    {
+      name: "claim_agent_task",
+      title: "Claim an assigned task",
+      description: "Claim a pending task assigned to this profile. Refused while the profile is paused or disabled; the task stays pending.",
+      inputSchema: { type: "object", properties: { task_id: { type: "string" } }, required: ["task_id"], additionalProperties: false },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+      run: async (args) => {
+        const parsed = idSchema.safeParse(args ?? {});
+        if (!parsed.success) return invalid(parsed.error);
+        const settings = await loadSettings(profileId);
+        const { claimAgentTask } = await import("@/content/master-mcp.server");
+        try {
+          const task = await claimAgentTask(parsed.data.task_id, profileId, auth, { enabled: settings.enabled, paused: settings.paused });
+          return { ok: true, data: { task } };
+        } catch (error) {
+          return { ok: false, error: error instanceof Error ? error.message : "Could not claim that task." };
+        }
+      },
+    },
+    {
+      name: "report_agent_task",
+      title: "Report task result",
+      description: "Mark a claimed task in progress, completed or failed, and report affected article IDs and the changes you made. A task is not complete until you report completion.",
+      inputSchema: { type: "object", properties: { task_id: { type: "string" }, status: { type: "string", enum: ["in_progress", "completed", "failed"] }, summary: { type: "string" }, article_ids: { type: "array", items: { type: "string" } }, changes: {}, error: { type: "string" } }, required: ["task_id", "status"], additionalProperties: false },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+      run: async (args) => {
+        const parsed = reportSchema.safeParse(args ?? {});
+        if (!parsed.success) return invalid(parsed.error);
+        const { reportAgentTask } = await import("@/content/master-mcp.server");
+        try {
+          const task = await reportAgentTask({
+            id: parsed.data.task_id,
+            profileId,
+            status: parsed.data.status,
+            summary: parsed.data.summary,
+            articleIds: parsed.data.article_ids,
+            changes: parsed.data.changes,
+            error: parsed.data.error,
+          });
+          return { ok: true, data: { task } };
+        } catch (error) {
+          return { ok: false, error: error instanceof Error ? error.message : "Could not update that task." };
+        }
+      },
+    },
+  ];
 }

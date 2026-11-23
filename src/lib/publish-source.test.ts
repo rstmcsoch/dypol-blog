@@ -126,3 +126,12 @@ test("formatPublishedVia: not recorded unless a source exists; drafts show creat
     { primary: "dypolblog production (main) MCP from Grok · 23 Nov 2026, 2:30 pm IST" },
   );
 });
+
+test("t242: Master MCP provenance is distinct from MCP_TOKEN bearer and manual admin", () => {
+  assert.equal(formatSourceLabel({ via: "master" }), "Master MCP");
+  assert.equal(formatSourceLabel({ via: "master", client: "Grok" }), "Master MCP (Grok)");
+  assert.equal(formatSourceLabel({ via: "mcp", mcpAuth: "bearer" }), "MCP (master token)");
+  assert.equal(formatSourceLabel({ via: "manual" }), "Manual (admin)");
+  assert.equal(viaColumn({ via: "master" }), "master-mcp");
+  assert.equal(sourceFromRow("master-mcp", "Cursor", null)?.via, "master");
+});

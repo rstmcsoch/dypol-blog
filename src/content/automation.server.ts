@@ -247,11 +247,11 @@ export async function claimAiPublish(input: {
   articleId: string;
   auth: string;
   /** t177: caps enforced atomically by the claim insert itself (0 = none). */
-  limits?: { websiteCap: number; specialCap: number; articleType: "regular" | "special" };
+  limits?: { websiteCap: number; specialCap: number; articleType: "regular" | "special"; profileCap?: number };
 }): Promise<string | null | { blocked: true }> {
   const details = { runKey: input.runKey, mode: input.mode, claimed: true, ...(input.limits?.articleType === "special" ? { articleType: "special" } : {}) };
   const limits = input.limits;
-  if (!limits || (limits.websiteCap <= 0 && limits.specialCap <= 0)) {
+  if (!limits || (limits.websiteCap <= 0 && limits.specialCap <= 0 && (limits.profileCap ?? 0) <= 0)) {
     return recordRun({ profileId: input.profileId, tool: "publish_article_if_allowed", outcome: "publish_claim", articleId: input.articleId, auth: input.auth, details });
   }
   const { atomicClaimStatement, capWindowStart } = await import("@/lib/automation/publish-limits");
@@ -265,6 +265,7 @@ export async function claimAiPublish(input: {
     since: capWindowStart(),
     websiteCap: limits.websiteCap,
     specialCap: limits.articleType === "special" ? limits.specialCap : 0,
+    profileCap: limits.profileCap ?? 0,
   });
   try {
     const sql = await getSql();
