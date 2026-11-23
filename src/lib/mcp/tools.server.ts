@@ -21,6 +21,7 @@ import { blocksToBody } from "@/lib/automation/body";
 import type { AiActor } from "@/lib/automation/ai-edit";
 import type { ToolDefinition, ToolResult } from "./protocol";
 import type { ArticleBlock, CoverMotif } from "@/content/types";
+import { sourceFromAuthLabel, type PublishSource } from "@/lib/publish-source";
 
 /**
  * The twelve automation tools. Each one authorises against the owner's automation
@@ -154,7 +155,11 @@ function invalid(error: z.ZodError): ToolResult {
   };
 }
 
-type Ctx = { auth: string; profileId?: string; /** t173: precomputed special mode (null/absent = off). */ special?: SpecialCtx | null; /** t178: exclusive Normal/Special assignment (absent = normal, the legacy behaviour). */ assignment?: "normal" | "special" };
+type Ctx = { auth: string; profileId?: string; /** t173: precomputed special mode (null/absent = off). */ special?: SpecialCtx | null; /** t178: exclusive Normal/Special assignment (absent = normal, the legacy behaviour). */ assignment?: "normal" | "special"; /** t241: structured MCP identity for article provenance. */ source?: PublishSource | null };
+
+function actorSource(ctx: { auth: string; source?: PublishSource | null }): PublishSource | null {
+  return ctx.source ?? sourceFromAuthLabel(ctx.auth);
+}
 
 async function loadSettings(profileId: string) {
   const { readProfileSettings } = await import("@/content/automation.server");
@@ -286,7 +291,7 @@ async function claimPublish(
  * an AI that forgets the separate publish step no longer strands a
  * publishable draft. Returns clear reasons when it stays a draft.
  */
-async function attemptAutoPublish(articleId: string, profileId: string, auth: string, runId?: string | null): Promise<{ published: boolean; status: string; reasons: string[] }> {
+async function attemptAutoPublish(articleId: string, profileId: string, auth: string, runId?: string | null, source?: PublishSource | null): Promise<{ published: boolean; status: string; reasons: string[] }> {
   const store = await import("@/content/automation.server");
   const settings = await loadSettings(profileId);
   const submission = await store.findSubmission({ articleId });
@@ -318,7 +323,12 @@ async function attemptAutoPublish(articleId: string, profileId: string, auth: st
   const now = new Date().toISOString();
   const flipped = await sql<{ id: string }>`update articles set status = 'published', published_at = ${now}, updated_at = ${now} where id = ${articleId} and status = 'draft' returning id`;
   await store.settleAiPublishClaim(claimed.claim.claimId, "published", { mode: "automatic", runKey: claimed.claim.run.runKey });
-  if (flipped[0]) await (await import("@/content/repository.server")).assignRotatingAuthor(articleId);
+  if (flipped[0]) {
+    const repo = await import("@/content/repository.server");
+    await repo.assignRotatingAuthor(articleId);
+    const stamped = source ?? sourceFromAuthLabel(auth);
+    if (stamped) await repo.stampArticleSource(articleId, "published", stamped);
+  }
   return { published: true, status: "published", reasons: [] };
 }
 
@@ -340,6 +350,7 @@ async function explicitPublish(
   profileId: string,
   auth: string,
   runId?: string | null,
+  source?: PublishSource | null,
 ): Promise<{ published: boolean; status: string; alreadyPublished?: boolean; reasons: string[]; warnings: string[]; slug?: string; author?: string }> {
   const store = await import("@/content/automation.server");
   const settings = await loadSettings(profileId);
@@ -408,6 +419,10 @@ async function explicitPublish(
   await store.settleAiPublishClaim(claimed.claim.claimId, "published_explicit", { mode: "explicit", warnings, runKey: claimed.claim.run.runKey });
   // t169: first publish only (a re-publish keeps whatever byline it had).
   const author = flipped[0] && !rows[0].published_at ? await repo.assignRotatingAuthor(articleId) : null;
+  if (flipped[0]) {
+    const stamped = source ?? sourceFromAuthLabel(auth);
+    if (stamped) await repo.stampArticleSource(articleId, "published", stamped);
+  }
   return { published: true, status: "published", reasons: [], warnings, slug: rows[0].slug, ...(author ? { author } : {}) };
 }
 
@@ -733,7 +748,7 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
             publishedAt: null,
             blocks,
             intent: "save",
-          });
+          }, actorSource(ctx));
         } catch (error) {
           if (error instanceof ContentError || error instanceof z.ZodError) {
             const message = error instanceof z.ZodError ? "The article failed validation." : error.message;
@@ -777,7 +792,7 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
               : sel.suggestedIndex;
           if (usedIndex !== null) await store2.writeTopicCursor(profileId, advanceCursor(usedIndex, settings.topicSelection.step, settings.topicIdeas.length));
         }
-        const auto = await attemptAutoPublish(saved.id, profileId, auth, input.run_id);
+        const auto = await attemptAutoPublish(saved.id, profileId, auth, input.run_id, actorSource(ctx));
         // t169: the byline comes from the profile's author rotation at FIRST publish.
         const author = auto.published ? await (await import("@/content/repository.server")).assignRotatingAuthor(saved.id) : null;
         return {
@@ -829,7 +844,7 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
       run: async (args) => {
         const parsed = publishSchema.safeParse(args ?? {});
         if (!parsed.success) return invalid(parsed.error);
-        const result = await explicitPublish(parsed.data.article_id, profileId, auth, parsed.data.run_id);
+        const result = await explicitPublish(parsed.data.article_id, profileId, auth, parsed.data.run_id, actorSource(ctx));
         if (result.status === "missing") return { ok: false, error: "That article no longer exists." };
         if (result.status === "blocked") return { ok: false, error: result.reasons[0] };
         if (!result.published && !result.alreadyPublished) return { ok: false, error: result.reasons[0] ?? "Your profile cannot publish that draft." };
@@ -917,7 +932,7 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
           }
         }
         await store.recordRun({ profileId, tool: "upload_featured_image", outcome: "stored", articleId: input.article_id ?? null, auth, details: { mediaId, bytes: image.bytes.length, mime: image.mime, attached, credit: input.credit ?? null, sourcePage: input.source_page ?? null } });
-        const auto = attached && input.article_id ? await attemptAutoPublish(input.article_id, profileId, auth, input.run_id) : null;
+        const auto = attached && input.article_id ? await attemptAutoPublish(input.article_id, profileId, auth, input.run_id, actorSource(ctx)) : null;
         const note = input.article_id && !attached
           ? submission
             ? "Stored in the media library but not attached: the article is no longer a draft (the owner may have published it). Attach it in the admin panel."
@@ -1240,7 +1255,7 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
   ];
   // t173: special-article additions. With special mode off the list is exactly the one above.
   const special = ctx.special ?? null;
-  const deps = { profileId, auth, loadSettings, attemptAutoPublish };
+  const deps = { profileId, auth, loadSettings, attemptAutoPublish, source: actorSource(ctx) };
   return applySpecialTools(tools, Boolean(special), {
     submitProperties: SPECIAL_SUBMIT_PROPERTIES,
     submit: (args) => submitSpecialDraft(args, special!, deps),

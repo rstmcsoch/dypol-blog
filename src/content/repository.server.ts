@@ -29,6 +29,7 @@ import { getSql, withTransaction, type Sql } from "@/lib/db";
 import { cachedRead } from "@/lib/content-cache.server";
 import { safeColor } from "@/lib/dominant-color";
 import { REVISION_KEEP, buildRestoreInput, mergeActivityFeed, sanitizeNotFoundPath, type RevisionSnapshot } from "../lib/admin-followup.ts";
+import { MANUAL_ADMIN, sourceColumns, sourceFromRow, type ArticleProvenance, type PublishSource } from "@/lib/publish-source";
 import { assertAiCanAccess, assertAiPatchAllowed, type AiActor, type AiEditAction } from "@/lib/automation/ai-edit";
 import { cutoffFor, filterOldArticles, type OldArticleQuery } from "@/lib/old-articles";
 
@@ -218,6 +219,8 @@ export async function sweepDueScheduled(sql: Sql): Promise<number> {
       const flipped = await sql<{ id: string }>`update articles set status = 'published', published_at = scheduled_at, scheduled_at = null, updated_at = ${new Date(nowMs).toISOString()} where id = ${row.id} and status = 'draft' returning id`;
       // t169: a scheduled AI draft takes its author turn when it goes live.
       if (flipped[0] && !row.published_at) await assignRotatingAuthor(row.id);
+      // Only the desk can set scheduled_at, so a scheduled go-live is Manual (admin).
+      if (flipped[0]) await stampArticleSource(row.id, "published", MANUAL_ADMIN);
     }
     return due.length;
   } catch {
@@ -1075,7 +1078,7 @@ export async function duplicateArticle(id: string): Promise<{ id: string; slug: 
     scheduledAt: null,
     blocks: source.blocks,
     intent: "save",
-  });
+  }, MANUAL_ADMIN);
 }
 
 export async function adminEditor(id: string | null) {
@@ -1089,12 +1092,17 @@ export async function adminEditor(id: string | null) {
     : [];
   const article = id ? (data.articles.find((item) => item.id === id) ?? null) : null;
   if (article) article.aiEditAllowed = (await aiEditGrantIds()).has(article.id);
+  const provenance = article
+    ? await loadArticleProvenance(article.id, { publishedAt: article.publishedAt, status: article.status })
+    : { created: null, published: null, publishedAt: null, status: "draft" };
   return {
     article,
     categories: data.categories,
     tags: data.tags,
     media,
     publishedSlugs: published(data.articles).map((item) => item.slug),
+    authors: await listKnownAuthors(),
+    provenance,
   };
 }
 
@@ -1225,7 +1233,87 @@ export async function listNotFounds(limit = 12): Promise<Array<{ path: string; h
   return rows.map((r) => ({ path: r.path, hits: Number(r.hits), lastSeen: r.last_seen, referrer: r.referrer }));
 }
 
-export async function saveArticle(raw: unknown): Promise<{ id: string; slug: string; status: PublicationStatus }> {
+
+/** t241: record create/publish provenance once; never overwrites a stored value. */
+export async function stampArticleSource(id: string, kind: "created" | "published", source: PublishSource): Promise<void> {
+  try {
+    const sql = await getSql();
+    const cols = sourceColumns(source);
+    // Only the first write wins: never fill in a later product/client onto an already-recorded source.
+    if (kind === "created") {
+      await sql`update articles set
+        created_via = ${cols.via},
+        created_via_client = ${cols.client},
+        created_via_product = ${cols.product}
+      where id = ${id} and created_via is null`;
+    } else {
+      await sql`update articles set
+        published_via = ${cols.via},
+        published_via_client = ${cols.client},
+        published_via_product = ${cols.product}
+      where id = ${id} and published_via is null`;
+    }
+  } catch (error) {
+    console.error("[publish-source]", error);
+  }
+}
+
+export async function loadArticleProvenance(id: string, fallback?: { publishedAt: string | null; status: string }): Promise<ArticleProvenance> {
+  const empty: ArticleProvenance = { created: null, published: null, publishedAt: fallback?.publishedAt ?? null, status: fallback?.status ?? "draft" };
+  try {
+    const sql = await getSql();
+    const rows = await sql<{
+      created_via: string | null;
+      created_via_client: string | null;
+      created_via_product: string | null;
+      published_via: string | null;
+      published_via_client: string | null;
+      published_via_product: string | null;
+      published_at: string | Date | null;
+      status: string;
+    }>`select created_via, created_via_client, created_via_product, published_via, published_via_client, published_via_product, published_at, status from articles where id = ${id}`;
+    const row = rows[0];
+    if (!row) return empty;
+    return {
+      created: sourceFromRow(row.created_via, row.created_via_client, row.created_via_product),
+      published: sourceFromRow(row.published_via, row.published_via_client, row.published_via_product),
+      publishedAt: iso(row.published_at),
+      status: row.status,
+    };
+  } catch {
+    return empty;
+  }
+}
+
+/** Known writer names for the desk author field (articles + automation lists). */
+export async function listKnownAuthors(): Promise<string[]> {
+  const names = new Map<string, string>();
+  const add = (raw: string | null | undefined) => {
+    const value = raw?.replace(/\s+/g, " ").trim();
+    if (!value) return;
+    const key = value.toLowerCase();
+    if (!names.has(key)) names.set(key, value);
+  };
+  try {
+    const sql = await getSql();
+    const articleNames = await sql<{ author_name: string }>`select distinct trim(author_name) as author_name from articles where author_name is not null and trim(author_name) <> ''`;
+    for (const row of articleNames) add(row.author_name);
+    const lists = await sql<{ names: string }>`select names from automation_authors`.catch(() => [] as Array<{ names: string }>);
+    for (const row of lists) {
+      try {
+        const parsed = JSON.parse(row.names) as unknown;
+        if (Array.isArray(parsed)) for (const name of parsed) if (typeof name === "string") add(name);
+      } catch { /* ignore bad json */ }
+    }
+    const profiles = await sql<{ author_name: string }>`select distinct trim(author_name) as author_name from automation_profiles where author_name is not null and trim(author_name) <> ''`.catch(() => [] as Array<{ author_name: string }>);
+    for (const row of profiles) add(row.author_name);
+  } catch {
+    /* pre-migration or empty */
+  }
+  return [...names.values()].sort((a, b) => a.localeCompare(b, "en", { sensitivity: "base" }));
+}
+
+export async function saveArticle(raw: unknown, actor?: PublishSource | null): Promise<{ id: string; slug: string; status: PublicationStatus }> {
   const input: ArticleWrite = scrubCitationsDeep(articleWriteSchema.parse(raw));
   // t173: special articles keep their body in R2; the normal save path must never overwrite them.
   if (input.id && (await articleTypeOf(input.id)) === "special") throw new ContentError("This is a special article. Edit it in the special editor.", 409);
@@ -1238,6 +1326,13 @@ export async function saveArticle(raw: unknown): Promise<{ id: string; slug: str
   }
   let firstPublish = false;
   const result = await saveArticleRows(input, (v) => { firstPublish = v; }, authorOverride);
+  // t241: stamp provenance after the write so a pre-migration database cannot roll back the save.
+  if (actor) {
+    if (!input.id) await stampArticleSource(result.id, "created", actor);
+    if (firstPublish || (result.status === "published" && !input.id && input.intent === "publish")) {
+      await stampArticleSource(result.id, "published", actor);
+    }
+  }
   // t169: an AI draft published for the first time takes its profile's next author.
   if (firstPublish) await assignRotatingAuthor(result.id);
   return result;

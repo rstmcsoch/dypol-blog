@@ -28,6 +28,7 @@ import {
 } from "@/lib/special/store";
 import { SpecialBodyError, specialToc, type SpecialBody, type SpecialContent } from "@/lib/special/body";
 import { chartSvg } from "@/lib/special/chart";
+import { MANUAL_ADMIN, type PublishSource } from "@/lib/publish-source";
 
 export const specialMetaSchema = articleWriteSchema.omit({ blocks: true, intent: true }).extend({
   intent: z.enum(["save", "publish", "unpublish"]),
@@ -69,7 +70,7 @@ export type SaveSpecialResult = { id: string; slug: string; status: string; vers
  * Saves a new version (R2 first, then D1). intent "publish" publishes only after the
  * save fully succeeded AND the stored body is readable; "unpublish" unpublishes.
  */
-export async function saveSpecialArticle(raw: unknown, by = "admin", opts: { allowPublish?: boolean } = {}): Promise<SaveSpecialResult> {
+export async function saveSpecialArticle(raw: unknown, by = "admin", opts: { allowPublish?: boolean; actor?: PublishSource | null } = {}): Promise<SaveSpecialResult> {
   const input = specialMetaSchema.parse(raw);
   let authorOverride: string | null | undefined;
   if (input.authorName !== undefined) {
@@ -100,8 +101,13 @@ export async function saveSpecialArticle(raw: unknown, by = "admin", opts: { all
   }
   const content = await readCurrentBody(sql, b, saved.id).catch(() => null);
   if (content) await storeCharts(b, saved.id, content.body);
+  const actor = opts.actor ?? (by === "admin" ? MANUAL_ADMIN : null);
+  if (actor && !input.id) {
+    const { stampArticleSource } = await import("./repository.server");
+    await stampArticleSource(saved.id, "created", actor);
+  }
   if (input.intent === "publish" && opts.allowPublish !== false) {
-    const pub = await publishSpecialArticle(saved.id);
+    const pub = await publishSpecialArticle(saved.id, actor);
     return { ...saved, status: "published", author: pub.author };
   }
   if (input.intent === "unpublish") {
@@ -111,7 +117,7 @@ export async function saveSpecialArticle(raw: unknown, by = "admin", opts: { all
   return saved;
 }
 
-export async function publishSpecialArticle(id: string): Promise<{ author: string | null }> {
+export async function publishSpecialArticle(id: string, actor?: PublishSource | null): Promise<{ author: string | null }> {
   if ((await articleTypeOf(id)) !== "special") throw new ContentError("That special article no longer exists.", 404);
   const sql = await getSql();
   const rows = await sql<{ excerpt: string; status: string; published_at: string | null }>`select excerpt, status, published_at from articles where id = ${id}`;
@@ -126,6 +132,10 @@ export async function publishSpecialArticle(id: string): Promise<{ author: strin
   const first = row.status !== "published" && !row.published_at;
   const now = new Date().toISOString();
   await sql`update articles set status = 'published', published_at = coalesce(published_at, ${now}), scheduled_at = null, updated_at = ${now} where id = ${id}`;
+  if (first) {
+    const { stampArticleSource } = await import("./repository.server");
+    await stampArticleSource(id, "published", actor ?? MANUAL_ADMIN);
+  }
   const author = first ? await assignRotatingAuthor(id).catch(() => null) : null;
   return { author };
 }

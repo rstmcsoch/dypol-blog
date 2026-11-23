@@ -49,7 +49,8 @@ export const adminSaveArticle = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     await writeGuard();
     const { saveArticle, logAdminAction } = await import("./repository.server");
-    const out = await saveArticle(data);
+    const { MANUAL_ADMIN } = await import("@/lib/publish-source");
+    const out = await saveArticle(data, MANUAL_ADMIN);
     await logAdminAction("article.save", `Saved article ${out.slug} (${out.status})`);
     return out;
   });
@@ -78,7 +79,8 @@ export const adminSaveSpecialArticle = createServerFn({ method: "POST" })
     await writeGuard();
     const { saveSpecialArticle } = await import("./special.server");
     const { logAdminAction } = await import("./repository.server");
-    const out = await saveSpecialArticle(data, "admin");
+    const { MANUAL_ADMIN } = await import("@/lib/publish-source");
+    const out = await saveSpecialArticle(data, "admin", { actor: MANUAL_ADMIN });
     await logAdminAction("special.save", `Saved special article ${out.slug} v${out.version} (${out.status})`);
     return out;
   });
@@ -116,7 +118,10 @@ export const adminPublishSpecial = createServerFn({ method: "POST" })
     await writeGuard();
     const { publishSpecialArticle, unpublishSpecialArticle } = await import("./special.server");
     const { logAdminAction } = await import("./repository.server");
-    if (data.publish) await publishSpecialArticle(data.id);
+    if (data.publish) {
+      const { MANUAL_ADMIN } = await import("@/lib/publish-source");
+      await publishSpecialArticle(data.id, MANUAL_ADMIN);
+    }
     else await unpublishSpecialArticle(data.id);
     await logAdminAction("special.status", `${data.publish ? "Published" : "Unpublished"} special article ${data.id}`);
     return { ok: true as const };

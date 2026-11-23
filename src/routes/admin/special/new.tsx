@@ -12,5 +12,5 @@ export const Route = createFileRoute("/admin/special/new")({
 
 function NewSpecial() {
   const data = Route.useLoaderData();
-  return <SpecialEditor article={null} body={null} categories={data.categories} tags={data.tags} media={data.media} />;
+  return <SpecialEditor article={null} body={null} categories={data.categories} tags={data.tags} media={data.media} authors={data.authors} provenance={data.provenance} />;
 }

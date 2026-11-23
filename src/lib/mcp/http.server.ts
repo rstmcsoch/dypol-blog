@@ -4,6 +4,7 @@ import { extraClientHosts } from "./hosts.server";
 import { MCP_CORS_BASE, originAllowed, withHeaders } from "./cors";
 import { handleRpc, RPC } from "./protocol";
 import { buildTools } from "./tools.server";
+import { authLabelFrom, mcpSourceFromAuth } from "@/lib/publish-source";
 
 /**
  * POST /mcp — Streamable HTTP transport, stateless, JSON responses.
@@ -108,7 +109,9 @@ async function handleMcpInner(request: Request, env: { MCP_TOKEN?: string; MCP_L
   const { special, assignment } = await import("@/lib/special/special-tools.server")
     .then((m) => m.specialRequestContext(auth.profile.id))
     .catch(() => ({ special: null, assignment: "normal" as const }));
-  const reply = await handleRpc(body, buildTools({ auth: auth.client ? `oauth:${auth.client}` : auth.via, profileId: auth.profile.id, special, assignment }));
+  const hints = { origin: request.headers.get("origin"), userAgent: request.headers.get("user-agent") };
+  const source = mcpSourceFromAuth(auth, hints);
+  const reply = await handleRpc(body, buildTools({ auth: authLabelFrom(auth), profileId: auth.profile.id, special, assignment, source }));
   if (reply === null) return new Response(null, { status: 202 });
   return json(reply);
 }

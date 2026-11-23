@@ -8,6 +8,8 @@ import type { Article, ArticleBlock, Category, CoverMotif, PublicationStatus, Ta
 import { slugify } from "@/content/validate";
 import { errorText } from "./gate";
 import { checklistScore, seoChecklist } from "@/lib/seo-checklist";
+import type { ArticleProvenance } from "@/lib/publish-source";
+import { PublishMetaFields } from "./publish-meta";
 
 type MediaOption = { id: string; filename: string; alt: string };
 
@@ -101,11 +103,15 @@ export function ArticleEditor({
   categories,
   tags,
   media,
+  authors = [],
+  provenance = null,
 }: {
   article: Article | null;
   categories: Category[];
   tags: Tag[];
   media: MediaOption[];
+  authors?: string[];
+  provenance?: ArticleProvenance | null;
 }) {
   const navigate = useNavigate();
   const router = useRouter();
@@ -255,6 +261,12 @@ export function ArticleEditor({
             <span>Excerpt</span>
             <textarea value={draft.excerpt} onChange={(event) => update({ excerpt: event.target.value })} />
           </label>
+          <PublishMetaFields
+            authorName={draft.authorName}
+            onAuthorChange={(authorName) => update({ authorName })}
+            authors={authors}
+            provenance={provenance}
+          />
           {draft.blocks.map((block, index) => (
             <fieldset key={index} className="block-card">
               <legend>
@@ -460,11 +472,6 @@ export function ArticleEditor({
             <span>SEO description</span>
             <textarea value={draft.seoDescription} onChange={(event) => update({ seoDescription: event.target.value })} />
             <span className="field-help">{draft.seoDescription.trim().length}/160 characters</span>
-          </label>
-          <label className="field">
-            <span>Author (byline)</span>
-            <input value={draft.authorName} maxLength={60} placeholder="DYPOL LABS" data-testid="article-author" onChange={(event) => update({ authorName: event.target.value })} />
-            <span className="field-help">Optional override. AI articles get the next name from their automation profile&apos;s author rotation when first published; a name typed here is kept instead.</span>
           </label>
           <label className="field">
             <span>Corrections note (optional)</span>
