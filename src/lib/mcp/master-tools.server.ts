@@ -12,6 +12,7 @@ import { assertSitePatchAllowed, assertAdsPatchAllowed, collectAdsSnapshot } fro
 import type { MasterActor } from "@/content/master-mcp.server";
 import type { PublishSource } from "@/lib/publish-source";
 import { contrast, themeColors } from "@/lib/appearance";
+import { masterNewArticleWrite } from "./master/article-write";
 
 export type MasterToolCtx = { actor: MasterActor; source: PublishSource | null };
 
@@ -350,20 +351,27 @@ const defs: Array<(ctx: MasterToolCtx) => ToolDefinition> = [
     run: async (input, ctx) => {
       const repo = await import("@/content/repository.server");
       const { bodyToBlocks } = await import("@/lib/automation/body");
-      const saved = await repo.saveArticle({
+      let topicIds = [...new Set((input.topic_ids ?? []).filter(Boolean))].slice(0, 4);
+      if (!topicIds.length) {
+        const list = await repo.adminList({});
+        const first = (list.categories as Array<{ id: string }>)[0]?.id;
+        if (!first) throw new Error("The site has no topics yet. Add a topic first, or pass topic_ids.");
+        topicIds = [first];
+      }
+      const saved = await repo.saveArticle(masterNewArticleWrite({
         title: input.title,
-        slug: input.slug || undefined,
-        excerpt: input.excerpt || "",
-        topicIds: input.topic_ids,
+        slug: input.slug,
+        excerpt: input.excerpt,
+        topicIds,
         tagIds: input.tag_ids,
-        seoTitle: input.seo_title ?? "",
-        seoDescription: input.seo_description ?? "",
+        seoTitle: input.seo_title,
+        seoDescription: input.seo_description,
         authorName: input.author_name,
-        featured: input.featured ?? false,
-        coverMediaId: input.cover_media_id ?? null,
+        featured: input.featured,
+        coverMediaId: input.cover_media_id,
         blocks: input.body ? bodyToBlocks(input.body) : [],
         intent: input.publish ? "publish" : "save",
-      }, actorSource(ctx));
+      }), actorSource(ctx));
       const { recordArticleEvent } = await import("@/content/master-mcp.server");
       await recordArticleEvent({ articleId: saved.id, action: input.publish ? "published" : "created", actorKind: "master-mcp", actorId: ctx.actor.connectionId, clientName: ctx.actor.clientName, detail: { slug: saved.slug, status: saved.status } });
       return saved;
