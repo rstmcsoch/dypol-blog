@@ -64,7 +64,8 @@ export type SpecialDeps = {
   profileId: string;
   auth: string;
   loadSettings: (profileId: string) => Promise<AutomationSettings>;
-  attemptAutoPublish: (articleId: string, profileId: string, auth: string, runId?: string | null) => Promise<{ published: boolean; status: string; reasons: string[] }>;
+  attemptAutoPublish: (articleId: string, profileId: string, auth: string, runId?: string | null, source?: import("@/lib/publish-source").PublishSource | null) => Promise<{ published: boolean; status: string; reasons: string[] }>;
+  source?: import("@/lib/publish-source").PublishSource | null;
 };
 
 const MAX_SPECIAL_BODY_CHARS = 400_000;
@@ -238,7 +239,7 @@ export async function submitSpecialDraft(raw: unknown, ctx: SpecialCtx, deps: Sp
       motif: (["corner", "band", "split", "stamp", "stack", "edge"] as const)[parseInt(hash.slice(0, 2), 16) % 6], featured: false,
       seoTitle: input.seo_title ?? "", seoDescription: input.seo_description ?? "", coverMediaId: input.cover_media_id ?? null,
       publishedAt: null, scheduledAt: null, intent: "save", content, note: `AI draft (${profileId})`,
-    }, `ai:${profileId}`, { allowPublish: false, actor: sourceFromAuthLabel(auth) });
+    }, `ai:${profileId}`, { allowPublish: false, actor: deps.source ?? sourceFromAuthLabel(auth) });
   } catch (error) {
     const message = error instanceof ContentError ? error.message : error instanceof z.ZodError ? "The special article failed validation." : null;
     if (!message) throw error;
@@ -258,7 +259,7 @@ export async function submitSpecialDraft(raw: unknown, ctx: SpecialCtx, deps: Sp
   await store.recordRun({ profileId, tool: "submit_article_draft", outcome: "drafted", reason: flags.length ? `flags: ${flags.join(", ")}` : "", articleId: saved.id, auth, details: { articleType: "special", version: saved.version, words: saved.wordCount, notes: input.notes ?? "", sources: content.sources.length } });
   let auto: { published: boolean; status: string; reasons: string[] } = { published: false, status: "draft", reasons: [] };
   if (ctx.settings.publishBehaviour === "auto-if-passes") {
-    auto = report?.ok ? await deps.attemptAutoPublish(saved.id, profileId, auth, input.run_id) : { published: false, status: "draft", reasons: ["The quality report has blocking items: " + (report?.blocking.join(", ") || "report unavailable")] };
+    auto = report?.ok ? await deps.attemptAutoPublish(saved.id, profileId, auth, input.run_id, deps.source ?? sourceFromAuthLabel(auth)) : { published: false, status: "draft", reasons: ["The quality report has blocking items: " + (report?.blocking.join(", ") || "report unavailable")] };
   } else {
     auto.reasons = ["AI special articles stay drafts for the owner to review (Automation → Special → draft/publish behaviour)."];
   }
@@ -736,7 +737,7 @@ export async function updateSpecialDraft(raw: unknown, ctx: SpecialCtx | null, d
       seoTitle: input.seo_title ?? article.seoTitle ?? "", seoDescription: input.seo_description ?? article.seoDescription ?? "",
       coverMediaId: article.coverMediaId ?? null, publishedAt: article.publishedAt, scheduledAt: article.scheduledAt ?? null,
       intent: "save", content, note: `AI edit (${deps.profileId})`,
-    }, `ai:${deps.profileId}`, { allowPublish: false, actor: sourceFromAuthLabel(deps.auth) });
+    }, `ai:${deps.profileId}`, { allowPublish: false, actor: deps.source ?? sourceFromAuthLabel(deps.auth) });
     const report = await runQualityReport(article.id, ctx.settings).catch(() => null);
     if (report) await store.setSubmissionFlags(article.id, report.blocking.map((b) => `special_${b}`)).catch(() => undefined);
     const changed = Object.keys(input).filter((k) => k !== "article_id");

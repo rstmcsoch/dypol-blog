@@ -1239,18 +1239,19 @@ export async function stampArticleSource(id: string, kind: "created" | "publishe
   try {
     const sql = await getSql();
     const cols = sourceColumns(source);
+    // Only the first write wins: never fill in a later product/client onto an already-recorded source.
     if (kind === "created") {
       await sql`update articles set
-        created_via = coalesce(created_via, ${cols.via}),
-        created_via_client = case when created_via_client is null or trim(created_via_client) = '' then ${cols.client} else created_via_client end,
-        created_via_product = case when created_via_product is null or trim(created_via_product) = '' then ${cols.product} else created_via_product end
-      where id = ${id}`;
+        created_via = ${cols.via},
+        created_via_client = ${cols.client},
+        created_via_product = ${cols.product}
+      where id = ${id} and created_via is null`;
     } else {
       await sql`update articles set
-        published_via = coalesce(published_via, ${cols.via}),
-        published_via_client = case when published_via_client is null or trim(published_via_client) = '' then ${cols.client} else published_via_client end,
-        published_via_product = case when published_via_product is null or trim(published_via_product) = '' then ${cols.product} else published_via_product end
-      where id = ${id}`;
+        published_via = ${cols.via},
+        published_via_client = ${cols.client},
+        published_via_product = ${cols.product}
+      where id = ${id} and published_via is null`;
     }
   } catch (error) {
     console.error("[publish-source]", error);
