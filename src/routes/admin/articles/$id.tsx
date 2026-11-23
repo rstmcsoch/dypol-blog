@@ -19,6 +19,6 @@ function EditPiece() {
   const data = Route.useLoaderData();
   if (!data.article) return null;
   return (
-    <ArticleEditor article={data.article} categories={data.categories} tags={data.tags} media={data.media} />
+    <ArticleEditor article={data.article} categories={data.categories} tags={data.tags} media={data.media} authors={data.authors} provenance={data.provenance} />
   );
 }

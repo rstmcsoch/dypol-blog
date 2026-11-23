@@ -2382,6 +2382,26 @@ html[data-theme="dark"] .theme-switch__btn[data-value="dark"] .theme-switch__mar
 .field { display: grid; gap: 0.3rem; min-width: min(100%, 12rem); flex: 1; }
 .field span, .block-card legend { color: var(--a-text); font-size: 0.85rem; font-weight: 600; }
 .field small, .field-help { color: var(--a-muted); font-size: 0.8rem; }
+.publish-meta { display: grid; gap: 1rem; }
+@media (min-width: 640px) {
+  .publish-meta { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; }
+}
+.desk .publish-via {
+  margin: 0;
+  min-height: 2.6rem;
+  border: 1px solid var(--a-line-strong);
+  border-radius: 10px;
+  background: var(--a-bg);
+  color: var(--a-text);
+  padding: 0.55rem 0.8rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.15rem;
+  overflow-wrap: anywhere;
+}
+.desk .publish-via__sub { color: var(--a-muted); font-size: 0.85rem; }
+
 .desk input, .desk textarea, .desk select { width: 100%; border: 1px solid var(--a-line-strong); border-radius: 8px; background: var(--a-surface); color: var(--a-text); font: inherit; padding: 0.5rem 0.65rem; }
 .desk input[type="checkbox"], .desk input[type="radio"] { width: 1rem; height: 1rem; accent-color: var(--a-primary); }
 .desk input[type="range"] { padding: 0; border: 0; accent-color: var(--a-primary); }

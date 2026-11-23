@@ -21,6 +21,7 @@ import { blocksToBody } from "@/lib/automation/body";
 import type { AiActor } from "@/lib/automation/ai-edit";
 import type { ToolDefinition, ToolResult } from "./protocol";
 import type { ArticleBlock, CoverMotif } from "@/content/types";
+import { sourceFromAuthLabel, type PublishSource } from "@/lib/publish-source";
 
 /**
  * The twelve automation tools. Each one authorises against the owner's automation
@@ -154,7 +155,11 @@ function invalid(error: z.ZodError): ToolResult {
   };
 }
 
-type Ctx = { auth: string; profileId?: string; /** t173: precomputed special mode (null/absent = off). */ special?: SpecialCtx | null; /** t178: exclusive Normal/Special assignment (absent = normal, the legacy behaviour). */ assignment?: "normal" | "special" };
+type Ctx = { auth: string; profileId?: string; /** t173: precomputed special mode (null/absent = off). */ special?: SpecialCtx | null; /** t178: exclusive Normal/Special assignment (absent = normal, the legacy behaviour). */ assignment?: "normal" | "special"; /** t241: structured MCP identity for article provenance. */ source?: PublishSource | null };
+
+function actorSource(ctx: { auth: string; source?: PublishSource | null }): PublishSource | null {
+  return ctx.source ?? sourceFromAuthLabel(ctx.auth);
+}
 
 async function loadSettings(profileId: string) {
   const { readProfileSettings } = await import("@/content/automation.server");
@@ -318,7 +323,12 @@ async function attemptAutoPublish(articleId: string, profileId: string, auth: st
   const now = new Date().toISOString();
   const flipped = await sql<{ id: string }>`update articles set status = 'published', published_at = ${now}, updated_at = ${now} where id = ${articleId} and status = 'draft' returning id`;
   await store.settleAiPublishClaim(claimed.claim.claimId, "published", { mode: "automatic", runKey: claimed.claim.run.runKey });
-  if (flipped[0]) await (await import("@/content/repository.server")).assignRotatingAuthor(articleId);
+  if (flipped[0]) {
+    const repo = await import("@/content/repository.server");
+    await repo.assignRotatingAuthor(articleId);
+    const source = sourceFromAuthLabel(auth);
+    if (source) await repo.stampArticleSource(articleId, "published", source);
+  }
   return { published: true, status: "published", reasons: [] };
 }
 
@@ -408,6 +418,10 @@ async function explicitPublish(
   await store.settleAiPublishClaim(claimed.claim.claimId, "published_explicit", { mode: "explicit", warnings, runKey: claimed.claim.run.runKey });
   // t169: first publish only (a re-publish keeps whatever byline it had).
   const author = flipped[0] && !rows[0].published_at ? await repo.assignRotatingAuthor(articleId) : null;
+  if (flipped[0]) {
+    const source = sourceFromAuthLabel(auth);
+    if (source) await repo.stampArticleSource(articleId, "published", source);
+  }
   return { published: true, status: "published", reasons: [], warnings, slug: rows[0].slug, ...(author ? { author } : {}) };
 }
 
@@ -733,7 +747,7 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
             publishedAt: null,
             blocks,
             intent: "save",
-          });
+          }, actorSource(ctx));
         } catch (error) {
           if (error instanceof ContentError || error instanceof z.ZodError) {
             const message = error instanceof z.ZodError ? "The article failed validation." : error.message;

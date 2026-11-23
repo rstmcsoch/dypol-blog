@@ -11,5 +11,5 @@ export const Route = createFileRoute("/admin/articles/new")({
 
 function NewPiece() {
   const data = Route.useLoaderData();
-  return <ArticleEditor article={null} categories={data.categories} tags={data.tags} media={data.media} />;
+  return <ArticleEditor article={null} categories={data.categories} tags={data.tags} media={data.media} authors={data.authors} provenance={data.provenance} />;
 }
