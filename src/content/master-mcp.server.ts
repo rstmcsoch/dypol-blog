@@ -49,6 +49,17 @@ let ready = false;
 export async function ensureMasterTables(): Promise<void> {
   if (ready) return;
   const sql = await getSql();
+  // Fast path: after migration 0029 is applied, a single lookup avoids ~18
+  // serial IAD→D1 round trips (several seconds) on every cold isolate.
+  const present = await sql<{ creds: number; col: number }>`
+    select
+      (select count(*) from sqlite_master where type = 'table' and name = 'master_mcp_credentials') as creds,
+      (select count(*) from pragma_table_info('articles') where name = 'published_mode') as col
+  `.catch(() => [] as Array<{ creds: number; col: number }>);
+  if ((present[0]?.creds ?? 0) > 0 && (present[0]?.col ?? 0) > 0) {
+    ready = true;
+    return;
+  }
   await sql`create table if not exists master_mcp_credentials (
     id text primary key,
     created_at text not null,
