@@ -49,7 +49,26 @@ export const SERVER_INSTRUCTIONS =
   "If nothing is good enough, call record_run_result with outcome 'skipped'. " +
   "Social media embeds: follow get_blog_settings.socialEmbedInstructions (post URL alone on its own line, at most 1–2, never HTML/scripts, never invented URLs).";
 
-async function handleOne(message: unknown, tools: ToolDefinition[]): Promise<object | null> {
+
+export type RpcOptions = {
+  instructions?: string;
+  serverInfo?: { name: string; title: string; version: string };
+};
+
+export const MASTER_SERVER_INFO = { name: "dypol-blog-master", title: "DYPOL Blog Master MCP", version: "1.0.0" };
+
+export const MASTER_SERVER_INSTRUCTIONS =
+  "You are the website owner's Master MCP for DYPOL Blog: an operations manager, not a writer profile. " +
+  "Use get_master_overview and get_master_permissions first. You can manage content, publishing, existing " +
+  "automation profiles, analytics, media, events, pages and permitted website settings. " +
+  "You cannot access Security, administrator login, Worker secrets, or create or delete automation profiles " +
+  "or credentials. You cannot run arbitrary SQL or JavaScript. " +
+  "Deleting published content requires preview_article_deletion and then delete_article with the confirmation token. " +
+  "Pausing a profile blocks its further website operations; it does not terminate any external AI process. " +
+  "A queued agent task is not complete until the target profile reports completion. " +
+  "Daily publishing caps are counted per UTC calendar day. Analytics date presets use Asia/Kolkata (IST).";
+
+async function handleOne(message: unknown, tools: ToolDefinition[], options?: RpcOptions): Promise<object | null> {
   if (!isRequest(message)) return error(null, RPC.INVALID_REQUEST, "Invalid JSON-RPC request.");
   const id = message.id ?? null;
   const isNotification = message.id === undefined;
@@ -62,8 +81,8 @@ async function handleOne(message: unknown, tools: ToolDefinition[]): Promise<obj
       return result(id, {
         protocolVersion,
         capabilities: { tools: { listChanged: false } },
-        serverInfo: SERVER_INFO,
-        instructions: SERVER_INSTRUCTIONS,
+        serverInfo: options?.serverInfo ?? SERVER_INFO,
+        instructions: options?.instructions ?? SERVER_INSTRUCTIONS,
       });
     }
     case "ping":
@@ -105,11 +124,11 @@ async function handleOne(message: unknown, tools: ToolDefinition[]): Promise<obj
 }
 
 /** Returns the JSON body to send, or null when only notifications were received (HTTP 202). */
-export async function handleRpc(body: unknown, tools: ToolDefinition[]): Promise<object | object[] | null> {
+export async function handleRpc(body: unknown, tools: ToolDefinition[], options?: RpcOptions): Promise<object | object[] | null> {
   if (Array.isArray(body)) {
     if (body.length === 0 || body.length > 20) return error(null, RPC.INVALID_REQUEST, "Batch must have 1-20 messages.");
-    const replies = (await Promise.all(body.map((m) => handleOne(m, tools)))).filter((r): r is object => r !== null);
+    const replies = (await Promise.all(body.map((m) => handleOne(m, tools, options)))).filter((r): r is object => r !== null);
     return replies.length ? replies : null;
   }
-  return handleOne(body, tools);
+  return handleOne(body, tools, options);
 }

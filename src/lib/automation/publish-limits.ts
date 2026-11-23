@@ -79,6 +79,8 @@ export type LimitVerdict = {
   websiteReason: string | null;
   /** Set when the per-run cap is the (first) blocker. */
   runReason: string | null;
+  /** t242: set when the per-profile daily cap (UTC day) is the first blocker. */
+  profileReason?: string | null;
 };
 
 export function limitVerdict(input: {
@@ -116,9 +118,32 @@ export function combinedLimitVerdict(input: {
   /** Special AI publishes today (UTC), claims included. Ignored for regular. */
   specialUsed?: number;
   specialCap?: number;
-}): LimitVerdict & { specialReason: string | null } {
-  // Regular articles: exactly the pre-t177 verdict (same order, same text).
-  if (input.kind !== "special") return { ...limitVerdict(input), specialReason: null };
+  /** t242: this profile's AI publishes today (UTC), claims included. */
+  profileUsed?: number;
+  /** t242: per-profile daily cap; 0 / omitted = no profile daily limit. */
+  profileCap?: number;
+}): LimitVerdict & { specialReason: string | null; profileReason: string | null } {
+  const profileCap = input.profileCap ?? 0;
+  const profileUsed = input.profileUsed ?? 0;
+  const profileReason =
+    profileCap > 0 && profileUsed >= profileCap
+      ? `Profile daily publish limit reached (${profileCap}) for this automation (UTC day).`
+      : null;
+  // Regular articles: pre-t177 verdict (website then run), with the new
+  // profile daily cap inserted after the website ceiling when it is set.
+  if (input.kind !== "special") {
+    if (!profileCap) return { ...limitVerdict(input), specialReason: null, profileReason: null };
+    const websiteReason =
+      input.websiteCap > 0 && input.websiteUsed >= input.websiteCap
+        ? `Website daily publish limit reached (${input.websiteCap}).`
+        : null;
+    const profileBlock = !websiteReason ? profileReason : null;
+    const runReason =
+      !websiteReason && !profileBlock && input.runCap > 0 && input.runUsed >= input.runCap
+        ? `Per-run publish limit reached (${input.runCap}) for this automation run.`
+        : null;
+    return { blocked: Boolean(websiteReason ?? profileBlock ?? runReason), websiteReason, runReason, specialReason: null, profileReason: profileBlock };
+  }
   const websiteReason =
     input.websiteCap > 0 && input.websiteUsed >= input.websiteCap
       ? `Website daily publish limit reached (${input.websiteCap}) — this main limit counts Normal + Special articles combined. Kept as a draft.`
@@ -128,11 +153,12 @@ export function combinedLimitVerdict(input: {
     !websiteReason && specialCap > 0 && (input.specialUsed ?? 0) >= specialCap
       ? `Special-article daily publish limit reached (${specialCap}). Kept as a draft.`
       : null;
+  const profileBlock = !websiteReason && !specialReason ? profileReason : null;
   const runReason =
-    !websiteReason && !specialReason && input.runCap > 0 && input.runUsed >= input.runCap
+    !websiteReason && !specialReason && !profileBlock && input.runCap > 0 && input.runUsed >= input.runCap
       ? `Per-run publish limit reached (${input.runCap}) for this automation run.`
       : null;
-  return { blocked: Boolean(websiteReason ?? specialReason ?? runReason), websiteReason, runReason, specialReason };
+  return { blocked: Boolean(websiteReason ?? specialReason ?? profileBlock ?? runReason), websiteReason, runReason, specialReason, profileReason: profileBlock };
 }
 
 /** Start of the cap window: the current UTC day (same window as the website cap since t64). */
@@ -161,6 +187,8 @@ export function atomicClaimStatement(input: {
   websiteCap: number;
   /** Only for special articles; 0 = no special cap. */
   specialCap: number;
+  /** t242: per-profile daily cap (UTC day); 0 / omitted = none. */
+  profileCap?: number;
 }): { text: string; params: unknown[] } {
   const params: unknown[] = [input.id, input.createdAt, input.articleId, input.auth, input.details, input.profileId];
   const conds: string[] = [];
@@ -171,6 +199,10 @@ export function atomicClaimStatement(input: {
   if (input.specialCap > 0) {
     params.push(input.since, input.specialCap);
     conds.push(`(select count(*) from automation_runs r join articles a on a.id = r.article_id where r.${COUNTED.replace(/ and outcome/, " and r.outcome")} and a.article_type = 'special' and r.created_at >= $${params.length - 1}) < $${params.length}`);
+  }
+  if ((input.profileCap ?? 0) > 0) {
+    params.push(input.since, input.profileId, input.profileCap);
+    conds.push(`(select count(*) from automation_runs where ${COUNTED} and created_at >= $${params.length - 2} and profile_id = $${params.length - 1}) < $${params.length}`);
   }
   const text = `insert into automation_runs (id, created_at, tool, outcome, reason, article_id, auth, details, profile_id)
     select $1, $2, 'publish_article_if_allowed', 'publish_claim', '', $3, $4, $5, $6

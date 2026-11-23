@@ -152,7 +152,18 @@ function esc(value: string): string {
   });
 }
 
-type ConfidentialRef = { profileId: string; name: string; clientId: string };
+type ConfidentialRef = { profileId: string; name: string; clientId: string; kind?: "profile" | "master-mcp"; secretVersion?: string };
+
+async function resolveConfidential(clientId: string): Promise<(ConfidentialRef & { redirectUris: string[]; secretVersion: string }) | null> {
+  const { oauthClientById } = await import("@/content/automation.server");
+  const client = await oauthClientById(clientId);
+  if (client) return { profileId: client.profileId, name: client.name, clientId: client.clientId, kind: "profile", redirectUris: client.redirectUris, secretVersion: client.secretVersion };
+  const master = await import("@/content/master-mcp.server").then((m) => m.masterOauthClientById(clientId));
+  if (master) return { profileId: "master", name: master.name, clientId: master.id, kind: "master-mcp", redirectUris: master.redirectUris, secretVersion: master.secretVersion };
+  return null;
+}
+
+
 type AuthorizeParams = { clientId: string; clientName: string | null; redirectUri: string; challenge: string; state: string; scope: string; confidential: ConfidentialRef | null };
 
 async function readParams(get: (k: string) => string | null, env: Env): Promise<AuthorizeParams | string> {
@@ -177,11 +188,10 @@ async function readParams(get: (k: string) => string | null, env: Env): Promise<
   if (OAUTH_CLIENT_ID_RE.test(p.clientId)) {
     // Desk-issued confidential client: the redirect must be one the admin pasted.
     // It is not limited to the public DCR host list.
-    const { oauthClientById } = await import("@/content/automation.server");
-    const client = await oauthClientById(p.clientId);
-    if (!client) return "client_id is not registered here. Create it under Desk → Automation.";
-    if (!client.redirectUris.some((r) => redirectMatches(r, p.redirectUri))) return "redirect_uri was not registered for this OAuth client. Paste this exact URL on the automation profile.";
-    confidential = { profileId: client.profileId, name: client.name, clientId: client.clientId };
+    const client = await resolveConfidential(p.clientId);
+    if (!client) return "client_id is not registered here. Create it under Desk → Automation, or Desk → Settings → Master MCP.";
+    if (!client.redirectUris.some((r) => redirectMatches(r, p.redirectUri))) return "redirect_uri was not registered for this OAuth client. Paste this exact URL on the automation profile or in Settings → Master MCP.";
+    confidential = { profileId: client.profileId, name: client.name, clientId: client.clientId, kind: client.kind, secretVersion: client.secretVersion };
     clientName = client.name;
   } else {
     if (!redirectAllowed(p.redirectUri, await extraClientHosts(env))) return "redirect_uri is not allowed.";
@@ -319,19 +329,32 @@ export async function authorize(request: Request): Promise<Response> {
   }
   let oauthClientVersion: string | undefined;
   if (params.confidential) {
-    const bound = await oauthClientById(params.clientId);
+    const bound = await resolveConfidential(params.clientId);
     if (!bound) return page(params, "This OAuth client was removed. Create it again in the desk.", 400, signedIn);
-    if (pastedProfile && pastedProfile.id !== bound.profileId) {
-      noteApproveFailure(approveIp);
-      return page(params, "That API key belongs to a different automation profile.", 401, signedIn);
+    if (bound.kind === "master-mcp") {
+      if (pastedProfile) {
+        noteApproveFailure(approveIp);
+        return page(params, "A publishing profile API key cannot approve the Master MCP connection. Sign in to the desk, or enter the site MCP token.", 401, signedIn);
+      }
+      if (!master && !signedIn) {
+        noteApproveFailure(approveIp);
+        return page(params, "Sign in to the desk in this browser, or enter the MCP token, to approve the Master MCP connection.", 401, signedIn);
+      }
+      profile = { id: "master", version: bound.secretVersion };
+      oauthClientVersion = bound.secretVersion;
+    } else {
+      if (pastedProfile && pastedProfile.id !== bound.profileId) {
+        noteApproveFailure(approveIp);
+        return page(params, "That API key belongs to a different automation profile.", 401, signedIn);
+      }
+      const ownsProfile = Boolean(pastedProfile && pastedProfile.id === bound.profileId);
+      if (!master && !ownsProfile && !signedIn) {
+        noteApproveFailure(approveIp);
+        return page(params, "Sign in to the desk in this browser, or enter the MCP token or this profile's API key.", 401, signedIn);
+      }
+      profile = bound.profileId === "default" ? DEFAULT_PROFILE : { id: bound.profileId, version: pastedProfile?.version ?? "" };
+      oauthClientVersion = bound.secretVersion;
     }
-    const ownsProfile = Boolean(pastedProfile && pastedProfile.id === bound.profileId);
-    if (!master && !ownsProfile && !signedIn) {
-      noteApproveFailure(approveIp);
-      return page(params, "Sign in to the desk in this browser, or enter the MCP token or this profile's API key.", 401, signedIn);
-    }
-    profile = bound.profileId === "default" ? DEFAULT_PROFILE : { id: bound.profileId, version: pastedProfile?.version ?? "" };
-    oauthClientVersion = bound.secretVersion;
   } else if (pastedProfile) {
     profile = pastedProfile;
   } else if (master) {
@@ -408,7 +431,8 @@ export async function token(request: Request): Promise<Response> {
   if (OAUTH_CLIENT_ID_RE.test(creds.clientId)) {
     const { authenticateOauthClient } = await import("@/content/automation.server");
     const client = await authenticateOauthClient(creds.clientId, creds.secret);
-    if (!client) return oauthError("invalid_client", "Unknown client or wrong client secret.", 401);
+    const masterClient = client ? null : await import("@/content/master-mcp.server").then((m) => m.authenticateMasterOauthClient(creds.clientId, creds.secret));
+    if (!client && !masterClient) return oauthError("invalid_client", "Unknown client or wrong client secret.", 401);
   }
   const grant = get("grant_type");
   if (grant === "authorization_code") {
@@ -423,8 +447,21 @@ export async function token(request: Request): Promise<Response> {
   }
   if (grant === "refresh_token") {
     const { profileResolver } = await import("@/content/automation.server");
+    const { masterResolver } = await import("@/content/master-mcp.server");
     const { claimOAuthNonce } = await import("./consumed.server");
-    const pair = await refresh(env.MCP_TOKEN, { refreshToken: get("refresh_token"), clientId: creds.clientId }, undefined, profileResolver, claimOAuthNonce);
+    const master = masterResolver();
+    const resolver = {
+      byToken: profileResolver.byToken,
+      stillValid: async (binding: { id: string; version: string }) => {
+        if (binding.id === "master") return master.oauthClientStillValid ? master.oauthClientStillValid(binding.version) : false;
+        return profileResolver.stillValid(binding);
+      },
+      oauthClientStillValid: async (profileId: string, version: string) => {
+        if (profileId === "master") return master.oauthClientStillValid ? master.oauthClientStillValid(version) : false;
+        return profileResolver.oauthClientStillValid ? profileResolver.oauthClientStillValid(profileId, version) : false;
+      },
+    };
+    const pair = await refresh(env.MCP_TOKEN, { refreshToken: get("refresh_token"), clientId: creds.clientId }, undefined, resolver, claimOAuthNonce);
     return pair ? json(pair) : oauthError("invalid_grant", "The refresh token is invalid or expired.");
   }
   return oauthError("unsupported_grant_type", "Use authorization_code or refresh_token.");

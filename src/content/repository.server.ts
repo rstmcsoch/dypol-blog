@@ -1197,20 +1197,32 @@ export async function logAdminAction(kind: string, summary: string): Promise<voi
   } catch { /* logging must never break the action it describes */ }
 }
 
-export async function activityFeed(): Promise<Array<{ at: string; source: "You" | "Automation"; text: string }>> {
+export async function activityFeed(): Promise<Array<{ at: string; source: import("@/lib/admin-followup").ActivitySource; text: string }>> {
   await ensureFollowupTables().catch(() => undefined);
   const sql = await getSql();
-  const admin = await sql<{ created_at: string; summary: string }>`select created_at, summary from admin_actions order by created_at desc limit 40`.catch(() => [] as Array<{ created_at: string; summary: string }>);
-  let automation: Array<{ at: string; text: string }> = [];
+  const admin = await sql<{ created_at: string; summary: string; kind?: string; actor_kind?: string | null }>`select created_at, summary, kind, actor_kind from admin_actions order by created_at desc limit 40`.catch(() => [] as Array<{ created_at: string; summary: string; kind?: string; actor_kind?: string | null }>);
+  let automation: Array<{ at: string; text: string; assignment?: "normal" | "special" }> = [];
   try {
     const { recentRuns } = await import("./automation.server");
+    const { readSpecialSettings } = await import("./special-settings.server");
+    const { assignmentOf } = await import("@/lib/special/settings");
     const runs = await recentRuns(25);
+    const special = await readSpecialSettings().catch(() => null);
     automation = runs.map((r) => ({
       at: r.createdAt,
       text: `${r.profileId} · ${r.tool} — ${r.outcome}${r.reason ? `: ${r.reason}` : ""}`,
+      assignment: special ? assignmentOf(special, r.profileId) : "normal",
     }));
   } catch { /* automation table unavailable */ }
-  return mergeActivityFeed(admin.map((a) => ({ at: a.created_at, text: a.summary })), automation, 50);
+  return mergeActivityFeed(
+    admin.map((a) => ({
+      at: a.created_at,
+      text: a.summary,
+      actorKind: a.actor_kind ?? (a.kind?.startsWith("master.") ? "master-mcp" : "admin"),
+    })),
+    automation,
+    50,
+  );
 }
 
 export async function recordNotFound(rawPath: unknown, referrer = ""): Promise<void> {

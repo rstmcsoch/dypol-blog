@@ -361,3 +361,14 @@ test("t166: an At a glance box written after the body moves to the top; order is
   const already = bodyToBlocks("## At a glance\n- One\n\nIntro.");
   assert.equal(placeSummaryFirst(already), already);
 });
+
+test("t242: maxArticlesPerDay is a new field; pre-t64 maxPublishedPerDay does not become the daily cap", () => {
+  const migrated = normalizeAutomationSettings({ policy: { maxPublishedPerDay: 4 } });
+  assert.equal(migrated.policy.maxPublishedPerRun, 4);
+  assert.equal(migrated.policy.maxArticlesPerDay, 0);
+  const set = normalizeAutomationSettings({ policy: { maxPublishedPerRun: 2, maxArticlesPerDay: 3 } });
+  assert.equal(set.policy.maxPublishedPerRun, 2);
+  assert.equal(set.policy.maxArticlesPerDay, 3);
+  const missing = normalizeAutomationSettings({ enabled: true });
+  assert.equal(missing.policy.maxArticlesPerDay, 0);
+});

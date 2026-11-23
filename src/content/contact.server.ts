@@ -85,12 +85,24 @@ export async function submitContact(raw: unknown, request: Request): Promise<Con
   return { ok: true };
 }
 
-export async function listContactMessages(limit = 200): Promise<Array<{ id: string; name: string; email: string; message: string; createdAt: string }>> {
+export async function listContactMessages(limit = 200): Promise<Array<{ id: string; name: string; email: string; message: string; createdAt: string; handled: boolean }>> {
   try {
     const sql = await getSql();
-    const rows = await sql<{ id: string; name: string; email: string; message: string; created_at: string }>`select id, name, email, message, created_at from contact_messages order by created_at desc limit ${limit}`;
-    return rows.map((r) => ({ id: r.id, name: r.name, email: r.email, message: r.message, createdAt: r.created_at }));
+    const rows = await sql<{ id: string; name: string; email: string; message: string; created_at: string; handled?: number }>`select id, name, email, message, created_at, handled from contact_messages order by created_at desc limit ${limit}`;
+    return rows.map((r) => ({ id: r.id, name: r.name, email: r.email, message: r.message, createdAt: r.created_at, handled: Number(r.handled ?? 0) === 1 }));
   } catch {
     return [];
   }
+}
+
+export async function setContactHandled(id: string, handled: boolean): Promise<void> {
+  const sql = await getSql();
+  const rows = await sql<{ id: string }>`update contact_messages set handled = ${handled ? 1 : 0} where id = ${id} returning id`;
+  if (!rows[0]) throw new Error("That message no longer exists.");
+}
+
+export async function deleteContactMessage(id: string): Promise<void> {
+  const sql = await getSql();
+  const rows = await sql<{ id: string }>`delete from contact_messages where id = ${id} returning id`;
+  if (!rows[0]) throw new Error("That message no longer exists.");
 }

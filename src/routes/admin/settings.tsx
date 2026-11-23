@@ -2,6 +2,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { adminPending } from "@/components/admin/pending";
 import { FormShell, useSiteForm } from "@/components/admin/site-form";
 import { adminSettings } from "@/content/admin-api";
+import { adminMasterMcp } from "@/content/master-mcp-api";
+import { MasterMcpPanel } from "@/components/admin/master-mcp";
 import { useState } from "react";
 import { HeadCodeCards } from "@/components/admin/head-code-cards";
 import { SettingsTabs, type SettingsTab } from "@/components/admin/settings-tabs";
@@ -16,7 +18,11 @@ import {
 
 export const Route = createFileRoute("/admin/settings")({
   ...adminPending,
-  loader: () => adminSettings(),
+  loader: async () => {
+    const site = await adminSettings();
+    const master = await adminMasterMcp().catch(() => null);
+    return { ...site, master };
+  },
   component: SettingsAdmin,
 });
 
@@ -29,6 +35,7 @@ const SETTINGS_TABS: SettingsTab[] = [
   { id: "tracking", label: "Analytics & head code" },
   { id: "publishing", label: "AI publishing" },
   { id: "access", label: "Access" },
+  { id: "mastermcp", label: "Master MCP" },
 ];
 
 function SettingsAdmin() {
@@ -285,6 +292,10 @@ function SettingsAdmin() {
             everyone out. See Help for details.
           </p>
         </section>
+      </div>
+      <div {...tabPanelProps(P, "mastermcp", tab)}>
+        <MasterMcpPanel initial={data.master} />
+        <p className="desk-note">Credential and OAuth changes on this tab save immediately. The Save changes button still applies only to the other Settings tabs.</p>
       </div>
     </FormShell>
   );
