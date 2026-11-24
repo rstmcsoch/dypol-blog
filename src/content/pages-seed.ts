@@ -46,6 +46,8 @@ Our writers and editors lead DYPOL BLOG's coverage and do the main work of produ
 
 AI-assisted tools support the team with surface-level research, finding background information and potential sources, spotting emerging topics and trends, and analysing site traffic and audience activity to suggest what readers may find useful. For serious, complex or original-reporting stories that require deeper research or human input, our writers and editors carry out that work, check primary sources and apply their own expertise and editorial judgement. The team remains responsible for the substance and final wording of its articles. Read more in our [Editorial Policy](/editorial-policy).
 
+When we get something wrong, we fix it openly. See our [Corrections Policy](/corrections-policy) for how that works.
+
 ## Our promise
 
 - Explain technology clearly, for readers who are smart but busy
