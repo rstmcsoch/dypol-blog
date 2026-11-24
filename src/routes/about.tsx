@@ -1,3 +1,4 @@
+import "@/styles-about-team.css";
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { ArrowRight } from "lucide-react";
 import { NotFoundState, PagePending } from "@/components/site/states";
