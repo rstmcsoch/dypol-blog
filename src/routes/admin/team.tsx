@@ -52,7 +52,7 @@ function TeamDesk() {
       const saved = await adminSaveTeam({ data: draft });
       setDraft(clone(saved));
       setSavedSnapshot(JSON.stringify(saved));
-      setMessage("DYPOLBLOG TEAM saved and live.");
+      setMessage("Team page saved and live.");
       await router.invalidate();
     } catch (caught) {
       setError(errorText(caught));
@@ -135,7 +135,7 @@ function TeamDesk() {
   return (
     <>
       <p className="desk-kicker">Site / Pages</p>
-      <h1 className="desk-title">DYPOLBLOG TEAM</h1>
+      <h1 className="desk-title">Team page</h1>
       <p className="desk-note">
         Manage the public <Link to="/team">/team</Link> page. Add, edit, hide/show, reorder, transfer between groups, or delete any group or member.
       </p>
@@ -290,7 +290,7 @@ function TeamDesk() {
         </section>
 
         <div className="row" style={{ gap: "0.75rem", flexWrap: "wrap", alignItems: "center" }}>
-          <button type="submit" className="btn btn--primary" disabled={busy}>{busy ? "Saving…" : "Save DYPOLBLOG TEAM"}</button>
+          <button type="submit" className="btn btn--primary" disabled={busy}>{busy ? "Saving…" : "Save team page"}</button>
           <Link to="/team" className="btn" target="_blank" rel="noreferrer">Preview /team</Link>
           {dirty ? (
             <button type="button" className="btn btn--ghost" disabled={busy} onClick={() => setDraft(JSON.parse(savedSnapshot) as TeamSettings)}>
@@ -302,7 +302,7 @@ function TeamDesk() {
             className="btn btn--ghost"
             disabled={busy}
             onClick={() => {
-              if (!window.confirm("Reset the DYPOLBLOG TEAM draft back to the default editorial roster? Click Save afterwards to apply.")) return;
+              if (!window.confirm("Reset the team page draft back to the default editorial roster? Click Save afterwards to apply.")) return;
               setDraft(clone(DEFAULT_TEAM_SETTINGS));
             }}
           >

@@ -93,7 +93,7 @@ export function footerColumns(pages: { slug: string; title: string }[]): FooterC
     {
       heading: "Company",
       links: [
-        { label: "DYPOLBLOG TEAM", href: "/team" },
+        { label: "Team", href: "/team" },
         ...(has("contact") ? [page("contact", "Contact")] : []),
         ...(has("editorial-policy") ? [page("editorial-policy", "Editorial Policy")] : []),
         ...(has("corrections-policy") ? [page("corrections-policy", "Corrections Policy")] : []),

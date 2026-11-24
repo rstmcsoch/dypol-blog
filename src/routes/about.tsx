@@ -44,14 +44,14 @@ function AboutRoute() {
       <section className="page" style={{ paddingTop: 0 }}>
         <div className="container">
           <div className="static-column">
-            <Link to="/team" className="about-team-cta" aria-label="Meet DYPOLBLOG TEAM">
+            <Link to="/team" className="about-team-cta" aria-label="Meet the DYPOL Blog editorial team">
               <div className="about-team-cta__copy">
                 <p className="kicker">The newsroom</p>
-                <p className="about-team-cta__title">Meet DYPOLBLOG TEAM</p>
-                <p className="about-team-cta__lede">The editors and writers behind DYPOLBLOG — the people who research, report, edit and publish every story.</p>
+                <p className="about-team-cta__title">Meet the editorial team</p>
+                <p className="about-team-cta__lede">The editors and writers behind DYPOL Blog — the people who research, report, edit and publish every story.</p>
               </div>
               <span className="about-team-cta__action" aria-hidden="true">
-                View DYPOLBLOG TEAM <ArrowRight size={18} strokeWidth={2.5} />
+                View team <ArrowRight size={18} strokeWidth={2.5} />
               </span>
             </Link>
           </div>

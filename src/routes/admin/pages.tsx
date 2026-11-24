@@ -58,16 +58,16 @@ function PagesDesk() {
       ) : null}
 
       <section className="desk-section">
-        <h2>DYPOLBLOG TEAM</h2>
+        <h2>Team page</h2>
         <div className="block-card">
           <div className="row" style={{ justifyContent: "space-between", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
             <div>
-              <strong>DYPOLBLOG TEAM</strong> <span className="muted">/team</span>{" "}
+              <strong>Editorial Team</strong> <span className="muted">/team</span>{" "}
               <span className="badge">custom page</span>
               <p className="muted" style={{ margin: "0.35rem 0 0" }}>Manage team groups, members, names, roles and ordering on the public team page.</p>
             </div>
             <span className="row" style={{ gap: "0.4rem", flexWrap: "wrap" }}>
-              <Link to="/admin/team" className="btn btn--sm btn--primary">Edit DYPOLBLOG TEAM</Link>
+              <Link to="/admin/team" className="btn btn--sm btn--primary">Edit team</Link>
               <a className="btn btn--sm" href="/team" target="_blank" rel="noreferrer">Preview</a>
             </span>
           </div>
@@ -132,16 +132,16 @@ function PagesDesk() {
         <div className="block-card">
           <div className="row" style={{ justifyContent: "space-between", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
             <strong>
-              DYPOLBLOG TEAM <span className="muted">/team</span>{" "}
+              Editorial Team <span className="muted">/team</span>{" "}
               <span className="badge">published</span>{" "}
               <span className="badge">team editor</span>
             </strong>
             <span className="row" style={{ gap: "0.4rem" }}>
-              <Link to="/admin/team" className="btn btn--sm btn--primary">Edit DYPOLBLOG TEAM</Link>
+              <Link to="/admin/team" className="btn btn--sm btn--primary">Edit team</Link>
               <a className="btn btn--sm" href="/team" target="_blank" rel="noreferrer">Preview</a>
             </span>
           </div>
-          <p className="muted">Managed with the visual DYPOLBLOG TEAM editor (groups, members, roles, ordering & visibility).</p>
+          <p className="muted">Managed with the visual Team editor (groups, members, roles, ordering & visibility).</p>
         </div>
         {data.map((page) => (
           <div key={page.id} className="block-card">
