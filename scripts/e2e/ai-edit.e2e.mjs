@@ -91,7 +91,7 @@ await check("get_article returns full draft; other-profile and owner drafts refu
   const cross = await call(B, "get_article", { article_id: dA });
   assert.equal(cross.ok, false); assert.match(cross.error, /different automation profile/);
   const owners = await call(A, "get_article", { article_id: dM });
-  assert.equal(owners.ok, false); assert.match(owners.error, /master MCP token|other automations/);
+  assert.equal(owners.ok, false); assert.match(owners.error, /master MCP (token|agent)|other automations/);
 });
 
 await check("update edits every field on own draft; id/status preserved; stays draft", async () => {

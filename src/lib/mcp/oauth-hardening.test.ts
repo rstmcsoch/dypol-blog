@@ -21,7 +21,7 @@ test("SEC-001: authorization code is single-use when a consumer is wired", async
     used.add(key);
     return true;
   };
-  const code = await issueCode(TOKEN, { clientId: "client-1", redirectUri: "https://claude.ai/cb", challenge, profile: { id: "default", version: "" } });
+  const code = await issueCode(TOKEN, { clientId: "client-1", redirectUri: "https://claude.ai/cb", challenge, profile: { id: "default", version: "", isMaster: true } });
   const first = await exchangeCode(TOKEN, { code, clientId: "client-1", redirectUri: "https://claude.ai/cb", verifier }, undefined, consume);
   assert.ok(first?.access_token, "first exchange succeeds");
   const second = await exchangeCode(TOKEN, { code, clientId: "client-1", redirectUri: "https://claude.ai/cb", verifier }, undefined, consume);
@@ -37,7 +37,7 @@ test("SEC-001: refresh token rotates — the old one cannot be reused", async ()
     used.add(key);
     return true;
   };
-  const code = await issueCode(TOKEN, { clientId: "client-1", redirectUri: "https://claude.ai/cb", challenge, profile: { id: "default", version: "" } });
+  const code = await issueCode(TOKEN, { clientId: "client-1", redirectUri: "https://claude.ai/cb", challenge, profile: { id: "default", version: "", isMaster: true } });
   const pair = await exchangeCode(TOKEN, { code, clientId: "client-1", redirectUri: "https://claude.ai/cb", verifier }, undefined, consume);
   assert.ok(pair?.refresh_token);
   const rotated = await refresh(TOKEN, { refreshToken: pair.refresh_token, clientId: "client-1" }, undefined, undefined, consume);

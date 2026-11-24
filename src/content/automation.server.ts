@@ -327,6 +327,8 @@ export type ProfileSummary = {
   id: string;
   name: string;
   isDefault: boolean;
+  /** Master agent: same draft-editing privileges as the default MCP_TOKEN profile, with its own token and audit trail. */
+  isMaster: boolean;
   enabled: boolean;
   paused: boolean;
   hasToken: boolean;
@@ -340,7 +342,7 @@ export type ProfileSummary = {
   nextAuthor: string | null;
 };
 
-type ProfileRow = { id: string; name: string; settings: string; token_hash: string | null; token_hint: string | null; token_created_at: string | null; author_name?: string | null };
+type ProfileRow = { id: string; name: string; settings: string; token_hash: string | null; token_hint: string | null; token_created_at: string | null; author_name?: string | null; is_master?: number | null };
 
 const DEFAULT_AUTHOR_KEY = "automation_default_author";
 
@@ -487,9 +489,13 @@ async function profileRows(): Promise<ProfileRow[]> {
   try {
     const sql = await getSql();
     try {
-      return await sql<ProfileRow>`select id, name, settings, token_hash, token_hint, token_created_at, author_name from automation_profiles order by created_at`;
+      return await sql<ProfileRow>`select id, name, settings, token_hash, token_hint, token_created_at, author_name, is_master from automation_profiles order by created_at`;
     } catch {
-      return await sql<ProfileRow>`select id, name, settings, token_hash, token_hint, token_created_at from automation_profiles order by created_at`;
+      try {
+        return await sql<ProfileRow>`select id, name, settings, token_hash, token_hint, token_created_at, author_name from automation_profiles order by created_at`;
+      } catch {
+        return await sql<ProfileRow>`select id, name, settings, token_hash, token_hint, token_created_at from automation_profiles order by created_at`;
+      }
     }
   } catch {
     return []; // migration 0004 not applied yet: only the default profile exists
@@ -508,10 +514,10 @@ export async function listProfiles(): Promise<ProfileSummary[]> {
     return { authors: r.names, nextAuthor: r.nextUp };
   };
   return [
-    { id: "default", name: DEFAULT_PROFILE_NAME, isDefault: true, enabled: def.enabled, paused: def.paused, hasToken: true, tokenHint: null, tokenCreatedAt: null, oauth: pub("default"), authorName: defaultAuthor, ...rot("default", defaultAuthor) },
+    { id: "default", name: DEFAULT_PROFILE_NAME, isDefault: true, isMaster: true, enabled: def.enabled, paused: def.paused, hasToken: true, tokenHint: null, tokenCreatedAt: null, oauth: pub("default"), authorName: defaultAuthor, ...rot("default", defaultAuthor) },
     ...rows.map((r) => {
       const s = normalizeAutomationSettings(JSON.parse(r.settings || "{}"));
-      return { id: r.id, name: r.name, isDefault: false, enabled: s.enabled, paused: s.paused, hasToken: Boolean(r.token_hash), tokenHint: r.token_hint, tokenCreatedAt: r.token_created_at, oauth: pub(r.id), authorName: r.author_name?.trim() || null, ...rot(r.id, r.author_name?.trim() || null) };
+      return { id: r.id, name: r.name, isDefault: false, isMaster: Boolean(r.is_master), enabled: s.enabled, paused: s.paused, hasToken: Boolean(r.token_hash), tokenHint: r.token_hint, tokenCreatedAt: r.token_created_at, oauth: pub(r.id), authorName: r.author_name?.trim() || null, ...rot(r.id, r.author_name?.trim() || null) };
     }),
   ];
 }
@@ -555,15 +561,21 @@ function cleanName(name: unknown): string {
 }
 
 /** New profiles start disabled with the default's topics/policy copied, auto-publish off. */
-export async function createProfile(name: unknown): Promise<ProfileSummary> {
+export async function createProfile(name: unknown, opts?: { isMaster?: boolean }): Promise<ProfileSummary> {
   const clean = cleanName(name);
+  const isMaster = opts?.isMaster === true;
   const base = await readAutomationSettings();
   const settings: AutomationSettings = { ...base, enabled: false, paused: false, policy: { ...base.policy, autoPublish: false }, imageTransfer: "untested" };
   const id = newProfileId();
   const now = new Date().toISOString();
   const sql = await getSql();
-  await sql`insert into automation_profiles (id, name, settings, created_at, updated_at) values (${id}, ${clean}, ${JSON.stringify(settings)}, ${now}, ${now})`;
-  return { id, name: clean, isDefault: false, enabled: false, paused: false, hasToken: false, tokenHint: null, tokenCreatedAt: null, oauth: null, authorName: null, authors: [], nextAuthor: null };
+  try {
+    await sql`insert into automation_profiles (id, name, settings, is_master, created_at, updated_at) values (${id}, ${clean}, ${JSON.stringify(settings)}, ${isMaster ? 1 : 0}, ${now}, ${now})`;
+  } catch {
+    if (isMaster) throw new ProfileError("Master agent profiles need the latest database migration (0028_master_profiles). Apply migrations, then try again.");
+    await sql`insert into automation_profiles (id, name, settings, created_at, updated_at) values (${id}, ${clean}, ${JSON.stringify(settings)}, ${now}, ${now})`;
+  }
+  return { id, name: clean, isDefault: false, isMaster, enabled: false, paused: false, hasToken: false, tokenHint: null, tokenCreatedAt: null, oauth: null, authorName: null, authors: [], nextAuthor: null };
 }
 
 export async function renameProfile(id: string, name: unknown): Promise<void> {
@@ -573,6 +585,20 @@ export async function renameProfile(id: string, name: unknown): Promise<void> {
   const sql = await getSql();
   await sql`update automation_profiles set name = ${clean}, updated_at = ${new Date().toISOString()} where id = ${id}`;
   await sql`update automation_oauth_clients set name = ${cleanClientName(clean)}, updated_at = ${new Date().toISOString()} where profile_id = ${id}`.catch(() => undefined);
+}
+
+/** Promote or demote a profile's master-agent privilege. The default profile is always master. */
+export async function setProfileMaster(id: string, isMaster: boolean): Promise<void> {
+  checkId(id);
+  if (id === "default") throw new ProfileError("The default MCP profile is always a master agent.");
+  const sql = await getSql();
+  try {
+    const done = await sql<{ id: string }>`update automation_profiles set is_master = ${isMaster ? 1 : 0}, updated_at = ${new Date().toISOString()} where id = ${id} returning id`;
+    if (!done[0]) throw new ProfileError("That automation profile no longer exists.");
+  } catch (error) {
+    if (error instanceof ProfileError) throw error;
+    throw new ProfileError("Master agent profiles need the latest database migration (0028_master_profiles). Apply migrations, then try again.");
+  }
 }
 
 /** Removes the profile (its token stops working). Its past runs and drafts are kept. */
@@ -772,7 +798,9 @@ export const profileResolver: ProfileResolver = {
     const row = rows.find((r) => r.id === parsed.profileId);
     if (!row?.token_hash) return null;
     const hash = await hashToken(token);
-    return constantTimeEqual(hash, row.token_hash) ? { id: row.id, version: tokenVersion(row.token_hash) } : null;
+    return constantTimeEqual(hash, row.token_hash)
+      ? { id: row.id, version: tokenVersion(row.token_hash), isMaster: Boolean(row.is_master) }
+      : null;
   },
   async stillValid(binding: ProfileBinding): Promise<boolean> {
     if (binding.id === "default") return true;
@@ -787,6 +815,11 @@ export const profileResolver: ProfileResolver = {
     if (!row || !constantTimeEqual(tokenVersion(row.secret_hash), version)) return false;
     if (profileId === "default") return true;
     return (await profileRows()).some((p) => p.id === profileId);
+  },
+  async isMaster(profileId: string): Promise<boolean> {
+    if (profileId === "default") return true;
+    const rows = await profileRows();
+    return Boolean(rows.find((r) => r.id === profileId)?.is_master);
   },
 };
 

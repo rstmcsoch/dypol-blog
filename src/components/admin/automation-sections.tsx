@@ -130,6 +130,7 @@ export function NewProfileForm({ profiles, defaultSection, onCreated }: { profil
   const [connect, setConnect] = useState<"api-key" | "oauth">("api-key");
   const [redirects, setRedirects] = useState("");
   const [section, setSection] = useState<Section>(defaultSection);
+  const [isMaster, setIsMaster] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [shown, setShown] = useState<{ kind: "token"; token: string } | { kind: "oauth"; clientId: string; clientSecret: string; redirectUris: string[] } | null>(null);
@@ -171,10 +172,11 @@ export function NewProfileForm({ profiles, defaultSection, onCreated }: { profil
           setBusy(true);
           setError(null);
           void (async () => {
-            const r = await adminProfileAction({ data: connect === "oauth" ? { action: "create", name, connect, redirectUris: uris, authorName, section } : { action: "create", name, connect: "api-key", authorName, section } });
+            const r = await adminProfileAction({ data: connect === "oauth" ? { action: "create", name, connect, redirectUris: uris, authorName, section, isMaster } : { action: "create", name, connect: "api-key", authorName, section, isMaster } });
             setName("");
             setAuthorName("");
             setRedirects("");
+            setIsMaster(false);
             if ("token" in r && r.token) setShown({ kind: "token", token: r.token });
             if ("oauth" in r && r.oauth) setShown({ kind: "oauth", clientId: r.oauth.clientId, clientSecret: r.oauth.clientSecret, redirectUris: r.oauth.redirectUris });
             if ("profile" in r && r.profile) await onCreated(r.profile.id, section);
@@ -190,6 +192,10 @@ export function NewProfileForm({ profiles, defaultSection, onCreated }: { profil
           <SectionPicker value={section} onChange={setSection} name={`${id}-section`} testId={`${id}-section`} />
           {section === "special" ? <p className="desk-note auto-seg__note" role="note" data-testid="special-section-note">{SPECIAL_SECTION_NOTE}</p> : null}
         </fieldset>
+        <label className="field" style={checkRow}>
+          <input type="checkbox" style={{ width: "auto" }} checked={isMaster} onChange={(e) => setIsMaster(e.target.checked)} data-testid="new-profile-master" />
+          <span>Master agent (can edit any draft, like the default MCP token)</span>
+        </label>
         <label className="field"><span>First author name (optional; add more in the profile&apos;s Authors card)</span><input value={authorName} maxLength={60} placeholder="John Daniel" data-testid="new-profile-author" onChange={(e) => setAuthorName(e.target.value)} />
           {authorProblem ? <small className="author-cell__error" role="alert">{authorProblem}</small> : null}
         </label>

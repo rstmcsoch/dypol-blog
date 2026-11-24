@@ -103,8 +103,8 @@ export type NonceConsumer = (kind: "code" | "refresh", nonce: string) => Promise
 const nowSec = () => Math.floor(Date.now() / 1000);
 
 /** The profile an MCP credential acts as. "default" = the master MCP_TOKEN. */
-export type ProfileBinding = { id: string; version: string };
-export const DEFAULT_PROFILE: ProfileBinding = { id: "default", version: "" };
+export type ProfileBinding = { id: string; version: string; /** Runtime-only: master agents can edit any draft. Not serialized into OAuth tokens. */ isMaster?: boolean };
+export const DEFAULT_PROFILE: ProfileBinding = { id: "default", version: "", isMaster: true };
 
 /**
  * Looks up a per-profile token (`dyp_<profile>_<secret>`) and confirms a
@@ -119,6 +119,8 @@ export type ProfileResolver = {
    * Return false if the client was removed, the secret rotated, or the profile deleted.
    */
   oauthClientStillValid?(profileId: string, version: string): Promise<boolean>;
+  /** Whether the profile currently has master-agent privileges. Default profile is always master. */
+  isMaster?(profileId: string): Promise<boolean>;
 };
 
 export type AuthResult =
@@ -141,16 +143,19 @@ export async function authenticate(
   if (presented.startsWith("mcpat.")) {
     const payload = await open<{ c: string; n?: string; p?: string; v?: string; o?: string }>("mcpat", mcpToken, presented, now);
     if (!payload) return { ok: false, reason: "invalid" };
-    const profile = payload.p && payload.p !== "default" ? { id: payload.p, version: payload.v ?? "" } : DEFAULT_PROFILE;
+    const profile: ProfileBinding = payload.p && payload.p !== "default" ? { id: payload.p, version: payload.v ?? "" } : { ...DEFAULT_PROFILE };
     if (payload.o) {
       // Bound to a desk-issued client secret, not to the profile API key.
       if (!profiles?.oauthClientStillValid || !(await profiles.oauthClientStillValid(profile.id, payload.o))) return { ok: false, reason: "invalid" };
     } else if (profile.id !== "default" && !(profiles && (await profiles.stillValid(profile)))) return { ok: false, reason: "invalid" };
+    profile.isMaster = profile.id === "default" ? true : (await profiles?.isMaster?.(profile.id)) === true;
     return { ok: true, via: "oauth", client: payload.n ?? (payload.c === "signed" ? undefined : LEGACY_CLIENT_LABEL), profile };
   }
   if (presented.startsWith("dyp_") && profiles) {
     const profile = await profiles.byToken(presented);
-    return profile ? { ok: true, via: "profile-token", profile } : { ok: false, reason: "invalid" };
+    if (!profile) return { ok: false, reason: "invalid" };
+    if (profile.isMaster === undefined) profile.isMaster = profile.id === "default" ? true : (await profiles.isMaster?.(profile.id)) === true;
+    return { ok: true, via: "profile-token", profile };
   }
   return (await secretMatches(presented, mcpToken)) ? { ok: true, via: "bearer", profile: DEFAULT_PROFILE } : { ok: false, reason: "invalid" };
 }
