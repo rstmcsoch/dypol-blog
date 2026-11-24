@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { adminPending } from "@/components/admin/pending";
-import { createFileRoute, useRouter } from "@tanstack/react-router";
+import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { errorText } from "@/components/admin/gate";
 import { adminDeletePageFn, adminPages, adminSavePageFn } from "@/content/admin-api";
 import { slugifyPageTitle } from "@/lib/pages";
@@ -56,6 +56,23 @@ function PagesDesk() {
       {message ? (
         <p className="banner" role="status">{message}</p>
       ) : null}
+
+      <section className="desk-section">
+        <h2>Team page</h2>
+        <div className="block-card">
+          <div className="row" style={{ justifyContent: "space-between", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
+            <div>
+              <strong>Editorial Team</strong> <span className="muted">/team</span>{" "}
+              <span className="badge">custom page</span>
+              <p className="muted" style={{ margin: "0.35rem 0 0" }}>Manage team groups, members, names, roles and ordering on the public team page.</p>
+            </div>
+            <span className="row" style={{ gap: "0.4rem", flexWrap: "wrap" }}>
+              <Link to="/admin/team" className="btn btn--sm btn--primary">Edit team</Link>
+              <a className="btn btn--sm" href="/team" target="_blank" rel="noreferrer">Preview</a>
+            </span>
+          </div>
+        </div>
+      </section>
 
       <section className="desk-section">
         <h2>{draft.id ? `Edit page` : "New page"}</h2>

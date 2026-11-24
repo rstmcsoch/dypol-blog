@@ -46,6 +46,7 @@ import { Route as AdminSecurityRouteImport } from './routes/admin/security'
 import { Route as AdminSettingsRouteImport } from './routes/admin/settings'
 import { Route as AdminSiteTextRouteImport } from './routes/admin/site-text'
 import { Route as AdminStatsRouteImport } from './routes/admin/stats'
+import { Route as AdminTeamRouteImport } from './routes/admin/team'
 import { Route as AdminTickerRouteImport } from './routes/admin/ticker'
 import { Route as AdminTopicsRouteImport } from './routes/admin/topics'
 import { Route as ApiAdEventsRouteImport } from './routes/api/ad-events'
@@ -266,6 +267,11 @@ const AdminStatsRoute = AdminStatsRouteImport.update({
   path: '/stats',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminTeamRoute = AdminTeamRouteImport.update({
+  id: '/team',
+  path: '/team',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminTickerRoute = AdminTickerRouteImport.update({
   id: '/ticker',
   path: '/ticker',
@@ -467,6 +473,7 @@ export interface FileRoutesByFullPath {
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/site-text': typeof AdminSiteTextRoute
   '/admin/stats': typeof AdminStatsRoute
+  '/admin/team': typeof AdminTeamRoute
   '/admin/ticker': typeof AdminTickerRoute
   '/admin/topics': typeof AdminTopicsRoute
   '/api/ad-events': typeof ApiAdEventsRoute
@@ -537,6 +544,7 @@ export interface FileRoutesByTo {
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/site-text': typeof AdminSiteTextRoute
   '/admin/stats': typeof AdminStatsRoute
+  '/admin/team': typeof AdminTeamRoute
   '/admin/ticker': typeof AdminTickerRoute
   '/admin/topics': typeof AdminTopicsRoute
   '/api/ad-events': typeof ApiAdEventsRoute
@@ -609,6 +617,7 @@ export interface FileRoutesById {
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/site-text': typeof AdminSiteTextRoute
   '/admin/stats': typeof AdminStatsRoute
+  '/admin/team': typeof AdminTeamRoute
   '/admin/ticker': typeof AdminTickerRoute
   '/admin/topics': typeof AdminTopicsRoute
   '/api/ad-events': typeof ApiAdEventsRoute
@@ -682,6 +691,7 @@ export interface FileRouteTypes {
     | '/admin/settings'
     | '/admin/site-text'
     | '/admin/stats'
+    | '/admin/team'
     | '/admin/ticker'
     | '/admin/topics'
     | '/api/ad-events'
@@ -752,6 +762,7 @@ export interface FileRouteTypes {
     | '/admin/settings'
     | '/admin/site-text'
     | '/admin/stats'
+    | '/admin/team'
     | '/admin/ticker'
     | '/admin/topics'
     | '/api/ad-events'
@@ -823,6 +834,7 @@ export interface FileRouteTypes {
     | '/admin/settings'
     | '/admin/site-text'
     | '/admin/stats'
+    | '/admin/team'
     | '/admin/ticker'
     | '/admin/topics'
     | '/api/ad-events'
@@ -1163,6 +1175,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminStatsRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/team': {
+      id: '/admin/team'
+      path: '/team'
+      fullPath: '/admin/team'
+      preLoaderRoute: typeof AdminTeamRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/ticker': {
       id: '/admin/ticker'
       path: '/ticker'
@@ -1406,6 +1425,7 @@ interface AdminRouteChildren {
   AdminSettingsRoute: typeof AdminSettingsRoute
   AdminSiteTextRoute: typeof AdminSiteTextRoute
   AdminStatsRoute: typeof AdminStatsRoute
+  AdminTeamRoute: typeof AdminTeamRoute
   AdminTickerRoute: typeof AdminTickerRoute
   AdminTopicsRoute: typeof AdminTopicsRoute
   AdminIndexRoute: typeof AdminIndexRoute
@@ -1435,6 +1455,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminSettingsRoute: AdminSettingsRoute,
   AdminSiteTextRoute: AdminSiteTextRoute,
   AdminStatsRoute: AdminStatsRoute,
+  AdminTeamRoute: AdminTeamRoute,
   AdminTickerRoute: AdminTickerRoute,
   AdminTopicsRoute: AdminTopicsRoute,
   AdminIndexRoute: AdminIndexRoute,
