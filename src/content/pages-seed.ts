@@ -24,8 +24,8 @@ export const STANDARD_PAGES: StandardPage[] = [
   {
     slug: "about",
     title: "About Us",
-    description: "DYPOL BLOG is a technology news publication by DYPOL Labs covering AI, gadgets, cybersecurity, startups and the business of tech.",
-    body: `DYPOL BLOG is a technology news and reviews publication, published by **DYPOL Labs**. We cover the technology that is changing how people live and work — and we try to explain it in plain language, without the hype.
+    description: "DYPOLBLOG is a technology news publication by DYPOL Labs covering AI, gadgets, cybersecurity, startups and the business of tech.",
+    body: `DYPOLBLOG is a technology news and reviews publication, published by **DYPOL Labs**. We cover the technology that is changing how people live and work — and we try to explain it in plain language, without the hype.
 
 ## What we cover
 
@@ -42,7 +42,7 @@ Our reporting is organised into topics so you can follow the subjects you care a
 
 ## How our stories are produced
 
-DYPOL BLOG uses modern tools, and we are open about it. Our articles are researched and drafted with the help of AI systems, then **reviewed and approved by a human editor before anything is published**. Every story must be based on sources we can point to — you will find them listed at the end of each article. If a claim cannot be verified, it does not go in. You can read more in our [Editorial Policy](/editorial-policy).
+DYPOLBLOG uses modern tools, and we are open about it. Our articles are researched and drafted with the help of AI systems, then **reviewed and approved by a human editor before anything is published**. Every story must be based on sources we can point to — you will find them listed at the end of each article. If a claim cannot be verified, it does not go in. You can read more in our [Editorial Policy](/editorial-policy).
 
 When we get something wrong, we fix it openly. See our [Corrections Policy](/corrections-policy) for how that works.
 
@@ -53,17 +53,17 @@ When we get something wrong, we fix it openly. See our [Corrections Policy](/cor
 - Credit the original reporting and images we build on
 - Never publish a story we cannot stand behind
 
-## Who publishes DYPOL BLOG
+## Who publishes DYPOLBLOG
 
-DYPOL BLOG is published by **DYPOL Labs**. To reach us — with a tip, a correction, or a business enquiry — see our [Contact](/contact) page.`,
+DYPOLBLOG is published by **DYPOL Labs**. To reach us — with a tip, a correction, or a business enquiry — see our [Contact](/contact) page.`,
   },
   {
     slug: "privacy-policy",
     title: "Privacy Policy",
-    description: "What data DYPOL BLOG collects, why, and the choices you have. Effective 18 October 2026.",
+    description: "What data DYPOLBLOG collects, why, and the choices you have. Effective 18 October 2026.",
     body: `**Effective date: ${EFFECTIVE}**
 
-DYPOL BLOG ("we", "us") is a technology news publication published by DYPOL Labs. This policy explains what information we collect when you read the site, why we collect it, and what we do with it. We keep data collection to a minimum.
+DYPOLBLOG ("we", "us") is a technology news publication published by DYPOL Labs. This policy explains what information we collect when you read the site, why we collect it, and what we do with it. We keep data collection to a minimum.
 
 ## What we collect
 
@@ -95,7 +95,7 @@ Depending on where you live, you may have rights to access, correct or delete pe
 
 ## Children
 
-DYPOL BLOG is a general-audience technology publication and is not directed at children under 13. We do not knowingly collect information from children.
+DYPOLBLOG is a general-audience technology publication and is not directed at children under 13. We do not knowingly collect information from children.
 
 ## Changes to this policy
 
@@ -104,14 +104,14 @@ If this policy changes, we will update this page and the effective date above. S
   {
     slug: "terms",
     title: "Terms and Conditions",
-    description: "The terms that govern your use of DYPOL BLOG. Effective 18 October 2026.",
+    description: "The terms that govern your use of DYPOLBLOG. Effective 18 October 2026.",
     body: `**Effective date: ${EFFECTIVE}**
 
-Welcome to DYPOL BLOG, a technology news publication published by DYPOL Labs ("we", "us"). By reading or using this website, you agree to these terms. If you do not agree, please do not use the site.
+Welcome to DYPOLBLOG, a technology news publication published by DYPOL Labs ("we", "us"). By reading or using this website, you agree to these terms. If you do not agree, please do not use the site.
 
 ## The service
 
-DYPOL BLOG publishes news, reviews, guides and commentary about technology. We may add, change or remove content and features at any time. We work to keep the site available and accurate, but we do not guarantee uninterrupted access.
+DYPOLBLOG publishes news, reviews, guides and commentary about technology. We may add, change or remove content and features at any time. We work to keep the site available and accurate, but we do not guarantee uninterrupted access.
 
 ## Using the site
 
@@ -123,7 +123,7 @@ You may read, link to and share our articles for personal, non-commercial use. Y
 
 ## Our content and intellectual property
 
-Articles, text, layout and branding on DYPOL BLOG belong to DYPOL Labs or our licensors, unless stated otherwise. Images may come from third parties under licence and are credited where required; they remain the property of their owners. You may quote short excerpts with clear attribution and a link back to the original article. Anything more needs our written permission. See our [DMCA / Copyright Policy](/dmca) for how we handle copyright questions.
+Articles, text, layout and branding on DYPOLBLOG belong to DYPOL Labs or our licensors, unless stated otherwise. Images may come from third parties under licence and are credited where required; they remain the property of their owners. You may quote short excerpts with clear attribution and a link back to the original article. Anything more needs our written permission. See our [DMCA / Copyright Policy](/dmca) for how we handle copyright questions.
 
 ## Accuracy
 
@@ -139,7 +139,7 @@ We link to other websites for sources and further reading. We are not responsibl
 
 ## Liability
 
-To the extent permitted by applicable law, DYPOL BLOG and DYPOL Labs are not liable for indirect or consequential loss arising from your use of, or inability to use, the site or its content. Nothing in these terms limits liability that cannot be limited by law.
+To the extent permitted by applicable law, DYPOLBLOG and DYPOL Labs are not liable for indirect or consequential loss arising from your use of, or inability to use, the site or its content. Nothing in these terms limits liability that cannot be limited by law.
 
 ## Changes to these terms
 
@@ -154,10 +154,10 @@ Questions about these terms: see our [Contact](/contact) page.`,
   {
     slug: "dmca",
     title: "DMCA / Copyright Policy",
-    description: "How to report copyright infringement on DYPOL BLOG and how we respond. Effective 18 October 2026.",
+    description: "How to report copyright infringement on DYPOLBLOG and how we respond. Effective 18 October 2026.",
     body: `**Effective date: ${EFFECTIVE}**
 
-DYPOL BLOG respects the intellectual property of others. We write our own articles, license images where required, and credit sources. If you believe something on this site infringes your copyright, this page explains how to tell us and what happens next.
+DYPOLBLOG respects the intellectual property of others. We write our own articles, license images where required, and credit sources. If you believe something on this site infringes your copyright, this page explains how to tell us and what happens next.
 
 ## How to send a takedown notice
 
@@ -165,7 +165,7 @@ Contact us via our [Contact](/contact) page, stating clearly that this is a **co
 
 1. Your full name and how we can reach you
 2. The work you own (or are authorised to act for) that you believe is infringed
-3. The exact page address (URL) on DYPOL BLOG where the material appears
+3. The exact page address (URL) on DYPOLBLOG where the material appears
 4. A short explanation of why you believe it infringes
 5. A statement that you have a good-faith belief the use is not authorised by the owner, its agent or the law
 6. A statement that the information you provide is accurate, and that you are the owner or authorised to act for them
@@ -194,10 +194,10 @@ This policy works alongside the copyright terms in our [Terms and Conditions](/t
   {
     slug: "cookie-policy",
     title: "Cookie Policy",
-    description: "The cookies and local storage DYPOL BLOG uses — kept deliberately minimal. Effective 18 October 2026.",
+    description: "The cookies and local storage DYPOLBLOG uses — kept deliberately minimal. Effective 18 October 2026.",
     body: `**Effective date: ${EFFECTIVE}**
 
-This page explains the cookies and similar storage DYPOL BLOG uses. The short version: **almost none**, and none for tracking readers.
+This page explains the cookies and similar storage DYPOLBLOG uses. The short version: **almost none**, and none for tracking readers.
 
 ## What we use
 
@@ -222,10 +222,10 @@ You can block or delete cookies in your browser settings. The public site will s
   {
     slug: "editorial-policy",
     title: "Editorial Policy",
-    description: "How DYPOL BLOG chooses, researches, writes and reviews its stories — including how AI is used. Effective 18 October 2026.",
+    description: "How DYPOLBLOG chooses, researches, writes and reviews its stories — including how AI is used. Effective 18 October 2026.",
     body: `**Effective date: ${EFFECTIVE}**
 
-DYPOL BLOG exists to explain technology clearly. This page explains how stories are chosen and produced, so you can judge our work for yourself.
+DYPOLBLOG exists to explain technology clearly. This page explains how stories are chosen and produced, so you can judge our work for yourself.
 
 ## How we choose stories
 
@@ -264,7 +264,7 @@ We prefer images created for the story or licensed for reuse, always credited wh
   {
     slug: "corrections-policy",
     title: "Corrections Policy",
-    description: "How to report an error in a DYPOL BLOG article and how we fix mistakes. Effective 18 October 2026.",
+    description: "How to report an error in a DYPOLBLOG article and how we fix mistakes. Effective 18 October 2026.",
     body: `**Effective date: ${EFFECTIVE}**
 
 We would rather fix a mistake in the open than pretend it never happened. This page explains how.
@@ -298,8 +298,8 @@ Sometimes a reader reports an "error" that is really a difference of interpretat
   {
     slug: "contact",
     title: "Contact",
-    description: "How to reach the DYPOL BLOG team: tips, corrections, copyright and business enquiries.",
-    body: `DYPOL BLOG is published by **DYPOL Labs**. We read everything that reaches the editors, and we reply when a reply is needed.
+    description: "How to reach DYPOLBLOG TEAM: tips, corrections, copyright and business enquiries.",
+    body: `DYPOLBLOG is published by **DYPOL Labs**. We read everything that reaches the editors, and we reply when a reply is needed.
 
 ## News tips
 
@@ -321,23 +321,23 @@ For copyright questions, credit changes or takedown notices, see our [DMCA / Cop
 
 ## Advertising and business
 
-For advertising, partnerships and other business enquiries, contact the publisher, DYPOL Labs, referencing DYPOL BLOG and what you have in mind. Editorial coverage is not for sale; see our [Editorial Policy](/editorial-policy).
+For advertising, partnerships and other business enquiries, contact the publisher, DYPOL Labs, referencing DYPOLBLOG and what you have in mind. Editorial coverage is not for sale; see our [Editorial Policy](/editorial-policy).
 
 ## Press
 
 Members of the press are welcome to quote our articles with attribution and a link. For anything beyond that, contact the publisher as above.
 
-*DYPOL BLOG does not run reader accounts or a public comment system — the routes above are the fastest way to reach a human.*`,
+*DYPOLBLOG does not run reader accounts or a public comment system — the routes above are the fastest way to reach a human.*`,
   },
   {
     slug: "disclaimer",
     title: "Disclaimer",
-    description: "What DYPOL BLOG content is — and is not. Reviews, buying advice, affiliate links and accuracy. Effective 18 October 2026.",
+    description: "What DYPOLBLOG content is — and is not. Reviews, buying advice, affiliate links and accuracy. Effective 18 October 2026.",
     body: `**Effective date: ${EFFECTIVE}**
 
 ## General information
 
-DYPOL BLOG publishes technology news, reviews and explainers for general information. We work to be accurate at the time of publication, but technology changes quickly: specifications, prices, availability and company plans can all change after we publish. Check the date on the article, and check the maker's own pages before making a decision.
+DYPOLBLOG publishes technology news, reviews and explainers for general information. We work to be accurate at the time of publication, but technology changes quickly: specifications, prices, availability and company plans can all change after we publish. Check the date on the article, and check the maker's own pages before making a decision.
 
 Nothing on this site is professional advice — financial, legal, medical or otherwise. For decisions that matter, consult someone qualified who knows your situation.
 
@@ -355,7 +355,7 @@ We link to sources and other websites so you can check our work. We do not contr
 
 ## Views expressed
 
-Analysis and opinion pieces reflect the judgement of DYPOL BLOG's editors at the time of writing. Facts are sourced; opinions are ours, and we label the difference.
+Analysis and opinion pieces reflect the judgement of DYPOLBLOG's editors at the time of writing. Facts are sourced; opinions are ours, and we label the difference.
 
 This disclaimer works together with our [Terms and Conditions](/terms) and [Editorial Policy](/editorial-policy).`,
   },
