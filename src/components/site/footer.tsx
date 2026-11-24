@@ -73,10 +73,21 @@ export function SiteFooter() {
   const columns = (site.footer.columns ?? footerColumns(pages)).map((column) => ({
     ...column, links: column.links.filter((link) => !standardPaths.has(link.href) || publishedPaths.has(link.href)),
   })).filter((column) => column.links.length);
-  // Always surface Team, even when footer columns were customized in settings.
-  if (!columns.some((column) => column.links.some((link) => link.href === "/team"))) {
+  // Always surface DYPOLBLOG TEAM, even when footer columns were customized in settings.
+  let hasTeamLink = false;
+  for (const column of columns) {
+    for (const link of column.links) {
+      if (link.href === "/team") {
+        hasTeamLink = true;
+        if (/^(team|editorial team|dypol blog team|dypolblog team)$/i.test(link.label.trim())) {
+          link.label = "DYPOLBLOG TEAM";
+        }
+      }
+    }
+  }
+  if (!hasTeamLink) {
     const company = columns.find((column) => column.heading.toLowerCase() === "company");
-    const teamLink = { label: "Team", href: "/team" };
+    const teamLink = { label: "DYPOLBLOG TEAM", href: "/team" };
     if (company) company.links.unshift(teamLink);
     else columns.splice(Math.min(1, columns.length), 0, { heading: "Company", links: [teamLink] });
   }

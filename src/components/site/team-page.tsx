@@ -102,7 +102,7 @@ export function TeamPage({ team }: { team: TeamSettings }) {
       <section className="team-hero" ref={hero} aria-labelledby="team-title">
         <div className="container team-hero__inner">
           <div className="team-hero__copy" data-reveal>
-            <p className="kicker">{team.kicker || `${site.name} / Editorial`}</p>
+            <p className="kicker">{team.kicker || `${site.name} TEAM`}</p>
             <h1 id="team-title" className="team-hero__title">
               <HeroTitle title={team.title} />
             </h1>
@@ -110,7 +110,7 @@ export function TeamPage({ team }: { team: TeamSettings }) {
           </div>
           <div className="team-hero__visual" aria-hidden="true">
             <div className="team-hero__mark team-hero__mark--back">
-              <span className="team-hero__mark-text">TEAM</span>
+              <span className="team-hero__mark-text">DYPOLBLOG<br />TEAM</span>
             </div>
             <div className="team-hero__mark team-hero__mark--front">
               <span className="team-hero__count">{String(total).padStart(2, "0")}</span>

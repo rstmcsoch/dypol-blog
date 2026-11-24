@@ -29,9 +29,9 @@ export type TeamGroup = z.infer<typeof teamGroupSchema>;
 export type TeamSettings = z.infer<typeof teamSettingsSchema>;
 
 export const DEFAULT_TEAM_SETTINGS: TeamSettings = {
-  kicker: "DYPOL Blog / Editorial",
+  kicker: "DYPOLBLOG TEAM",
   title: "The people behind the story.",
-  lede: "DYPOL Blog is made by editors and writers who care about clarity, accuracy and the craft of a good tech story. Meet the newsroom behind every headline.",
+  lede: "DYPOLBLOG is made by editors and writers who care about clarity, accuracy and the craft of a good tech story. Meet DYPOLBLOG TEAM behind every headline.",
   groups: [
     {
       id: "leadership",

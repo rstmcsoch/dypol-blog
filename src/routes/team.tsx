@@ -10,11 +10,11 @@ const TEAM_PAGE = { type: "about" as const };
 export const Route = createFileRoute("/team")({
   loader: () => getTeam(),
   head: ({ loaderData }) => {
-    if (!loaderData) return { meta: [{ title: sitePageTitle("Editorial Team") }] };
+    if (!loaderData) return { meta: [{ title: sitePageTitle("DYPOLBLOG TEAM") }] };
     const origin = loaderData.origin ?? "";
-    const title = sitePageTitle("Editorial Team", loaderData.site.name);
+    const title = sitePageTitle("DYPOLBLOG TEAM", loaderData.site.name);
     const description = metaDescription(
-      "Meet the DYPOL Blog editorial team — the editors and writers who research, report, edit and publish every story.",
+      "Meet DYPOLBLOG TEAM — the editors and writers who research, report, edit and publish every story.",
       title,
     );
     return {
@@ -39,7 +39,7 @@ export const Route = createFileRoute("/team")({
               origin,
               items: [
                 { name: "Home", path: "/" },
-                { name: "Editorial Team", path: "/team" },
+                { name: "DYPOLBLOG TEAM", path: "/team" },
               ],
             }),
           ),
