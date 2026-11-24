@@ -27,8 +27,8 @@ describe("standard pages (t52)", () => {
     }
     expect(standardPage("about")?.title).toBe("About Us");
     expect(standardPage("privacy-policy")?.body).toContain("18 October 2026");
-    expect(standardPage("editorial-policy")?.body).toMatch(/AI systems/);
-    expect(standardPage("editorial-policy")?.body).toMatch(/human editor/);
+    expect(standardPage("editorial-policy")?.body).toMatch(/AI-assisted tools/);
+    expect(standardPage("editorial-policy")?.body).toMatch(/Writers and editors/);
   });
 
   it("no page contains the old self-referential copy", () => {
