@@ -52,9 +52,10 @@ export const Route = createFileRoute("/team")({
 });
 
 function TeamRoute() {
+  const { team } = Route.useLoaderData();
   return (
     <AdPage page={TEAM_PAGE}>
-      <TeamPage />
+      <TeamPage team={team} />
     </AdPage>
   );
 }

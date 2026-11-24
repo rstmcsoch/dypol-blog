@@ -1,71 +1,6 @@
 import { useEffect, useRef } from "react";
+import { teamMemberCount, type TeamSettings } from "@/lib/team";
 import { useSite } from "./use-site";
-
-type TeamMember = {
-  name: string;
-  role: string;
-};
-
-type TeamGroup = {
-  id: string;
-  kicker: string;
-  title: string;
-  note: string;
-  members: TeamMember[];
-};
-
-const TEAM_GROUPS: TeamGroup[] = [
-  {
-    id: "leadership",
-    kicker: "Editorial leadership",
-    title: "The desk that sets the line",
-    note: "Direction, standards and final editorial judgment.",
-    members: [
-      { name: "Rowan Grant", role: "Editor-in-Chief" },
-      { name: "Henrik Lindqvist", role: "Managing Editor" },
-      { name: "Saanvi Joshi", role: "Deputy Editor" },
-      { name: "Mira Solberg", role: "Senior Editor" },
-    ],
-  },
-  {
-    id: "copy",
-    kicker: "Copy desk",
-    title: "Clarity, before anything goes live",
-    note: "Line edits, accuracy checks and the final polish.",
-    members: [{ name: "Aisha Rahman", role: "Copy Editor" }],
-  },
-  {
-    id: "senior-staff",
-    kicker: "Senior staff writers",
-    title: "Experienced voices on the beat",
-    note: "Deep reporting across the stories that matter.",
-    members: [
-      { name: "Lucas Bennett", role: "Senior Staff Writer" },
-      { name: "Akira Fujita", role: "Senior Staff Writer" },
-      { name: "Sophie Williams", role: "Senior Staff Writer" },
-    ],
-  },
-  {
-    id: "staff",
-    kicker: "Staff writers",
-    title: "The reporting engine",
-    note: "Daily coverage, research and sharp explainers.",
-    members: [
-      { name: "Advait Sharma", role: "Staff Writer" },
-      { name: "Samir Nasser", role: "Staff Writer" },
-      { name: "Yasmin Nasser", role: "Staff Writer" },
-      { name: "Ishikawa Yusei", role: "Staff Writer" },
-      { name: "Elena Vance", role: "Staff Writer" },
-      { name: "Arjun Mehta", role: "Staff Writer" },
-      { name: "Freya Dalton", role: "Staff Writer" },
-      { name: "Shanaya Negi", role: "Staff Writer" },
-      { name: "Paisley Warren", role: "Staff Writer" },
-      { name: "Carson Walker", role: "Staff Writer" },
-    ],
-  },
-];
-
-const TOTAL = TEAM_GROUPS.reduce((n, g) => n + g.members.length, 0);
 
 function initials(name: string): string {
   return name
@@ -76,7 +11,7 @@ function initials(name: string): string {
     .join("");
 }
 
-function useReveal(root: React.RefObject<HTMLElement | null>) {
+function useReveal(root: React.RefObject<HTMLElement | null>, key?: unknown) {
   useEffect(() => {
     const node = root.current;
     if (!node) return;
@@ -99,7 +34,7 @@ function useReveal(root: React.RefObject<HTMLElement | null>) {
     );
     items.forEach((el) => io.observe(el));
     return () => io.disconnect();
-  }, [root]);
+  }, [root, key]);
 }
 
 function useHeroParallax(ref: React.RefObject<HTMLElement | null>) {
@@ -136,42 +71,52 @@ function useHeroParallax(ref: React.RefObject<HTMLElement | null>) {
   }, [ref]);
 }
 
-export function TeamPage() {
+function HeroTitle({ title }: { title: string }) {
+  const words = title.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return null;
+  const last = words[words.length - 1];
+  const lead = words.slice(0, -1).join(" ");
+  return (
+    <>
+      {lead ? <span className="team-hero__title-line">{lead} </span> : null}
+      <span className="team-hero__title-line"><span className="team-hero__accent">{last}</span></span>
+    </>
+  );
+}
+
+export function TeamPage({ team }: { team: TeamSettings }) {
   const site = useSite();
   const root = useRef<HTMLDivElement | null>(null);
   const hero = useRef<HTMLElement | null>(null);
-  useReveal(root);
+  useReveal(root, team);
   useHeroParallax(hero);
 
+  const total = teamMemberCount(team);
   let index = 0;
   return (
-    <div className="team-page" ref={root}>
+    <div className="team-page" ref={root} data-team-version={String(total)}>
       <section className="team-hero" ref={hero} aria-labelledby="team-title">
         <div className="container team-hero__inner">
           <div className="team-hero__copy" data-reveal>
-            <p className="kicker">{site.name} / Editorial</p>
+            <p className="kicker">{team.kicker || `${site.name} / Editorial`}</p>
             <h1 id="team-title" className="team-hero__title">
-              <span className="team-hero__title-line">The people</span>
-              <span className="team-hero__title-line">behind the <span className="team-hero__accent">story.</span></span>
+              <HeroTitle title={team.title} />
             </h1>
-            <p className="team-hero__lede">
-              DYPOL Blog is made by editors and writers who care about clarity, accuracy and the craft of
-              a good tech story. Meet the newsroom behind every headline.
-            </p>
+            <p className="team-hero__lede">{team.lede}</p>
           </div>
           <div className="team-hero__visual" aria-hidden="true">
             <div className="team-hero__mark team-hero__mark--back">
               <span className="team-hero__mark-text">TEAM</span>
             </div>
             <div className="team-hero__mark team-hero__mark--front">
-              <span className="team-hero__count">{String(TOTAL).padStart(2, "0")}</span>
+              <span className="team-hero__count">{String(total).padStart(2, "0")}</span>
               <span className="team-hero__count-label">People in the newsroom</span>
             </div>
           </div>
         </div>
         <div className="container">
           <div className="team-hero__stats" data-reveal>
-            {TEAM_GROUPS.map((group) => (
+            {team.groups.map((group) => (
               <div key={group.id} className="team-stat">
                 <span className="team-stat__value">{String(group.members.length).padStart(2, "0")}</span>
                 <span className="team-stat__label">{group.kicker}</span>
@@ -181,7 +126,7 @@ export function TeamPage() {
         </div>
       </section>
 
-      {TEAM_GROUPS.map((group) => (
+      {team.groups.map((group) => (
         <section key={group.id} className="team-group" aria-labelledby={`team-${group.id}-title`}>
           <div className="container">
             <header className="team-group__head" data-reveal>
@@ -189,7 +134,7 @@ export function TeamPage() {
                 <p className="kicker">{group.kicker}</p>
                 <h2 id={`team-${group.id}-title`} className="team-group__title">{group.title}</h2>
               </div>
-              <p className="team-group__note">{group.note}</p>
+              {group.note ? <p className="team-group__note">{group.note}</p> : null}
             </header>
             <div className={`team-grid team-grid--${group.id}`} role="list">
               {group.members.map((member) => {
@@ -197,7 +142,7 @@ export function TeamPage() {
                 const n = String(index).padStart(2, "0");
                 return (
                   <article
-                    key={`${group.id}-${member.name}`}
+                    key={member.id || `${group.id}-${member.name}`}
                     className="team-card"
                     role="listitem"
                     data-reveal
@@ -225,17 +170,16 @@ export function TeamPage() {
         </section>
       ))}
 
-      <section className="team-note" aria-label="Editorial note">
-        <div className="container">
-          <div className="team-note__panel" data-reveal>
-            <p className="kicker">Editorial note</p>
-            <p className="team-note__text">
-              Writer seniority and the Copy Editor assignment are provisional, pending confirmation of
-              individual experience and editing responsibilities.
-            </p>
+      {team.note ? (
+        <section className="team-note" aria-label="Editorial note">
+          <div className="container">
+            <div className="team-note__panel" data-reveal>
+              <p className="kicker">Editorial note</p>
+              <p className="team-note__text">{team.note}</p>
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      ) : null}
     </div>
   );
 }

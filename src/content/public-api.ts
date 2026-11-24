@@ -199,8 +199,9 @@ export const getPage = createServerFn({ method: "GET" })
     };
   });
 
-/** Team page shell: origin + site for SEO/meta. */
+/** Team page shell: origin + site + editorial team for SEO/meta. */
 export const getTeam = createServerFn({ method: "GET" }).handler(async () => {
-  const { readShell } = await import("./repository.server");
-  return { site: (await readShell()).site, origin: await requestOrigin() };
+  const [{ readShell }, { readTeamSettings }] = await Promise.all([import("./repository.server"), import("./team.server")]);
+  const [shell, team] = await Promise.all([readShell(), readTeamSettings()]);
+  return { site: shell.site, origin: await requestOrigin(), team };
 });

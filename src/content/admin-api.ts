@@ -988,6 +988,20 @@ export const adminDeletePageFn = createServerFn({ method: "POST" })
     return adminDeletePage({ id: data.id, actor: "admin" });
   });
 
+export const adminTeam = createServerFn({ method: "GET" }).handler(async () => {
+  await guard();
+  const { readTeamSettings } = await import("./team.server");
+  return readTeamSettings();
+});
+
+export const adminSaveTeam = createServerFn({ method: "POST" })
+  .validator((input: unknown) => input)
+  .handler(async ({ data }) => {
+    await writeGuard();
+    const { saveTeamSettings } = await import("./team.server");
+    return saveTeamSettings(data);
+  });
+
 export const adminRevisions = createServerFn({ method: "GET" })
   .validator((input: { articleId: string }) => input)
   .handler(async ({ data }) => {
