@@ -1,10 +1,23 @@
 /**
- * Minimal stateless MCP server over Streamable HTTP (JSON responses, no SSE).
- * Implements: initialize, notifications/*, ping, tools/list, tools/call.
- * Spec: https://modelcontextprotocol.io/specification (2025-06-18; also
- * answers 2025-03-26 and 2024-11-05 clients).
+ * Stateless MCP server over Streamable HTTP. Dual-era:
+ *   - Legacy handshake: initialize, notifications/*, ping, tools/list, tools/call
+ *     (2025-11-25, 2025-06-18, 2025-03-26, 2024-11-05).
+ *   - Modern per-request metadata (2026-07-28): server/discover, tools/list,
+ *     tools/call, ping. No session, no initialize required.
+ * Spec: https://modelcontextprotocol.io/specification
  */
-export const SUPPORTED_PROTOCOL_VERSIONS = ["2025-06-18", "2025-03-26", "2024-11-05"];
+export const MODERN_PROTOCOL_VERSION = "2026-07-28";
+export const DEFAULT_PROTOCOL_VERSION = "2025-06-18";
+export const SUPPORTED_PROTOCOL_VERSIONS = [
+  MODERN_PROTOCOL_VERSION,
+  "2025-11-25",
+  "2025-06-18",
+  "2025-03-26",
+  "2024-11-05",
+];
+export const PROTOCOL_VERSION_META = "io.modelcontextprotocol/protocolVersion";
+export const SERVER_INFO_META = "io.modelcontextprotocol/serverInfo";
+export const LIST_CACHE_TTL_MS = 300_000;
 export const SERVER_INFO = { name: "dypol-blog", title: "DYPOL Blog automation", version: "1.0.0" };
 
 export type ToolResult = { ok: true; data: unknown } | { ok: false; error: string; data?: unknown };
@@ -21,7 +34,53 @@ export type ToolDefinition = {
 type JsonRpcId = string | number | null;
 type JsonRpcRequest = { jsonrpc: "2.0"; id?: JsonRpcId; method: string; params?: Record<string, unknown> };
 
-export const RPC = { PARSE: -32700, INVALID_REQUEST: -32600, METHOD_NOT_FOUND: -32601, INVALID_PARAMS: -32602, INTERNAL: -32603 };
+export const RPC = {
+  PARSE: -32700,
+  INVALID_REQUEST: -32600,
+  METHOD_NOT_FOUND: -32601,
+  INVALID_PARAMS: -32602,
+  INTERNAL: -32603,
+  HEADER_MISMATCH: -32020,
+  UNSUPPORTED_PROTOCOL_VERSION: -32022,
+};
+
+export function isModernProtocol(version: string | undefined): boolean {
+  return version === MODERN_PROTOCOL_VERSION;
+}
+
+export function protocolVersionOf(message: unknown, headerVersion?: string): string | undefined {
+  if (message && typeof message === "object" && !Array.isArray(message)) {
+    const params = (message as { params?: { _meta?: Record<string, unknown> } }).params;
+    const fromMeta = params?._meta?.[PROTOCOL_VERSION_META];
+    if (typeof fromMeta === "string" && fromMeta.trim()) return fromMeta.trim();
+  }
+  const header = headerVersion?.trim();
+  return header || undefined;
+}
+
+export function rpcHttpStatus(reply: object | object[] | null, protocolVersion?: string): number {
+  if (reply === null) return 202;
+  if (!isModernProtocol(protocolVersion) || Array.isArray(reply)) return 200;
+  const code = (reply as { error?: { code?: number } }).error?.code;
+  if (code === RPC.UNSUPPORTED_PROTOCOL_VERSION || code === RPC.HEADER_MISMATCH) return 400;
+  if (code === RPC.METHOD_NOT_FOUND) return 404;
+  return 200;
+}
+
+function serverInfoMeta(info: { name: string; title: string; version: string }) {
+  return { [SERVER_INFO_META]: { name: info.name, title: info.title, version: info.version } };
+}
+
+function cacheable(value: Record<string, unknown>, info: { name: string; title: string; version: string }, cacheScope: "public" | "private" = "private") {
+  return {
+    ...value,
+    resultType: "complete" as const,
+    ttlMs: LIST_CACHE_TTL_MS,
+    cacheScope,
+    _meta: serverInfoMeta(info),
+  };
+}
+
 
 function error(id: JsonRpcId, code: number, message: string) {
   return { jsonrpc: "2.0" as const, id, error: { code, message } };
@@ -53,6 +112,8 @@ export const SERVER_INSTRUCTIONS =
 export type RpcOptions = {
   instructions?: string;
   serverInfo?: { name: string; title: string; version: string };
+  /** Value of the MCP-Protocol-Version header, when present. */
+  protocolVersion?: string;
 };
 
 export const MASTER_SERVER_INFO = { name: "dypol-blog-master", title: "DYPOL Blog Master MCP", version: "1.0.0" };
@@ -74,29 +135,59 @@ async function handleOne(message: unknown, tools: ToolDefinition[], options?: Rp
   const isNotification = message.id === undefined;
   if (isNotification) return null; // notifications/initialized, cancelled, ... -> no response
 
+  const requestedVersion = protocolVersionOf(message, options?.protocolVersion);
+  const info = options?.serverInfo ?? SERVER_INFO;
+  const instructions = options?.instructions ?? SERVER_INSTRUCTIONS;
+  const modern = isModernProtocol(requestedVersion);
+
+  if (
+    message.method !== "server/discover" &&
+    message.method !== "initialize" &&
+    requestedVersion &&
+    !SUPPORTED_PROTOCOL_VERSIONS.includes(requestedVersion)
+  ) {
+    return {
+      jsonrpc: "2.0" as const,
+      id,
+      error: {
+        code: RPC.UNSUPPORTED_PROTOCOL_VERSION,
+        message: "Unsupported protocol version",
+        data: { supported: SUPPORTED_PROTOCOL_VERSIONS, requested: requestedVersion },
+      },
+    };
+  }
+
+  const listedTools = tools.map(({ name, title, description, inputSchema, annotations }) => ({
+    name,
+    title,
+    description,
+    inputSchema,
+    ...(annotations ? { annotations } : {}),
+  }));
+
   switch (message.method) {
+    case "server/discover":
+      return result(id, cacheable({
+        supportedVersions: SUPPORTED_PROTOCOL_VERSIONS,
+        capabilities: { tools: { listChanged: false } },
+        instructions,
+      }, info, "private"));
     case "initialize": {
       const requested = String(message.params?.protocolVersion ?? "");
-      const protocolVersion = SUPPORTED_PROTOCOL_VERSIONS.includes(requested) ? requested : SUPPORTED_PROTOCOL_VERSIONS[0];
+      const protocolVersion = SUPPORTED_PROTOCOL_VERSIONS.includes(requested) ? requested : DEFAULT_PROTOCOL_VERSION;
       return result(id, {
         protocolVersion,
         capabilities: { tools: { listChanged: false } },
-        serverInfo: options?.serverInfo ?? SERVER_INFO,
-        instructions: options?.instructions ?? SERVER_INSTRUCTIONS,
+        serverInfo: info,
+        instructions,
       });
     }
     case "ping":
-      return result(id, {});
-    case "tools/list":
-      return result(id, {
-        tools: tools.map(({ name, title, description, inputSchema, annotations }) => ({
-          name,
-          title,
-          description,
-          inputSchema,
-          ...(annotations ? { annotations } : {}),
-        })),
-      });
+      return result(id, modern ? { resultType: "complete", _meta: serverInfoMeta(info) } : {});
+    case "tools/list": {
+      const payload = { tools: listedTools };
+      return result(id, modern ? cacheable(payload, info, "private") : payload);
+    }
     case "tools/call": {
       const name = message.params?.name;
       const tool = tools.find((t) => t.name === name);
@@ -106,6 +197,7 @@ async function handleOne(message: unknown, tools: ToolDefinition[], options?: Rp
         const outcome = await tool.run(args);
         const payload = outcome.ok ? outcome.data : { error: outcome.error, ...(outcome.data ? { details: outcome.data } : {}) };
         return result(id, {
+          ...(modern ? { resultType: "complete" as const } : {}),
           content: [{ type: "text", text: JSON.stringify(payload, null, 2) }],
           structuredContent: payload,
           isError: !outcome.ok,
@@ -113,6 +205,7 @@ async function handleOne(message: unknown, tools: ToolDefinition[], options?: Rp
       } catch (caught) {
         console.error(`[mcp] tool ${tool.name} failed`, caught instanceof Error ? caught.message : "unknown error");
         return result(id, {
+          ...(modern ? { resultType: "complete" as const } : {}),
           content: [{ type: "text", text: JSON.stringify({ error: "The tool failed on the server. Nothing was published." }) }],
           isError: true,
         });

@@ -5,6 +5,7 @@ import {
 import type { KeyEnv } from "@/lib/automation/provider";
 import { SOCIAL_EMBED_GUIDANCE } from "@/lib/automation/embed-guidance";
 import { z } from "zod";
+import { zodToMcpInputSchema } from "./json-schema";
 import { getSql } from "@/lib/db";
 import { workerEnv } from "@/lib/cf-env.server";
 import { writesAllowed } from "@/lib/write-guard.server";
@@ -142,9 +143,7 @@ const runSchema = z.object({
 });
 
 function schemaOf(schema: z.ZodType): Record<string, unknown> {
-  const json = z.toJSONSchema(schema, { io: "input", unrepresentable: "any" }) as Record<string, unknown>;
-  delete json.$schema;
-  return json;
+  return zodToMcpInputSchema(schema);
 }
 
 function invalid(error: z.ZodError): ToolResult {

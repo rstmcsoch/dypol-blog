@@ -2,9 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { acceptPrefersSse, encodeSseMessage, rpcMethodOf } from "./transport.ts";
 
-test("prefer SSE when the client advertises text/event-stream, even alongside JSON", () => {
-  assert.equal(acceptPrefersSse("application/json, text/event-stream"), true);
+test("prefer JSON when the client advertises both JSON and event-stream; SSE only when JSON is absent", () => {
+  assert.equal(acceptPrefersSse("application/json, text/event-stream"), false);
   assert.equal(acceptPrefersSse("text/event-stream"), true);
+  assert.equal(acceptPrefersSse("text/event-stream, application/json"), false);
   assert.equal(acceptPrefersSse("application/json"), false);
   assert.equal(acceptPrefersSse(null), false);
 });

@@ -1,11 +1,16 @@
 /**
- * Streamable HTTP response helpers. Clients send
- * Accept: application/json, text/event-stream. JSON is allowed by the spec,
- * but several agents (including ones that only complete initialize) only
- * reliably parse SSE events when that media type is accepted.
+ * Streamable HTTP response helpers. Clients MUST advertise
+ * Accept: application/json, text/event-stream. Both media types are valid
+ * responses. Prefer JSON whenever the client accepts it: known-good servers
+ * (and the official examples) do this, and some agents (including Wabi/Yomi)
+ * advertise both but only parse JSON, then show "no actions" if the body is SSE.
+ * SSE is used only when the client asks for event-stream and not JSON.
  */
 export function acceptPrefersSse(accept: string | null | undefined): boolean {
-  return (accept ?? "").toLowerCase().includes("text/event-stream");
+  const a = (accept ?? "").toLowerCase();
+  if (!a.includes("text/event-stream")) return false;
+  if (a.includes("application/json")) return false;
+  return true;
 }
 
 /** Encode one or more JSON-RPC messages as SSE `message` events. */

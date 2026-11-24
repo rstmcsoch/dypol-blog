@@ -37,7 +37,9 @@ Every important Master mutation is written to the Master audit log (visible on t
 
 ## Handshake and client compatibility
 
-The MCP endpoint is Streamable HTTP. Clients should send `Accept: application/json, text/event-stream`. When that header includes `text/event-stream`, responses are SSE `message` events; otherwise they are JSON. There is no server-side session: a `GET` to `/mcp` returns 405, which is expected, and every `POST` is self-contained.
+The MCP endpoint is Streamable HTTP and is dual-era. It answers the legacy `initialize` handshake (`2025-11-25`, `2025-06-18`, `2025-03-26`, `2024-11-05`) and the modern `2026-07-28` flow (`server/discover`, then `tools/list` / `tools/call` with per-request metadata). There is no server-side session: a `GET` to `/mcp` returns 405, which is expected, and every `POST` is self-contained.
 
-If an agent shows the server as connected but nothing changes on the site, it may have completed only `initialize` and never called `tools/list` or `tools/call`. Reconnect the agent after a deploy so it repeats the handshake and refreshes the tool list. Use the Master credential from **Settings → Master MCP**, not `MCP_TOKEN` or a publishing profile key — those keep the writer tool set.
+Clients should send `Accept: application/json, text/event-stream`. When the client accepts JSON, responses are `application/json`. SSE `message` events are used only when the client asks for `text/event-stream` and not JSON. Each Master tool advertises a JSON Schema `inputSchema` with `"type": "object"` and a `properties` map.
+
+If an agent shows the server as connected but "returned no actions" or lists zero tools, reconnect it after a deploy so it repeats discovery and refreshes the tool list. Use the Master credential from **Settings → Master MCP**, not `MCP_TOKEN` or a publishing profile key — those keep the writer tool set.
 

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { authenticate, exchangeCode, formActionSource, issueCode, pkceS256, readClient, redirectAllowed, redirectMatches, refresh, registerClient, secretMatches, adminRegisteredRedirectOk } from "./auth.ts";
-import { handleRpc, type ToolDefinition } from "./protocol.ts";
+import { handleRpc, type ToolDefinition, SUPPORTED_PROTOCOL_VERSIONS, DEFAULT_PROTOCOL_VERSION, MODERN_PROTOCOL_VERSION, rpcHttpStatus, RPC, MASTER_SERVER_INFO, MASTER_SERVER_INSTRUCTIONS } from "./protocol.ts";
 
 const TOKEN = "t".repeat(40);
 
@@ -199,4 +199,84 @@ test("profile tokens: resolver binds profile; revoked/replaced profile voids its
   version = "v2"; // token replaced or revoked
   assert.deepEqual(await auth(`Bearer ${pair.access_token}`, TOKEN, undefined, resolver), { ok: false, reason: "invalid" });
   assert.equal(await refresh(TOKEN, { refreshToken: pair.refresh_token, clientId: "dypol-mcp-client" }, undefined, resolver), null);
+});
+
+test("server/discover advertises supported versions, tools capability, and cache hints", async () => {
+  const reply = (await handleRpc({
+    jsonrpc: "2.0",
+    id: "d1",
+    method: "server/discover",
+    params: { _meta: { "io.modelcontextprotocol/protocolVersion": "2026-07-28" } },
+  }, [echo], { instructions: MASTER_SERVER_INSTRUCTIONS, serverInfo: MASTER_SERVER_INFO })) as {
+    result: {
+      resultType: string;
+      supportedVersions: string[];
+      capabilities: { tools: { listChanged: boolean } };
+      instructions: string;
+      ttlMs: number;
+      cacheScope: string;
+      _meta: { "io.modelcontextprotocol/serverInfo": { name: string } };
+    };
+  };
+  assert.equal(reply.result.resultType, "complete");
+  assert.deepEqual(reply.result.supportedVersions, SUPPORTED_PROTOCOL_VERSIONS);
+  assert.ok(reply.result.supportedVersions.includes(MODERN_PROTOCOL_VERSION));
+  assert.ok(reply.result.supportedVersions.includes(DEFAULT_PROTOCOL_VERSION));
+  assert.deepEqual(reply.result.capabilities, { tools: { listChanged: false } });
+  assert.equal(reply.result.instructions, MASTER_SERVER_INSTRUCTIONS);
+  assert.equal(reply.result.cacheScope, "private");
+  assert.ok(reply.result.ttlMs > 0);
+  assert.equal(reply.result._meta["io.modelcontextprotocol/serverInfo"].name, MASTER_SERVER_INFO.name);
+});
+
+test("modern tools/list includes resultType and does not paginate a short catalog", async () => {
+  const list = (await handleRpc({
+    jsonrpc: "2.0",
+    id: 2,
+    method: "tools/list",
+    params: { _meta: { "io.modelcontextprotocol/protocolVersion": "2026-07-28" } },
+  }, [echo])) as { result: { tools: { name: string; inputSchema: { type: string } }[]; resultType: string; nextCursor?: string } };
+  assert.equal(list.result.resultType, "complete");
+  assert.equal(list.result.tools.length, 1);
+  assert.equal(list.result.tools[0].name, "echo");
+  assert.equal(list.result.tools[0].inputSchema.type, "object");
+  assert.equal(list.result.nextCursor, undefined);
+  const legacy = (await handleRpc({ jsonrpc: "2.0", id: 2, method: "tools/list" }, [echo])) as { result: { resultType?: string; tools: unknown[] } };
+  assert.equal(legacy.result.resultType, undefined);
+  assert.equal(legacy.result.tools.length, 1);
+});
+
+test("legacy initialize still defaults unknown versions to 2025-06-18, not the modern revision", async () => {
+  const unknown = (await handleRpc({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "1999" } }, [])) as { result: { protocolVersion: string; capabilities: { tools: { listChanged: boolean } } } };
+  assert.equal(unknown.result.protocolVersion, DEFAULT_PROTOCOL_VERSION);
+  assert.deepEqual(unknown.result.capabilities, { tools: { listChanged: false } });
+  const modernInit = (await handleRpc({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2026-07-28" } }, [])) as { result: { protocolVersion: string } };
+  assert.equal(modernInit.result.protocolVersion, MODERN_PROTOCOL_VERSION);
+});
+
+test("unsupported modern protocol versions return -32022 and map to HTTP 400; unknown methods map to 404", async () => {
+  const reply = (await handleRpc({
+    jsonrpc: "2.0",
+    id: 9,
+    method: "tools/list",
+    params: { _meta: { "io.modelcontextprotocol/protocolVersion": "2099-01-01" } },
+  }, [echo])) as { error: { code: number; data: { supported: string[]; requested: string } } };
+  assert.equal(reply.error.code, RPC.UNSUPPORTED_PROTOCOL_VERSION);
+  assert.equal(reply.error.data.requested, "2099-01-01");
+  assert.ok(reply.error.data.supported.includes(MODERN_PROTOCOL_VERSION));
+  assert.equal(rpcHttpStatus(reply, "2026-07-28"), 400);
+  const missing = (await handleRpc({ jsonrpc: "2.0", id: 10, method: "resources/list", params: { _meta: { "io.modelcontextprotocol/protocolVersion": "2026-07-28" } } }, [])) as object;
+  assert.equal(rpcHttpStatus(missing, "2026-07-28"), 404);
+  assert.equal(rpcHttpStatus(missing, "2025-06-18"), 200);
+  assert.equal(rpcHttpStatus(null, "2026-07-28"), 202);
+});
+
+test("JSON-RPC batches still run, including mixed initialize and tools/list", async () => {
+  const batch = (await handleRpc([
+    { jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2024-11-05" } },
+    { jsonrpc: "2.0", id: 2, method: "tools/list" },
+  ], [echo])) as { result: { protocolVersion?: string; tools?: unknown[] } }[];
+  assert.equal(batch.length, 2);
+  assert.equal(batch[0].result.protocolVersion, "2024-11-05");
+  assert.equal(batch[1].result.tools?.length, 1);
 });
