@@ -12,7 +12,7 @@ Our writers and editors guide DYPOL BLOG''s coverage. The newsroom selects stori
 We use AI-assisted tools in a supporting role across parts of the editorial workflow. They can help us spot emerging topics and trends, find background material and potential sources, organise research, assist with preliminary fact-finding, and analyse audience and publication data. In some workflows, they may also help prepare or refine an early working draft. AI output is treated as working material, not as evidence: important names, dates, figures, quotations and technical claims are checked against original documents, official statements, research papers or other reliable sources. Editorial judgement and responsibility for the finished article remain with our team. Read more in our [Editorial Policy](/editorial-policy).'),
     updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
 WHERE slug = 'about'
-  AND body LIKE '%Our articles are researched and drafted with the help of AI systems%';
+  AND instr(body, 'Our articles are researched and drafted with the help of AI systems') > 0;
 
 UPDATE pages
 SET body = REPLACE(
@@ -27,7 +27,13 @@ AI-assisted tools support selected parts of this process. They may help monitor 
     ),
     updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
 WHERE slug = 'editorial-policy'
-  AND body LIKE '%articles are researched and drafted with the help of AI systems%';
+  AND instr(body, 'articles are researched and drafted with the help of AI systems') > 0;
+
+UPDATE pages
+SET body = REPLACE(body, '**Effective date: 18 October 2026**', '**Effective date: 24 November 2026**'),
+    updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+WHERE slug = 'editorial-policy'
+  AND instr(body, '**Effective date: 18 October 2026**') > 0;
 
 UPDATE pages
 SET body = REPLACE(
@@ -41,7 +47,7 @@ Our newsroom may use AI-assisted tools to support trend monitoring, preliminary 
     ),
     updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
 WHERE slug IN ('terms', 'terms-and-conditions')
-  AND body NOT LIKE '%## Editorial tools and AI assistance%';
+  AND instr(body, '## Editorial tools and AI assistance') = 0;
 
 UPDATE pages
 SET body = REPLACE(
@@ -55,4 +61,4 @@ DYPOL BLOG may use AI-assisted tools to support topic discovery, trend monitorin
     ),
     updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
 WHERE slug = 'disclaimer'
-  AND body NOT LIKE '%## Editorial research and AI-assisted tools%';
+  AND instr(body, '## Editorial research and AI-assisted tools') = 0;
