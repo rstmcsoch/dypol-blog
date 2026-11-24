@@ -2,19 +2,23 @@ import { useEffect, useMemo, useState } from "react";
 import {
   adminCreateMasterCredential,
   adminDeactivateMasterCredential,
+  adminDeleteMasterCredential,
   adminIssueMasterOauth,
   adminMasterMcp,
   adminReactivateMasterCredential,
+  adminRenameMasterCredential,
   adminRevokeMasterCredential,
   adminRevokeMasterOauth,
   adminRotateMasterCredential,
 } from "@/content/master-mcp-api";
 import type { MasterConnectionView } from "@/content/master-mcp.server";
+import type { MasterProfileView } from "@/content/master-mcp-profiles.server";
 import type { PermissionSummaryItem } from "@/lib/mcp/master/permissions";
 
 type AuditRow = { at: string; toolName: string; action: string; resourceId: string | null; success: boolean; error: string | null; clientName: string | null };
 type Payload = {
   connection: MasterConnectionView;
+  profiles?: MasterProfileView[];
   usage: { calls24h: number; failures24h: number; calls7d: number };
   audit: AuditRow[];
   permissions: readonly PermissionSummaryItem[];
@@ -42,7 +46,10 @@ export function MasterMcpPanel({ initial }: { initial?: Payload | null }) {
   const [data, setData] = useState<Payload | null>(initial ?? null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [shownToken, setShownToken] = useState<string | null>(null);
+  const [newName, setNewName] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState("");
+  const [shownToken, setShownToken] = useState<{ token: string; name: string } | null>(null);
   const [shownOauth, setShownOauth] = useState<{ clientId: string; clientSecret: string } | null>(null);
   const [redirects, setRedirects] = useState("");
   const mcpUrl = useMemo(endpoint, [data]);
@@ -85,77 +92,209 @@ export function MasterMcpPanel({ initial }: { initial?: Payload | null }) {
   }
 
   const c = data.connection;
+  const profiles: MasterProfileView[] = data.profiles ?? (c.id
+    ? [{
+        id: c.id,
+        name: c.name,
+        status: c.status === "absent" ? "revoked" : c.status,
+        tokenPrefix: c.tokenPrefix,
+        createdAt: c.createdAt ?? "",
+        lastConnectedAt: c.lastConnectedAt,
+        lastActivityAt: c.lastActivityAt,
+        lastClientName: c.lastClientName,
+        revokedAt: null,
+        deactivatedAt: null,
+      }]
+    : []);
+  const activeCount = profiles.filter((p) => p.status === "active").length;
+
   return (
     <div className="stack" style={{ gap: "1.1rem" }}>
       {error ? <p className="banner banner--bad" role="alert">{error}</p> : null}
 
       <fieldset className="block-card">
-        <legend>Connection</legend>
+        <legend>Master MCP profiles ({activeCount} active / {profiles.length} total)</legend>
         <p className="desk-note">
-          A dedicated owner-provisioned identity for an operations agent. It is not a publishing profile and does not
-          appear in Admin → AI Automation. The existing <code>MCP_TOKEN</code> and profile keys keep their current
-          meaning and do not receive these privileges.
-        </p>
-        <p>
-          <span className={`badge${c.status === "active" ? " badge--master" : c.status === "deactivated" ? " badge--scheduled" : ""}`}>
-            {statusLabel(c.status)}
-          </span>
+          Create and manage multiple owner-provisioned Master MCP profiles — each agent or device gets its own
+          bearer credential, name, status toggle, and audit trail on <code>{mcpUrl}</code>.
         </p>
         <dl className="master-mcp-dl">
           <div><dt>MCP endpoint</dt><dd><code>{mcpUrl}</code> <CopyButton text={mcpUrl} /></dd></div>
-          <div><dt>Methods</dt><dd>Bearer credential, or an owner-provisioned OAuth 2.1 + PKCE client</dd></div>
-          <div><dt>Credential fingerprint</dt><dd>{c.tokenPrefix ?? "—"}</dd></div>
-          <div><dt>Last successful connection</dt><dd>{when(c.lastConnectedAt)}</dd></div>
-          <div><dt>Last activity</dt><dd>{when(c.lastActivityAt)}</dd></div>
-          <div><dt>Last connected client</dt><dd>{c.lastClientName ?? "—"}</dd></div>
+          <div><dt>Methods</dt><dd>Per-profile Bearer credential (<code>dypm_…</code>), or OAuth 2.1 + PKCE client below</dd></div>
         </dl>
+
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            void run("create", async () => {
+              const out = await adminCreateMasterCredential({ data: { name: newName.trim() || `Master MCP ${profiles.length + 1}` } });
+              setShownToken({ token: out.token, name: out.name });
+              setNewName("");
+            });
+          }}
+          style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", alignItems: "flex-end", marginTop: "0.9rem" }}
+        >
+          <label className="field" style={{ flex: "1 1 220px", margin: 0 }}>
+            <span>New Master MCP profile name</span>
+            <input
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              maxLength={80}
+              placeholder="e.g. Wabi Agent, Claude Desktop, Ops Bot"
+            />
+          </label>
+          <button type="submit" className="btn btn--primary" disabled={Boolean(busy)}>
+            {busy === "create" ? "Creating…" : "+ Add Master profile"}
+          </button>
+        </form>
+
         {shownToken ? (
-          <div className="banner" role="status">
-            <p style={{ margin: 0 }}>New Master MCP credential, shown <strong>once</strong>. Copy it now. Only a hash is stored; it cannot be shown again.</p>
-            <p><code style={{ wordBreak: "break-all" }}>{shownToken}</code></p>
-            <button type="button" className="btn btn--ghost" onClick={() => void navigator.clipboard?.writeText(shownToken)}>Copy</button>{" "}
+          <div className="banner" role="status" style={{ marginTop: "0.9rem" }}>
+            <p style={{ margin: 0 }}>New credential for <strong>{shownToken.name}</strong>, shown <strong>once</strong>. Copy it now — only a hash is stored.</p>
+            <p><code style={{ wordBreak: "break-all" }}>{shownToken.token}</code></p>
+            <button type="button" className="btn btn--ghost" onClick={() => void navigator.clipboard?.writeText(shownToken.token)}>Copy</button>{" "}
             <button type="button" className="btn btn--ghost" onClick={() => setShownToken(null)}>I have copied it</button>
           </div>
         ) : null}
-        <div className="row" style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", marginTop: "0.8rem" }}>
-          {c.status === "absent" || c.status === "revoked" ? (
-            <button type="button" className="btn" disabled={Boolean(busy)} onClick={() => void run("create", async () => {
-              const out = await adminCreateMasterCredential({ data: { name: "Master MCP" } });
-              setShownToken(out.token);
-            })}>{busy === "create" ? "Creating…" : "Create credential"}</button>
-          ) : (
-            <>
-              <button type="button" className="btn" disabled={Boolean(busy)} onClick={() => void run("rotate", async () => {
-                if (!confirm("Rotate the Master MCP credential? The current secret will stop working immediately.")) return;
-                const out = await adminRotateMasterCredential();
-                setShownToken(out.token);
-              })}>{busy === "rotate" ? "Rotating…" : "Rotate credential"}</button>
-              {c.status === "active" ? (
-                <button type="button" className="btn btn--ghost" disabled={Boolean(busy)} onClick={() => void run("deactivate", async () => {
-                  await adminDeactivateMasterCredential();
-                })}>Deactivate</button>
-              ) : (
-                <button type="button" className="btn btn--ghost" disabled={Boolean(busy)} onClick={() => void run("reactivate", async () => {
-                  await adminReactivateMasterCredential();
-                })}>Reactivate</button>
-              )}
-              <button type="button" className="btn btn--ghost" disabled={Boolean(busy)} onClick={() => void run("revoke", async () => {
-                if (!confirm("Revoke the Master MCP credential permanently? You can create a new one afterwards.")) return;
-                await adminRevokeMasterCredential();
-                setShownToken(null);
-              })}>Revoke</button>
-            </>
-          )}
-        </div>
+
+        {profiles.length === 0 ? (
+          <p className="desk-note" style={{ marginTop: "0.9rem" }}>No Master MCP profiles yet. Add one above to generate a bearer credential.</p>
+        ) : (
+          <div className="stack" style={{ gap: "0.75rem", marginTop: "1rem" }}>
+            {profiles.map((p) => {
+              const isEditing = editingId === p.id;
+              return (
+                <div
+                  key={p.id}
+                  style={{
+                    padding: "0.9rem 1rem",
+                    border: "1px solid var(--a-line, #ddd)",
+                    borderRadius: "10px",
+                    display: "grid",
+                    gap: "0.55rem",
+                  }}
+                >
+                  <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: "0.5rem" }}>
+                    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.5rem" }}>
+                      {isEditing ? (
+                        <form
+                          onSubmit={(e) => {
+                            e.preventDefault();
+                            void run(`rename-${p.id}`, async () => {
+                              await adminRenameMasterCredential({ data: { id: p.id, name: editingName } });
+                              setEditingId(null);
+                            });
+                          }}
+                          style={{ display: "flex", gap: "0.4rem", alignItems: "center", flexWrap: "wrap" }}
+                        >
+                          <input value={editingName} onChange={(e) => setEditingName(e.target.value)} maxLength={80} required />
+                          <button type="submit" className="btn btn--sm btn--primary" disabled={Boolean(busy)}>Save</button>
+                          <button type="button" className="btn btn--sm btn--ghost" onClick={() => setEditingId(null)}>Cancel</button>
+                        </form>
+                      ) : (
+                        <>
+                          <strong>{p.name}</strong>
+                          <span className={`badge${p.status === "active" ? " badge--master" : p.status === "deactivated" ? " badge--scheduled" : ""}`}>
+                            {statusLabel(p.status)}
+                          </span>
+                          {p.tokenPrefix ? <code style={{ fontSize: "0.82rem" }}>{p.tokenPrefix}</code> : null}
+                        </>
+                      )}
+                    </div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem" }}>
+                      {!isEditing ? (
+                        <button
+                          type="button"
+                          className="btn btn--sm btn--ghost"
+                          disabled={Boolean(busy)}
+                          onClick={() => { setEditingId(p.id); setEditingName(p.name); }}
+                        >
+                          Rename
+                        </button>
+                      ) : null}
+                      {p.status !== "revoked" ? (
+                        <>
+                          <button
+                            type="button"
+                            className="btn btn--sm"
+                            disabled={Boolean(busy)}
+                            onClick={() => void run(`rotate-${p.id}`, async () => {
+                              if (!confirm(`Rotate credential for "${p.name}"? Its current secret will stop working immediately.`)) return;
+                              const out = await adminRotateMasterCredential({ data: { id: p.id } });
+                              setShownToken({ token: out.token, name: out.name });
+                            })}
+                          >
+                            Rotate
+                          </button>
+                          {p.status === "active" ? (
+                            <button
+                              type="button"
+                              className="btn btn--sm btn--ghost"
+                              disabled={Boolean(busy)}
+                              onClick={() => void run(`deact-${p.id}`, async () => {
+                                await adminDeactivateMasterCredential({ data: { id: p.id } });
+                              })}
+                            >
+                              Deactivate
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              className="btn btn--sm btn--ghost"
+                              disabled={Boolean(busy)}
+                              onClick={() => void run(`react-${p.id}`, async () => {
+                                await adminReactivateMasterCredential({ data: { id: p.id } });
+                              })}
+                            >
+                              Reactivate
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            className="btn btn--sm btn--ghost"
+                            disabled={Boolean(busy)}
+                            onClick={() => void run(`revoke-${p.id}`, async () => {
+                              if (!confirm(`Revoke "${p.name}" permanently?`)) return;
+                              await adminRevokeMasterCredential({ data: { id: p.id } });
+                            })}
+                          >
+                            Revoke
+                          </button>
+                        </>
+                      ) : null}
+                      <button
+                        type="button"
+                        className="btn btn--sm btn--danger"
+                        disabled={Boolean(busy)}
+                        onClick={() => void run(`delete-${p.id}`, async () => {
+                          if (!confirm(`Delete profile "${p.name}"? Any agent using its token will immediately lose access.`)) return;
+                          await adminDeleteMasterCredential({ data: { id: p.id } });
+                        })}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                  <div className="muted" style={{ fontSize: "0.84rem", display: "flex", flexWrap: "wrap", gap: "0.5rem 1.25rem" }}>
+                    <span>Created: {when(p.createdAt)}</span>
+                    <span>Last connected: {when(p.lastConnectedAt)}</span>
+                    <span>Last activity: {when(p.lastActivityAt)}</span>
+                    {p.lastClientName ? <span>Client: {p.lastClientName}</span> : null}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </fieldset>
 
       <fieldset className="block-card">
         <legend>Connection instructions</legend>
         <ol className="desk-note" style={{ paddingLeft: "1.2rem" }}>
-          <li>Create or rotate the bearer credential above and copy the secret immediately.</li>
+          <li>Add a named Master MCP profile above and copy its bearer secret immediately.</li>
           <li>In your external agent, add an MCP server with URL <code>{mcpUrl}</code> and <code>Authorization: Bearer &lt;secret&gt;</code>.</li>
-          <li>Or create an OAuth client below, paste the redirect URL your agent shows, and copy the client ID and secret into the agent. Approve the connection while signed in to this desk, or with the site MCP token — never with a publishing profile key.</li>
-          <li>Deactivate or revoke access here at any time. The change takes effect on the next request.</li>
+          <li>Or create an OAuth client below, paste the redirect URL your agent shows, and copy the client ID and secret into the agent.</li>
+          <li>Rename, rotate, deactivate, revoke, or delete any profile individually at any time.</li>
         </ol>
       </fieldset>
 

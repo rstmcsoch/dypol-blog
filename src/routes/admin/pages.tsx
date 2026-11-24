@@ -129,6 +129,20 @@ function PagesDesk() {
 
       <section className="desk-section">
         <h2>All pages</h2>
+        <div className="block-card">
+          <div className="row" style={{ justifyContent: "space-between", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
+            <strong>
+              Editorial Team <span className="muted">/team</span>{" "}
+              <span className="badge">published</span>{" "}
+              <span className="badge">team editor</span>
+            </strong>
+            <span className="row" style={{ gap: "0.4rem" }}>
+              <Link to="/admin/team" className="btn btn--sm btn--primary">Edit team</Link>
+              <a className="btn btn--sm" href="/team" target="_blank" rel="noreferrer">Preview</a>
+            </span>
+          </div>
+          <p className="muted">Managed with the visual Team editor (groups, members, roles, ordering & visibility).</p>
+        </div>
         {data.map((page) => (
           <div key={page.id} className="block-card">
             <div className="row" style={{ justifyContent: "space-between" }}>

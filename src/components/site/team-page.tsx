@@ -92,7 +92,10 @@ export function TeamPage({ team }: { team: TeamSettings }) {
   useReveal(root, team);
   useHeroParallax(hero);
 
-  const total = teamMemberCount(team);
+  const visibleGroups = team.groups
+    .filter((g) => g.visible !== false)
+    .map((g) => ({ ...g, members: g.members.filter((m) => m.visible !== false) }));
+  const total = teamMemberCount(team, true);
   let index = 0;
   return (
     <div className="team-page" ref={root} data-team-version={String(total)}>
@@ -115,19 +118,21 @@ export function TeamPage({ team }: { team: TeamSettings }) {
             </div>
           </div>
         </div>
-        <div className="container">
-          <div className="team-hero__stats" data-reveal>
-            {team.groups.map((group) => (
-              <div key={group.id} className="team-stat">
-                <span className="team-stat__value">{String(group.members.length).padStart(2, "0")}</span>
-                <span className="team-stat__label">{group.kicker}</span>
-              </div>
-            ))}
+        {visibleGroups.length > 0 ? (
+          <div className="container">
+            <div className="team-hero__stats" data-reveal>
+              {visibleGroups.map((group) => (
+                <div key={group.id} className="team-stat">
+                  <span className="team-stat__value">{String(group.members.length).padStart(2, "0")}</span>
+                  <span className="team-stat__label">{group.kicker}</span>
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
+        ) : null}
       </section>
 
-      {team.groups.map((group) => (
+      {visibleGroups.map((group) => (
         <section key={group.id} className="team-group" aria-labelledby={`team-${group.id}-title`}>
           <div className="container">
             <header className="team-group__head" data-reveal>
@@ -158,6 +163,7 @@ export function TeamPage({ team }: { team: TeamSettings }) {
                     <div className="team-card__body">
                       <p className="team-card__role">{member.role}</p>
                       <h3 className="team-card__name">{member.name}</h3>
+                      {member.bio ? <p className="team-group__note" style={{ fontSize: "0.86rem", marginTop: "0.25rem", textAlign: "left" }}>{member.bio}</p> : null}
                     </div>
                     <div className="team-card__foot" aria-hidden="true">
                       <span className="team-card__line" />

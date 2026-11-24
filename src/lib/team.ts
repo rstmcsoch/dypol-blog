@@ -4,6 +4,8 @@ export const teamMemberSchema = z.object({
   id: z.string().trim().min(1).max(80),
   name: z.string().trim().min(1).max(120),
   role: z.string().trim().min(1).max(120),
+  bio: z.string().trim().max(240).optional(),
+  visible: z.boolean().optional(),
 });
 
 export const teamGroupSchema = z.object({
@@ -11,6 +13,7 @@ export const teamGroupSchema = z.object({
   kicker: z.string().trim().min(1).max(120),
   title: z.string().trim().min(1).max(200),
   note: z.string().trim().max(300),
+  visible: z.boolean().optional(),
   members: z.array(teamMemberSchema).max(60),
 });
 
@@ -18,7 +21,7 @@ export const teamSettingsSchema = z.object({
   kicker: z.string().trim().min(1).max(120),
   title: z.string().trim().min(1).max(200),
   lede: z.string().trim().min(1).max(500),
-  groups: z.array(teamGroupSchema).min(1).max(20),
+  groups: z.array(teamGroupSchema).max(20),
 });
 
 export type TeamMember = z.infer<typeof teamMemberSchema>;
@@ -100,11 +103,12 @@ export function normalizeTeamSettings(input: unknown): TeamSettings {
     const groups: TeamGroup[] = [];
     for (const g of raw.groups) {
       const gr = g && typeof g === "object" ? (g as Record<string, unknown>) : {};
-      const group = {
+      const group: TeamGroup = {
         id: typeof gr.id === "string" && gr.id.trim() ? gr.id.trim().slice(0, 80) : `g-${groups.length + 1}`,
         kicker: typeof gr.kicker === "string" && gr.kicker.trim() ? gr.kicker.trim().slice(0, 120) : "Group",
         title: typeof gr.title === "string" && gr.title.trim() ? gr.title.trim().slice(0, 200) : "Team group",
         note: typeof gr.note === "string" ? gr.note.trim().slice(0, 300) : "",
+        ...(gr.visible === false ? { visible: false } : {}),
         members: Array.isArray(gr.members)
           ? gr.members
               .flatMap((m, i) => {
@@ -113,20 +117,25 @@ export function normalizeTeamSettings(input: unknown): TeamSettings {
                 const role = typeof mr.role === "string" ? mr.role.trim().slice(0, 120) : "";
                 if (!name || !role) return [];
                 const id = typeof mr.id === "string" && mr.id.trim() ? mr.id.trim().slice(0, 80) : `m-${groups.length + 1}-${i + 1}`;
-                return [{ id, name, role }];
+                const bio = typeof mr.bio === "string" && mr.bio.trim() ? mr.bio.trim().slice(0, 240) : undefined;
+                return [{ id, name, role, ...(bio ? { bio } : {}), ...(mr.visible === false ? { visible: false } : {}) }];
               })
               .slice(0, 60)
           : [],
       };
       groups.push(group);
     }
-    if (groups.length > 0) out.groups = groups.slice(0, 20);
+    out.groups = groups.slice(0, 20);
   }
   return teamSettingsSchema.parse(out);
 }
 
-export function teamMemberCount(settings: TeamSettings): number {
-  return settings.groups.reduce((n, g) => n + g.members.length, 0);
+export function teamMemberCount(settings: TeamSettings, visibleOnly = false): number {
+  return settings.groups.reduce((n, g) => {
+    if (visibleOnly && g.visible === false) return n;
+    const count = visibleOnly ? g.members.filter((m) => m.visible !== false).length : g.members.length;
+    return n + count;
+  }, 0);
 }
 
 export function createTeamId(prefix: "g" | "m"): string {
