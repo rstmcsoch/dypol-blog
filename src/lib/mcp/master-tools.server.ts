@@ -6,6 +6,7 @@
  */
 import { z } from "zod";
 import type { ToolDefinition, ToolResult } from "./protocol";
+import { zodToMcpInputSchema } from "./json-schema";
 import { MASTER_PERMISSION_SUMMARY, MASTER_PROHIBITED, MASTER_PROHIBITED_TOOL_NAMES, isMasterDenied, denyMaster } from "./master/permissions";
 import { MASTER_TOOL_CATALOG } from "./master/catalog";
 import { assertSitePatchAllowed, assertAdsPatchAllowed, collectAdsSnapshot } from "./master/settings-guard";
@@ -32,7 +33,7 @@ function fail(error: unknown): ToolResult {
 }
 
 function schemaOf(schema: z.ZodType): Record<string, unknown> {
-  return { type: "object", additionalProperties: true, description: "See tool description for fields." };
+  return zodToMcpInputSchema(schema);
 }
 
 async function audit(ctx: MasterToolCtx, toolName: string, action: string, extra: {
