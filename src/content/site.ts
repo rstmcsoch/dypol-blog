@@ -19,8 +19,8 @@ export const T96_HOME_BLOCKS: ContentBlock[] = [
  * so the owner can edit them in the admin panel.
  */
 export const site = {
-  name: "DYPOLBLOG",
-  title: "DYPOLBLOG",
+  name: "DYPOL BLOG",
+  title: "DYPOL BLOG",
   description:
     "Tech news, reviews and explainers from DYPOL Labs — AI, smartphones, cybersecurity, startups, gadgets and the business of technology.",
   publisher: "DYPOL Labs",
@@ -31,13 +31,13 @@ export const site = {
     topics: "Topics",
     read: "Read",
     fullIndex: "Full index",
-    indexKicker: "DYPOLBLOG",
+    indexKicker: "DYPOL BLOG",
     indexTitle: "Index",
     indexLede: "Every published piece, newest first.",
     topicsKicker: "Filed under",
     topicsTitle: "Topics",
     topicsLede: "Browse every subject we cover — from AI and smartphones to startups, cybersecurity and electric vehicles.",
-    aboutKicker: "DYPOLBLOG",
+    aboutKicker: "DYPOL BLOG",
     aboutTitle: "About",
     related: "Continue",
     neighbors: "Along the index",
@@ -121,14 +121,14 @@ export const site = {
   },
   appearance: { darkness: 92, whiteness: 100, accent: "#ff4d00", coverFallback: "minimal", accentText: "black" },
   footer: {
-    note: "© {year} DYPOLBLOG · DYPOL Labs",
+    note: "© {year} DYPOL BLOG · DYPOL Labs",
     links: [],
   },
   about: {
     // Kept for settings compatibility — the public About page is managed
     // in Admin → Pages (see src/content/pages-seed.ts).
     paragraphs: [
-      "DYPOLBLOG is a technology news and reviews publication, published by DYPOL Labs.",
+      "DYPOL BLOG is a technology news and reviews publication, published by DYPOL Labs.",
       "We cover artificial intelligence, smartphones, apps, cybersecurity, startups, gadgets and the business of technology — explained in plain language, without the hype.",
     ],
   },
