@@ -42,11 +42,9 @@ Our reporting is organised into topics so you can follow the subjects you care a
 
 ## How our newsroom works
 
-DYPOL BLOG's editorial leadership sets coverage priorities, defines editorial standards and oversees the publication. We use AI-assisted systems as part of our newsroom and publishing workflow.
+Our writers and editors lead DYPOL BLOG's coverage and do the main work of producing its articles. As a general guide, our writers contribute roughly 80% of an article's written content; the exact contribution can vary by story.
 
-These tools can help identify emerging topics and trends, locate and organise background material, carry out preliminary research, analyse audience and publication data, and prepare article drafts. The publishing process depends on the workflow: some AI-assisted drafts are held for editorial review, while other automation profiles can publish automatically under preset rules. Source requirements can also vary by profile. AI-generated material can be incomplete or inaccurate, so readers should consult the sources linked with each story and contact us when something needs checking or correcting. DYPOL BLOG's editorial leadership is responsible for the standards and controls governing what appears on the site. Learn more in our [Editorial Policy](/editorial-policy).
-
-When we get something wrong, we fix it openly. See our [Corrections Policy](/corrections-policy) for how that works.
+AI-assisted tools support the team with surface-level research, finding background information and potential sources, spotting emerging topics and trends, and analysing site traffic and audience activity to suggest what readers may find useful. For serious, complex or original-reporting stories that require deeper research or human input, our writers and editors carry out that work, check primary sources and apply their own expertise and editorial judgement. The team remains responsible for the substance and final wording of its articles. Read more in our [Editorial Policy](/editorial-policy).
 
 ## Our promise
 
@@ -137,7 +135,7 @@ Reviews reflect hands-on testing or careful research at the time of writing. The
 
 ## Editorial tools and AI assistance
 
-DYPOL BLOG uses AI-assisted systems to support research, trend monitoring, source organisation, analytics and article-draft preparation. Some automated workflows may publish under preset rules without a separate manual approval step, and source requirements can vary by workflow. AI-assisted content can contain errors or become outdated. See our [Editorial Policy](/editorial-policy) for more about our publishing practices.
+AI-assisted tools may support our newsroom with surface-level research, background and source discovery, trend monitoring, and analysis of site traffic and audience activity. Our writers produce roughly 80% of article text as a general guide, while our team carries out deeper research and applies human expertise where a story requires it. See our [Editorial Policy](/editorial-policy) for details.
 
 ## External links
 
@@ -237,18 +235,18 @@ DYPOL BLOG exists to explain technology clearly. This page explains how stories 
 
 We follow the subjects in our [Topics](/topics) — AI, phones, security, startups, hardware, culture and more — and pick stories that are genuinely useful or genuinely interesting to readers: a launch that matters, research that changes what we know, a scam people need to avoid, a product worth your money (or not).
 
-## How stories are researched, written and published
+## How stories are researched and written
 
-DYPOL BLOG's editorial leadership sets coverage priorities, selects topics and maintains publishing rules. AI-assisted systems support topic and trend discovery, preliminary research, source discovery and organisation, audience and publication analytics, and article-draft preparation.
+Our writers lead the reporting and do most of the writing. As a general guide, our team members produce roughly 80% of an article's written content; the exact contribution varies by story. Editors set coverage priorities, choose the angle and ensure that published work meets the publication's standards.
 
-AI systems may prepare article drafts. Publication is controlled by configured workflow rules: some profiles keep drafts for editorial review and enforce source requirements; other profiles may publish automatically, and source requirements can differ. AI outputs can be incomplete, inaccurate or missing context. Readers should check sources linked with each story, particularly for quotations, dates, figures, technical specifications and claims that may change. Readers can report errors through our [Contact](/contact) page; corrections are handled under our [Corrections Policy](/corrections-policy).
+AI-assisted tools support the team with surface-level research, finding background information and potential sources, spotting emerging topics and trends, and analysing site traffic and audience activity to suggest what readers may find useful. For serious, complex or original-reporting stories that require deeper research or human input, our writers and editors carry out that work, check primary sources and add the expertise, context and judgement the story needs. AI suggestions are starting points, not a substitute for the team's research or verification.
 
 - Stories must be based on sources we actually read — company announcements, documentation, research papers, reputable reporting. Sources are listed at the end of every article.
 - Facts that matter (numbers, dates, names, quotes) must be confirmed, preferably against a primary source.
 - If a claim cannot be verified, it is left out or clearly flagged — never dressed up as fact.
 - Articles are written in our own words. We do not copy other publications' reporting; where we build on someone's work, we credit and link them.
 
-DYPOL BLOG's editorial leadership is responsible for setting and maintaining these standards and publishing controls. The use of AI tools does not remove the publication's responsibility to address errors under our [Corrections Policy](/corrections-policy).
+Writers and editors remain responsible for each article's substance, accuracy and final wording. AI is a supporting tool; it does not replace the team's reporting, deeper research or editorial judgement. Our [Corrections Policy](/corrections-policy) explains how we address mistakes.
 
 ## Independence
 
@@ -359,7 +357,7 @@ Some links to shops in reviews and buying guides **may** be affiliate links: if 
 
 ## Editorial research and AI-assisted tools
 
-AI tools may support topic discovery, research, source organisation, analytics and article-draft preparation. Depending on the configured workflow, an AI-assisted draft may be reviewed before publication or published automatically under preset rules. Source requirements may differ between workflows. AI output can be inaccurate, incomplete or out of date; consult linked sources for important claims and report errors through our [Contact](/contact) page. Our [Editorial Policy](/editorial-policy) explains the publishing process.
+AI-assisted tools help our team with surface-level research, background and source discovery, trend monitoring, and analysis of site traffic and audience activity. Our writers produce roughly 80% of article text as a general guide. For serious or complex stories, our team carries out the deeper research, checks primary sources and applies human expertise and editorial judgement. AI output can be incomplete or inaccurate and is not a substitute for verification. See our [Editorial Policy](/editorial-policy).
 
 ## External content
 
