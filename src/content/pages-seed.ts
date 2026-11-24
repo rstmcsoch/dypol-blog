@@ -40,9 +40,11 @@ Our reporting is organised into topics so you can follow the subjects you care a
 - **Guides and reviews** — hands-on product reviews, buying guides and developer tools
 - **Policy and culture** — technology policy, social media, YouTube and internet culture, plus credible leaks
 
-## How our stories are produced
+## How our newsroom works
 
-DYPOL BLOG uses modern tools, and we are open about it. Our articles are researched and drafted with the help of AI systems, then **reviewed and approved by a human editor before anything is published**. Every story must be based on sources we can point to — you will find them listed at the end of each article. If a claim cannot be verified, it does not go in. You can read more in our [Editorial Policy](/editorial-policy).
+Our writers and editors guide DYPOL BLOG's coverage. The newsroom selects stories, sets the angle, develops the reporting and takes responsibility for the articles it publishes.
+
+We use AI-assisted tools in a supporting role across parts of the editorial workflow. They can help us spot emerging topics and trends, find background material and potential sources, organise research, assist with preliminary fact-finding, and analyse audience and publication data. In some workflows, they may also help prepare or refine an early working draft. AI output is treated as working material, not as evidence: important names, dates, figures, quotations and technical claims are checked against original documents, official statements, research papers or other reliable sources. Editorial judgement and responsibility for the finished article remain with our team. Read more in our [Editorial Policy](/editorial-policy).
 
 When we get something wrong, we fix it openly. See our [Corrections Policy](/corrections-policy) for how that works.
 
@@ -104,8 +106,8 @@ If this policy changes, we will update this page and the effective date above. S
   {
     slug: "terms",
     title: "Terms and Conditions",
-    description: "The terms that govern your use of DYPOL BLOG. Effective 18 October 2026.",
-    body: `**Effective date: ${EFFECTIVE}**
+    description: "The terms that govern your use of DYPOL BLOG. Effective 24 November 2026.",
+    body: `**Effective date: 24 November 2026**
 
 Welcome to DYPOL BLOG, a technology news publication published by DYPOL Labs ("we", "us"). By reading or using this website, you agree to these terms. If you do not agree, please do not use the site.
 
@@ -132,6 +134,10 @@ We work hard to be accurate and we correct errors openly (see our [Corrections P
 ## Reviews and recommendations
 
 Reviews reflect hands-on testing or careful research at the time of writing. They are editorial opinions, not guarantees that a product is right for you. Read our [Disclaimer](/disclaimer) for more, including how affiliate links would work if we ever use them.
+
+## Editorial tools and AI assistance
+
+Our newsroom may use AI-assisted tools to support trend monitoring, preliminary research, source discovery, data analysis and parts of draft preparation. Their output is not treated as authoritative and does not replace source verification or editorial judgement. Our [Editorial Policy](/editorial-policy) explains the standards that apply to our published work.
 
 ## External links
 
@@ -222,8 +228,8 @@ You can block or delete cookies in your browser settings. The public site will s
   {
     slug: "editorial-policy",
     title: "Editorial Policy",
-    description: "How DYPOL BLOG chooses, researches, writes and reviews its stories — including how AI is used. Effective 18 October 2026.",
-    body: `**Effective date: ${EFFECTIVE}**
+    description: "How DYPOL BLOG chooses, researches, writes and edits its stories, including newsroom standards and the use of AI-assisted tools. Effective 24 November 2026.",
+    body: `**Effective date: 24 November 2026**
 
 DYPOL BLOG exists to explain technology clearly. This page explains how stories are chosen and produced, so you can judge our work for yourself.
 
@@ -233,14 +239,16 @@ We follow the subjects in our [Topics](/topics) — AI, phones, security, startu
 
 ## How stories are researched and written
 
-We are open about our process: **articles are researched and drafted with the help of AI systems, working from real sources, and every article is reviewed and approved by a human editor before it is published.**
+Our editorial team sets coverage priorities, chooses the angle and directs each assignment. Writers develop and prepare stories; editors review the sourcing, accuracy, clarity and context before publication. The newsroom remains responsible for the work published under DYPOL BLOG's name.
+
+AI-assisted tools support selected parts of this process. They may help monitor emerging topics and trends, locate potential sources and background material, organise research, assist with preliminary fact-finding, analyse audience and publication data, and prepare or refine early drafts. Their output is working material — not a source of truth, proof or an independent fact-check. Important details, including names, dates, figures, quotations and technical claims, are checked against original documents, official statements, research papers or other reliable sources. Unsupported claims are removed or clearly qualified.
 
 - Stories must be based on sources we actually read — company announcements, documentation, research papers, reputable reporting. Sources are listed at the end of every article.
 - Facts that matter (numbers, dates, names, quotes) must be confirmed, preferably against a primary source.
 - If a claim cannot be verified, it is left out or clearly flagged — never dressed up as fact.
 - Articles are written in our own words. We do not copy other publications' reporting; where we build on someone's work, we credit and link them.
 
-The AI never publishes on its own. A human being is responsible for every story on this site, and our [Corrections Policy](/corrections-policy) applies when we fall short.
+Editorial judgement, publication decisions and responsibility for corrections remain with DYPOL BLOG's editorial team. AI tools assist the workflow; they do not replace newsroom standards or accountability. Our [Corrections Policy](/corrections-policy) explains how we address mistakes.
 
 ## Independence
 
@@ -348,6 +356,10 @@ Our reviews and buying guides are editorial opinions, based on testing or resear
 ## Affiliate links
 
 Some links to shops in reviews and buying guides **may** be affiliate links: if you buy through one, the retailer may pay us a small commission at no extra cost to you. Affiliate relationships never decide our verdicts, rankings or recommendations, and a product cannot pay to be recommended. Where an article contains affiliate links, this disclaimer applies to it. Sponsored content, if we ever publish any, will be labelled as sponsored, clearly and in the article itself.
+
+## Editorial research and AI-assisted tools
+
+DYPOL BLOG may use AI-assisted tools to support topic discovery, trend monitoring, preliminary research, source organisation, data analysis and parts of draft preparation. These tools can produce incomplete or inaccurate results; their output is not a substitute for original sources or editorial review. Material claims are checked against appropriate source material under our [Editorial Policy](/editorial-policy).
 
 ## External content
 
