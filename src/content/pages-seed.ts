@@ -340,8 +340,8 @@ Members of the press are welcome to quote our articles with attribution and a li
   {
     slug: "disclaimer",
     title: "Disclaimer",
-    description: "What DYPOL BLOG content is — and is not. Reviews, buying advice, affiliate links and accuracy. Effective 18 October 2026.",
-    body: `**Effective date: ${EFFECTIVE}**
+    description: "What DYPOL BLOG content is — and is not. Reviews, buying advice, affiliate links and editorial tools. Effective 24 November 2026.",
+    body: `**Effective date: 24 November 2026**
 
 ## General information
 
