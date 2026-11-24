@@ -170,16 +170,6 @@ export function TeamPage({ team }: { team: TeamSettings }) {
         </section>
       ))}
 
-      {team.note ? (
-        <section className="team-note" aria-label="Editorial note">
-          <div className="container">
-            <div className="team-note__panel" data-reveal>
-              <p className="kicker">Editorial note</p>
-              <p className="team-note__text">{team.note}</p>
-            </div>
-          </div>
-        </section>
-      ) : null}
     </div>
   );
 }

@@ -118,7 +118,6 @@ function TeamDesk() {
             <label className="field"><span>Kicker</span><input value={draft.kicker} onChange={(e) => setDraft({ ...draft, kicker: e.target.value })} maxLength={120} required /></label>
             <label className="field"><span>Title</span><input value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} maxLength={200} required /></label>
             <label className="field"><span>Intro / lede</span><textarea value={draft.lede} onChange={(e) => setDraft({ ...draft, lede: e.target.value })} maxLength={500} rows={3} required /></label>
-            <label className="field"><span>Editorial note (optional, shown at bottom)</span><textarea value={draft.note} onChange={(e) => setDraft({ ...draft, note: e.target.value })} maxLength={500} rows={3} /></label>
             <p className="desk-note" style={{ marginBottom: 0 }}>{teamMemberCount(draft)} people across {draft.groups.length} group{draft.groups.length === 1 ? "" : "s"}.</p>
           </div>
         </section>

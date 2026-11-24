@@ -19,7 +19,6 @@ export const teamSettingsSchema = z.object({
   title: z.string().trim().min(1).max(200),
   lede: z.string().trim().min(1).max(500),
   groups: z.array(teamGroupSchema).min(1).max(20),
-  note: z.string().trim().max(500),
 });
 
 export type TeamMember = z.infer<typeof teamMemberSchema>;
@@ -80,7 +79,6 @@ export const DEFAULT_TEAM_SETTINGS: TeamSettings = {
       ],
     },
   ],
-  note: "Writer seniority and the Copy Editor assignment are provisional, pending confirmation of individual experience and editing responsibilities.",
 };
 
 export function normalizeTeamSettings(input: unknown): TeamSettings {
@@ -95,7 +93,7 @@ export function normalizeTeamSettings(input: unknown): TeamSettings {
   // Field-by-field fallback to avoid wiping everything on one bad field.
   const out: TeamSettings = { ...DEFAULT_TEAM_SETTINGS };
   const top = teamSettingsSchema.shape;
-  for (const key of ["kicker", "title", "lede", "note"] as const) {
+  for (const key of ["kicker", "title", "lede"] as const) {
     const v = raw[key];
     if (top[key].safeParse(v).success) out[key] = v as never;
   }
