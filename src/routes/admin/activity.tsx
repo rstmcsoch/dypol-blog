@@ -20,8 +20,8 @@ function ActivityDesk() {
       <p className="desk-kicker">System</p>
       <h1 className="desk-title">Activity</h1>
       <p className="desk-note">
-        What happened recently: your admin actions and automation (AI) runs in one list, newest first. If an
-        automation published or failed, it shows here with its reason.
+        What happened recently: administrator actions, Master MCP operations, and Normal or Special MCP
+        automation, in one list, newest first. If an automation published or failed, it shows here with its reason.
       </p>
 
       <section className="panel" style={{ marginTop: "1rem" }}>
@@ -32,7 +32,7 @@ function ActivityDesk() {
           <ul className="stack" style={{ listStyle: "none", margin: 0, padding: 0 }}>
             {data.entries.map((e, i) => (
               <li key={`${e.at}-${i}`} style={{ display: "flex", gap: "0.6rem", alignItems: "baseline", flexWrap: "wrap" }}>
-                <span className={`badge${e.source === "Automation" ? " badge--scheduled" : ""}`}>{e.source}</span>
+                <span className={`badge${e.source === "Administrator" ? "" : e.source === "Master MCP" ? " badge--master" : e.source === "Special MCP" ? " badge--special" : " badge--scheduled"}`}>{e.source}</span>
                 <span style={{ flex: 1, minWidth: 200 }}>{e.text}</span>
                 <span className="desk-note">{when(e.at)}</span>
               </li>

@@ -29,6 +29,8 @@ function EditSpecial() {
       categories={data.categories}
       tags={data.tags}
       media={data.media}
+      authors={data.authors}
+      provenance={data.provenance}
     />
   );
 }

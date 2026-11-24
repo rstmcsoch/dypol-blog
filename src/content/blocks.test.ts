@@ -98,3 +98,22 @@ test("t103: a ~29-story archive still fills every homepage section", () => {
   assert.equal(new Set(ids).size, ids.length, "still no repeats");
   assert.ok((r.find((x) => x.block.type === "river")?.rail?.length ?? 0) >= 3, "rail shows");
 });
+
+// t217: the homepage preview renders the builder's draft through this same path
+// (normalizeSite(draft) -> resolveBlocks). Every builder edit must show up.
+test("t217 preview fidelity: heading overrides, enabled, order and limits from a draft are honoured", async () => {
+  const { normalizeSite } = await import("./validate.ts");
+  const draftHome = { blocks: [block("a", "also", { count: 1, title: "QA UNSAVED ALSO" }), block("f", "featured", { title: "QA UNSAVED HERO" }), block("l", "latest", { count: 9, enabled: false })] };
+  const draft = normalizeSite({ ...site, home: draftHome });
+  const r = resolveBlocks(draft.home.blocks, { ...ctx, site: draft }, "home");
+  const titles = r.map((x) => x.title);
+  assert.ok(titles.indexOf("QA UNSAVED ALSO") === 0 && titles.indexOf("QA UNSAVED HERO") > 0, titles.join());
+  assert.equal(r[0]!.cards.length, 1, "count limit honoured");
+  // (normalizeSite's existing essential-section backfill may still add Latest/Topics; unchanged policy.)
+  // Empty heading falls back to the draft's labels (same normalization Save uses).
+  const relabel = normalizeSite({ ...site, home: { blocks: [block("f", "featured", { title: "" })] }, labels: { ...site.labels, featured: "QA LABEL" } });
+  assert.equal(resolveBlocks(relabel.home.blocks, { ...ctx, site: relabel }, "home")[0]!.title, "QA LABEL");
+  // Disabled blocks are skipped.
+  const off = normalizeSite({ ...site, home: { blocks: [block("f", "featured"), block("a", "also", { title: "QA OFF", enabled: false })] } });
+  assert.ok(!resolveBlocks(off.home.blocks, { ...ctx, site: off }, "home").some((x) => x.title === "QA OFF"));
+});

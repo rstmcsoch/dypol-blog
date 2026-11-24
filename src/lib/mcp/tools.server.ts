@@ -5,6 +5,7 @@ import {
 import type { KeyEnv } from "@/lib/automation/provider";
 import { SOCIAL_EMBED_GUIDANCE } from "@/lib/automation/embed-guidance";
 import { z } from "zod";
+import { zodToMcpInputSchema } from "./json-schema";
 import { getSql } from "@/lib/db";
 import { workerEnv } from "@/lib/cf-env.server";
 import { writesAllowed } from "@/lib/write-guard.server";
@@ -21,6 +22,7 @@ import { blocksToBody } from "@/lib/automation/body";
 import type { AiActor } from "@/lib/automation/ai-edit";
 import type { ToolDefinition, ToolResult } from "./protocol";
 import type { ArticleBlock, CoverMotif } from "@/content/types";
+import { sourceFromAuthLabel, type PublishSource } from "@/lib/publish-source";
 
 /**
  * The twelve automation tools. Each one authorises against the owner's automation
@@ -141,9 +143,7 @@ const runSchema = z.object({
 });
 
 function schemaOf(schema: z.ZodType): Record<string, unknown> {
-  const json = z.toJSONSchema(schema, { io: "input", unrepresentable: "any" }) as Record<string, unknown>;
-  delete json.$schema;
-  return json;
+  return zodToMcpInputSchema(schema);
 }
 
 function invalid(error: z.ZodError): ToolResult {
@@ -154,7 +154,11 @@ function invalid(error: z.ZodError): ToolResult {
   };
 }
 
-type Ctx = { auth: string; profileId?: string; /** t173: precomputed special mode (null/absent = off). */ special?: SpecialCtx | null; /** t178: exclusive Normal/Special assignment (absent = normal, the legacy behaviour). */ assignment?: "normal" | "special" };
+type Ctx = { auth: string; profileId?: string; /** t173: precomputed special mode (null/absent = off). */ special?: SpecialCtx | null; /** t178: exclusive Normal/Special assignment (absent = normal, the legacy behaviour). */ assignment?: "normal" | "special"; /** t241: structured MCP identity for article provenance. */ source?: PublishSource | null };
+
+function actorSource(ctx: { auth: string; source?: PublishSource | null }): PublishSource | null {
+  return ctx.source ?? sourceFromAuthLabel(ctx.auth);
+}
 
 async function loadSettings(profileId: string) {
   const { readProfileSettings } = await import("@/content/automation.server");
@@ -216,8 +220,9 @@ async function publishLimitContext(profileId: string, policy: AutomationSettings
     kind === "special" ? specialDailyCap() : Promise.resolve(0),
   ]);
   const run = effectiveRun(profileId, runId, mine);
-  const verdict = combinedLimitVerdict({ kind, websiteUsed: all.length, websiteCap, runUsed: run.used, runCap: policy.maxPublishedPerRun, specialUsed, specialCap });
-  return { store, run, websiteCap, websiteUsed: all.length, specialUsed, specialCap, kind, verdict };
+  const profileCap = policy.maxArticlesPerDay ?? 0;
+  const verdict = combinedLimitVerdict({ kind, websiteUsed: all.length, websiteCap, runUsed: run.used, runCap: policy.maxPublishedPerRun, specialUsed, specialCap, profileUsed: mine.length, profileCap });
+  return { store, run, websiteCap, websiteUsed: all.length, specialUsed, specialCap, profileUsed: mine.length, profileCap, kind, verdict };
 }
 
 async function articleKindOf(articleId: string): Promise<ArticleKind> {
@@ -248,12 +253,12 @@ async function claimPublish(
   input: { articleId: string; auth: string; mode: "automatic" | "explicit"; runId?: string | null },
 ): Promise<{ ok: true; claim: PublishClaim } | { ok: false; reason: string }> {
   if (ctx.verdict.blocked) {
-    return { ok: false, reason: ctx.verdict.websiteReason ?? ctx.verdict.specialReason ?? ctx.verdict.runReason ?? "Publish limit reached." };
+    return { ok: false, reason: ctx.verdict.websiteReason ?? ctx.verdict.specialReason ?? ctx.verdict.profileReason ?? ctx.verdict.runReason ?? "Publish limit reached." };
   }
   // t177: the claim insert itself re-checks the website (and special) caps
   // atomically, so concurrent publishers from any profile/type cannot both
   // take the last slot.
-  const claimed = await ctx.store.claimAiPublish({ profileId, runKey: ctx.run.runKey, mode: input.mode, articleId: input.articleId, auth: input.auth, limits: { websiteCap: ctx.websiteCap, specialCap: ctx.specialCap, articleType: ctx.kind } });
+  const claimed = await ctx.store.claimAiPublish({ profileId, runKey: ctx.run.runKey, mode: input.mode, articleId: input.articleId, auth: input.auth, limits: { websiteCap: ctx.websiteCap, specialCap: ctx.specialCap, articleType: ctx.kind, profileCap: ctx.profileCap } });
   if (claimed && typeof claimed === "object") {
     const again = await publishLimitContext(profileId, policy, input.runId, input.articleId);
     return { ok: false, reason: again.verdict.websiteReason ?? again.verdict.specialReason ?? "Publish limit reached." };
@@ -271,6 +276,8 @@ async function claimPublish(
     runCap: policy.maxPublishedPerRun,
     specialUsed: Math.max(0, recount.specialUsed - 1),
     specialCap: recount.specialCap,
+    profileUsed: Math.max(0, recount.profileUsed - 1),
+    profileCap: recount.profileCap,
   }).blocked;
   if (othersBlocked) {
     await ctx.store.releaseAiPublishClaim(claimId);
@@ -286,7 +293,7 @@ async function claimPublish(
  * an AI that forgets the separate publish step no longer strands a
  * publishable draft. Returns clear reasons when it stays a draft.
  */
-async function attemptAutoPublish(articleId: string, profileId: string, auth: string, runId?: string | null): Promise<{ published: boolean; status: string; reasons: string[] }> {
+async function attemptAutoPublish(articleId: string, profileId: string, auth: string, runId?: string | null, source?: PublishSource | null): Promise<{ published: boolean; status: string; reasons: string[] }> {
   const store = await import("@/content/automation.server");
   const settings = await loadSettings(profileId);
   const submission = await store.findSubmission({ articleId });
@@ -318,7 +325,12 @@ async function attemptAutoPublish(articleId: string, profileId: string, auth: st
   const now = new Date().toISOString();
   const flipped = await sql<{ id: string }>`update articles set status = 'published', published_at = ${now}, updated_at = ${now} where id = ${articleId} and status = 'draft' returning id`;
   await store.settleAiPublishClaim(claimed.claim.claimId, "published", { mode: "automatic", runKey: claimed.claim.run.runKey });
-  if (flipped[0]) await (await import("@/content/repository.server")).assignRotatingAuthor(articleId);
+  if (flipped[0]) {
+    const repo = await import("@/content/repository.server");
+    await repo.assignRotatingAuthor(articleId);
+    const stamped = source ?? sourceFromAuthLabel(auth);
+    if (stamped) await repo.stampArticleSource(articleId, "published", stamped);
+  }
   return { published: true, status: "published", reasons: [] };
 }
 
@@ -340,6 +352,7 @@ async function explicitPublish(
   profileId: string,
   auth: string,
   runId?: string | null,
+  source?: PublishSource | null,
 ): Promise<{ published: boolean; status: string; alreadyPublished?: boolean; reasons: string[]; warnings: string[]; slug?: string; author?: string }> {
   const store = await import("@/content/automation.server");
   const settings = await loadSettings(profileId);
@@ -408,6 +421,10 @@ async function explicitPublish(
   await store.settleAiPublishClaim(claimed.claim.claimId, "published_explicit", { mode: "explicit", warnings, runKey: claimed.claim.run.runKey });
   // t169: first publish only (a re-publish keeps whatever byline it had).
   const author = flipped[0] && !rows[0].published_at ? await repo.assignRotatingAuthor(articleId) : null;
+  if (flipped[0]) {
+    const stamped = source ?? sourceFromAuthLabel(auth);
+    if (stamped) await repo.stampArticleSource(articleId, "published", stamped);
+  }
   return { published: true, status: "published", reasons: [], warnings, slug: rows[0].slug, ...(author ? { author } : {}) };
 }
 
@@ -733,7 +750,7 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
             publishedAt: null,
             blocks,
             intent: "save",
-          });
+          }, actorSource(ctx));
         } catch (error) {
           if (error instanceof ContentError || error instanceof z.ZodError) {
             const message = error instanceof z.ZodError ? "The article failed validation." : error.message;
@@ -777,7 +794,7 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
               : sel.suggestedIndex;
           if (usedIndex !== null) await store2.writeTopicCursor(profileId, advanceCursor(usedIndex, settings.topicSelection.step, settings.topicIdeas.length));
         }
-        const auto = await attemptAutoPublish(saved.id, profileId, auth, input.run_id);
+        const auto = await attemptAutoPublish(saved.id, profileId, auth, input.run_id, actorSource(ctx));
         // t169: the byline comes from the profile's author rotation at FIRST publish.
         const author = auto.published ? await (await import("@/content/repository.server")).assignRotatingAuthor(saved.id) : null;
         return {
@@ -829,7 +846,7 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
       run: async (args) => {
         const parsed = publishSchema.safeParse(args ?? {});
         if (!parsed.success) return invalid(parsed.error);
-        const result = await explicitPublish(parsed.data.article_id, profileId, auth, parsed.data.run_id);
+        const result = await explicitPublish(parsed.data.article_id, profileId, auth, parsed.data.run_id, actorSource(ctx));
         if (result.status === "missing") return { ok: false, error: "That article no longer exists." };
         if (result.status === "blocked") return { ok: false, error: result.reasons[0] };
         if (!result.published && !result.alreadyPublished) return { ok: false, error: result.reasons[0] ?? "Your profile cannot publish that draft." };
@@ -917,7 +934,7 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
           }
         }
         await store.recordRun({ profileId, tool: "upload_featured_image", outcome: "stored", articleId: input.article_id ?? null, auth, details: { mediaId, bytes: image.bytes.length, mime: image.mime, attached, credit: input.credit ?? null, sourcePage: input.source_page ?? null } });
-        const auto = attached && input.article_id ? await attemptAutoPublish(input.article_id, profileId, auth, input.run_id) : null;
+        const auto = attached && input.article_id ? await attemptAutoPublish(input.article_id, profileId, auth, input.run_id, actorSource(ctx)) : null;
         const note = input.article_id && !attached
           ? submission
             ? "Stored in the media library but not attached: the article is no longer a draft (the owner may have published it). Attach it in the admin panel."
@@ -1240,8 +1257,8 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
   ];
   // t173: special-article additions. With special mode off the list is exactly the one above.
   const special = ctx.special ?? null;
-  const deps = { profileId, auth, loadSettings, attemptAutoPublish };
-  return applySpecialTools(tools, Boolean(special), {
+  const deps = { profileId, auth, loadSettings, attemptAutoPublish, source: actorSource(ctx) };
+  const wired = applySpecialTools(tools, Boolean(special), {
     submitProperties: SPECIAL_SUBMIT_PROPERTIES,
     submit: (args) => submitSpecialDraft(args, special!, deps),
     update: (args) => updateSpecialDraft(args, special, deps),
@@ -1253,4 +1270,78 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
     },
     research: () => specialResearchTools(special!, deps),
   }, ctx.assignment ?? "normal");
+  return [...wired, ...publisherTaskTools({ profileId, auth })];
+}
+
+function publisherTaskTools(ctx: { profileId: string; auth: string }): ToolDefinition[] {
+  const { profileId, auth } = ctx;
+  const idSchema = z.object({ task_id: z.string().trim().min(1).max(80) });
+  const reportSchema = idSchema.extend({
+    status: z.enum(["in_progress", "completed", "failed"]),
+    summary: z.string().trim().max(2000).optional(),
+    article_ids: z.array(z.string().trim().min(1).max(80)).max(200).optional(),
+    changes: z.unknown().optional(),
+    error: z.string().trim().max(500).optional(),
+  });
+  return [
+    {
+      name: "list_my_agent_tasks",
+      title: "List my assigned tasks",
+      description: "List correction tasks the Master MCP assigned to this automation profile. Paused and disabled profiles can still read their queue; the tasks stay pending until the profile is allowed to work.",
+      inputSchema: { type: "object", properties: { status: { type: "string", enum: ["pending", "claimed", "in_progress", "completed", "failed", "cancelled"] }, limit: { type: "integer", minimum: 1, maximum: 200 } }, additionalProperties: false },
+      annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+      run: async (args) => {
+        const parsed = z.object({ status: z.enum(["pending", "claimed", "in_progress", "completed", "failed", "cancelled"]).optional(), limit: z.number().int().min(1).max(200).optional() }).safeParse(args ?? {});
+        if (!parsed.success) return invalid(parsed.error);
+        const { listAgentTasks } = await import("@/content/master-mcp.server");
+        const tasks = await listAgentTasks({ profileId, status: parsed.data.status, limit: parsed.data.limit });
+        return { ok: true, data: { tasks, timezoneNote: "Task timestamps are ISO-8601 UTC." } };
+      },
+    },
+    {
+      name: "claim_agent_task",
+      title: "Claim an assigned task",
+      description: "Claim a pending task assigned to this profile. Refused while the profile is paused or disabled; the task stays pending.",
+      inputSchema: { type: "object", properties: { task_id: { type: "string" } }, required: ["task_id"], additionalProperties: false },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+      run: async (args) => {
+        const parsed = idSchema.safeParse(args ?? {});
+        if (!parsed.success) return invalid(parsed.error);
+        const settings = await loadSettings(profileId);
+        const { claimAgentTask } = await import("@/content/master-mcp.server");
+        try {
+          const task = await claimAgentTask(parsed.data.task_id, profileId, auth, { enabled: settings.enabled, paused: settings.paused });
+          return { ok: true, data: { task } };
+        } catch (error) {
+          return { ok: false, error: error instanceof Error ? error.message : "Could not claim that task." };
+        }
+      },
+    },
+    {
+      name: "report_agent_task",
+      title: "Report task result",
+      description: "Mark a claimed task in progress, completed or failed, and report affected article IDs and the changes you made. A task is not complete until you report completion.",
+      inputSchema: { type: "object", properties: { task_id: { type: "string" }, status: { type: "string", enum: ["in_progress", "completed", "failed"] }, summary: { type: "string" }, article_ids: { type: "array", items: { type: "string" } }, changes: {}, error: { type: "string" } }, required: ["task_id", "status"], additionalProperties: false },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+      run: async (args) => {
+        const parsed = reportSchema.safeParse(args ?? {});
+        if (!parsed.success) return invalid(parsed.error);
+        const { reportAgentTask } = await import("@/content/master-mcp.server");
+        try {
+          const task = await reportAgentTask({
+            id: parsed.data.task_id,
+            profileId,
+            status: parsed.data.status,
+            summary: parsed.data.summary,
+            articleIds: parsed.data.article_ids,
+            changes: parsed.data.changes,
+            error: parsed.data.error,
+          });
+          return { ok: true, data: { task } };
+        } catch (error) {
+          return { ok: false, error: error instanceof Error ? error.message : "Could not update that task." };
+        }
+      },
+    },
+  ];
 }

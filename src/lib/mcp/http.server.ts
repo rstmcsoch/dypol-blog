@@ -2,12 +2,16 @@ import { workerEnv } from "@/lib/cf-env.server";
 import { authenticate } from "./auth";
 import { extraClientHosts } from "./hosts.server";
 import { MCP_CORS_BASE, originAllowed, withHeaders } from "./cors";
-import { handleRpc, RPC } from "./protocol";
+import { handleRpc, RPC, MASTER_SERVER_INFO, MASTER_SERVER_INSTRUCTIONS, SUPPORTED_PROTOCOL_VERSIONS, protocolVersionOf, rpcHttpStatus } from "./protocol";
+import { acceptPrefersSse, encodeSseMessage, rpcMethodOf } from "./transport";
 import { buildTools } from "./tools.server";
+import { authLabelFrom, mcpSourceFromAuth } from "@/lib/publish-source";
 
 /**
- * POST /mcp — Streamable HTTP transport, stateless, JSON responses.
- * Order of checks: method -> origin -> rate limit -> auth -> size -> JSON-RPC.
+ * POST /mcp — Streamable HTTP transport, stateless. JSON unless the client
+ * accepts only text/event-stream. Dual-era: initialize (legacy) and
+ * server/discover (2026-07-28). Order of checks: origin -> rate limit -> auth
+ * -> size -> JSON-RPC.
  */
 export const MAX_REQUEST_BYTES = 15_000_000; // room for a 10 MB base64 cover image
 export const MCP_RATE = { limit: 30, periodSeconds: 60 };
@@ -51,6 +55,25 @@ async function readCapped(request: Request): Promise<string | null> {
   return new TextDecoder().decode(all);
 }
 
+
+function protocolHeader(request: Request): Record<string, string> {
+  const version = (request.headers.get("mcp-protocol-version") ?? "").trim();
+  return SUPPORTED_PROTOCOL_VERSIONS.includes(version) ? { "mcp-protocol-version": version } : {};
+}
+
+/** JSON-RPC body: SSE when the client accepts event-stream, otherwise JSON. */
+function rpcReply(body: unknown, request: Request, status = 200, headers: Record<string, string> = {}): Response {
+  const extra = { "cache-control": "no-store", ...protocolHeader(request), ...headers };
+  if (acceptPrefersSse(request.headers.get("accept"))) {
+    return new Response(encodeSseMessage(body), { status, headers: { "content-type": "text/event-stream", ...extra } });
+  }
+  return json(body, status, extra);
+}
+
+function logMcp(fields: Record<string, unknown>) {
+  console.info("[mcp]", JSON.stringify(fields));
+}
+
 export function resourceMetadataUrl(request: Request): string {
   return `${new URL(request.url).origin}/.well-known/oauth-protected-resource/mcp`;
 }
@@ -77,7 +100,8 @@ async function handleMcpInner(request: Request, env: { MCP_TOKEN?: string; MCP_L
   }
 
   const { profileResolver } = await import("@/content/automation.server");
-  const auth = await authenticate(request.headers.get("authorization"), env.MCP_TOKEN, undefined, profileResolver);
+  const { masterResolver, touchMasterConnection } = await import("@/content/master-mcp.server");
+  const auth = await authenticate(request.headers.get("authorization"), env.MCP_TOKEN, undefined, profileResolver, masterResolver());
   if (!auth.ok) {
     if (auth.reason === "disabled") return rpcError(503, RPC.INTERNAL, "The MCP endpoint is not enabled on this deployment.");
     return rpcError(401, RPC.INVALID_REQUEST, "Unauthorized.", {
@@ -103,12 +127,34 @@ async function handleMcpInner(request: Request, env: { MCP_TOKEN?: string; MCP_L
   } catch {
     return rpcError(400, RPC.PARSE, "Parse error.");
   }
+  const hints = { origin: request.headers.get("origin"), userAgent: request.headers.get("user-agent") };
+  const started = Date.now();
+  const { method, toolName } = rpcMethodOf(body);
+  const protocolVersion = protocolVersionOf(body, request.headers.get("mcp-protocol-version") ?? undefined);
+  const logAndReply = (reply: object | object[] | null, role: string) => {
+    const status = rpcHttpStatus(reply, protocolVersion);
+    logMcp({ role, via: auth.via, method, toolName, durationMs: Date.now() - started, status });
+    if (reply === null) return new Response(null, { status: 202, headers: protocolHeader(request) });
+    return rpcReply(reply, request, status);
+  };
+  if (auth.role === "master") {
+    const connectionId = auth.connectionId ?? "master";
+    await touchMasterConnection(connectionId, auth.client ?? null);
+    const { buildMasterTools } = await import("./master-tools.server");
+    const actor = { kind: "master" as const, connectionId, clientName: auth.client ?? null, via: auth.via === "oauth" ? "oauth" as const : "bearer" as const };
+    const product = (await import("@/lib/publish-source")).inferProduct({ clientName: auth.client, origin: hints.origin, userAgent: hints.userAgent });
+    const source = { via: "master" as const, client: auth.client ?? null, product, mcpAuth: auth.via === "oauth" ? "oauth" as const : "bearer" as const };
+    const reply = await handleRpc(body, buildMasterTools({ actor, source }), { instructions: MASTER_SERVER_INSTRUCTIONS, serverInfo: MASTER_SERVER_INFO, protocolVersion });
+    return logAndReply(reply, "master");
+  }
   // t173: special mode is resolved once per request (buildTools stays synchronous).
   // t178: plus the profile's exclusive Normal/Special assignment (Normal if unreadable).
+  // Master requests skip this — it is a publishing-profile concern and added a D1 round trip
+  // on the initialize handshake.
   const { special, assignment } = await import("@/lib/special/special-tools.server")
     .then((m) => m.specialRequestContext(auth.profile.id))
     .catch(() => ({ special: null, assignment: "normal" as const }));
-  const reply = await handleRpc(body, buildTools({ auth: auth.client ? `oauth:${auth.client}` : auth.via, profileId: auth.profile.id, special, assignment }));
-  if (reply === null) return new Response(null, { status: 202 });
-  return json(reply);
+  const source = mcpSourceFromAuth(auth, hints);
+  const reply = await handleRpc(body, buildTools({ auth: authLabelFrom(auth), profileId: auth.profile.id, special, assignment, source }), { protocolVersion });
+  return logAndReply(reply, auth.via === "profile-token" ? "profile" : auth.via === "oauth" ? "oauth" : "publisher");
 }

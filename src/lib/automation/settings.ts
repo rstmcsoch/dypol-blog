@@ -49,6 +49,13 @@ export const publishingPolicySchema = z.object({
   requireFeaturedImage: z.boolean(),
 /** t64: per-RUN cap (was maxPublishedPerDay before t64; values migrate on read). 0 = no per-run limit. */
   maxPublishedPerRun: z.number().int().min(0).max(20),
+  /**
+   * t242: per-profile daily cap, counted per UTC calendar day (same window as
+   * the website-wide AI publish limit). 0 = no per-profile daily limit.
+   * Distinct from the pre-t64 field `maxPublishedPerDay`, which migrated to
+   * maxPublishedPerRun and must not be reused as this cap.
+   */
+  maxArticlesPerDay: z.number().int().min(0).max(100).default(0),
 });
 
 export const scheduleSchema = z.object({
@@ -111,6 +118,7 @@ export const DEFAULT_AUTOMATION_SETTINGS: AutomationSettings = {
     minSources: 2,
     requireFeaturedImage: false,
     maxPublishedPerRun: 2,
+    maxArticlesPerDay: 0,
   },
   imageTransfer: "untested",
   schedule: DEFAULT_SCHEDULE,

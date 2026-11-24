@@ -111,3 +111,9 @@ export function footerColumns(pages: { slug: string; title: string }[]): FooterC
   ];
   return columns.filter((c) => c.links.length > 0);
 }
+
+/** t204: extra footer links minus the standalone publisher link (e.g. "DYPOL LABS"); everything else is kept. */
+export function footerExtraLinks<T extends { label: string }>(links: T[], publisher: string | undefined): T[] {
+  const target = (publisher || "DYPOL LABS").trim().toLowerCase();
+  return links.filter((link) => link.label.trim().toLowerCase() !== target);
+}

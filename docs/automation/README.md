@@ -147,6 +147,17 @@ If its OAuth callback is on a host not listed above, add that host in Desk → A
 
 Then create the daily task with `automation-prompt.md`.
 
+
+## Master MCP (operations control plane)
+
+A separate credential, created by the owner in **Desk → Settings → Master MCP**, authenticates a Master agent on the same `/mcp` endpoint. After Master-specific authentication it receives the Master tool registry (overview, articles, automation supervision, agent tasks, website configuration, analytics). It is not a writer profile and must not be confused with the Default profile's `MCP_TOKEN`.
+
+Daily publishing caps (website-wide, per-profile `maxArticlesPerDay`, and Special) are counted per **UTC** calendar day, using the same atomic claim path as existing AI publishes. Analytics tools use **Asia/Kolkata (IST)** date presets.
+
+Standard publishing profiles also gain `list_my_agent_tasks`, `claim_agent_task` and `report_agent_task` so they can collect correction work the Master MCP assigned. A paused or disabled profile can list its queue but cannot claim work; those tasks stay pending.
+
+See `docs/MASTER-MCP.md` for the tool list, permissions, and how to connect an external agent.
+
 ## Production steps (not done in this PR)
 
 1. Merge the PR (Workers Builds deploys both Workers; adds the `MCP_LIMITER` binding).

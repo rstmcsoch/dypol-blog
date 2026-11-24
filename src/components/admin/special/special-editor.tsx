@@ -20,6 +20,8 @@ import {
   type SpecialSource,
 } from "@/lib/special/body";
 import { chartSvg } from "@/lib/special/chart";
+import type { ArticleProvenance } from "@/lib/publish-source";
+import { PublishMetaFields } from "../publish-meta";
 
 type MediaOption = { id: string; filename: string; alt: string };
 type VersionRow = { version: number; createdAt: string; createdBy: string; note: string; wordCount: number; bytes: number };
@@ -140,6 +142,8 @@ export function SpecialEditor({
   categories,
   tags,
   media: initialMedia,
+  authors = [],
+  provenance = null,
 }: {
   article: Article | null;
   body: SpecialBody | null;
@@ -149,6 +153,8 @@ export function SpecialEditor({
   categories: Category[];
   tags: Tag[];
   media: MediaOption[];
+  authors?: string[];
+  provenance?: ArticleProvenance | null;
 }) {
   const navigate = useNavigate();
   const router = useRouter();
@@ -372,6 +378,13 @@ export function SpecialEditor({
                 <textarea rows={3} maxLength={500} value={meta.excerpt} onChange={(e) => patchMeta({ excerpt: e.target.value })} />
                 <span className="field-help">{meta.excerpt.trim().length}/500 · shown under the title, on cards and in search.</span>
               </label>
+              <PublishMetaFields
+                authorName={meta.authorName}
+                onAuthorChange={(authorName) => patchMeta({ authorName })}
+                authors={authors}
+                provenance={provenance}
+                listId="special-known-authors"
+              />
             </section>
             {content.blocks.map((block, i) => (
               <section key={i} className={`sp-card sp-block sp-block--${block.type}`}>
@@ -499,8 +512,7 @@ export function SpecialEditor({
             </div>
           </section>
           <section className="sp-card">
-            <p className="sp-card__title">Byline &amp; schedule</p>
-            <label className="field"><span>Author (byline)</span><input value={meta.authorName} maxLength={60} placeholder="DYPOL LABS" onChange={(e) => patchMeta({ authorName: e.target.value })} /></label>
+            <p className="sp-card__title">Schedule</p>
             <label className="field"><span>Schedule publish (draft only)</span><input type="datetime-local" value={meta.scheduledAt} onChange={(e) => patchMeta({ scheduledAt: e.target.value })} /><span className="field-help">Goes live on the first request after this time, only if a saved version exists.</span></label>
             <label className="check-row"><input type="checkbox" checked={meta.featured} onChange={(e) => patchMeta({ featured: e.target.checked })} /> Featured on the homepage</label>
           </section>

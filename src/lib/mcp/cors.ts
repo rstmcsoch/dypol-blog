@@ -24,7 +24,7 @@ export function originAllowed(origin: string, selfOrigin: string, extraHosts: st
 
 export const MCP_CORS_BASE = {
   "access-control-allow-methods": "GET, POST, DELETE, OPTIONS",
-  "access-control-allow-headers": "authorization, content-type, accept, mcp-protocol-version, mcp-session-id, last-event-id",
+  "access-control-allow-headers": "authorization, content-type, accept, mcp-protocol-version, mcp-session-id, last-event-id, mcp-method, mcp-name",
   "access-control-expose-headers": "www-authenticate, mcp-session-id, mcp-protocol-version, retry-after",
   "access-control-max-age": "600",
   vary: "origin",
@@ -34,7 +34,7 @@ export const MCP_CORS_BASE = {
 export const PUBLIC_CORS = {
   "access-control-allow-origin": "*",
   "access-control-allow-methods": "GET, POST, OPTIONS",
-  "access-control-allow-headers": "content-type, authorization, mcp-protocol-version",
+  "access-control-allow-headers": "content-type, authorization, mcp-protocol-version, mcp-method, mcp-name",
   "access-control-max-age": "600",
 };
 

@@ -123,7 +123,7 @@ test("normal-only behaviour is identical to the pre-t177 verdict", () => {
   for (const websiteUsed of [0, 1, 4, 5, 9]) for (const websiteCap of [0, 1, 5]) for (const runUsed of [0, 2, 3]) for (const runCap of [0, 1, 3]) {
     const before = limitVerdict({ websiteUsed, websiteCap, runUsed, runCap });
     const after = combinedLimitVerdict({ kind: "regular", websiteUsed, websiteCap, runUsed, runCap, specialUsed: 99, specialCap: 1 });
-    assert.deepEqual(after, { ...before, specialReason: null });
+    assert.deepEqual(after, { ...before, specialReason: null, profileReason: null });
   }
   // No caps → plain insert, exactly as the old claim.
   const stmt = atomicClaimStatement({ id: "i", createdAt: "t", profileId: "p", articleId: "a", auth: "x", details: "{}", since: "s", websiteCap: 0, specialCap: 0 });
@@ -132,4 +132,21 @@ test("normal-only behaviour is identical to the pre-t177 verdict", () => {
   const d = db();
   const out = publishAll(d, Array(12).fill("regular") as ArticleKind[], { websiteCap: 0, normalRunCap: 15, specialCap: 1 });
   assert.equal(out.filter((o) => o.published).length, 12);
+});
+
+test("t242: per-profile daily cap blocks after the website ceiling, before the per-run cap", () => {
+  const blocked = combinedLimitVerdict({ kind: "regular", websiteUsed: 1, websiteCap: 10, runUsed: 0, runCap: 5, profileUsed: 2, profileCap: 2 });
+  assert.equal(blocked.blocked, true);
+  assert.match(blocked.profileReason ?? "", /Profile daily publish limit reached \(2\)/);
+  assert.equal(blocked.websiteReason, null);
+  assert.equal(blocked.runReason, null);
+  const websiteFirst = combinedLimitVerdict({ kind: "regular", websiteUsed: 10, websiteCap: 10, runUsed: 0, runCap: 5, profileUsed: 2, profileCap: 2 });
+  assert.match(websiteFirst.websiteReason ?? "", /Website daily publish limit reached \(10\)/);
+  assert.equal(websiteFirst.profileReason, null);
+  const open = combinedLimitVerdict({ kind: "regular", websiteUsed: 1, websiteCap: 10, runUsed: 0, runCap: 5, profileUsed: 1, profileCap: 2 });
+  assert.equal(open.blocked, false);
+  const stmt = atomicClaimStatement({ id: "i", createdAt: "t", profileId: "p1", articleId: "a", auth: "x", details: "{}", since: "s", websiteCap: 0, specialCap: 0, profileCap: 3 });
+  assert.match(stmt.text, /profile_id = \$/);
+  assert.equal(stmt.params.includes("p1"), true);
+  assert.equal(stmt.params.includes(3), true);
 });
