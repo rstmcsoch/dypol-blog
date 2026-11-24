@@ -200,3 +200,10 @@ export const getPage = createServerFn({ method: "GET" })
       origin: await requestOrigin(),
     };
   });
+
+/** Team page shell: origin + site + editorial team for SEO/meta. */
+export const getTeam = createServerFn({ method: "GET" }).handler(async () => {
+  const [{ readShell }, { readTeamSettings }] = await Promise.all([import("./repository.server"), import("./team.server")]);
+  const [shell, team] = await Promise.all([readShell(), readTeamSettings()]);
+  return { site: shell.site, origin: await requestOrigin(), team };
+});

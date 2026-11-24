@@ -10,7 +10,7 @@ export const PAGE_SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 /** Slugs the site itself owns; a page may not shadow these routes. */
 export const RESERVED_PAGE_SLUGS = new Set([
-  "articles", "topics", "admin", "login", "preview", "media", "oauth",
+  "articles", "topics", "team", "admin", "login", "preview", "media", "oauth",
   "sitemap.xml", "news-sitemap.xml", "feed.xml", "robots.txt", "manifest.webmanifest",
 ]);
 
@@ -37,7 +37,7 @@ export function slugifyPageTitle(title: string): string {
   return title
     .toLowerCase()
     .normalize("NFKD")
-    .replace(/[̀-ͯ]/g, "")
+    .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 80);
