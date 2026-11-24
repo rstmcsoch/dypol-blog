@@ -52,6 +52,16 @@ test("unpublished behaves like draft", () => {
   assert.deepEqual(assertAiCanAccess({ status: "unpublished", slug: "u1" }, "pa", profA, "delete"), { viaGrant: false });
 });
 
+test("non-default master agent has same draft privileges as default master", () => {
+  const masterAgent = { profileId: "pmaster", isMaster: true, editAllDrafts: false };
+  assert.deepEqual(assertAiCanAccess(draft, "pa", masterAgent, "edit"), { viaGrant: false });
+  assert.deepEqual(assertAiCanAccess(draft, null, masterAgent, "read"), { viaGrant: false });
+  assert.deepEqual(assertAiCanAccess({ status: "unpublished", slug: "u1" }, "pb", masterAgent, "edit"), { viaGrant: false });
+  // Published is still locked without a grant, even for master agents.
+  assert.throws(() => assertAiCanAccess(publishedLocked, "pa", masterAgent, "edit"), /published articles are locked/);
+  assert.deepEqual(assertAiCanAccess(publishedGrant, "pa", masterAgent, "edit"), { viaGrant: true });
+});
+
 test("body round-trip: blocksToBody(bodyToBlocks(x)) preserves structure", () => {
   const body = "Intro paragraph.\n\n## Section\n\n- one\n- two\n\n> a quote\n\n```ts\nconst x = 1;\n```";
   assert.equal(blocksToBody(bodyToBlocks(body)), body);

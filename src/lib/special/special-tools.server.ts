@@ -62,6 +62,7 @@ export async function specialRequestContext(profileId: string): Promise<{ specia
 export type SpecialDeps = {
   profileId: string;
   auth: string;
+  isMaster: boolean;
   loadSettings: (profileId: string) => Promise<AutomationSettings>;
   attemptAutoPublish: (articleId: string, profileId: string, auth: string, runId?: string | null) => Promise<{ published: boolean; status: string; reasons: string[] }>;
 };
@@ -577,7 +578,7 @@ export function specialResearchTools(ctx: SpecialCtx, deps: SpecialDeps): ToolDe
         try {
           const { getArticleForAi } = await import("@/content/repository.server");
           const s = await deps.loadSettings(profileId);
-          await getArticleForAi(p.data.article_id, { profileId, isMaster: profileId === "default", editAllDrafts: s.aiMayEditAllDrafts }, "read");
+          await getArticleForAi(p.data.article_id, { profileId, isMaster: deps.isMaster, editAllDrafts: s.aiMayEditAllDrafts }, "read");
           let links: LinkCheck[] | undefined;
           if (p.data.check_links) {
             const { readCurrentBody } = await import("./store");
@@ -700,7 +701,7 @@ export async function updateSpecialDraft(raw: unknown, ctx: SpecialCtx | null, d
   if (!(await writesAllowed())) return { ok: false, error: "This deployment is read-only for automation." };
   if (!ctx) return { ok: false, error: "Special mode is off for this profile, so special articles cannot be edited over MCP. Edit it in the admin special editor." };
   const repo = await import("@/content/repository.server");
-  const actor = { profileId: deps.profileId, isMaster: deps.profileId === "default", editAllDrafts: s.aiMayEditAllDrafts };
+  const actor = { profileId: deps.profileId, isMaster: deps.isMaster, editAllDrafts: s.aiMayEditAllDrafts };
   try {
     const { article, viaGrant } = await repo.getArticleForAi(input.article_id, actor, "edit");
     if (input.slug && input.slug !== article.slug && viaGrant) return { ok: false, error: "The slug of a published article cannot be changed by AI." };

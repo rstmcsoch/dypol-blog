@@ -154,7 +154,7 @@ function invalid(error: z.ZodError): ToolResult {
   };
 }
 
-type Ctx = { auth: string; profileId?: string; /** t173: precomputed special mode (null/absent = off). */ special?: SpecialCtx | null; /** t178: exclusive Normal/Special assignment (absent = normal, the legacy behaviour). */ assignment?: "normal" | "special" };
+type Ctx = { auth: string; profileId?: string; /** Master agent: can edit any draft like the default MCP token. */ isMaster?: boolean; /** t173: precomputed special mode (null/absent = off). */ special?: SpecialCtx | null; /** t178: exclusive Normal/Special assignment (absent = normal, the legacy behaviour). */ assignment?: "normal" | "special" };
 
 async function loadSettings(profileId: string) {
   const { readProfileSettings } = await import("@/content/automation.server");
@@ -339,6 +339,7 @@ async function explicitPublish(
   articleId: string,
   profileId: string,
   auth: string,
+  isMaster: boolean,
   runId?: string | null,
 ): Promise<{ published: boolean; status: string; alreadyPublished?: boolean; reasons: string[]; warnings: string[]; slug?: string; author?: string }> {
   const store = await import("@/content/automation.server");
@@ -363,7 +364,7 @@ async function explicitPublish(
   }
   // Ownership guard (repository layer): own profile, master, or edit-others setting.
   const repo = await import("@/content/repository.server");
-  const actor: AiActor = { profileId, isMaster: profileId === "default", editAllDrafts: settings.aiMayEditAllDrafts };
+  const actor: AiActor = { profileId, isMaster: isMaster || profileId === "default", editAllDrafts: settings.aiMayEditAllDrafts };
   try {
     await repo.getArticleForAi(articleId, actor, "publish");
   } catch (error) {
@@ -478,8 +479,9 @@ function stripSourcesSection(blocks: ArticleBlock[]): ArticleBlock[] {
 export function buildTools(ctx: Ctx): ToolDefinition[] {
   const { auth } = ctx;
   const profileId = ctx.profileId ?? "default";
+  const isMaster = ctx.isMaster === true || profileId === "default";
 
-  const actorFor = (settings: AutomationSettings): AiActor => ({ profileId, isMaster: profileId === "default", editAllDrafts: settings.aiMayEditAllDrafts });
+  const actorFor = (settings: AutomationSettings): AiActor => ({ profileId, isMaster, editAllDrafts: settings.aiMayEditAllDrafts });
 
   /** Recomputes quality flags after an edit and stores them on the submission (if any). Never publishes. */
   async function refreshFlags(articleId: string, settings: AutomationSettings, droppedTags = 0): Promise<{ flags: DraftFlag[]; wouldPublish: boolean; publishReasons: string[] }> {
@@ -566,7 +568,7 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
               draftEditing: {
                 mayEditAllDrafts: settings.aiMayEditAllDrafts,
                 rules:
-                  "AI may fully edit draft/unpublished articles it created (list_editable_articles). The master token may edit any draft. " +
+                  "AI may fully edit draft/unpublished articles it created (list_editable_articles). Master MCP agents (the default MCP token and any profile marked Master agent) may edit any draft. " +
                   "publish_article_if_allowed is an EXPLICIT publish: it always publishes a draft you may edit, ignoring the publishing " +
                   "policy (cap, topics, flags, auto-publish off) and returning those as warnings — policy only governs AUTOMATIC " +
                   "publishing during submit/cover flows. Published articles are locked unless the owner enables 'Allow AI to edit " +
@@ -816,7 +818,7 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
       title: "Publish a draft now (explicit)",
       description:
         "EXPLICIT publish: publish a draft/unpublished article NOW, on your deliberate instruction. This works " +
-        "for drafts your profile may edit (your own drafts; the master token: any draft) — the publishing POLICY " +
+        "for drafts your profile may edit (your own drafts; Master MCP agents: any draft) — the publishing POLICY " +
         "(allowed topics, quality flags, auto-publish on/off, featured-image rule) does NOT block an explicit " +
         "publish; it only governs AUTOMATIC publishing during submit_article_draft / cover attach. The owner's " +
         "HARD limits DO block it: the whole-website daily AI publish cap (Settings) and the per-run cap " +
@@ -829,7 +831,7 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
       run: async (args) => {
         const parsed = publishSchema.safeParse(args ?? {});
         if (!parsed.success) return invalid(parsed.error);
-        const result = await explicitPublish(parsed.data.article_id, profileId, auth, parsed.data.run_id);
+        const result = await explicitPublish(parsed.data.article_id, profileId, auth, isMaster, parsed.data.run_id);
         if (result.status === "missing") return { ok: false, error: "That article no longer exists." };
         if (result.status === "blocked") return { ok: false, error: result.reasons[0] };
         if (!result.published && !result.alreadyPublished) return { ok: false, error: result.reasons[0] ?? "Your profile cannot publish that draft." };
@@ -930,7 +932,7 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
       name: "list_editable_articles",
       title: "List articles AI may edit",
       description:
-        "List drafts/unpublished articles YOUR profile may edit (your own drafts; the master token sees all drafts; " +
+        "List drafts/unpublished articles YOUR profile may edit (your own drafts; Master MCP agents see all drafts; " +
         "other profiles' drafts appear only if the owner enabled 'AI may edit drafts created by other automations'). " +
         "Published articles are never listed — they are locked unless the owner grants one article in the admin panel.",
       inputSchema: schemaOf(listEditableSchema),
@@ -1240,7 +1242,7 @@ export function buildTools(ctx: Ctx): ToolDefinition[] {
   ];
   // t173: special-article additions. With special mode off the list is exactly the one above.
   const special = ctx.special ?? null;
-  const deps = { profileId, auth, loadSettings, attemptAutoPublish };
+  const deps = { profileId, auth, isMaster, loadSettings, attemptAutoPublish };
   return applySpecialTools(tools, Boolean(special), {
     submitProperties: SPECIAL_SUBMIT_PROPERTIES,
     submit: (args) => submitSpecialDraft(args, special!, deps),

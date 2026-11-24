@@ -836,9 +836,10 @@ export const adminSaveAutomation = createServerFn({ method: "POST" })
   });
 
 type ProfileAction =
-  | { action: "create"; name: string; connect?: "api-key" | "oauth"; redirectUris?: string[]; authorName?: string; section: "normal" | "special" }
+  | { action: "create"; name: string; connect?: "api-key" | "oauth"; redirectUris?: string[]; authorName?: string; section: "normal" | "special"; isMaster?: boolean }
   | { action: "section"; profileId: string; section: "normal" | "special" }
   | { action: "rename"; profileId: string; name: string }
+  | { action: "set-master"; profileId: string; isMaster: boolean }
   | { action: "author"; profileId: string; authorName: string }
   | { action: "authors"; profileId: string; names: string[]; reset: boolean }
   | { action: "delete" | "token" | "revoke" | "oauth-revoke"; profileId: string }
@@ -855,14 +856,16 @@ export const adminProfileAction = createServerFn({ method: "POST" })
     if (v.action === "create") {
       if (!section) throw new Error("Section must be 'normal' or 'special'.");
       const authorName = typeof v.authorName === "string" ? v.authorName.slice(0, 200) : "";
-      if (connect === "oauth") return { action: "create", name, connect, redirectUris: parseAdminRedirects(v.redirectUris), authorName, section };
-      return { action: "create", name, connect, authorName, section };
+      const isMaster = v.isMaster === true;
+      if (connect === "oauth") return { action: "create", name, connect, redirectUris: parseAdminRedirects(v.redirectUris), authorName, section, isMaster };
+      return { action: "create", name, connect, authorName, section, isMaster };
     }
     if (v.action === "section") {
       if (!section || v.section === undefined) throw new Error("Section must be 'normal' or 'special'.");
       return { action: "section", profileId: profileIdOf(v), section };
     }
     if (v.action === "rename") return { action: "rename", profileId: profileIdOf(v), name };
+    if (v.action === "set-master") return { action: "set-master", profileId: profileIdOf(v), isMaster: v.isMaster === true };
     if (v.action === "authors") {
       const names = Array.isArray(v.names) ? v.names.slice(0, 100).map((n) => (typeof n === "string" ? n.slice(0, 200) : "")) : [];
       return { action: "authors", profileId: profileIdOf(v), names, reset: v.reset === true };
@@ -884,7 +887,7 @@ export const adminProfileAction = createServerFn({ method: "POST" })
           const checked = checkAuthorName(data.authorName);
           if (!checked.ok) throw new store.ProfileError(checked.error);
         }
-        const created = await store.createProfile(data.name);
+        const created = await store.createProfile(data.name, { isMaster: data.isMaster });
         let profile = created;
         try {
           if (data.authorName?.trim()) profile = { ...created, authorName: await store.setProfileAuthor(created.id, data.authorName) };
@@ -917,6 +920,12 @@ export const adminProfileAction = createServerFn({ method: "POST" })
         return { ok: true as const, section: data.section, specialProfileIds: saved.profileIds };
       }
       if (data.action === "rename") await store.renameProfile(data.profileId, data.name);
+      if (data.action === "set-master") {
+        await store.setProfileMaster(data.profileId, data.isMaster);
+        const { logAdminAction } = await import("./repository.server");
+        await logAdminAction("automation.profile", `Profile ${data.profileId} ${data.isMaster ? "promoted to" : "demoted from"} master agent`).catch(() => undefined);
+        return { ok: true as const, isMaster: data.isMaster };
+      }
       if (data.action === "authors") return { ok: true as const, rotation: await store.saveAuthorList(data.profileId, data.names, { reset: data.reset }) };
       if (data.action === "author") return { ok: true as const, authorName: await store.setProfileAuthor(data.profileId, data.authorName) };
       if (data.action === "delete") {

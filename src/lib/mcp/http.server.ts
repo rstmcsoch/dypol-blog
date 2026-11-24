@@ -108,7 +108,7 @@ async function handleMcpInner(request: Request, env: { MCP_TOKEN?: string; MCP_L
   const { special, assignment } = await import("@/lib/special/special-tools.server")
     .then((m) => m.specialRequestContext(auth.profile.id))
     .catch(() => ({ special: null, assignment: "normal" as const }));
-  const reply = await handleRpc(body, buildTools({ auth: auth.client ? `oauth:${auth.client}` : auth.via, profileId: auth.profile.id, special, assignment }));
+  const reply = await handleRpc(body, buildTools({ auth: auth.client ? `oauth:${auth.client}` : auth.via, profileId: auth.profile.id, isMaster: auth.profile.isMaster === true || auth.profile.id === "default", special, assignment }));
   if (reply === null) return new Response(null, { status: 202 });
   return json(reply);
 }

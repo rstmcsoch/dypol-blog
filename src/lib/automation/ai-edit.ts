@@ -7,9 +7,10 @@ import type { PublicationStatus } from "../../content/types.ts";
  * every AI read/edit/cover/delete. The MCP tool layer never decides alone.
  *
  * Rules:
- *  - Drafts/unpublished: the creating profile may edit; the master token
- *    (profile "default") may edit any draft; other profiles may edit only
- *    when the admin setting aiMayEditAllDrafts is on.
+ *  - Drafts/unpublished: the creating profile may edit; master MCP agents
+ *    (the default MCP token and any profile marked as a master agent) may
+ *    edit any draft; other profiles may edit only when the admin setting
+ *    aiMayEditAllDrafts is on.
  *  - Published: locked for AI unless the admin turned on the per-article
  *    "Allow AI to edit this article" grant (articles.ai_edit_allowed).
  *    With a grant, AI may read/edit/cover but NEVER delete it and never
@@ -49,7 +50,7 @@ export function assertAiCanAccess(
     );
   }
   throw new Error(
-    "That draft was created by the owner (not by an automation profile), so only the master MCP token can edit it unless the owner turns on “AI may edit drafts created by other automations” in the admin panel.",
+    "That draft was created by the owner (not by an automation profile), so only a master MCP agent can edit it unless the owner turns on “AI may edit drafts created by other automations” in the admin panel.",
   );
 }
 

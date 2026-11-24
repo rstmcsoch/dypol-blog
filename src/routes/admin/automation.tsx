@@ -160,11 +160,12 @@ function Profiles() {
         </div>
       ) : null}
       <div className="adm-scroll-x"><table className="desk-table">
-        <thead><tr><th>Profile</th><th>Section</th><th>Authors</th><th>Status</th><th>API key</th><th>OAuth</th><th>Actions</th></tr></thead>
+        <thead><tr><th>Profile</th><th>Role</th><th>Section</th><th>Authors</th><th>Status</th><th>API key</th><th>OAuth</th><th>Actions</th></tr></thead>
         <tbody>
           {data.profiles.map((p) => (
             <tr key={p.id} aria-current={p.id === data.profileId ? "true" : undefined} style={p.id === data.profileId ? { fontWeight: 650 } : undefined}>
               <td>{p.name}</td>
+              <td>{p.isMaster ? <span className="auto-tag auto-tag--special" data-testid={`role-${p.id}`}>Master agent</span> : <span className="auto-tag" data-testid={`role-${p.id}`}>Standard</span>}</td>
               <td><SectionTag section={sectionOf(specialIds, p.id)} /></td>
               <td><AuthorSummary authors={p.authors} nextAuthor={p.nextAuthor} /></td>
               <td>{!p.enabled ? "Off" : p.paused ? "Paused" : "On"}</td>
@@ -195,6 +196,16 @@ function Profiles() {
                         Revoke key
                       </button>
                     ) : null}
+                    <button type="button" className="btn btn--ghost" disabled={busy}
+                      onClick={() => {
+                        const next = !p.isMaster;
+                        const msg = next
+                          ? `Make “${p.name}” a Master agent? It will be able to edit any draft, like the default MCP token.`
+                          : `Remove Master agent access from “${p.name}”? It will go back to editing only its own drafts (unless “AI may edit drafts created by other automations” is on).`;
+                        if (window.confirm(msg)) void run(() => adminProfileAction({ data: { action: "set-master", profileId: p.id, isMaster: next } }));
+                      }}>
+                      {p.isMaster ? "Make standard" : "Make master"}
+                    </button>
                     <button type="button" className="btn btn--ghost" disabled={busy}
                       onClick={() => {
                         const next = window.prompt("New name", p.name);
@@ -541,7 +552,7 @@ function AutomationDesk() {
             label="AI may edit drafts created by other automations"
           />
           <p className="desk-note">
-            Off (default): each automation profile can only edit its own drafts over MCP; the master token can edit any draft.
+            Off (default): each automation profile can only edit its own drafts over MCP; Master MCP agents can edit any draft.
             On: any profile may also edit drafts created by other profiles or by you. Published articles are never editable
             unless you grant one article in its editor (“Allow AI to edit this article”), and AI can never delete a published article.
           </p>
