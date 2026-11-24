@@ -1,4 +1,5 @@
-import { createFileRoute, notFound } from "@tanstack/react-router";
+import { createFileRoute, Link, notFound } from "@tanstack/react-router";
+import { ArrowRight } from "lucide-react";
 import { NotFoundState, PagePending } from "@/components/site/states";
 import { StaticPage } from "@/components/site/static-page";
 import { AdPage } from "@/components/site/ads";
@@ -39,6 +40,22 @@ function AboutRoute() {
   return (
     <AdPage page={ABOUT_PAGE}>
       <StaticPage page={data} />
+      <section className="page" style={{ paddingTop: 0 }}>
+        <div className="container">
+          <div className="static-column">
+            <Link to="/team" className="about-team-cta" aria-label="Meet the DYPOL Blog editorial team">
+              <div className="about-team-cta__copy">
+                <p className="kicker">The newsroom</p>
+                <p className="about-team-cta__title">Meet the editorial team</p>
+                <p className="about-team-cta__lede">The editors and writers behind DYPOL Blog — the people who research, report, edit and publish every story.</p>
+              </div>
+              <span className="about-team-cta__action" aria-hidden="true">
+                View team <ArrowRight size={18} strokeWidth={2.5} />
+              </span>
+            </Link>
+          </div>
+        </div>
+      </section>
     </AdPage>
   );
 }
