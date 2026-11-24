@@ -52,6 +52,7 @@ test("footerColumns: three organised columns, About only once, only existing pag
   // A page removed from the published list drops out of the footer.
   const withoutTerms = footerColumns(ALL_PAGES.filter((p) => p.slug !== "terms"));
   assert.ok(!withoutTerms.flatMap((c) => c.links).some((l) => l.href === "/terms"));
-  // No pages at all: only the fixed Explore links remain.
-  assert.deepEqual(footerColumns([]).map((c) => c.heading), ["Explore"]);
+  // No pages at all: fixed Explore links and the always-present Team link remain.
+  assert.deepEqual(footerColumns([]).map((c) => c.heading), ["Explore", "Company"]);
+  assert.deepEqual(footerColumns([]).find((c) => c.heading === "Company")?.links.map((l) => l.href), ["/team"]);
 });

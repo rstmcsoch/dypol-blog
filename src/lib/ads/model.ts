@@ -686,5 +686,6 @@ export function pageTypeForPath(pathname: string): PageType | null {
   if (p === "/topics") return "topics";
   if (/^\/topics\/[^/]+$/.test(p)) return "topic";
   if (p === "/about") return "about";
+  if (p === "/team") return "about";
   return null;
 }
