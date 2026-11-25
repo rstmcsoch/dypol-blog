@@ -20,7 +20,14 @@ import {
   tokenPrefix,
   type MasterCredentialStatus,
 } from "@/lib/mcp/master/credentials";
-import { denyMaster } from "@/lib/mcp/master/permissions";
+import {
+  DEFAULT_MASTER_PERMISSIONS,
+  MASTER_TOGGLEABLE_PERMISSIONS,
+  denyMaster,
+  normalizeMasterPermissions,
+  type MasterPermissionKey,
+  type MasterPermissionsMap,
+} from "@/lib/mcp/master/permissions";
 import {
   confirmationExpiresAt,
   confirmationValid,
@@ -309,11 +316,57 @@ export async function masterByToken(presented: string): Promise<{ id: string } |
 }
 
 export async function masterOauthStillValid(version: string): Promise<boolean> {
+  if (!version) return false;
   await ensureMasterTables();
   const sql = await getSql();
-  const rows = await sql<{ secret_version: string; status: string }>`select secret_version, status from master_mcp_oauth_clients where status = 'active' order by created_at desc limit 1`.catch(() => []);
+  const rows = await sql<{ secret_version: string; status: string }>`
+    select secret_version, status from master_mcp_oauth_clients
+    where status = 'active' and secret_version = ${version}
+    limit 1
+  `.catch(() => []);
   const row = rows[0];
   return Boolean(row && row.status === "active" && constantTimeEqual(row.secret_version, version));
+}
+
+let settingsReady = false;
+async function ensureMasterSettingsTable(): Promise<void> {
+  if (settingsReady) return;
+  const sql = await getSql();
+  await sql`create table if not exists master_mcp_settings (
+    key text primary key,
+    value text not null,
+    updated_at text not null
+  )`;
+  settingsReady = true;
+}
+
+export async function getMasterPermissions(): Promise<MasterPermissionsMap> {
+  try {
+    await ensureMasterSettingsTable();
+    const sql = await getSql();
+    const rows = await sql<{ value: string }>`select value from master_mcp_settings where key = 'permissions' limit 1`.catch(() => []);
+    if (!rows[0]?.value) return { ...DEFAULT_MASTER_PERMISSIONS };
+    return normalizeMasterPermissions(JSON.parse(rows[0].value));
+  } catch {
+    return { ...DEFAULT_MASTER_PERMISSIONS };
+  }
+}
+
+export async function setMasterPermission(key: MasterPermissionKey, enabled: boolean): Promise<MasterPermissionsMap> {
+  if (!MASTER_TOGGLEABLE_PERMISSIONS.some((p) => p.key === key)) {
+    throw new Error("That permission cannot be changed.");
+  }
+  await ensureMasterSettingsTable();
+  const current = await getMasterPermissions();
+  const next: MasterPermissionsMap = { ...current, [key]: Boolean(enabled) };
+  const sql = await getSql();
+  const now = new Date().toISOString();
+  await sql`
+    insert into master_mcp_settings (key, value, updated_at)
+    values ('permissions', ${JSON.stringify(next)}, ${now})
+    on conflict(key) do update set value = excluded.value, updated_at = excluded.updated_at
+  `;
+  return next;
 }
 
 export function masterResolver(): MasterResolver {
@@ -335,7 +388,6 @@ export async function issueMasterOauthClient(input: { name: string; redirectUris
   const version = secretVersion(hash);
   const name = input.name.trim().slice(0, 80) || "Master MCP OAuth";
   const uris = JSON.stringify(input.redirectUris);
-  await sql`update master_mcp_oauth_clients set status = 'revoked', revoked_at = ${now} where status = 'active'`;
   await sql`insert into master_mcp_oauth_clients (id, created_at, updated_at, name, redirect_uris, secret_hash, secret_hint, secret_version, status)
     values (${clientId}, ${now}, ${now}, ${name}, ${uris}, ${hash}, ${hint}, ${version}, 'active')`;
   return { clientId, clientSecret, secretHint: hint, redirectUris: input.redirectUris };
