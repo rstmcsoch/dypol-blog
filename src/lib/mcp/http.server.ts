@@ -100,7 +100,7 @@ async function handleMcpInner(request: Request, env: { MCP_TOKEN?: string; MCP_L
   }
 
   const { profileResolver } = await import("@/content/automation.server");
-  const { masterResolver, touchMasterConnection } = await import("@/content/master-mcp.server");
+  const { masterResolver, touchMasterConnection, getMasterPermissions } = await import("@/content/master-mcp.server");
   const auth = await authenticate(request.headers.get("authorization"), env.MCP_TOKEN, undefined, profileResolver, masterResolver());
   if (!auth.ok) {
     if (auth.reason === "disabled") return rpcError(503, RPC.INTERNAL, "The MCP endpoint is not enabled on this deployment.");
@@ -150,7 +150,8 @@ async function handleMcpInner(request: Request, env: { MCP_TOKEN?: string; MCP_L
     const { buildMasterTools } = await import("./master-tools.server");
     const actor = { kind: "master" as const, connectionId, clientName: resolvedClient, via: auth.via === "oauth" ? "oauth" as const : "bearer" as const };
     const source = { via: "master" as const, client: resolvedClient, product, mcpAuth: auth.via === "oauth" ? "oauth" as const : "bearer" as const };
-    const reply = await handleRpc(body, buildMasterTools({ actor, source }), { instructions: MASTER_SERVER_INSTRUCTIONS, serverInfo: MASTER_SERVER_INFO, protocolVersion });
+    const permissions = await getMasterPermissions();
+    const reply = await handleRpc(body, buildMasterTools({ actor, source, permissions }), { instructions: MASTER_SERVER_INSTRUCTIONS, serverInfo: MASTER_SERVER_INFO, protocolVersion });
     return logAndReply(reply, "master");
   }
   // t173: special mode is resolved once per request (buildTools stays synchronous).

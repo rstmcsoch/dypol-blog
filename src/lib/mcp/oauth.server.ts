@@ -190,7 +190,10 @@ async function readParams(get: (k: string) => string | null, env: Env): Promise<
     // It is not limited to the public DCR host list.
     const client = await resolveConfidential(p.clientId);
     if (!client) return "client_id is not registered here. Create it under Desk → Automation, or Desk → Settings → Master MCP.";
-    if (!client.redirectUris.some((r) => redirectMatches(r, p.redirectUri))) return "redirect_uri was not registered for this OAuth client. Paste this exact URL on the automation profile or in Settings → Master MCP.";
+    const redirOk = client.redirectUris.length > 0
+      ? client.redirectUris.some((r) => redirectMatches(r, p.redirectUri))
+      : (client.kind === "master-mcp" && redirectAllowed(p.redirectUri, await extraClientHosts(env)));
+    if (!redirOk) return "redirect_uri was not registered for this OAuth client. Paste this exact URL on the automation profile or in Settings → Master MCP.";
     confidential = { profileId: client.profileId, name: client.name, clientId: client.clientId, kind: client.kind, secretVersion: client.secretVersion };
     clientName = client.name;
   } else {
@@ -311,7 +314,6 @@ export async function authorize(request: Request): Promise<Response> {
   const signedIn = await deskSessionFromCookieHeader(request.headers.get("cookie"));
   const presented = typeof secret === "string" ? secret.slice(0, 512).trim() : "";
   // Master MCP_TOKEN → default profile. A profile API key → that profile.
-  // A desk session (no token pasted) → default, or the confidential client's profile.
   let profile: ProfileBinding | null = null;
   let pastedProfile: ProfileBinding | null = null;
   let master = false;
