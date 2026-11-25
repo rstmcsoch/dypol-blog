@@ -7,7 +7,7 @@
 import { z } from "zod";
 import type { ToolDefinition, ToolResult } from "./protocol";
 import { zodToMcpInputSchema } from "./json-schema";
-import { MASTER_PERMISSION_SUMMARY, MASTER_PROHIBITED, MASTER_PROHIBITED_TOOL_NAMES, isMasterDenied, denyMaster } from "./master/permissions";
+import { DEFAULT_MASTER_PERMISSIONS, MASTER_PERMISSION_SUMMARY, MASTER_PROHIBITED, MASTER_PROHIBITED_TOOL_NAMES, isMasterDenied, denyMaster, permissionForTool, permissionLabel, MasterDenied, type MasterPermissionsMap } from "./master/permissions";
 import { MASTER_TOOL_CATALOG } from "./master/catalog";
 import { assertSitePatchAllowed, assertAdsPatchAllowed, collectAdsSnapshot } from "./master/settings-guard";
 import type { MasterActor } from "@/content/master-mcp.server";
@@ -15,7 +15,7 @@ import type { PublishSource } from "@/lib/publish-source";
 import { contrast, themeColors } from "@/lib/appearance";
 import { masterExistingArticleWrite, masterNewArticleWrite } from "./master/article-write";
 
-export type MasterToolCtx = { actor: MasterActor; source: PublishSource | null };
+export type MasterToolCtx = { actor: MasterActor; source: PublishSource | null; permissions?: MasterPermissionsMap };
 
 const periodSchema = z.object({
   period: z.enum(["today", "yesterday", "last-7", "last-28", "last-30", "last-90", "last-12-months", "custom"]).optional(),
@@ -63,6 +63,12 @@ function tool<S extends z.ZodType>(def: {
     run: async (args) => {
       if ((MASTER_PROHIBITED_TOOL_NAMES as readonly string[]).includes(def.name)) {
         denyMaster(def.name in MASTER_PROHIBITED ? def.name : "execute_sql");
+      }
+      const permKey = permissionForTool(def.name);
+      if (permKey && ctx.permissions && ctx.permissions[permKey] === false) {
+        const message = `Permission "${permissionLabel(permKey)}" is currently disabled in Admin → Settings → Master MCP.`;
+        await audit(ctx, def.name, def.action ?? def.name, { resourceType: def.resourceType, success: false, error: message });
+        return fail(new MasterDenied(def.name, message));
       }
       const parsed = def.schema.safeParse(args ?? {});
       if (!parsed.success) return invalid(parsed.error);
@@ -252,7 +258,8 @@ const defs: Array<(ctx: MasterToolCtx) => ToolDefinition> = [
     description: "The backend-enforced permission summary and the list of operations that are always rejected, with explanations.",
     schema: empty,
     hints: { readOnlyHint: true, idempotentHint: true },
-    run: async () => ({
+    run: async (_input, ctx) => ({
+      toggles: ctx.permissions ?? DEFAULT_MASTER_PERMISSIONS,
       summary: MASTER_PERMISSION_SUMMARY,
       prohibited: Object.entries(MASTER_PROHIBITED).map(([operation, reason]) => ({ operation, reason })),
       note: "Ordinary publishing profiles, including the default MCP_TOKEN profile, do not receive these privileges.",
