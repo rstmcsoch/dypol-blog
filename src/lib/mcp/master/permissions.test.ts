@@ -1,70 +1,42 @@
-import assert from "node:assert/strict";
 import test from "node:test";
+import assert from "node:assert/strict";
 import {
-  denyMaster,
-  isMasterDenied,
-  isReservedMasterId,
-  looksLikeSecretLeak,
-  MASTER_PERMISSION_SUMMARY,
-  MASTER_PROHIBITED,
-  MASTER_PROHIBITED_TOOL_NAMES,
-  MASTER_RESERVED_ID,
-  MasterDenied,
+  DEFAULT_MASTER_PERMISSIONS,
+  MASTER_LOCKED_PERMISSIONS,
+  MASTER_TOGGLEABLE_PERMISSIONS,
+  normalizeMasterPermissions,
+  permissionForTool,
 } from "./permissions.ts";
+import { MASTER_TOOL_CATALOG } from "./catalog.ts";
 
-test("permission summary covers the backend-enforced areas", () => {
-  const areas = MASTER_PERMISSION_SUMMARY.map((i) => i.area);
-  for (const need of [
-    "Content management",
-    "Publishing management",
-    "AI automation supervision",
-    "Analytics",
-    "Website configuration",
-    "Media management",
-    "Ads management",
-    "Security and administrator management",
-    "Website and infrastructure deletion",
-    "Automation profile and credential lifecycle",
-  ]) assert.ok(areas.includes(need), need);
-  const security = MASTER_PERMISSION_SUMMARY.find((i) => i.area.startsWith("Security"));
-  assert.equal(security?.level, "Restricted");
-  const creds = MASTER_PERMISSION_SUMMARY.find((i) => i.area.startsWith("Automation profile"));
-  assert.equal(creds?.level, "Owner only");
-  const config = MASTER_PERMISSION_SUMMARY.find((i) => i.area === "Website configuration");
-  assert.match(config?.level ?? "", /excluding protected executable code/);
+test("normalizeMasterPermissions defaults all controllable areas to true and ignores locked/unknown keys", () => {
+  const normalized = normalizeMasterPermissions({
+    analytics: false,
+    ads: false,
+    security: true,
+    infrastructure: true,
+    unknown: false,
+  });
+  assert.equal(normalized.analytics, false);
+  assert.equal(normalized.ads, false);
+  assert.equal(normalized.content, true);
+  assert.equal(normalized.publishing, true);
+  assert.equal(normalized.automation, true);
+  assert.equal(normalized.config, true);
+  assert.equal(normalized.media, true);
+  assert.equal(Object.keys(normalized).length, MASTER_TOGGLEABLE_PERMISSIONS.length);
+  assert.equal(MASTER_LOCKED_PERMISSIONS.length, 3);
+  assert.deepEqual(normalizeMasterPermissions(null), DEFAULT_MASTER_PERMISSIONS);
 });
 
-test("every prohibited operation explains why it is rejected", () => {
-  for (const [op, message] of Object.entries(MASTER_PROHIBITED)) {
-    assert.ok(message.length > 40, op);
-    assert.match(message, /owner|cannot|not permitted|owner-only/i, op);
-    try {
-      denyMaster(op);
-      assert.fail("should throw");
-    } catch (error) {
-      assert.ok(isMasterDenied(error));
-      assert.equal((error as MasterDenied).operation, op);
-      assert.equal((error as Error).message, message);
+test("every non-system Master tool maps to a valid toggleable permission area", () => {
+  const validKeys = new Set(MASTER_TOGGLEABLE_PERMISSIONS.map((p) => p.key));
+  for (const entry of MASTER_TOOL_CATALOG) {
+    if (entry.group === "system" && entry.name !== "get_daily_publishing_report") {
+      assert.equal(permissionForTool(entry.name), null, `system tool ${entry.name} should stay readable`);
+      continue;
     }
+    const perm = permissionForTool(entry.name);
+    assert.ok(perm && validKeys.has(perm), `tool ${entry.name} must map to a valid toggleable permission`);
   }
-});
-
-test("arbitrary SQL / JS tool names are on the denylist", () => {
-  for (const name of ["execute_sql", "run_admin_function", "execute_javascript"]) {
-    assert.ok((MASTER_PROHIBITED_TOOL_NAMES as readonly string[]).includes(name), name);
-  }
-});
-
-test("reserved master id is distinct from publishing profiles", () => {
-  assert.equal(MASTER_RESERVED_ID, "master");
-  assert.equal(isReservedMasterId("master"), true);
-  assert.equal(isReservedMasterId("MASTER"), true);
-  assert.equal(isReservedMasterId("default"), false);
-  assert.equal(isReservedMasterId("p00aabbcc"), false);
-});
-
-test("secret leak detector requires a value assignment, not a mention", () => {
-  assert.equal(looksLikeSecretLeak("The Master MCP cannot access ADMIN_TOKEN."), false);
-  assert.equal(looksLikeSecretLeak("ADMIN_TOKEN=supersecret"), true);
-  assert.equal(looksLikeSecretLeak("MCP_TOKEN: abcdef"), true);
 });

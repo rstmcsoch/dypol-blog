@@ -1,8 +1,8 @@
 /**
- * Master MCP permission model (pure). The UI summary is derived from the same
- * constants the backend uses to reject prohibited operations. Ordinary
- * publishing profiles never receive these privileges — including the default
- * profile authenticated with MCP_TOKEN.
+ * Master MCP permission model (pure). The UI summary and toggles are derived
+ * from the same constants the backend uses to enforce permissions and reject
+ * prohibited operations. Ordinary publishing profiles never receive these
+ * privileges — including the default profile authenticated with MCP_TOKEN.
  */
 export const MASTER_RESERVED_ID = "master";
 
@@ -16,11 +16,134 @@ export class MasterDenied extends Error {
   }
 }
 
+export type MasterPermissionKey =
+  | "content"
+  | "publishing"
+  | "automation"
+  | "analytics"
+  | "config"
+  | "media"
+  | "ads";
+
+export type MasterPermissionsMap = Record<MasterPermissionKey, boolean>;
+
+export const DEFAULT_MASTER_PERMISSIONS: MasterPermissionsMap = {
+  content: true,
+  publishing: true,
+  automation: true,
+  analytics: true,
+  config: true,
+  media: true,
+  ads: true,
+};
+
+export const MASTER_TOGGLEABLE_PERMISSIONS: readonly { key: MasterPermissionKey; label: string }[] = [
+  { key: "content", label: "Content management" },
+  { key: "publishing", label: "Publishing management" },
+  { key: "automation", label: "AI automation supervision" },
+  { key: "analytics", label: "Analytics & reporting" },
+  { key: "config", label: "Website configuration" },
+  { key: "media", label: "Media management" },
+  { key: "ads", label: "Ads management" },
+];
+
+export const MASTER_LOCKED_PERMISSIONS: readonly { key: string; label: string }[] = [
+  { key: "security", label: "Security & admin accounts" },
+  { key: "infrastructure", label: "Site & infrastructure deletion" },
+  { key: "credentials", label: "Master & profile credentials" },
+];
+
+export const MASTER_TOOL_PERMISSION: Readonly<Record<string, MasterPermissionKey>> = {
+  // Content management
+  list_all_articles: "content",
+  get_full_article: "content",
+  create_article: "content",
+  update_article: "content",
+  duplicate_article: "content",
+  preview_article_deletion: "content",
+  delete_article: "content",
+  list_article_revisions: "content",
+  restore_article_revision: "content",
+
+  // Publishing management
+  publish_article: "publishing",
+  schedule_article: "publishing",
+  unpublish_article: "publishing",
+  set_article_ai_edit_permission: "publishing",
+
+  // AI automation supervision & agent tasks
+  list_automation_profiles: "automation",
+  get_automation_profile: "automation",
+  update_automation_profile: "automation",
+  set_automation_status: "automation",
+  update_automation_publishing_limits: "automation",
+  update_automation_topics: "automation",
+  update_automation_sources: "automation",
+  update_automation_schedule: "automation",
+  manage_automation_authors: "automation",
+  get_automation_usage: "automation",
+  assign_agent_task: "automation",
+  list_agent_tasks: "automation",
+  get_agent_task: "automation",
+  update_agent_task: "automation",
+  cancel_agent_task: "automation",
+  get_agent_task_results: "automation",
+
+  // Analytics & reporting
+  get_analytics_overview: "analytics",
+  get_article_analytics: "analytics",
+  get_topic_analytics: "analytics",
+  get_traffic_sources: "analytics",
+  get_automation_analytics: "analytics",
+  get_publishing_history: "analytics",
+  get_daily_publishing_report: "analytics",
+
+  // Website configuration
+  get_website_settings: "config",
+  update_website_settings: "config",
+  get_homepage_configuration: "config",
+  update_homepage_configuration: "config",
+  update_site_text: "config",
+  update_appearance: "config",
+  manage_pages: "config",
+  manage_topics: "config",
+  manage_tags: "config",
+  manage_ticker: "config",
+  manage_events: "config",
+  list_contact_messages: "config",
+
+  // Media management
+  manage_media: "media",
+
+  // Ads management
+  manage_ads: "ads",
+};
+
+export function normalizeMasterPermissions(raw: unknown): MasterPermissionsMap {
+  const out: MasterPermissionsMap = { ...DEFAULT_MASTER_PERMISSIONS };
+  if (!raw || typeof raw !== "object") return out;
+  const src = raw as Record<string, unknown>;
+  for (const item of MASTER_TOGGLEABLE_PERMISSIONS) {
+    if (typeof src[item.key] === "boolean") {
+      out[item.key] = src[item.key] as boolean;
+    }
+  }
+  return out;
+}
+
+export function permissionForTool(toolName: string): MasterPermissionKey | null {
+  return MASTER_TOOL_PERMISSION[toolName] ?? null;
+}
+
+export function permissionLabel(key: MasterPermissionKey): string {
+  return MASTER_TOGGLEABLE_PERMISSIONS.find((p) => p.key === key)?.label ?? key;
+}
+
 export type PermissionLevel = "Full" | "Full, excluding protected executable code" | "Full, excluding unrestricted executable code" | "Restricted" | "Owner only";
 
 export type PermissionSummaryItem = { area: string; level: PermissionLevel; detail: string };
 
-/** Displayed in Admin → Settings → Master MCP. Must match backend enforcement. */
+/** Displayed in Admin → Settings → Master MCP & returned by get_master_permissions. */
 export const MASTER_PERMISSION_SUMMARY: readonly PermissionSummaryItem[] = [
   { area: "Content management", level: "Full", detail: "Create, edit, publish, unpublish, schedule, revise and delete articles, including published ones, with confirmation for destructive actions." },
   { area: "Publishing management", level: "Full", detail: "Inspect and change publication status, dates, featured flags, SEO, topics, tags, covers and AI-edit permission." },
