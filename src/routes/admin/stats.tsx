@@ -1,4 +1,7 @@
+import "@/styles-stats.css";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { SettingsTabs, type SettingsTab } from "@/components/admin/settings-tabs";
+import { tabPanelProps } from "@/lib/admin-tabs";
 import { adminPending } from "@/components/admin/pending";
 import {
   createFileRoute,
@@ -852,6 +855,7 @@ function StatsPage() {
   const search = Route.useSearch();
   const router = useRouter();
   const [refreshing, setRefreshing] = useState(false);
+  const [statsTab, setStatsTab] = useState<string>("overview");
 
   if (!data) {
     if (error === "not-signed-in") return null; // parent renders sign-in
@@ -936,532 +940,443 @@ function StatsPage() {
     { id: "custom", label: "Custom range" },
   ];
 
+  const statsTabs: SettingsTab[] = [
+    { id: "overview", label: "Overview" },
+    { id: "audience", label: "Audience & traffic" },
+    { id: "content", label: "Content & topics" },
+    { id: "details", label: "Tools & details" },
+  ];
+  const SP = "stats";
+
+  const deltaPill = (val: string, trend: "up" | "down" | "neutral" | null) =>
+    !prior ? (
+      <span className="adm-stat__delta adm-stat__delta--neutral">No prior</span>
+    ) : (
+      <span className={`adm-stat__delta ${trend === "up" ? "adm-stat__delta--up" : trend === "down" ? "adm-stat__delta--down" : "adm-stat__delta--neutral"}`}>
+        <TrendIcon trend={trend ?? "neutral"} /> {val}
+      </span>
+    );
+
   return (
-    <div className="adm-stats-page">
-      <div className="adm-stats__header">
+    <div className="stx-page adm-stats-page">
+      {/* Compact Header */}
+      <div className="stx-head">
         <div>
-          <p className="desk-kicker">Stats &amp; analytics</p>
-          <h1 className="desk-title">Editorial dashboard</h1>
-          <p className="desk-note">
-            First-party readership measurement for DYPOL Blog. Reporting timezone:
-            Asia/Kolkata (IST){" "}
-            <HelpTip text="All dates and rollups use Asia/Kolkata (UTC+5:30). Metrics are computed from the site's first-party beacon and the cumulative article view counter; GA4 is installed on the site but its reporting API is not connected to this dashboard." />
-          </p>
+          <p className="desk-kicker">Analytics</p>
+          <h1 className="desk-title">Stats</h1>
+          <div className="stx-head__meta">
+            <span className="adm-chip adm-chip--subtle">
+              {period.fromLabel} &rarr; {period.toLabel} &middot; {period.granularity} &middot; IST
+            </span>
+            {overview.freshness ? (
+              <span className="adm-chip adm-chip--subtle">Updated {overview.freshness}</span>
+            ) : null}
+          </div>
         </div>
-        <div className="adm-stats__actions">
-          <a href={exportUrl("overview")} className="adm-btn adm-btn--ghost" title="Download the overview metrics and daily series as CSV">
-            <Download size={16} /> Overview CSV
+        <div className="stx-head__actions">
+          <a href={exportUrl("overview")} className="btn btn--ghost btn--sm" title="Download overview metrics and daily series as CSV">
+            <Download size={15} /> Overview CSV
           </a>
-          <button type="button" className="adm-btn adm-btn--ghost" onClick={handleRefresh} disabled={refreshing}>
-            {refreshing ? <Clock size={16} className="animate-spin" /> : <Clock size={16} />} Refresh
+          <button type="button" className="btn btn--ghost btn--sm" onClick={handleRefresh} disabled={refreshing}>
+            <Clock size={15} className={refreshing ? "animate-spin" : undefined} /> Refresh
           </button>
         </div>
       </div>
 
-      {/* Global filters */}
-      <section className="adm-filters">
-        <div className="adm-filters__presets">
-          {presets.map((p) => {
-            const active = period.preset === p.id;
-            return (
-              <button
-                key={p.id}
-                type="button"
-                onClick={() => handlePreset(p.id)}
-                className={`adm-chip ${active ? "adm-chip--active" : ""}`}
-              >
-                {p.label}
-              </button>
-            );
-          })}
-          {period.preset === "custom" && (
-            <>
-              <label className="adm-chip">
-                From <input type="date" defaultValue={period.from} onChange={(e) => handleCustom(e.target.value, period.to)} />
-              </label>
-              <label className="adm-chip">
-                To{" "}
-                <input type="date" defaultValue={period.to} onChange={(e) => handleCustom(period.from, e.target.value)} />
-              </label>
-            </>
-          )}
+      {/* Date Range Bar */}
+      <section className="stx-bar" aria-label="Date range">
+        <div className="stx-presets">
+          {presets.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              onClick={() => handlePreset(p.id)}
+              className={`adm-chip ${period.preset === p.id ? "adm-chip--active" : ""}`}
+            >
+              {p.label}
+            </button>
+          ))}
         </div>
-        <div className="adm-filters__status">
-          <span className="adm-chip adm-chip--subtle">
-            {period.fromLabel} &rarr; {period.toLabel} &middot; {period.granularity} view
-          </span>
-          {overview.freshness ? (
-            <span className="adm-chip adm-chip--subtle">
-              Data through {overview.freshness}
-            </span>
-          ) : null}
-        </div>
-      </section>
-
-      {error && <ErrorBanner message={error} />}
-
-      {/* Overview KPIs */}
-      <section className="adm-section">
-        <div className="adm-section__head">
-          <h2>Overview</h2>
-          <p className="adm-section__desc">
-            Page views, sessions and engaged time in {period.label.toLowerCase()}
-            {prior ? " vs the previous equivalent period" : ""}.
-          </p>
-        </div>
-        <div className="stat-grid adm-stat-grid">
-          <ArticleStorageCard reading={storage} error={storageError} />
-          <StatCard
-            title="Page views"
-            value={formatCount(overview.pageViews)}
-            noPrior={!prior}
-            delta={pct(pvDelta)}
-            trend={trendOf(pvDelta)}
-            deltaLabel="vs previous period"
-            help="Article page views measured by the first-party beacon (bots excluded) in the selected period."
-          />
-          <StatCard
-            title="Sessions"
-            value={formatCount(overview.sessions)}
-            noPrior={!prior}
-            delta={pct(sessDelta)}
-            trend={trendOf(sessDelta)}
-            help="One session = one reader on one IST day (same source as the charts)."
-          />
-          <StatCard
-            title="Users"
-            value={formatCount(overview.users)}
-            noPrior={!prior}
-            delta={pct(usersDelta)}
-            trend={trendOf(usersDelta)}
-            help="Distinct readers (random first-party id, no IP stored) in the period."
-          />
-          <StatCard
-            title="New / returning"
-            value={`${formatCount(overview.newUsers)} / ${formatCount(overview.returningUsers)}`}
-            help="Returning = visited on more than one day within the last 30 days."
-          />
-          <StatCard
-            title="Avg engaged time"
-            value={overview.avgEngagementTime != null ? formatDuration(overview.avgEngagementTime) : "—"}
-            noPrior={!prior}
-            delta={pct(avgDelta)}
-            trend={trendOf(avgDelta)}
-            help="Total engaged time ÷ page views (visible, active time only)."
-          />
-          <StatCard
-            title="Engagement rate"
-            value={formatPercent(overview.engagementRate)}
-            noPrior={!prior}
-            delta={ptsLabel(erPts)}
-            trend={trendOf(erPts)}
-            help="GA4 definition: engaged sessions (≥10s engaged, or 2+ page views, or an internal article click) ÷ sessions."
-          />
-          <StatCard
-            title="Bounce rate"
-            value={formatPercent(overview.bounceRate)}
-            noPrior={!prior}
-            delta={ptsLabel(brPts)}
-            trend={trendOf(brPts, true)}
-            help="100% − engagement rate (GA4 definition)."
-          />
-          <StatCard
-            title="Total engaged time"
-            value={formatDuration(overview.totalEngagedTime)}
-            noPrior={!prior}
-            delta={pct(engTotalDelta)}
-            trend={trendOf(engTotalDelta)}
-            help="Sum of visible, active reading time across all article reads in the period."
-          />
-          <StatCard
-            title="Published articles"
-            value={formatCount(overview.publishedArticles)}
-            help="All currently published articles."
-          />
-          <StatCard
-            title="Published in period"
-            value={formatCount(overview.publishedInPeriod)}
-            help="Articles whose publication date (IST) falls inside the selected period."
-          />
-        </div>
-      </section>
-
-      {/* Trends */}
-      <section className="adm-section adm-section--two-col">
-        <div className="adm-panel">
-          <LineTrendChart
-            series={overview.series}
-            previousSeries={overview.previousSeries}
-            valueKey="pageViews"
-            label="Page views over time"
-            showPrevious={true}
-            annotations={extras.annotations}
-          />
-        </div>
-        <div className="adm-panel">
-          <LineTrendChart series={overview.series} valueKey="sessions" label="Sessions over time" area />
-        </div>
-        <div className="adm-panel">
-          <ComparisonTable
-            hasPrior={prior}
-            rows={[
-              { label: "Page views", current: formatCount(overview.pageViews), previous: formatCount(overview.prevPageViews), change: pct(pvDelta) },
-              { label: "Sessions", current: formatCount(overview.sessions), previous: formatCount(overview.prevSessions), change: pct(sessDelta) },
-              { label: "Users", current: formatCount(overview.users), previous: formatCount(overview.prevUsers), change: pct(usersDelta) },
-              { label: "Engagement rate", current: formatPercent(overview.engagementRate), previous: formatPercent(overview.prevEngagementRate), change: ptsLabel(erPts) },
-              { label: "Bounce rate", current: formatPercent(overview.bounceRate), previous: formatPercent(overview.prevBounceRate), change: ptsLabel(brPts) },
-              { label: "Avg engaged time", current: overview.avgEngagementTime != null ? formatDuration(overview.avgEngagementTime) : "—", previous: overview.prevAvgEngagementTime != null ? formatDuration(overview.prevAvgEngagementTime) : "—", change: pct(avgDelta) },
-            ]}
-          />
-        </div>
-      </section>
-
-      {/* Reader engagement */}
-      <section className="adm-section">
-        <div className="adm-section__head">
-          <h2>Reader engagement &amp; reading time</h2>
-          <p className="adm-section__desc">
-            Whether visitors genuinely read articles — visible, active time only; abandoned tabs don&rsquo;t count.
-          </p>
-        </div>
-        <div className="adm-panel-grid adm-panel-grid--engagement">
-          <div className="adm-panel">
-            <HistogramChart buckets={distribution.buckets} />
+        {period.preset === "custom" ? (
+          <div className="stx-custom">
+            <label className="adm-chip">
+              From <input type="date" defaultValue={period.from} onChange={(e) => handleCustom(e.target.value, period.to)} />
+            </label>
+            <label className="adm-chip">
+              To <input type="date" defaultValue={period.to} onChange={(e) => handleCustom(period.from, e.target.value)} />
+            </label>
           </div>
-          <div className="adm-panel">
-            <div className="adm-panel__body">
-              <h3 className="adm-card-title">Reading-time statistics</h3>
-              <div className="adm-scroll-x"><table className="adm-table--compact">
-                <tbody>
-                  <tr><td>Recorded session-article reads</td><td className="text-right">{formatCount(distribution.stats?.count ?? 0)}</td></tr>
-                  <tr><td>Average engaged time</td><td className="text-right">{formatDuration(distribution.stats?.average ?? 0)}</td></tr>
-                  <tr><td>Median engaged time</td><td className="text-right">{formatDuration(distribution.stats?.median ?? 0)}</td></tr>
-                  <tr><td>75th percentile</td><td className="text-right">{formatDuration(distribution.stats?.p75 ?? 0)}</td></tr>
-                  <tr><td>90th percentile</td><td className="text-right">{formatDuration(distribution.stats?.p90 ?? 0)}</td></tr>
-                </tbody>
-              </table></div>
-              <p className="adm-panel__note">
-                {distribution.notes.join(" ")}
-              </p>
-            </div>
+        ) : null}
+      </section>
+
+      {error ? <ErrorBanner message={error} /> : null}
+
+      {/* Top 4 Hero KPIs */}
+      <section className="stx-hero" aria-label="Key metrics">
+        <div className="stx-kpi">
+          <div className="stx-kpi__top">
+            <p className="stx-kpi__label">Page views <HelpTip text="Article page views measured by the first-party beacon (bots excluded)." /></p>
+            {deltaPill(pct(pvDelta), trendOf(pvDelta))}
           </div>
+          <div className="stx-kpi__val">{formatCount(overview.pageViews)}</div>
+          <div className="stx-kpi__foot"><span>{period.label}</span></div>
+        </div>
+
+        <div className="stx-kpi">
+          <div className="stx-kpi__top">
+            <p className="stx-kpi__label">Sessions <HelpTip text="One session = one reader on one IST day." /></p>
+            {deltaPill(pct(sessDelta), trendOf(sessDelta))}
+          </div>
+          <div className="stx-kpi__val">{formatCount(overview.sessions)}</div>
+          <div className="stx-kpi__foot"><span>{recirculation.avgArticlesPerSession != null ? `${recirculation.avgArticlesPerSession.toFixed(2)} articles / session` : "—"}</span></div>
+        </div>
+
+        <div className="stx-kpi">
+          <div className="stx-kpi__top">
+            <p className="stx-kpi__label">Users <HelpTip text="Distinct readers (random first-party id, no IP stored)." /></p>
+            {deltaPill(pct(usersDelta), trendOf(usersDelta))}
+          </div>
+          <div className="stx-kpi__val">{formatCount(overview.users)}</div>
+          <div className="stx-kpi__foot"><span>{formatCount(overview.newUsers)} new &middot; {formatCount(overview.returningUsers)} returning</span></div>
+        </div>
+
+        <div className="stx-kpi">
+          <div className="stx-kpi__top">
+            <p className="stx-kpi__label">Engagement <HelpTip text="Engaged sessions (≥10s active, 2+ views, or internal click) ÷ sessions." /></p>
+            {deltaPill(ptsLabel(erPts), trendOf(erPts))}
+          </div>
+          <div className="stx-kpi__val">{formatPercent(overview.engagementRate)}</div>
+          <div className="stx-kpi__foot"><span>Avg read: {overview.avgEngagementTime != null ? formatDuration(overview.avgEngagementTime) : "—"}</span></div>
         </div>
       </section>
 
-      {/* Article leaderboard */}
-      <section className="adm-section">
-        <div className="adm-section__head">
-          <h2>Article leaderboard</h2>
-          <p className="adm-section__desc">
-            Searchable ranking of published articles, sorted by page views by default. Click a column
-            header to sort by it (▼ high → low, ▲ low → high).
-          </p>
-          <div className="adm-table-actions">
-            <input
-              type="search"
-              placeholder="Search title or slug…"
-              defaultValue={search.q ?? ""}
-              onChange={(e) => void router.navigate({ to: "/admin/stats", search: { ...search, q: e.target.value, page: "1" } as Search })}
-              className="adm-input"
+      {/* Compact Secondary Ribbon */}
+      <div className="stx-ribbon" aria-label="Secondary summary">
+        <span className="stx-ribbon__item"><span className="stx-ribbon__label">Bounce rate</span> <span className="stx-ribbon__val">{formatPercent(overview.bounceRate)}</span></span>
+        <span className="stx-ribbon__item"><span className="stx-ribbon__label">Total engaged</span> <span className="stx-ribbon__val">{formatDuration(overview.totalEngagedTime)}</span></span>
+        <span className="stx-ribbon__item"><span className="stx-ribbon__label">Published</span> <span className="stx-ribbon__val">{formatCount(overview.publishedArticles)}</span></span>
+        <span className="stx-ribbon__item"><span className="stx-ribbon__label">In period</span> <span className="stx-ribbon__val">{formatCount(overview.publishedInPeriod)}</span></span>
+        <span className="stx-ribbon__item"><span className="stx-ribbon__label">Recirculation</span> <span className="stx-ribbon__val">{formatPercent(recirculation.clickThroughRate)}</span></span>
+      </div>
+
+      {/* Focused Sub-Tabs */}
+      <SettingsTabs tabs={statsTabs} active={statsTab} onChange={setStatsTab} label="Stats sections" idPrefix={SP} />
+
+      {/* TAB 1: OVERVIEW (Most important charts + Leaderboard + Insights) */}
+      <div {...tabPanelProps(SP, "overview", statsTab)} className="stx-stack">
+        <section className="stx-grid-2">
+          <div className="stx-card">
+            <LineTrendChart
+              series={overview.series}
+              previousSeries={overview.previousSeries}
+              valueKey="pageViews"
+              label="Page views over time"
+              showPrevious={true}
+              annotations={extras.annotations}
+              height={220}
             />
-            <label className="adm-select-field">
-              Category
-              <select value={search.categoryId ?? ""} onChange={(e) => void router.navigate({ to: "/admin/stats", search: { ...search, categoryId: e.target.value || null, page: "1" } as Search })} className="adm-select">
-                <option value="">All</option>
+          </div>
+          <div className="stx-card">
+            <LineTrendChart series={overview.series} valueKey="sessions" label="Sessions over time" area height={220} />
+          </div>
+        </section>
+
+        <section className="stx-card">
+          <div className="stx-card__head">
+            <div>
+              <h2 className="stx-card__title">Top articles</h2>
+              <p className="stx-card__sub">Click any column header to sort or open an article for full metrics.</p>
+            </div>
+            <div className="stx-lb-tools">
+              <input
+                type="search"
+                placeholder="Search title or slug…"
+                defaultValue={search.q ?? ""}
+                onChange={(e) => void router.navigate({ to: "/admin/stats", search: { ...search, q: e.target.value, page: "1" } as Search })}
+                className="adm-input"
+              />
+              <select
+                aria-label="Filter by category"
+                value={search.categoryId ?? ""}
+                onChange={(e) => void router.navigate({ to: "/admin/stats", search: { ...search, categoryId: e.target.value || null, page: "1" } as Search })}
+                className="adm-select"
+              >
+                <option value="">All categories</option>
                 {topics.categories.map((c: TopicRow) => (
                   <option key={c.id} value={c.id}>{c.label}</option>
                 ))}
               </select>
-            </label>
-            <a href={exportUrl("articles")} className="adm-btn adm-btn--ghost" title="Download the leaderboard as CSV" aria-label="Export leaderboard as CSV">
-              <Download size={16} /> Export CSV
-            </a>
+              <a href={exportUrl("articles")} className="btn btn--ghost btn--sm" title="Download leaderboard as CSV" aria-label="Export leaderboard as CSV">
+                <Download size={15} /> CSV
+              </a>
+            </div>
           </div>
-        </div>
-        <LeaderboardTable
-          rows={leaderboard.rows}
-          page={leaderboard.page}
-          pageSize={leaderboard.pageSize}
-          total={leaderboard.total}
-          pageCount={pageCount}
-          currentSort={search.sort ?? "views"}
-          onSort={handleSort}
-          onPageChange={handlePageChange}
-        />
-        <p className="adm-panel__note">{leaderboard.notes.join(" ")}</p>
-      </section>
+          <LeaderboardTable
+            rows={leaderboard.rows}
+            page={leaderboard.page}
+            pageSize={leaderboard.pageSize}
+            total={leaderboard.total}
+            pageCount={pageCount}
+            currentSort={search.sort ?? "views"}
+            onSort={handleSort}
+            onPageChange={handlePageChange}
+          />
+        </section>
 
-      {/* Topics */}
-      <section className="adm-section adm-section--two-col">
-        <div className="adm-panel">
-          <HorizontalBarChart
-            data={topics.categories.slice(0, 10).map((c: TopicRow) => ({ name: c.label, value: c.views }))}
-            label="Page views by category"
-            emptyMessage="No category views yet for this period."
-          />
-        </div>
-        <div className="adm-panel">
-          <HorizontalBarChart
-            data={topics.categories.slice(0, 10).map((c: TopicRow) => ({ name: c.label, value: c.sessions }))}
-            label="Reading sessions by category"
-            emptyMessage="No category sessions yet for this period."
-          />
-        </div>
-        <div className="adm-panel">
-          <DonutChart
-            data={topics.categories.slice(0, 8).map((c: TopicRow) => ({ name: c.label, value: c.views }))}
-            label="Share of article traffic by category"
-            emptyMessage="No article traffic yet for this period."
-          />
-        </div>
-        <div className="adm-panel">
-          <HorizontalBarChart
-            data={topics.tags.slice(0, 10).map((t: { id: string; label: string; views: number; articles: number }) => ({ name: t.label, value: t.views }))}
-            label="Top tags (topics) by views"
-            emptyMessage="No tagged article views yet for this period."
-          />
-        </div>
-      </section>
+        {insightsAllowed(overview.sessions) && insights.length > 0 ? (
+          <section className="stx-card">
+            <h2 className="stx-card__title">Editorial insights</h2>
+            <div className="adm-insight-grid">
+              {insights.map((insight, i) => (
+                <div key={i} className={`adm-insight adm-insight--${insight.kind}`}>
+                  <strong>{insight.title}</strong>
+                  <p>{insight.body}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+        ) : (
+          <p className="stx-note-line">
+            Insights unlock at {INSIGHT_MIN_SESSIONS}+ sessions in a period (currently {formatCount(overview.sessions)}).
+          </p>
+        )}
+      </div>
 
-      {/* Tags breakdown */}
-      <section className="adm-section">
-        <div className="adm-panel adm-panel__body">
-          <h3 className="adm-card-title">Tag (topic) breakdown</h3>
-          {topics.tags.length === 0 ? (
-            <p className="adm-empty__body adm-left">No tags yet.</p>
+      {/* TAB 2: AUDIENCE & TRAFFIC */}
+      <div {...tabPanelProps(SP, "audience", statsTab)} className="stx-stack">
+        <section className="stx-grid-2">
+          <div className="stx-card">
+            <DonutChart
+              data={sources.rows.map((s: SourceRow) => ({ name: `${s.source} · ${s.medium}`, value: s.sessions }))}
+              label="Sessions by source · medium"
+              emptyMessage="No source data yet for this period."
+            />
+          </div>
+          <div className="stx-card">
+            <DonutChart
+              data={devices.rows.map((d: DeviceRow) => ({ name: d.device, value: d.sessions }))}
+              label="Sessions by device"
+              emptyMessage="No device data yet for this period."
+            />
+          </div>
+          <div className="stx-card">
+            <HorizontalBarChart
+              data={sources.referrers.map((r: { domain: string; sessions: number }) => ({ name: r.domain, value: r.sessions }))}
+              label="Top referring websites"
+              emptyMessage="No referrer data yet — visits so far are direct or internal."
+            />
+          </div>
+          <div className="stx-card">
+            <HorizontalBarChart
+              data={devices.countries.slice(0, 12).map((c) => ({ name: countryName(c.country), value: c.sessions }))}
+              label="Geography — sessions by country"
+              emptyMessage="No country data yet for this period."
+            />
+          </div>
+        </section>
+
+        <section className="stx-card">
+          <h3 className="stx-card__title">Source · medium performance</h3>
+          {sources.rows.length === 0 ? (
+            <p className="stx-card__sub">No source data yet for this period.</p>
           ) : (
-            <div className="adm-table-wrap">
-              <table className="adm-table">
-                <thead><tr><th>Tag</th><th className="text-right">Articles</th><th className="text-right">Views</th><th className="text-right"><abbr title="Engaged time ÷ page views">Avg eng.</abbr></th></tr></thead>
+            <div className="adm-scroll-x">
+              <table className="adm-table--compact">
+                <thead>
+                  <tr><th>Source · medium</th><th className="text-right">Sessions</th><th className="text-right">Engagement</th><th className="text-right">Views / session</th></tr>
+                </thead>
                 <tbody>
-                  {topics.tags.map((t) => (
-                    <tr key={t.id}>
-                      <td>{t.label}</td>
-                      <td className="text-right">{formatCount(t.articles)}</td>
-                      <td className="text-right">{formatCount(t.views)}</td>
-                      <td className="text-right">{t.avgEngagedTime == null ? "—" : formatDuration(t.avgEngagedTime)}</td>
+                  {sources.rows.map((s: SourceRow) => (
+                    <tr key={`${s.source}|${s.medium}`}>
+                      <td>{s.source} · {s.medium}</td>
+                      <td className="text-right">{formatCount(s.sessions)}</td>
+                      <td className="text-right">{formatPercent(s.engagementRate)}</td>
+                      <td className="text-right">{s.viewsPerSession != null ? s.viewsPerSession.toFixed(2) : "—"}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
           )}
-          <p className="adm-panel__note">{topics.notes.join(" ")} Author breakdown will appear once articles carry bylines.</p>
-        </div>
-      </section>
+        </section>
+      </div>
 
-      {/* Traffic acquisition */}
-      <section className="adm-section adm-section--two-col">
-        <div className="adm-panel">
-          <DonutChart
-            data={sources.rows.map((s: SourceRow) => ({ name: `${s.source} · ${s.medium}`, value: s.sessions }))}
-            label="Sessions by source · medium"
-            emptyMessage="No source data yet for this period."
-          />
-        </div>
-        <div className="adm-panel">
-          <HorizontalBarChart
-            data={sources.referrers.map((r: { domain: string; sessions: number }) => ({ name: r.domain, value: r.sessions }))}
-            label="Top referring websites"
-            emptyMessage="No referrer data yet — visits so far are direct or internal."
-          />
-        </div>
-        <div className="adm-panel">
-          <DonutChart
-            data={devices.rows.map((d: DeviceRow) => ({ name: d.device, value: d.sessions }))}
-            label="Sessions by device"
-            emptyMessage="No device data yet for this period."
-          />
-        </div>
-        <div className="adm-panel adm-panel__body">
-          <h3 className="adm-card-title">Source · medium performance</h3>
-          {sources.rows.length === 0 ? <p className="adm-empty__body adm-left">No source data yet for this period.</p> : null}
-          <div className="adm-scroll-x"><table className="adm-table--compact">
-            <thead>
-              <tr><th>Source · medium</th><th className="text-right">Sessions</th><th className="text-right">Engagement</th><th className="text-right">Views / session</th></tr>
-            </thead>
-            <tbody>
-              {sources.rows.map((s: SourceRow) => (
-                <tr key={`${s.source}|${s.medium}`}>
-                  <td>{s.source} · {s.medium}</td>
-                  <td className="text-right">{formatCount(s.sessions)}</td>
-                  <td className="text-right">{formatPercent(s.engagementRate)}</td>
-                  <td className="text-right">{s.viewsPerSession != null ? s.viewsPerSession.toFixed(2) : "—"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table></div>
-          <p className="adm-panel__note">{sources.notes.join(" ")}</p>
-        </div>
-      </section>
+      {/* TAB 3: CONTENT & TOPICS */}
+      <div {...tabPanelProps(SP, "content", statsTab)} className="stx-stack">
+        <section className="stx-grid-2">
+          <div className="stx-card">
+            <HorizontalBarChart
+              data={topics.categories.slice(0, 10).map((c: TopicRow) => ({ name: c.label, value: c.views }))}
+              label="Page views by category"
+              emptyMessage="No category views yet for this period."
+            />
+          </div>
+          <div className="stx-card">
+            <DonutChart
+              data={topics.categories.slice(0, 8).map((c: TopicRow) => ({ name: c.label, value: c.views }))}
+              label="Share of traffic by category"
+              emptyMessage="No article traffic yet for this period."
+            />
+          </div>
+          <div className="stx-card">
+            <HistogramChart buckets={distribution.buckets} />
+            <div className="stx-ribbon">
+              <span className="stx-ribbon__item"><span className="stx-ribbon__label">Reads</span> <span className="stx-ribbon__val">{formatCount(distribution.stats?.count ?? 0)}</span></span>
+              <span className="stx-ribbon__item"><span className="stx-ribbon__label">Avg</span> <span className="stx-ribbon__val">{formatDuration(distribution.stats?.average ?? 0)}</span></span>
+              <span className="stx-ribbon__item"><span className="stx-ribbon__label">Median</span> <span className="stx-ribbon__val">{formatDuration(distribution.stats?.median ?? 0)}</span></span>
+              <span className="stx-ribbon__item"><span className="stx-ribbon__label">p90</span> <span className="stx-ribbon__val">{formatDuration(distribution.stats?.p90 ?? 0)}</span></span>
+            </div>
+          </div>
+          <div className="stx-card">
+            <h3 className="stx-card__title">Scroll-depth funnel</h3>
+            <FunnelBars funnel={extras.funnel} />
+            {extras.notes[0] ? <p className="stx-card__sub">{extras.notes[0]}</p> : null}
+          </div>
+        </section>
 
-      {/* Geography, scroll funnel, entry/exit, search */}
-      <section className="adm-section adm-section--two-col">
-        <div className="adm-panel">
-          <HorizontalBarChart
-            data={devices.countries.slice(0, 12).map((c) => ({ name: countryName(c.country), value: c.sessions }))}
-            label="Geography — sessions by country"
-            emptyMessage="No country data yet — recorded from this release onward (country code only, no IP)."
-          />
-        </div>
-        <div className="adm-panel adm-panel__body">
-          <h3 className="adm-card-title">Scroll-depth funnel</h3>
-          <FunnelBars funnel={extras.funnel} />
-          <p className="adm-panel__note">{extras.notes[0]}</p>
-        </div>
-        <PageList title="Entry pages" rows={extras.entryPages} empty="No entry-page data yet — recorded from this release onward." />
-        <PageList title="Exit pages" rows={extras.exitPages} empty="No exit-page data yet — recorded from this release onward." />
-        <div className="adm-panel adm-panel__body">
-          <h3 className="adm-card-title">Site search terms</h3>
-          {extras.searchTerms.length === 0 ? (
-            <p className="adm-empty__body adm-left">No searches recorded yet for this period.</p>
-          ) : (
-            <div className="adm-scroll-x"><table className="adm-table--compact">
-              <thead><tr><th>Term</th><th className="text-right">Searches</th><th className="text-right">Results</th></tr></thead>
-              <tbody>
-                {extras.searchTerms.map((t) => (
-                  <tr key={t.term}>
-                    <td>{t.term}</td>
-                    <td className="text-right">{formatCount(t.count)}</td>
-                    <td className={`text-right${t.results === 0 ? " adm-zero" : ""}`}>{t.results === 0 ? "0 — content gap" : formatCount(t.results)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table></div>
-          )}
-          <p className="adm-panel__note">{extras.notes[2]}</p>
-        </div>
-        <AnnotationsPanel annotations={extras.annotations} defaultDate={period.to} />
-      </section>
-
-      {/* Recirculation */}
-      <section className="adm-section adm-section--two-col">
-        <div className="adm-panel">
-          <div className="adm-panel__body">
-            <h3 className="adm-card-title">Article recirculation</h3>
-            <div className="adm-stat-grid adm-stat-grid--mini">
-              <StatCard
-                title="Site click-through"
-                value={formatPercent(recirculation.clickThroughRate)}
-                help="Site-level recirculation: internal article clicks ÷ article page views. Per-article values are in the leaderboard (Recirc. %)."
-              />
-              <StatCard
-                title="Multi-article sessions"
-                value={formatPercent(recirculation.multiArticleRate)}
-                help="Site-level: sessions that read 2+ different articles ÷ all sessions."
-              />
-              <StatCard title="Avg articles / session" value={recirculation.avgArticlesPerSession != null ? recirculation.avgArticlesPerSession.toFixed(2) : "—"} />
+        <section className="stx-grid-2">
+          <div className="stx-card">
+            <h3 className="stx-card__title">Article recirculation</h3>
+            <div className="stx-ribbon">
+              <span className="stx-ribbon__item"><span className="stx-ribbon__label">CTR</span> <span className="stx-ribbon__val">{formatPercent(recirculation.clickThroughRate)}</span></span>
+              <span className="stx-ribbon__item"><span className="stx-ribbon__label">Multi-article</span> <span className="stx-ribbon__val">{formatPercent(recirculation.multiArticleRate)}</span></span>
+              <span className="stx-ribbon__item"><span className="stx-ribbon__label">Avg / session</span> <span className="stx-ribbon__val">{recirculation.avgArticlesPerSession != null ? recirculation.avgArticlesPerSession.toFixed(2) : "—"}</span></span>
             </div>
             {recirculation.topLinks.length > 0 ? (
-              <div className="adm-scroll-x"><table className="adm-table--compact">
-                <thead>
-                  <tr><th>From → to</th><th className="text-right">Internal clicks</th></tr>
-                </thead>
-                <tbody>
-                  {recirculation.topLinks.map((l: { fromTitle: string; toTitle: string; clicks: number }) => (
-                    <tr key={`${l.fromTitle}|${l.toTitle}`}>
-                      <td>{l.fromTitle} &rarr; {l.toTitle}</td>
-                      <td className="text-right">{formatCount(l.clicks)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table></div>
+              <div className="adm-scroll-x">
+                <table className="adm-table--compact">
+                  <thead><tr><th>From &rarr; to</th><th className="text-right">Clicks</th></tr></thead>
+                  <tbody>
+                    {recirculation.topLinks.map((l: { fromTitle: string; toTitle: string; clicks: number }) => (
+                      <tr key={`${l.fromTitle}|${l.toTitle}`}>
+                        <td>{l.fromTitle} &rarr; {l.toTitle}</td>
+                        <td className="text-right">{formatCount(l.clicks)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             ) : (
-              <p className="adm-empty__body">No internal article clicks recorded yet.</p>
+              <p className="stx-card__sub">No internal article clicks recorded yet.</p>
             )}
-            <p className="adm-panel__note">{recirculation.notes.join(" ")}</p>
           </div>
-        </div>
-        <div className="adm-panel">
-          <div className="adm-panel__body">
-            <h3 className="adm-card-title">Publishing performance</h3>
+
+          <div className="stx-card">
+            <h3 className="stx-card__title">Publishing performance</h3>
             <HorizontalBarChart
               data={publishing.byMonth.map((m: { periodLabel: string; published: number; avgViewsFirst28Days: number | null }) => ({ name: m.periodLabel, value: m.published }))}
               label="Articles published by month"
             />
-            <div className="adm-scroll-x"><table className="adm-table--compact adm-mt">
-              <thead>
-                <tr><th>Article age</th><th className="text-right">Articles</th><th className="text-right">Avg measured views</th></tr>
-              </thead>
-              <tbody>
-                {publishing.ageCohorts.map((c: { label: string; articles: number; avgViews: number | null }) => (
-                  <tr key={c.label}>
-                    <td>{c.label}</td>
-                    <td className="text-right">{formatCount(c.articles)}</td>
-                    <td className="text-right">{c.avgViews != null ? formatCount(c.avgViews) : "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table></div>
-            <p className="adm-panel__note">{publishing.notes.join(" ")}</p>
+            <div className="adm-scroll-x">
+              <table className="adm-table--compact">
+                <thead><tr><th>Article age</th><th className="text-right">Articles</th><th className="text-right">Avg views</th></tr></thead>
+                <tbody>
+                  {publishing.ageCohorts.map((c: { label: string; articles: number; avgViews: number | null }) => (
+                    <tr key={c.label}>
+                      <td>{c.label}</td>
+                      <td className="text-right">{formatCount(c.articles)}</td>
+                      <td className="text-right">{c.avgViews != null ? formatCount(c.avgViews) : "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* Insights */}
-      <section className="adm-section">
-        <h2>Editorial insights</h2>
-        <div className="adm-insight-grid">
-          {!insightsAllowed(overview.sessions) ? (
-            <p className="adm-empty__body adm-left">
-              Insights are suppressed until the period has at least {INSIGHT_MIN_SESSIONS} sessions (n = {formatCount(overview.sessions)}) — smaller samples are noise.
-            </p>
-          ) : insights.length === 0 ? (
-            <p className="adm-empty__body adm-left">No significant observations for this period yet.</p>
-          ) : (
-            insights.map((insight, i) => (
-              <div key={i} className={`adm-insight adm-insight--${insight.kind}`}>
-                <strong>{insight.title}</strong>
-                <p>{insight.body}</p>
+        <section className="stx-grid-2">
+          <PageList title="Entry pages" rows={extras.entryPages} empty="No entry-page data yet." />
+          <PageList title="Exit pages" rows={extras.exitPages} empty="No exit-page data yet." />
+        </section>
+
+        <section className="stx-grid-2">
+          <div className="stx-card">
+            <h3 className="stx-card__title">Site search terms</h3>
+            {extras.searchTerms.length === 0 ? (
+              <p className="stx-card__sub">No searches recorded yet for this period.</p>
+            ) : (
+              <div className="adm-scroll-x">
+                <table className="adm-table--compact">
+                  <thead><tr><th>Term</th><th className="text-right">Searches</th><th className="text-right">Results</th></tr></thead>
+                  <tbody>
+                    {extras.searchTerms.map((t) => (
+                      <tr key={t.term}>
+                        <td>{t.term}</td>
+                        <td className="text-right">{formatCount(t.count)}</td>
+                        <td className={`text-right${t.results === 0 ? " adm-zero" : ""}`}>{t.results === 0 ? "0 — gap" : formatCount(t.results)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
-            ))
-          )}
-        </div>
-        <p className="adm-panel__note adm-small">
-          Observations are deterministic comparisons against the previous equivalent period ({period.previousFrom} &rarr; {period.previousTo}). Correlations are described, not causation.
-        </p>
-      </section>
+            )}
+          </div>
 
-      {/* Data sources & availability */}
-      <section className="adm-section adm-card--bordered">
-        <h2>Data sources &amp; availability</h2>
-        <div className="adm-scroll-x"><table className="adm-table--compact">
-          <thead>
-            <tr><th>Source</th><th>Status</th><th>What it feeds</th></tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>First-party beacon (this site)</td>
-              <td className="adm-status adm-status--ok">Measuring</td>
-              <td>Page views, sessions, engagement time, scroll depth, sources, devices, recirculation</td>
-            </tr>
-            <tr>
-              <td>Cumulative article view counter</td>
-              <td className="adm-status adm-status--ok">Active</td>
-              <td>Raw hits (all-time) in the leaderboard — includes bots and repeat loads</td>
-            </tr>
-            <tr>
-              <td>Google Analytics 4 (G-T1R0QJ2F0Z)</td>
-              <td className="adm-status adm-status--off">Installed, reporting API not connected</td>
-              <td>Not connected — no GA4 data appears here. To import GA4 users/sessions/source-medium, configure GA4 Data API credentials on the server.</td>
-            </tr>
-            <tr>
-              <td>Google Search Console</td>
-              <td className="adm-status adm-status--off">Not connected</td>
-              <td>Search impressions/clicks/CTR/position are not shown. Connect Search Console to add the SEO section.</td>
-            </tr>
-            <tr>
-              <td>Geography</td>
-              <td className="adm-status adm-status--ok">Measuring (country only)</td>
-              <td>Two-letter country code from Cloudflare's edge; no IP address, city or region is stored.</td>
-            </tr>
-          </tbody>
-        </table></div>
-        <p className="adm-panel__note adm-small">
-          Nothing is fabricated: "no data" means nothing was measured, never zero substituted for an error. Period metrics require the first-party beacon,
-          which only starts recording after this feature is deployed; historical data before deployment is not available.
-        </p>
-      </section>
+          <div className="stx-card">
+            <h3 className="stx-card__title">Tag breakdown</h3>
+            {topics.tags.length === 0 ? (
+              <p className="stx-card__sub">No tags yet.</p>
+            ) : (
+              <div className="adm-scroll-x">
+                <table className="adm-table--compact">
+                  <thead><tr><th>Tag</th><th className="text-right">Articles</th><th className="text-right">Views</th><th className="text-right">Avg eng.</th></tr></thead>
+                  <tbody>
+                    {topics.tags.map((t) => (
+                      <tr key={t.id}>
+                        <td>{t.label}</td>
+                        <td className="text-right">{formatCount(t.articles)}</td>
+                        <td className="text-right">{formatCount(t.views)}</td>
+                        <td className="text-right">{t.avgEngagedTime == null ? "—" : formatDuration(t.avgEngagedTime)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </section>
+      </div>
+
+      {/* TAB 4: TOOLS & DETAILS (Storage, Comparison, Annotations, Data Sources) */}
+      <div {...tabPanelProps(SP, "details", statsTab)} className="stx-stack">
+        <section className="stx-grid-2">
+          <ArticleStorageCard reading={storage} error={storageError} />
+          <div className="stx-card">
+            <ComparisonTable
+              hasPrior={prior}
+              rows={[
+                { label: "Page views", current: formatCount(overview.pageViews), previous: formatCount(overview.prevPageViews), change: pct(pvDelta) },
+                { label: "Sessions", current: formatCount(overview.sessions), previous: formatCount(overview.prevSessions), change: pct(sessDelta) },
+                { label: "Users", current: formatCount(overview.users), previous: formatCount(overview.prevUsers), change: pct(usersDelta) },
+                { label: "Engagement rate", current: formatPercent(overview.engagementRate), previous: formatPercent(overview.prevEngagementRate), change: ptsLabel(erPts) },
+                { label: "Bounce rate", current: formatPercent(overview.bounceRate), previous: formatPercent(overview.prevBounceRate), change: ptsLabel(brPts) },
+                { label: "Avg engaged time", current: overview.avgEngagementTime != null ? formatDuration(overview.avgEngagementTime) : "—", previous: overview.prevAvgEngagementTime != null ? formatDuration(overview.prevAvgEngagementTime) : "—", change: pct(avgDelta) },
+              ]}
+            />
+          </div>
+        </section>
+
+        <AnnotationsPanel annotations={extras.annotations} defaultDate={period.to} />
+
+        <details className="stx-details">
+          <summary>
+            <span>Data sources &amp; measurement notes</span>
+            <span className="adm-chip adm-chip--subtle">First-party beacon active</span>
+          </summary>
+          <div className="adm-scroll-x">
+            <table className="adm-table--compact">
+              <thead><tr><th>Source</th><th>Status</th><th>What it feeds</th></tr></thead>
+              <tbody>
+                <tr><td>First-party beacon</td><td className="adm-status adm-status--ok">Measuring</td><td>Page views, sessions, engagement, scroll depth, sources, devices, recirculation</td></tr>
+                <tr><td>Article view counter</td><td className="adm-status adm-status--ok">Active</td><td>All-time raw hits in leaderboard</td></tr>
+                <tr><td>Geography (Cloudflare edge)</td><td className="adm-status adm-status--ok">Country only</td><td>Two-letter country code; no IP or city stored</td></tr>
+                <tr><td>Google Analytics 4</td><td className="adm-status adm-status--off">API not connected</td><td>Installed on site; reporting API not linked here</td></tr>
+                <tr><td>Search Console</td><td className="adm-status adm-status--off">Not connected</td><td>Impressions/CTR/position not imported</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </details>
+      </div>
     </div>
   );
 }

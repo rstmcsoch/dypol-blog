@@ -1,0 +1,55 @@
+/* Redesigned Admin → Stats dashboard */
+.desk .stx-page { display: grid; gap: 1rem; }
+
+/* Header & compact toolbar */
+.desk .stx-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 0.75rem; }
+.desk .stx-head__meta { display: flex; flex-wrap: wrap; align-items: center; gap: 0.45rem; margin-top: 0.25rem; }
+.desk .stx-head__actions { display: flex; flex-wrap: wrap; gap: 0.45rem; align-items: center; }
+
+.desk .stx-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.6rem; padding: 0.6rem 0.75rem; border: 1px solid var(--a-line); border-radius: 10px; background: var(--a-surface); }
+.desk .stx-presets { display: flex; flex-wrap: wrap; gap: 0.35rem; align-items: center; }
+.desk .stx-custom { display: inline-flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
+.desk .stx-custom input[type="date"] { padding: 0.25rem 0.45rem; border: 1px solid var(--a-line); border-radius: 6px; background: var(--a-bg); color: var(--a-ink); font: inherit; font-size: 0.8rem; }
+
+/* Hero 4 KPI cards */
+.desk .stx-hero { display: grid; gap: 0.75rem; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.desk .stx-kpi { display: grid; gap: 0.3rem; padding: 0.9rem 1rem; border: 1px solid var(--a-line); border-radius: 12px; background: var(--a-surface); position: relative; overflow: hidden; }
+.desk .stx-kpi::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: var(--a-primary); opacity: 0.85; }
+.desk .stx-kpi__top { display: flex; align-items: center; justify-content: space-between; gap: 0.4rem; }
+.desk .stx-kpi__label { margin: 0; font-size: 0.76rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--a-muted); display: inline-flex; align-items: center; gap: 0.3rem; }
+.desk .stx-kpi__val { font-size: 1.75rem; font-weight: 800; line-height: 1.1; letter-spacing: -0.02em; color: var(--a-ink); font-variant-numeric: tabular-nums; }
+.desk .stx-kpi__foot { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; font-size: 0.78rem; color: var(--a-muted); }
+
+/* Compact secondary metric ribbon */
+.desk .stx-ribbon { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1.25rem; padding: 0.55rem 0.85rem; border: 1px solid var(--a-line); border-radius: 9px; background: var(--a-bg); font-size: 0.8rem; }
+.desk .stx-ribbon__item { display: inline-flex; align-items: baseline; gap: 0.35rem; }
+.desk .stx-ribbon__label { color: var(--a-muted); }
+.desk .stx-ribbon__val { font-weight: 700; color: var(--a-ink); font-variant-numeric: tabular-nums; }
+
+/* Section grids & cards */
+.desk .stx-stack { display: grid; gap: 0.9rem; }
+.desk .stx-grid-2 { display: grid; gap: 0.85rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.desk .stx-card { border: 1px solid var(--a-line); border-radius: 11px; background: var(--a-surface); padding: 0.9rem 1rem; display: grid; gap: 0.65rem; min-width: 0; }
+.desk .stx-card__head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem; }
+.desk .stx-card__title { margin: 0; font-size: 0.98rem; font-weight: 750; color: var(--a-ink); }
+.desk .stx-card__sub { margin: 0; font-size: 0.8rem; color: var(--a-muted); }
+
+.desk .stx-lb-tools { display: flex; flex-wrap: wrap; gap: 0.45rem; align-items: center; }
+.desk .stx-lb-tools .adm-input { max-width: 15rem; }
+
+/* Compact collapsible details for Data Sources */
+.desk .stx-details { border: 1px solid var(--a-line); border-radius: 10px; background: var(--a-surface); padding: 0.65rem 0.9rem; }
+.desk .stx-details summary { cursor: pointer; font-weight: 700; font-size: 0.88rem; color: var(--a-ink); list-style: none; display: flex; align-items: center; justify-content: space-between; }
+.desk .stx-details summary::-webkit-details-marker { display: none; }
+.desk .stx-details[open] summary { margin-bottom: 0.65rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--a-line); }
+
+/* Compact insight banner */
+.desk .stx-note-line { margin: 0; padding: 0.55rem 0.8rem; border: 1px solid var(--a-line); border-radius: 8px; background: var(--a-bg); font-size: 0.8rem; color: var(--a-muted); }
+
+@media (max-width: 980px) {
+  .desk .stx-hero { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .desk .stx-grid-2 { grid-template-columns: 1fr; }
+}
+@media (max-width: 560px) {
+  .desk .stx-hero { grid-template-columns: 1fr; }
+}
