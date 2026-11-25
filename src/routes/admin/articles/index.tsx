@@ -7,6 +7,8 @@ import { adminArticles, adminDuplicateArticle, adminSetAiEditAllowed } from "@/c
 import { publicationStatuses } from "@/content/types";
 import { formatDate } from "@/lib/format";
 
+const PAGE_SIZE = 15;
+
 type Search = {
   q?: string;
   status?: (typeof publicationStatuses)[number];
@@ -14,19 +16,54 @@ type Search = {
   tagId?: string;
   sort?: "updated" | "published" | "title";
   type?: "special" | "regular";
+  page?: number;
 };
+
+function pageButtons(current: number, total: number): (number | "gap")[] {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+  const keep = new Set<number>([1, total, current - 1, current, current + 1]);
+  if (current <= 3) {
+    keep.add(2);
+    keep.add(3);
+    keep.add(4);
+  } else if (current >= total - 2) {
+    keep.add(total - 3);
+    keep.add(total - 2);
+    keep.add(total - 1);
+  }
+  const sorted = [...keep].filter((n) => n >= 1 && n <= total).sort((a, b) => a - b);
+  const out: (number | "gap")[] = [];
+  sorted.forEach((n, i) => {
+    if (i > 0 && n - sorted[i - 1]! === 2) out.push(n - 1);
+    else if (i > 0 && n - sorted[i - 1]! > 2) out.push("gap");
+    out.push(n);
+  });
+  return out;
+}
 
 export const Route = createFileRoute("/admin/articles/")({
   ...adminPending,
-  validateSearch: (search: Record<string, unknown>): Search => ({
-    q: typeof search.q === "string" && search.q ? search.q : undefined,
-    status: publicationStatuses.find((status) => status === search.status),
-    categoryId: typeof search.categoryId === "string" && search.categoryId ? search.categoryId : undefined,
-    tagId: typeof search.tagId === "string" && search.tagId ? search.tagId : undefined,
-    sort: search.sort === "published" || search.sort === "title" || search.sort === "updated" ? search.sort : undefined,
-    type: search.type === "special" || search.type === "regular" ? search.type : undefined,
+  validateSearch: (search: Record<string, unknown>): Search => {
+    const rawPage = Number(search.page);
+    const page = Number.isInteger(rawPage) && rawPage >= 2 ? rawPage : undefined;
+    return {
+      q: typeof search.q === "string" && search.q ? search.q : undefined,
+      status: publicationStatuses.find((status) => status === search.status),
+      categoryId: typeof search.categoryId === "string" && search.categoryId ? search.categoryId : undefined,
+      tagId: typeof search.tagId === "string" && search.tagId ? search.tagId : undefined,
+      sort: search.sort === "published" || search.sort === "title" || search.sort === "updated" ? search.sort : undefined,
+      type: search.type === "special" || search.type === "regular" ? search.type : undefined,
+      page,
+    };
+  },
+  loaderDeps: ({ search }) => ({
+    q: search.q,
+    status: search.status,
+    categoryId: search.categoryId,
+    tagId: search.tagId,
+    sort: search.sort,
+    type: search.type,
   }),
-  loaderDeps: ({ search }) => search,
   loader: ({ deps }) => {
     const { type, ...rest } = deps;
     return adminArticles({ data: type ? { ...rest, articleType: type } : rest });
@@ -41,12 +78,32 @@ function ArticleIndex() {
   const router = useRouter();
   const hasFilters = Boolean(search.q || search.status || search.categoryId || search.tagId || search.type || (search.sort && search.sort !== "updated"));
 
+  const total = data.articles.length;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const currentPage = Math.min(Math.max(1, search.page ?? 1), totalPages);
+  const startIdx = (currentPage - 1) * PAGE_SIZE;
+  const pageArticles = data.articles.slice(startIdx, startIdx + PAGE_SIZE);
+  const showingFrom = total === 0 ? 0 : startIdx + 1;
+  const showingTo = Math.min(startIdx + PAGE_SIZE, total);
+
+  const goPage = (next: number) => {
+    const clamped = Math.min(Math.max(1, next), totalPages);
+    void navigate({
+      to: "/admin/articles",
+      search: {
+        ...search,
+        page: clamped > 1 ? clamped : undefined,
+      },
+    });
+    if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
   return (
     <>
       <p className="desk-kicker">Content</p>
       <div className="ca-head">
         <h1 className="desk-title">Articles</h1>
-        <span className="ca-pill">{data.articles.length} {data.articles.length === 1 ? "article" : "articles"}</span>
+        <span className="ca-pill">{total} {total === 1 ? "article" : "articles"}</span>
       </div>
 
       <div className="sp-chooser" role="group" aria-label="Create an article">
@@ -86,6 +143,7 @@ function ArticleIndex() {
               tagId: read("tagId"),
               sort: read("sort") === "title" || read("sort") === "published" ? (read("sort") as "title" | "published") : undefined,
               type: read("type") === "special" || read("type") === "regular" ? (read("type") as "special" | "regular") : undefined,
+              page: undefined,
             },
           });
         }}
@@ -162,7 +220,7 @@ function ArticleIndex() {
         </div>
       </form>
 
-      {data.articles.length === 0 ? (
+      {total === 0 ? (
         <p className="desk-note">Nothing matches.</p>
       ) : (
         <div className="art-table-card">
@@ -180,7 +238,7 @@ function ArticleIndex() {
                 </tr>
               </thead>
               <tbody>
-                {data.articles.map((article) => (
+                {pageArticles.map((article) => (
                   <tr key={article.id}>
                     <td>
                       {article.articleType === "special" ? (
@@ -288,6 +346,51 @@ function ArticleIndex() {
                 ))}
               </tbody>
             </table>
+          </div>
+
+          <div className="art-pager" data-testid="articles-pagination">
+            <span className="art-pager__info">
+              Showing {showingFrom}–{showingTo} of {total}
+            </span>
+            {totalPages > 1 ? (
+              <nav className="art-pager__nav" aria-label="Articles pagination">
+                <button
+                  type="button"
+                  className="art-pager__btn"
+                  aria-label="Previous page"
+                  disabled={currentPage <= 1}
+                  onClick={() => goPage(currentPage - 1)}
+                >
+                  ←
+                </button>
+                {pageButtons(currentPage, totalPages).map((item, idx) =>
+                  item === "gap" ? (
+                    <span key={`gap-${idx}`} className="art-pager__gap" aria-hidden="true">
+                      …
+                    </span>
+                  ) : (
+                    <button
+                      key={item}
+                      type="button"
+                      className={`art-pager__btn${item === currentPage ? " is-active" : ""}`}
+                      aria-current={item === currentPage ? "page" : undefined}
+                      onClick={() => goPage(item)}
+                    >
+                      {item}
+                    </button>
+                  ),
+                )}
+                <button
+                  type="button"
+                  className="art-pager__btn"
+                  aria-label="Next page"
+                  disabled={currentPage >= totalPages}
+                  onClick={() => goPage(currentPage + 1)}
+                >
+                  →
+                </button>
+              </nav>
+            ) : null}
           </div>
         </div>
       )}
