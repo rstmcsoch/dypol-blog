@@ -139,11 +139,17 @@ async function handleMcpInner(request: Request, env: { MCP_TOKEN?: string; MCP_L
   };
   if (auth.role === "master") {
     const connectionId = auth.connectionId ?? "master";
-    await touchMasterConnection(connectionId, auth.client ?? null);
+    const initClient =
+      body && typeof body === "object" && !Array.isArray(body) &&
+      typeof (body as { params?: { clientInfo?: { name?: unknown } } }).params?.clientInfo?.name === "string"
+        ? String((body as { params?: { clientInfo?: { name?: string } } }).params?.clientInfo?.name).trim().slice(0, 120)
+        : null;
+    const product = (await import("@/lib/publish-source")).inferProduct({ clientName: initClient ?? auth.client, origin: hints.origin, userAgent: hints.userAgent });
+    const resolvedClient = initClient || auth.client || product || (auth.via === "oauth" ? "Master MCP OAuth" : "Master MCP Bearer");
+    await touchMasterConnection(connectionId, resolvedClient);
     const { buildMasterTools } = await import("./master-tools.server");
-    const actor = { kind: "master" as const, connectionId, clientName: auth.client ?? null, via: auth.via === "oauth" ? "oauth" as const : "bearer" as const };
-    const product = (await import("@/lib/publish-source")).inferProduct({ clientName: auth.client, origin: hints.origin, userAgent: hints.userAgent });
-    const source = { via: "master" as const, client: auth.client ?? null, product, mcpAuth: auth.via === "oauth" ? "oauth" as const : "bearer" as const };
+    const actor = { kind: "master" as const, connectionId, clientName: resolvedClient, via: auth.via === "oauth" ? "oauth" as const : "bearer" as const };
+    const source = { via: "master" as const, client: resolvedClient, product, mcpAuth: auth.via === "oauth" ? "oauth" as const : "bearer" as const };
     const reply = await handleRpc(body, buildMasterTools({ actor, source }), { instructions: MASTER_SERVER_INSTRUCTIONS, serverInfo: MASTER_SERVER_INFO, protocolVersion });
     return logAndReply(reply, "master");
   }

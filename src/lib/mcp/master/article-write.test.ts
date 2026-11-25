@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { articleWriteSchema } from "../../../content/validate.ts";
-import { masterNewArticleWrite, pickMotif } from "./article-write.ts";
+import { masterExistingArticleWrite, masterNewArticleWrite, pickMotif } from "./article-write.ts";
 
 test("Master create payload satisfies the editor write schema", () => {
   const raw = masterNewArticleWrite({
@@ -28,4 +28,32 @@ test("create payload refuses an empty topic list instead of sending an invalid s
 
 test("pickMotif is stable for a title", () => {
   assert.equal(pickMotif("Same title"), pickMotif("Same title"));
+});
+
+test("masterExistingArticleWrite derives categoryId and normalizes null corrections / missing SEO fields", () => {
+  const payload = masterExistingArticleWrite(
+    {
+      id: "art-crowdstrike",
+      title: "CrowdStrike Draft",
+      slug: "crowdstrike-draft",
+      excerpt: "Summary",
+      topicIds: ["cybersecurity-privacy"],
+      tagIds: ["crowdstrike"],
+      featured: false,
+      corrections: null,
+      seoTitle: undefined,
+      seoDescription: undefined,
+      coverMediaId: null,
+      publishedAt: null,
+      blocks: [{ type: "paragraph", text: "Body text" }],
+    },
+    { title: "CrowdStrike Updated" },
+    "publish",
+  );
+  const parsed = articleWriteSchema.parse(payload);
+  assert.equal(parsed.categoryId, "cybersecurity-privacy");
+  assert.equal(parsed.corrections, "");
+  assert.equal(parsed.seoTitle, "");
+  assert.equal(parsed.seoDescription, "");
+  assert.equal(parsed.intent, "publish");
 });

@@ -164,7 +164,7 @@ export async function authenticate(
     if (payload.p === "master") {
       const version = payload.o ?? payload.v ?? "";
       if (!master?.oauthClientStillValid || !(await master.oauthClientStillValid(version))) return { ok: false, reason: "invalid" };
-      return { ok: true, via: "oauth", client: payload.n ?? (payload.c === "signed" ? undefined : LEGACY_CLIENT_LABEL), profile: { id: "master", version }, role: "master", connectionId: "master" };
+      return { ok: true, via: "oauth", client: payload.n ?? (payload.o ? "Master MCP OAuth" : payload.c === "signed" ? undefined : LEGACY_CLIENT_LABEL), profile: { id: "master", version }, role: "master", connectionId: "master" };
     }
     const profile = payload.p && payload.p !== "default" ? { id: payload.p, version: payload.v ?? "" } : DEFAULT_PROFILE;
     if (payload.o) {
