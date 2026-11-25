@@ -56,6 +56,55 @@ const groups: { label: string; links: NavLinkDef[] }[] = [
 const isActive = (link: NavLinkDef, pathname: string) =>
   link.exact ? pathname === link.to || pathname === `${link.to}/` : pathname === link.to || pathname.startsWith(`${link.to}/`);
 
+const GROUP_HOME: Record<string, string> = {
+  Content: "/admin/articles",
+  Analytics: "/admin/stats",
+  Site: "/admin/homepage",
+  Automation: "/admin/automation",
+  System: "/admin/settings",
+};
+
+type Crumb = { label: string; to?: string };
+
+function buildCrumbs(pathname: string, current: (NavLinkDef & { group: string }) | undefined): Crumb[] {
+  const clean = pathname.replace(/\/+$/, "") || "/admin";
+  if (clean.startsWith("/admin/special")) {
+    return [
+      { label: "Home", to: "/admin" },
+      { label: "Content", to: GROUP_HOME.Content },
+      { label: "Articles", to: "/admin/articles" },
+      { label: clean === "/admin/special/new" ? "New special article" : "Edit special article" },
+    ];
+  }
+  if (clean === "/admin/team") {
+    return [
+      { label: "Home", to: "/admin" },
+      { label: "Site", to: GROUP_HOME.Site },
+      { label: "Pages", to: "/admin/pages" },
+      { label: "Team", to: "/admin/team" },
+    ];
+  }
+  if (clean === "/admin/activity") {
+    return [
+      { label: "Home", to: "/admin" },
+      { label: "System", to: GROUP_HOME.System },
+      { label: "Activity", to: "/admin/activity" },
+    ];
+  }
+  if (!current) return [];
+  const crumbs: Crumb[] = [
+    { label: "Home", to: "/admin" },
+    { label: current.group, to: GROUP_HOME[current.group] ?? "/admin" },
+    { label: current.label, to: current.to },
+  ];
+  if (clean.startsWith("/admin/articles/")) {
+    crumbs.push({ label: clean === "/admin/articles/new" ? "New article" : "Edit article" });
+  } else if (clean.startsWith("/admin/stats/article/")) {
+    crumbs.push({ label: "Article stats" });
+  }
+  return crumbs;
+}
+
 /* t120: admin UI preferences, saved in this browser only (admin-only; the
    public site never reads them). "system" follows the device. */
 type ThemePref = "light" | "dark" | "system";
@@ -452,15 +501,36 @@ export function AdminShell({
           </div>
         </header>
         <div className="adm-content">
-          {current ? (
-            <nav className="adm-crumbs" aria-label="Breadcrumb">
-              <Link to="/admin">Home</Link>
-              <ChevronRight aria-hidden="true" size={14} />
-              <span>{current.group}</span>
-              <ChevronRight aria-hidden="true" size={14} />
-              <span className="adm-crumbs__here" aria-current="page">{current.label}</span>
-            </nav>
-          ) : null}
+          {(() => {
+            const crumbs = buildCrumbs(pathname, current);
+            if (crumbs.length === 0) return null;
+            return (
+              <nav className="adm-crumbs" aria-label="Breadcrumb">
+                {crumbs.map((crumb, idx) => {
+                  const isLast = idx === crumbs.length - 1;
+                  return (
+                    <span key={`${crumb.label}-${idx}`} style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
+                      {idx > 0 ? <ChevronRight aria-hidden="true" size={14} /> : null}
+                      {crumb.to ? (
+                        <Link
+                          to={crumb.to}
+                          className={isLast ? "adm-crumbs__here" : undefined}
+                          style={isLast ? { color: "var(--a-primary-text)" } : undefined}
+                          aria-current={isLast ? "page" : undefined}
+                        >
+                          {crumb.label}
+                        </Link>
+                      ) : (
+                        <span className={isLast ? "adm-crumbs__here" : undefined} aria-current={isLast ? "page" : undefined}>
+                          {crumb.label}
+                        </span>
+                      )}
+                    </span>
+                  );
+                })}
+              </nav>
+            );
+          })()}
           {children}
         </div>
       </main>
