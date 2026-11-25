@@ -286,10 +286,12 @@ export async function touchMasterConnection(id: string, clientName?: string | nu
     const sql = await getSql();
     const now = new Date().toISOString();
     const client = clientName?.trim().slice(0, 120) || null;
+    const targetId = id === "master" ? (await loadCredential())?.id : id;
+    if (!targetId) return;
     if (client) {
-      await sql`update master_mcp_credentials set last_connected_at = coalesce(last_connected_at, ${now}), last_activity_at = ${now}, last_client_name = ${client} where id = ${id} and status = 'active'`;
+      await sql`update master_mcp_credentials set last_connected_at = coalesce(last_connected_at, ${now}), last_activity_at = ${now}, last_client_name = ${client} where id = ${targetId} and status = 'active'`;
     } else {
-      await sql`update master_mcp_credentials set last_connected_at = coalesce(last_connected_at, ${now}), last_activity_at = ${now} where id = ${id} and status = 'active'`;
+      await sql`update master_mcp_credentials set last_connected_at = coalesce(last_connected_at, ${now}), last_activity_at = ${now} where id = ${targetId} and status = 'active'`;
     }
   } catch { /* telemetry must never break a tool call */ }
 }
