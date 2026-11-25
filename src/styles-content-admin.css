@@ -1,0 +1,64 @@
+/* Clean organized layout for Admin Articles & Topics/Tags */
+.desk .ca-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 0.5rem; }
+.desk .ca-pill { display: inline-flex; align-items: center; padding: 0.14rem 0.52rem; border-radius: 999px; border: 1px solid var(--a-line); background: var(--a-bg); font-size: 0.75rem; font-weight: 600; color: var(--a-muted); white-space: nowrap; }
+.desk .ca-pill--pub { color: #0f766e; border-color: color-mix(in srgb, #0f766e 35%, var(--a-line)); background: color-mix(in srgb, #0f766e 10%, var(--a-surface)); }
+.desk .ca-pill--accent { color: var(--a-primary); border-color: color-mix(in srgb, var(--a-primary) 40%, var(--a-line)); background: var(--a-primary-soft, var(--a-bg)); }
+.desk .ca-pill--warn { color: #b45309; border-color: color-mix(in srgb, #b45309 35%, var(--a-line)); background: color-mix(in srgb, #b45309 10%, var(--a-surface)); }
+
+/* Articles filter card */
+.desk .art-filters { display: grid; gap: 0.65rem; padding: 0.8rem 0.9rem; border: 1px solid var(--a-line); border-radius: 10px; background: var(--a-surface); margin: 0.9rem 0; }
+.desk .art-filters__top { display: flex; flex-wrap: wrap; gap: 0.55rem; align-items: flex-end; }
+.desk .art-filters__search { flex: 1 1 16rem; margin: 0; }
+.desk .art-filters__grid { display: grid; gap: 0.55rem; grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.desk .art-filters__grid .field { margin: 0; }
+
+/* Articles table polish */
+.desk .art-table-card { border: 1px solid var(--a-line); border-radius: 10px; background: var(--a-surface); overflow: hidden; }
+.desk .art-table-card .desk-table { margin: 0; }
+.desk .art-title-link { font-weight: 700; text-decoration: none; color: var(--a-ink); display: inline-block; line-height: 1.3; }
+.desk .art-title-link:hover { color: var(--a-primary); text-decoration: underline; }
+.desk .art-meta-line { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; margin-top: 0.2rem; font-size: 0.78rem; color: var(--a-muted); }
+.desk .art-slug { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.75rem; word-break: break-all; }
+.desk .art-badges { display: flex; flex-wrap: wrap; gap: 0.3rem; align-items: center; }
+.desk .art-stats { display: grid; gap: 0.15rem; font-size: 0.8rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.desk .art-stats__muted { color: var(--a-muted); font-size: 0.75rem; }
+.desk .art-actions { display: flex; flex-wrap: wrap; gap: 0.3rem; justify-content: flex-end; }
+.desk .art-actions .btn { padding: 0.26rem 0.55rem; font-size: 0.78rem; }
+
+/* Topics & Tags organized cards */
+.desk .tax-stack { display: grid; gap: 0.9rem; }
+.desk .tax-create { display: grid; gap: 0.65rem; padding: 0.8rem 0.9rem; border: 1px dashed var(--a-line-strong, var(--a-line)); border-radius: 10px; background: var(--a-bg); }
+.desk .tax-create__head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem; }
+.desk .tax-create__title { margin: 0; font-size: 0.92rem; font-weight: 700; }
+.desk .tax-create__row { display: grid; gap: 0.6rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.desk .tax-create__tagrow { display: grid; gap: 0.55rem; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; align-items: end; }
+.desk .tax-create .field { margin: 0; }
+
+.desk .tax-filter { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 0.5rem 0.75rem; border: 1px solid var(--a-line); border-radius: 9px; background: var(--a-surface); }
+.desk .tax-filter input { flex: 1 1 14rem; max-width: 24rem; }
+
+.desk .tax-grid { display: grid; gap: 0.7rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.desk .tax-card { display: grid; gap: 0.55rem; padding: 0.75rem 0.85rem; border: 1px solid var(--a-line); border-radius: 10px; background: var(--a-surface); }
+.desk .tax-card__head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.4rem; }
+.desk .tax-card__title { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; min-width: 0; }
+.desk .tax-card__actions { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+.desk .tax-card__fields { display: grid; gap: 0.5rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.desk .tax-card .field { margin: 0; }
+
+.desk .tax-tag-list { display: grid; gap: 0.45rem; }
+.desk .tax-tag-row { display: grid; gap: 0.55rem; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto auto; align-items: end; padding: 0.55rem 0.7rem; border: 1px solid var(--a-line); border-radius: 8px; background: var(--a-surface); }
+.desk .tax-tag-row .field { margin: 0; }
+.desk .tax-tag-row__count { margin-bottom: 0.45rem; }
+
+@media (max-width: 900px) {
+  .desk .art-filters__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .desk .tax-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 680px) {
+  .desk .art-filters__grid,
+  .desk .tax-create__row,
+  .desk .tax-create__tagrow,
+  .desk .tax-card__fields,
+  .desk .tax-tag-row { grid-template-columns: 1fr; }
+  .desk .tax-tag-row__count { margin-bottom: 0; }
+}
