@@ -72,14 +72,20 @@ export function BlockEditor({
     ]);
   };
   return (
-    <div className="stack" data-testid={`${prefix}-blocks`}>
+    <div className="hb-list" data-testid={`${prefix}-blocks`}>
       {blocks.length === 0 ? <p className="field-help">No blocks yet. Add one below.</p> : null}
       {blocks.map((b, i) => {
         const info = BLOCK_INFO[b.type];
+        const cls = [
+          "adm-block",
+          "hb-block",
+          drag === i ? "is-dragging" : "",
+          b.enabled ? "" : "is-hidden",
+        ].filter(Boolean).join(" ");
         return (
           <div
             key={b.id}
-            className={drag === i ? "block-card adm-block is-dragging" : "block-card adm-block"}
+            className={cls}
             data-block={b.type}
             onDragOver={(e) => {
               if (drag === null) return;
@@ -95,29 +101,34 @@ export function BlockEditor({
               setDrag(null);
             }}
           >
-            <div className="filters" style={{ alignItems: "center" }}>
-              <span className="adm-drag" draggable onDragStart={() => setDrag(i)} onDragEnd={() => setDrag(null)} title="Drag to reorder" aria-hidden="true">
-                ⋮⋮
-              </span>
-              <label className="check-row" style={{ flex: 1 }}>
-                <input type="checkbox" checked={b.enabled} onChange={(e) => update(i, { enabled: e.target.checked })} />
-                <strong>{info.name}</strong>
-                {b.enabled ? null : <span className="adm-muted"> (hidden)</span>}
-              </label>
-              <div className="adm-row-actions">
-                <button type="button" className="btn btn--ghost" aria-label={`Move ${info.name} up`} disabled={i === 0} onClick={() => onChange(move(blocks, i, -1))}>
+            <div className="hb-block__head">
+              <div className="hb-block__title">
+                <span className="adm-drag" draggable onDragStart={() => setDrag(i)} onDragEnd={() => setDrag(null)} title="Drag to reorder" aria-hidden="true">
+                  ⋮⋮
+                </span>
+                <label className="check-row">
+                  <input type="checkbox" checked={b.enabled} onChange={(e) => update(i, { enabled: e.target.checked })} />
+                  <strong>{info.name}</strong>
+                </label>
+                {!b.enabled ? <span className="sa-pill sa-pill--off">Hidden</span> : null}
+                {info.count ? <span className="sa-pill">{b.count} {info.count.toLowerCase()}</span> : null}
+              </div>
+              <div className="hb-block__actions">
+                <button type="button" className="btn btn--ghost btn--sm" aria-label={`Move ${info.name} up`} disabled={i === 0} onClick={() => onChange(move(blocks, i, -1))}>
                   ↑
                 </button>
-                <button type="button" className="btn btn--ghost" aria-label={`Move ${info.name} down`} disabled={i === blocks.length - 1} onClick={() => onChange(move(blocks, i, 1))}>
+                <button type="button" className="btn btn--ghost btn--sm" aria-label={`Move ${info.name} down`} disabled={i === blocks.length - 1} onClick={() => onChange(move(blocks, i, 1))}>
                   ↓
                 </button>
-                <button type="button" className="btn btn--danger" aria-label={`Remove ${info.name}`} onClick={() => onChange(blocks.filter((_, j) => j !== i))}>
+                <button type="button" className="btn btn--danger btn--sm" aria-label={`Remove ${info.name}`} onClick={() => onChange(blocks.filter((_, j) => j !== i))}>
                   Remove
                 </button>
               </div>
             </div>
-            <p className="field-help">{info.help}</p>
-            <div className="filters">
+
+            <p className="hb-block__help">{info.help}</p>
+
+            <div className="hb-block__fields">
               {b.type !== "share" || prefix === "side" ? (
                 <label className="field">
                   <span>Heading</span>
@@ -125,13 +136,13 @@ export function BlockEditor({
                 </label>
               ) : null}
               {info.count ? (
-                <label className="field" style={{ maxWidth: "8rem" }}>
+                <label className="field field--num">
                   <span>{info.count}</span>
                   <input type="number" min={1} max={50} value={b.count} onChange={(e) => update(i, { count: Math.max(1, Math.min(50, Number(e.target.value) || 1)) })} />
                 </label>
               ) : null}
               {info.layout && prefix === "home" ? (
-                <label className="field" style={{ maxWidth: "10rem" }}>
+                <label className="field field--sel">
                   <span>Layout</span>
                   <select value={b.layout} onChange={(e) => update(i, { layout: e.target.value as ContentBlock["layout"] })}>
                     <option value="list">List</option>
@@ -141,7 +152,7 @@ export function BlockEditor({
                 </label>
               ) : null}
               {b.type === "category" ? (
-                <label className="field">
+                <label className="field field--sel">
                   <span>Topic</span>
                   <select value={b.categoryId} onChange={(e) => update(i, { categoryId: e.target.value })}>
                     {categories.map((c) => (
@@ -153,7 +164,7 @@ export function BlockEditor({
                 </label>
               ) : null}
               {b.type === "tag" ? (
-                <label className="field">
+                <label className="field field--sel">
                   <span>Tag</span>
                   <select value={b.tagId} onChange={(e) => update(i, { tagId: e.target.value })}>
                     {tags.map((t) => (
@@ -165,15 +176,22 @@ export function BlockEditor({
                 </label>
               ) : null}
             </div>
-            {b.type === "share" && share && onShareChange ? <ShareButtonsEditor value={share} onChange={onShareChange} /> : null}
+
+            {b.type === "share" && share && onShareChange ? (
+              <div className="hb-block__share">
+                <ShareButtonsEditor value={share} onChange={onShareChange} />
+              </div>
+            ) : null}
             {b.type === "text" || b.type === "cta" ? (
-              <label className="field">
-                <span>{b.type === "text" ? "Text" : "Short text (optional)"}</span>
-                <textarea value={b.body} maxLength={5000} onChange={(e) => update(i, { body: e.target.value })} />
-              </label>
+              <div className="hb-block__body">
+                <label className="field">
+                  <span>{b.type === "text" ? "Text" : "Short text (optional)"}</span>
+                  <textarea value={b.body} maxLength={5000} rows={3} onChange={(e) => update(i, { body: e.target.value })} />
+                </label>
+              </div>
             ) : null}
             {b.type === "cta" ? (
-              <div className="filters">
+              <div className="hb-block__cta">
                 <label className="field">
                   <span>Button label</span>
                   <input value={b.ctaLabel} maxLength={80} onChange={(e) => update(i, { ctaLabel: e.target.value })} />
@@ -187,7 +205,8 @@ export function BlockEditor({
           </div>
         );
       })}
-      <div className="filters" style={{ alignItems: "end" }}>
+
+      <div className="hb-addbar">
         <label className="field">
           <span>Add a block</span>
           <select value={adding} onChange={(e) => setAdding(e.target.value as BlockType)} data-testid={`${prefix}-add-type`}>
@@ -198,8 +217,8 @@ export function BlockEditor({
             ))}
           </select>
         </label>
-        <button type="button" className="btn btn--ghost" onClick={add} data-testid={`${prefix}-add`}>
-          Add block
+        <button type="button" className="btn btn--primary btn--sm" onClick={add} data-testid={`${prefix}-add`}>
+          + Add block
         </button>
       </div>
     </div>
