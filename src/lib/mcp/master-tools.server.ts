@@ -13,7 +13,7 @@ import { assertSitePatchAllowed, assertAdsPatchAllowed, collectAdsSnapshot } fro
 import type { MasterActor } from "@/content/master-mcp.server";
 import type { PublishSource } from "@/lib/publish-source";
 import { contrast, themeColors } from "@/lib/appearance";
-import { masterNewArticleWrite } from "./master/article-write";
+import { masterExistingArticleWrite, masterNewArticleWrite } from "./master/article-write";
 
 export type MasterToolCtx = { actor: MasterActor; source: PublishSource | null };
 
@@ -150,7 +150,8 @@ const defs: Array<(ctx: MasterToolCtx) => ToolDefinition> = [
       ]);
       return {
         overview: { ...overview, /* already no secrets */ },
-        publishUsage: usage,
+        publishUsage: { ...usage, websiteCapMode: usage.websiteCap > 0 ? "capped" : "unlimited" },
+        viewsNote: "overview.totalViews uses a rolling 7-day window when analytics rollups are active; call get_analytics_overview for full period breakdowns.",
         capTimezone: "UTC",
         analyticsTimezone: "Asia/Kolkata",
         masterConnection: {
@@ -217,14 +218,14 @@ const defs: Array<(ctx: MasterToolCtx) => ToolDefinition> = [
       const period = periodInput({ period: input.period ?? (input.date ? "custom" : "today"), from: input.from ?? input.date, to: input.to ?? input.date });
       const [usage, publishing, profiles, runs] = await Promise.all([
         auto.combinedPublishUsage(),
-        analytics.analyticsPublishing({ period }),
+        analytics.analyticsPublishing({ period, trusted: true }),
         auto.listProfiles(),
         auto.recentRuns(40),
       ]);
       return {
         capTimezone: "UTC",
         analyticsTimezone: "Asia/Kolkata",
-        usage,
+        usage: { ...usage, websiteCapMode: usage.websiteCap > 0 ? "capped" : "unlimited" },
         publishing,
         profiles: profiles.map((p) => ({
           id: p.id,
@@ -427,23 +428,19 @@ const defs: Array<(ctx: MasterToolCtx) => ToolDefinition> = [
       } else {
         if (isSpecial && input.body) throw new Error("This is a special article: body updates must go through the Special article service.");
         const { bodyToBlocks } = await import("@/lib/automation/body");
-        await repo.saveArticle({
-          id: article.id,
-          title: input.title ?? article.title,
-          slug: input.slug ?? article.slug,
-          excerpt: input.excerpt ?? article.excerpt,
-          topicIds: input.topic_ids ?? article.topicIds,
-          tagIds: input.tag_ids ?? article.tagIds,
-          seoTitle: input.seo_title ?? article.seoTitle ?? "",
-          seoDescription: input.seo_description ?? article.seoDescription ?? "",
-          featured: input.featured ?? article.featured,
-          coverMediaId: input.cover_media_id !== undefined ? input.cover_media_id : (article.coverMediaId ?? null),
+        await repo.saveArticle(masterExistingArticleWrite(article, {
+          title: input.title,
+          slug: input.slug,
+          excerpt: input.excerpt,
+          topicIds: input.topic_ids,
+          tagIds: input.tag_ids,
+          seoTitle: input.seo_title,
+          seoDescription: input.seo_description,
+          featured: input.featured,
+          coverMediaId: input.cover_media_id,
           authorName: input.author_name,
-          blocks: input.body ? bodyToBlocks(input.body) : article.blocks,
-          motif: article.motif,
-          publishedAt: article.publishedAt,
-          intent: "save",
-        }, actorSource(ctx));
+          blocks: input.body ? bodyToBlocks(input.body) : undefined,
+        }, "save"), actorSource(ctx));
       }
       const afterEditor = await repo.adminEditor(article.id);
       const afterArt = (afterEditor as { article: typeof article }).article;
@@ -472,7 +469,7 @@ const defs: Array<(ctx: MasterToolCtx) => ToolDefinition> = [
         const editor = await repo.adminEditor(input.article_id);
         const a = (editor as { article: Record<string, unknown> }).article;
         if (!a) throw new Error("That article was not found.");
-        await repo.saveArticle({ ...a, intent: "publish" }, actorSource(ctx));
+        await repo.saveArticle(masterExistingArticleWrite(a, {}, "publish"), actorSource(ctx));
       }
       const { recordArticleEvent } = await import("@/content/master-mcp.server");
       await recordArticleEvent({ articleId: input.article_id, action: "published", actorKind: "master-mcp", actorId: ctx.actor.connectionId, clientName: ctx.actor.clientName });
@@ -493,7 +490,7 @@ const defs: Array<(ctx: MasterToolCtx) => ToolDefinition> = [
       const editor = await repo.adminEditor(input.article_id);
       const a = (editor as { article: Record<string, unknown> }).article;
       if (!a) throw new Error("That article was not found.");
-      const saved = await repo.saveArticle({ ...a, scheduledAt: input.scheduled_at, intent: "save" }, actorSource(ctx));
+      const saved = await repo.saveArticle(masterExistingArticleWrite(a, { scheduledAt: input.scheduled_at }, "save"), actorSource(ctx));
       const { recordArticleEvent } = await import("@/content/master-mcp.server");
       await recordArticleEvent({ articleId: input.article_id, action: "scheduled", actorKind: "master-mcp", actorId: ctx.actor.connectionId, clientName: ctx.actor.clientName, detail: { scheduledAt: input.scheduled_at } });
       return { id: saved.id, slug: saved.slug, status: saved.status, scheduledAt: input.scheduled_at };
@@ -517,7 +514,7 @@ const defs: Array<(ctx: MasterToolCtx) => ToolDefinition> = [
         const editor = await repo.adminEditor(input.article_id);
         const a = (editor as { article: Record<string, unknown> }).article;
         if (!a) throw new Error("That article was not found.");
-        await repo.saveArticle({ ...a, intent: "unpublish" }, actorSource(ctx));
+        await repo.saveArticle(masterExistingArticleWrite(a, {}, "unpublish"), actorSource(ctx));
       }
       const { recordArticleEvent } = await import("@/content/master-mcp.server");
       await recordArticleEvent({ articleId: input.article_id, action: "unpublished", actorKind: "master-mcp", actorId: ctx.actor.connectionId, clientName: ctx.actor.clientName });
@@ -946,7 +943,7 @@ function automationTools(ctx: MasterToolCtx): ToolDefinition[] {
           const editor = await repo.adminEditor(input.article_id);
           const a = (editor as { article: Record<string, unknown> }).article;
           if (!a) throw new Error("That article was not found.");
-          await repo.saveArticle({ ...a, authorName: input.author_name, intent: "save" });
+          await repo.saveArticle(masterExistingArticleWrite(a, { authorName: input.author_name }, "save"), actorSource(ctx));
           return { article_id: input.article_id, author_name: input.author_name };
         }
         throw new Error("Unknown action.");
@@ -1266,7 +1263,13 @@ function configTools(ctx: MasterToolCtx): ToolDefinition[] {
           return { topics: data.categories };
         }
         if (input.action === "save") {
-          return await repo.saveCategory({ id: input.id, label: input.label, slug: input.slug, description: input.description });
+          if (!input.label?.trim()) throw new Error("Provide label to create or update a topic.");
+          return await repo.saveCategory({
+            id: input.id?.trim() ? input.id.trim() : null,
+            label: input.label.trim(),
+            slug: input.slug?.trim() ?? "",
+            description: input.description?.trim() ?? "",
+          });
         }
         if (input.action === "delete") {
           if (!input.id) throw new Error("Provide id.");
@@ -1299,7 +1302,12 @@ function configTools(ctx: MasterToolCtx): ToolDefinition[] {
           return { tags: data.tags };
         }
         if (input.action === "save") {
-          return await repo.saveTag({ id: input.id, label: input.label, slug: input.slug });
+          if (!input.label?.trim()) throw new Error("Provide label to create or update a tag.");
+          return await repo.saveTag({
+            id: input.id?.trim() ? input.id.trim() : null,
+            label: input.label.trim(),
+            slug: input.slug?.trim() ?? "",
+          });
         }
         if (input.action === "delete") {
           if (!input.id) throw new Error("Provide id.");
@@ -1392,7 +1400,7 @@ function configTools(ctx: MasterToolCtx): ToolDefinition[] {
           const editor = await repo.adminEditor(input.article_id);
           const a = (editor as { article: Record<string, unknown> }).article;
           if (!a) throw new Error("That article was not found.");
-          const saved = await repo.saveArticle({ ...a, coverMediaId: input.media_id ?? null, intent: "save" });
+          const saved = await repo.saveArticle(masterExistingArticleWrite(a, { coverMediaId: input.media_id ?? null }, "save"), actorSource(ctx));
           return { id: saved.id, slug: saved.slug, coverMediaId: input.media_id ?? null };
         }
         if (input.action === "delete") {
@@ -1513,8 +1521,8 @@ function analyticsTools(ctx: MasterToolCtx): ToolDefinition[] {
       hints: { readOnlyHint: true, idempotentHint: true },
       run: async (input) => {
         const analytics = await import("@/content/analytics.server");
-        const extras = await analytics.analyticsExtras({ period: periodInput(input) }).catch(() => null);
-        const overview = await analytics.analyticsOverview(periodInput(input));
+        const extras = await analytics.analyticsExtras({ period: periodInput(input), trusted: true }).catch(() => null);
+        const overview = await analytics.analyticsOverview(periodInput(input), { trusted: true });
         return { timezone: "Asia/Kolkata", overview, extras };
       },
     })(ctx),
@@ -1527,8 +1535,8 @@ function analyticsTools(ctx: MasterToolCtx): ToolDefinition[] {
       run: async (input) => {
         const analytics = await import("@/content/analytics.server");
         const period = periodInput(input);
-        if (input.article_id) return { timezone: "Asia/Kolkata", article: await analytics.analyticsArticle({ id: input.article_id, period }) };
-        return { timezone: "Asia/Kolkata", leaderboard: await analytics.analyticsLeaderboard({ period, sort: input.sort }) };
+        if (input.article_id) return { timezone: "Asia/Kolkata", article: await analytics.analyticsArticle({ id: input.article_id, period, trusted: true }) };
+        return { timezone: "Asia/Kolkata", leaderboard: await analytics.analyticsLeaderboard({ period, sort: input.sort as Parameters<typeof analytics.analyticsLeaderboard>[0]["sort"], trusted: true }) };
       },
     })(ctx),
     tool({
@@ -1539,7 +1547,7 @@ function analyticsTools(ctx: MasterToolCtx): ToolDefinition[] {
       hints: { readOnlyHint: true, idempotentHint: true },
       run: async (input) => {
         const analytics = await import("@/content/analytics.server");
-        return { timezone: "Asia/Kolkata", topics: await analytics.analyticsTopics({ period: periodInput(input) }) };
+        return { timezone: "Asia/Kolkata", topics: await analytics.analyticsTopics({ period: periodInput(input), trusted: true }) };
       },
     })(ctx),
     tool({
@@ -1552,8 +1560,8 @@ function analyticsTools(ctx: MasterToolCtx): ToolDefinition[] {
         const analytics = await import("@/content/analytics.server");
         const period = periodInput(input);
         const [sources, devices] = await Promise.all([
-          analytics.analyticsSources({ period }),
-          analytics.analyticsDevices({ period }),
+          analytics.analyticsSources({ period, trusted: true }),
+          analytics.analyticsDevices({ period, trusted: true }),
         ]);
         return { timezone: "Asia/Kolkata", sources, devices };
       },
@@ -1568,7 +1576,7 @@ function analyticsTools(ctx: MasterToolCtx): ToolDefinition[] {
         const analytics = await import("@/content/analytics.server");
         const auto = await import("@/content/automation.server");
         const [publishing, usage, profiles] = await Promise.all([
-          analytics.analyticsPublishing({ period: periodInput(input) }),
+          analytics.analyticsPublishing({ period: periodInput(input), trusted: true }),
           auto.combinedPublishUsage(),
           auto.listProfiles(),
         ]);
@@ -1576,7 +1584,7 @@ function analyticsTools(ctx: MasterToolCtx): ToolDefinition[] {
           capTimezone: "UTC",
           analyticsTimezone: "Asia/Kolkata",
           publishing,
-          usage,
+          usage: { ...usage, websiteCapMode: usage.websiteCap > 0 ? "capped" : "unlimited" },
           profiles: profiles.map((p) => ({ id: p.id, name: p.name, enabled: p.enabled, paused: p.paused })),
         };
       },
