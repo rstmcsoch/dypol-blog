@@ -31,8 +31,8 @@ import {
   type SessionAgg,
 } from "@/lib/analytics-metrics";
 
-async function guardedSql(): Promise<Sql> {
-  await requireAdmin();
+async function guardedSql(trusted = false): Promise<Sql> {
+  if (!trusted) await requireAdmin();
   return getSql();
 }
 
@@ -202,8 +202,8 @@ async function visitDatesWindow(sql: Sql, from: string, to: string): Promise<Map
   return map;
 }
 
-export async function analyticsOverview(input: PeriodInput): Promise<OverviewData> {
-  const sql = await guardedSql();
+export async function analyticsOverview(input: PeriodInput, opts?: { trusted?: boolean }): Promise<OverviewData> {
+  const sql = await guardedSql(opts?.trusted);
   const period = resolvePeriod(input);
 
   const [cur, prev, visitDates, articles, freshness] = await Promise.all([
@@ -404,8 +404,9 @@ export async function analyticsLeaderboard(input: {
   q?: string | null;
   page?: number;
   pageSize?: number;
+  trusted?: boolean;
 }): Promise<LeaderboardData> {
-  const sql = await guardedSql();
+  const sql = await guardedSql(input.trusted);
   const period = resolvePeriod(input.period);
   const page = Math.max(1, Number(input.page ?? 1) || 1);
   const pageSize = Math.min(10000, Math.max(1, Number(input.pageSize ?? 25) || 25));
@@ -568,14 +569,14 @@ export type TopicRow = {
   topArticle: { id: string; title: string; slug: string; views: number } | null;
 };
 
-export async function analyticsTopics(input: { period: PeriodInput }): Promise<{
+export async function analyticsTopics(input: { period: PeriodInput; trusted?: boolean }): Promise<{
   source: "first-party";
   period: Period;
   categories: TopicRow[];
   tags: Array<{ id: string; label: string; views: number; articles: number; avgEngagedTime: number | null }>;
   notes: string[];
 }> {
-  const sql = await guardedSql();
+  const sql = await guardedSql(input.trusted);
   const period = resolvePeriod(input.period);
   const [cur, articles] = await Promise.all([readsInRange(sql, period.from, period.to), catalogArticles(sql)]);
   const agg = aggregateByArticle(cur);
@@ -657,7 +658,7 @@ function sessionsByAttr(cur: ReadRow[], attrs: Map<string, VisitorAttrs>, pick: 
   return out;
 }
 
-export async function analyticsSources(input: { period: PeriodInput }): Promise<{
+export async function analyticsSources(input: { period: PeriodInput; trusted?: boolean }): Promise<{
   source: "first-party";
   period: Period;
   rows: SourceRow[];
@@ -665,7 +666,7 @@ export async function analyticsSources(input: { period: PeriodInput }): Promise<
   organicShare: number | null;
   notes: string[];
 }> {
-  const sql = await guardedSql();
+  const sql = await guardedSql(input.trusted);
   const period = resolvePeriod(input.period);
   const [cur, attrs] = await Promise.all([readsInRange(sql, period.from, period.to), visitorAttributes(sql, period.from, period.to)]);
   const groups = sessionsByAttr(cur, attrs, (a) => `${a.source}|${a.medium}`);
@@ -705,14 +706,14 @@ export type DeviceRow = {
   avgEngagementTime: number | null;
 };
 
-export async function analyticsDevices(input: { period: PeriodInput }): Promise<{
+export async function analyticsDevices(input: { period: PeriodInput; trusted?: boolean }): Promise<{
   source: "first-party";
   period: Period;
   rows: DeviceRow[];
   countries: Array<{ country: string; sessions: number; pageViews: number }>;
   notes: string[];
 }> {
-  const sql = await guardedSql();
+  const sql = await guardedSql(input.trusted);
   const period = resolvePeriod(input.period);
   const [cur, attrs] = await Promise.all([readsInRange(sql, period.from, period.to), visitorAttributes(sql, period.from, period.to)]);
   const rows = Array.from(sessionsByAttr(cur, attrs, (a) => a.device).entries()).map(([device, b]) => {
@@ -857,14 +858,14 @@ export async function analyticsRecirculation(input: { period: PeriodInput }): Pr
 /** Publishing performance                                             */
 /** ------------------------------------------------------------------ */
 
-export async function analyticsPublishing(input: { period: PeriodInput }): Promise<{
+export async function analyticsPublishing(input: { period: PeriodInput; trusted?: boolean }): Promise<{
   source: "first-party";
   period: Period;
   byMonth: Array<{ periodLabel: string; published: number; avgViewsFirst28Days: number | null }>;
   ageCohorts: Array<{ label: string; articles: number; avgViews: number | null }>;
   notes: string[];
 }> {
-  const sql = await guardedSql();
+  const sql = await guardedSql(input.trusted);
   const period = resolvePeriod(input.period);
   const articles = await catalogArticles(sql);
   const daily = await sql<{ article_id: string; date: string; views: number }>`
@@ -1040,7 +1041,7 @@ function entryExit(rows: Array<{ session_id: string; date: string; article_id: s
   return { entries, exits };
 }
 
-export async function analyticsExtras(input: { period: PeriodInput }): Promise<{
+export async function analyticsExtras(input: { period: PeriodInput; trusted?: boolean }): Promise<{
   period: Period;
   funnel: Array<{ depth: number; reads: number; share: number | null }>;
   entryPages: PageCount[];
@@ -1049,7 +1050,7 @@ export async function analyticsExtras(input: { period: PeriodInput }): Promise<{
   annotations: Array<{ id: string; date: string; note: string; kind: "manual" | "publish" }>;
   notes: string[];
 }> {
-  const sql = await guardedSql();
+  const sql = await guardedSql(input.trusted);
   const period = resolvePeriod(input.period);
   const [reads, timed, articles, terms, manual] = await Promise.all([
     readsInRange(sql, period.from, period.to),
@@ -1107,8 +1108,8 @@ export async function deleteAnnotation(id: string): Promise<void> {
 }
 
 /** Per-article drill-down. */
-export async function analyticsArticle(input: { id: string; period: PeriodInput }) {
-  const sql = await guardedSql();
+export async function analyticsArticle(input: { id: string; period: PeriodInput; trusted?: boolean }) {
+  const sql = await guardedSql(input.trusted);
   const period = resolvePeriod(input.period);
   const articles = await catalogArticles(sql);
   const article = articles.find((a) => a.id === input.id);
